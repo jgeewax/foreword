@@ -2345,6 +2345,53 @@ async function quickOpenChecks() {
   return out;
 }
 
+/** The app's chrome at 67% and 100% zoom: the same size on screen, the pane headers in line. The zoom is put back after. */
+async function chromeChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.zoom;
+  const onScreen = (sel: string) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r ? Math.round(r.height * studio.state.zoom * 10) / 10 : null;
+  };
+  // The headers along the top (not History's, lower down the sidebar).
+  const bottoms = () => [...document.querySelectorAll('.pane-header, .tabs')].map((e) => e.getBoundingClientRect()).filter((r) => r.top < 150).map((r) => Math.round(r.bottom));
+  for (const zoom of [0.67, 1]) {
+    await studio.setZoom(zoom, { persist: false, write: false });
+    await sleep(500);
+    const key = `at${Math.round(zoom * 100)}`;
+    out[key] = {
+      // Points on screen, the same at both zooms.
+      toolbar: onScreen('.toolbar'),
+      chromeIcon: onScreen('.toolbar .chrome-icon'),
+      activityIcon: onScreen('.activity-bar .chrome-icon'),
+      tabs: onScreen('.tabs'),
+      statusbar: onScreen('.statusbar'),
+      textButton: onScreen('.toolbar button:not(.chrome-icon)'),
+      sendButton: onScreen('.composer-controls button.primary'),
+      headerBottoms: bottoms(),
+      snapshot: await snap(`chrome-${key}`),
+    };
+    // The model list opens above its button, inside the window.
+    const picker = document.querySelectorAll<HTMLButtonElement>('.composer-controls > * button, .composer-controls > button')[1];
+    picker?.click();
+    await sleep(400);
+    const list = document.querySelector('.model-list')?.getBoundingClientRect();
+    (out[key] as Record<string, unknown>).modelList = list && { top: Math.round(list.top), bottom: Math.round(list.bottom), inWindow: list.top >= 0 && list.bottom <= innerHeight, aboveButton: list.bottom <= picker!.getBoundingClientRect().top + 1 };
+    (out[key] as Record<string, unknown>).modelSnapshot = await snap(`model-${key}`);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await sleep(300);
+    studio.openSettings();
+    await sleep(500);
+    (out[key] as Record<string, unknown>).settingsClose = onScreen('.modal-close');
+    (out[key] as Record<string, unknown>).settingsSnapshot = await snap(`settings-${key}`);
+    studio.closeSettings();
+    await sleep(300);
+  }
+  await studio.setZoom(saved, { persist: false, write: false });
+  return out;
+}
+
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
 async function tabChecks() {
   const out: Record<string, unknown> = {};
@@ -2944,6 +2991,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
+    if (want('chrome')) result.chrome = await chromeChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

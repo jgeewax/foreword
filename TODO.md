@@ -104,7 +104,7 @@
 
 - [x] the new task button is too far away and too small... how can we make it more prominent to start a new convo?
 
-- [ ] icons still feel weird and awkward. (look at top right as well as close icon for settings page at 67% zoom to see how weird things look)
+- [x] icons still feel weird and awkward. (look at top right as well as close icon for settings page at 67% zoom to see how weird things look)
 
 - [x] when looking at what changed, the zindexs are wrong. preview shows up ONTOP of the what changed modal
 

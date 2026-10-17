@@ -7,6 +7,7 @@ import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
+import { Icon } from './icons';
 import { useStore } from '../lib/store';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -393,7 +394,9 @@ export function EditorPane() {
               onClick={() => void studio.closeTab(t)}
             >
               <span className="dot">●</span>
-              <span className="x">×</span>
+              <span className="x">
+                <Icon name="close" size={14} />
+              </span>
             </button>
           </div>
         ))}

@@ -291,8 +291,8 @@ function CommandList({ commands, onChange, disabled = false }: { commands: strin
         {commands.map((c) => (
           <span key={c} className="command-chip editable">
             <code>{c}</code>
-            <button className="icon" aria-label={`Stop allowing ${c}`} disabled={disabled} onClick={() => onChange(commands.filter((x) => x !== c))}>
-              ×
+            <button className="icon chip-remove" aria-label={`Stop allowing ${c}`} disabled={disabled} onClick={() => onChange(commands.filter((x) => x !== c))}>
+              <Icon name="close" size={11} />
             </button>
           </span>
         ))}
@@ -433,8 +433,8 @@ export function SettingsDialog() {
           <h1>Settings</h1>
           <span className="muted settings-shortcut">⌘,</span>
           <span className="spacer" />
-          <button className="icon" aria-label="Close settings" onClick={() => studio.closeSettings()}>
-            ×
+          <button className="icon modal-close" aria-label="Close settings" title="Close (Esc)" onClick={() => studio.closeSettings()}>
+            <Icon name="close" size={16} />
           </button>
         </header>
         <div className="settings-layout">

@@ -619,8 +619,8 @@ function Composer() {
           {attachments.map((a) => (
             <span key={a.id} className="chip" title={a.selection.selectedText || 'cursor position'}>
               {a.label}
-              <button aria-label={`Remove ${a.label}`} onClick={() => studio.removeAttachment(a.id)}>
-                ×
+              <button className="chip-remove" aria-label={`Remove ${a.label}`} onClick={() => studio.removeAttachment(a.id)}>
+                <Icon name="close" size={11} />
               </button>
             </span>
           ))}

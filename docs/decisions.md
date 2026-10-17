@@ -231,6 +231,39 @@ pages in order and painted 150 ms after scrolling to the end and back
 - The preview webview is placed in window points, so its pane rect is scaled by
   the zoom. Verified in-app at 125 % and 80 %: within 0.5 pt of the pane.
 
+### Zoom is for the writing; the chrome stays put
+
+- Below 100 %, the page zoom shrinks the writing (editor, file list, chat,
+  History) but not the app's chrome:
+  - the title bar;
+  - pane headers and tabs;
+  - the sidebar's icons;
+  - the status bar;
+  - dialogs;
+  - the chat's controls row (mode, model, permissions, Send).
+- Each of those is zoomed back up as a whole with CSS `zoom: 1/zoom`. Its
+  text, icons and padding then keep their proportions.
+- **The earlier approach was replaced:** it kept only the icons at 100 %, so
+  at 67 % big icons sat beside small labels, and the assistant's header stood
+  taller than the tabs next to it.
+- At 100 % and above, everything zooms together, as before.
+- **Monaco is never inside a CSS-zoomed element,** which is what breaks its
+  hit-testing.
+- **WebKit details,** measured in the app: rects inside a zoomed element come
+  back in page coordinates, so code that positions things keeps working.
+  `vh`/`vw` inside one are scaled by the zoom too, so the few sizes there
+  divide by `--chrome-scale`.
+- Close buttons use the line-icon ×, not the text character, which looked
+  thin and off-centre:
+  - Settings;
+  - tabs;
+  - message attachments;
+  - allowed-command chips.
+- Verified (self-test `chrome`): at 67 % and 100 %, the toolbar, its icons and
+  text buttons, the tabs, the status bar, Send and the Settings close button
+  are the same size on screen. The pane headers' bottoms line up, and the
+  model list opens above its button inside the window.
+
 ### Title-bar inset (macOS 26)
 
 Windows get a full-size content view: the main webview spans the 32 pt title

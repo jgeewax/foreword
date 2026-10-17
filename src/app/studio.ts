@@ -3540,7 +3540,7 @@ export class Studio {
     this.zoomFactor = factor;
     const applied = await ipc.setUiZoom(factor);
     this.zoomFactor = applied;
-    // CSS can keep some controls a usable size when zoomed out (see .chrome-icon).
+    // Zoomed out, CSS keeps the app's chrome at 100% (see --chrome-scale).
     document.documentElement.style.setProperty('--ui-zoom', String(applied));
     this.store.set({ zoom: applied });
     if (persist) writeJson(ZOOM_KEY, applied);
