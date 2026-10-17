@@ -54,7 +54,7 @@
 
 - [x] clicking on a suggested thing in the empty state should just START the ai call, not just prefill the textbox.
 
-- [ ] templates should always include a makefile or some sort of build option that outputs the final result
+- [x] templates should always include a makefile or some sort of build option that outputs the final result
 
 - [ ] review mode, where i can add lots of comments across a chapter, section, paragraph, etc. and then we can address them all at once. we can explore this more to clarify what this should look like...
 

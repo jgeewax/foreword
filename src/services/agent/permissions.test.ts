@@ -19,7 +19,7 @@ const ro = sessionRules(PRESETS.readonly.permissions);
 describe('always', () => {
   it('denies Typst build commands, last, in every preset and mode', () => {
     for (const rules of [ask, edit, ro, sessionRules({ ...PRESETS.edit.permissions, shell: 'allow' }), sessionRules(PRESETS.edit.permissions, true)]) {
-      for (const cmd of ['typst compile main.typ', 'typst c main.typ out.pdf', 'cd book && typst watch main.typ', 'tinymist compile main.typ']) {
+      for (const cmd of ['typst compile main.typ', 'typst c main.typ out.pdf', 'cd book && typst watch main.typ', 'tinymist compile main.typ', 'make', 'make pdf', 'cd book && make watch']) {
         expect(effect('shell', cmd, rules), cmd).toBe('deny');
       }
       expect(rules.slice(-NO_COMPILE_RULES.length)).toEqual([...NO_COMPILE_RULES]);

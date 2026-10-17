@@ -77,6 +77,7 @@ function FileTree() {
         { label: 'New File…', accelerator: 'CmdOrCtrl+N', action: () => void studio.newFile('') },
         { label: 'New Folder…', action: () => void studio.newFolder('') },
         !studio.state.code.setUp && { label: 'Set Up Runnable Code…', action: () => void studio.code.setUp().then(() => studio.showSidebar('code')) },
+        !(studio.state.workspace?.files ?? []).includes('Makefile') && { label: 'Add a Makefile (Build from the Command Line)', action: () => void studio.addMakefile() },
         'separator',
         { label: 'Refresh', action: () => void studio.refreshFiles() },
         { label: 'Reveal Book Folder in Finder', action: () => void studio.reveal('') },

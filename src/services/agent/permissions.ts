@@ -81,6 +81,13 @@ export const NO_COMPILE_RULES: readonly PermissionRule[] = [
   { action: 'shell', resource: '*typst watch*', effect: 'deny' },
   { action: 'shell', resource: '*typst w *', effect: 'deny' },
   { action: 'shell', resource: '*tinymist*', effect: 'deny' },
+  // Book projects get a Makefile for the author; make would build the book too.
+  { action: 'shell', resource: 'make', effect: 'deny' },
+  { action: 'shell', resource: 'make *', effect: 'deny' },
+  { action: 'shell', resource: '* make', effect: 'deny' },
+  { action: 'shell', resource: '* make *', effect: 'deny' },
+  { action: 'shell', resource: '*;make*', effect: 'deny' },
+  { action: 'shell', resource: '*&&make*', effect: 'deny' },
 ];
 
 /** Plan and Options modes: no file changes and no commands, whatever the settings. */

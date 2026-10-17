@@ -10,7 +10,8 @@ describe('templateFiles', () => {
       const paths = files.map((f) => f.path);
       expect(paths).toContain('main.typ');
       expect(paths).toContain(t.firstFile);
-      expect(paths).toEqual(expect.arrayContaining(['.typst-studio.json', '.gitignore', 'WRITING_STYLE.md']));
+      expect(paths).toEqual(expect.arrayContaining(['.typst-studio.json', '.gitignore', 'Makefile', 'WRITING_STYLE.md']));
+      expect(files.find((f) => f.path === 'Makefile')!.text).toMatch(/^pdf:\n\t@mkdir -p export\n\ttypst compile --root \. \$\(MAIN\) \$\(PDF\)$/m);
       expect(JSON.parse(files.find((f) => f.path === '.typst-studio.json')!.text)).toEqual({ entryPoint: 'main.typ', outputDir: 'export' });
       for (const f of files) expect(f.text, f.path).not.toMatch(/\{\{\w+\}\}/);
       const main = files.find((f) => f.path === 'main.typ')!.text;
@@ -77,12 +78,22 @@ describe('paper templates', () => {
 
   it('adds project settings, a .gitignore and an academic style guide', () => {
     const files = paperExtras({ title: 'Sparse Attention' });
-    expect(files.map((f) => f.path)).toEqual(['.typst-studio.json', '.gitignore', 'WRITING_STYLE.md']);
-    expect(files[2].text).toContain('page limit');
+    expect(files.map((f) => f.path)).toEqual(['.typst-studio.json', '.gitignore', 'Makefile', 'WRITING_STYLE.md']);
+    expect(files[3].text).toContain('page limit');
   });
 
   it('asks the assistant to fill in title and authors', () => {
     expect(paperSetupMessage({ title: 'Sparse Attention', author: 'A. Example' })).toContain('“Sparse Attention” and the author(s) to “A. Example”');
+  });
+});
+
+describe('Makefile', () => {
+  it('names the PDF after the book and passes font folders', async () => {
+    const { makefile, pdfName } = await import('./makefile');
+    expect(pdfName('The “Quiet” Harbour: Part 1')).toBe('The-Quiet-Harbour-Part-1.pdf');
+    expect(pdfName('***')).toBe('book.pdf');
+    expect(makefile('X', 'book.typ', ['fonts'])).toContain('typst compile --root . --font-path "fonts" $(MAIN) $(PDF)');
+    expect(makefile('X', 'book.typ')).toContain('MAIN := book.typ');
   });
 });
 

@@ -24,6 +24,7 @@ import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles } from '../templates';
+import { makefile } from '../templates/makefile';
 import { snippetInsertion } from '../help/guide';
 import { CodeRunner, initialCode, type CodeState } from '../code/runner';
 import { OUTPUTS_FILE } from '../code/cells';
@@ -1057,6 +1058,21 @@ export class Studio {
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
     await this.send(todoPrompt(todo));
+  }
+
+  /** A Makefile so the book builds without Typst Studio (`make` → export/<name>.pdf). */
+  async addMakefile() {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    const fonts = this.state.project.settings.fontPaths ?? [];
+    try {
+      await ipc.fsWrite('Makefile', makefile(ws.name, ws.entry ?? 'main.typ', fonts), null);
+      await this.refreshFiles();
+      await this.openFile('Makefile');
+      this.toast('Added a Makefile: run make in the book folder to build the PDF into export/ (needs brew install typst).');
+    } catch (e) {
+      this.toast(`Couldn't add a Makefile: ${errorMessage(e)}`, 'error');
+    }
   }
 
   /** Open a file with the cursor on a line (1-based). */

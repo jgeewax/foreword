@@ -44,6 +44,10 @@ for (const id of readdirSync(root).filter((n) => statSync(join(root, n)).isDirec
     const output = `${run.stdout}${run.stderr}`.trim();
     if (run.status !== 0 || /warning/i.test(output)) throw new Error(output || `typst exited with ${run.status}`);
     const pdf = statSync(join(work, 'out.pdf')).size;
+    // The Makefile the app adds (same text as src/templates/makefile.ts, for this check).
+    writeFileSync(join(work, 'Makefile'), `MAIN := main.typ\nPDF  := export/check.pdf\npdf:\n\t@mkdir -p export\n\ttypst compile --root . $(MAIN) $(PDF)\n`);
+    const make = spawnSync('make', ['-s'], { cwd: work, encoding: 'utf8' });
+    if (make.status !== 0 || !statSync(join(work, 'export/check.pdf'), { throwIfNoEntry: false })) throw new Error(`make failed: ${make.stderr}`);
     if (pngDir) execFileSync('typst', ['compile', '--format', 'png', '--ppi', '40', 'main.typ', join(pngDir, `${id}-{0p}.png`)], { cwd: work });
     console.log(`ok   ${id} (${Math.round(pdf / 1024)} KB PDF)`);
   } catch (e) {

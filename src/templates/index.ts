@@ -6,6 +6,7 @@ import { serializeProjectSettings, PROJECT_FILE } from '../app/project-settings'
 import { STYLE_GUIDE_FILE, styleGuideTemplate, type StyleSection } from '../services/agent/style-guide';
 import { HELPER_FILE, OUTPUTS_FILE } from '../code/cells';
 import codeHelper from '../code/code.typ?raw';
+import { makefile } from './makefile';
 
 const RAW = import.meta.glob('./*/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -217,6 +218,7 @@ export function templateFiles(template: BookTemplate, info: BookInfo): { path: s
       : []),
     { path: PROJECT_FILE, text: serializeProjectSettings({}, { entryPoint: 'main.typ', outputDir: 'export' }) },
     { path: '.gitignore', text: '# Exported PDFs\nexport/\n' },
+    { path: 'Makefile', text: makefile(info.title) },
     { path: STYLE_GUIDE_FILE, text: styleGuideTemplate(info.title.trim() || 'Untitled', template.styleHints) },
   ];
 }
@@ -288,6 +290,7 @@ export function paperExtras(info: { title: string }): { path: string; text: stri
   return [
     { path: PROJECT_FILE, text: serializeProjectSettings({}, { entryPoint: 'main.typ', outputDir: 'export' }) },
     { path: '.gitignore', text: '# Exported PDFs\nexport/\n' },
+    { path: 'Makefile', text: makefile(info.title) },
     { path: STYLE_GUIDE_FILE, text: styleGuideTemplate(info.title.trim() || 'Untitled', PAPER_STYLE) },
   ];
 }
