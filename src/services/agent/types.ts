@@ -45,9 +45,10 @@ export interface AgentAdapter {
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;
-  createSession(model: ModelRef | null, opts?: { allowEdits?: boolean }): Promise<string>;
-  /** Whether the agent may edit files without asking; applies to a running session. */
-  setEditPolicy(sessionId: string, allowEdits: boolean): Promise<void>;
+  createSession(model: ModelRef | null, opts?: { allowEdits?: boolean; planning?: boolean }): Promise<string>;
+  /** Whether the agent may edit files without asking (and plan mode); applies to a running session. */
+  setEditPolicy(sessionId: string, allowEdits: boolean, planning?: boolean): Promise<void>;
+  switchAgent(sessionId: string, agent: 'build' | 'plan'): Promise<void>;
   /** Add (or replace) a named instruction block in the session's system context. */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;
   getInstructions(sessionId: string): Promise<{ key: string; value: unknown }[]>;

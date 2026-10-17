@@ -24,6 +24,7 @@ import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
+import { MODE_INSTRUCTIONS_KEY, PLAN_INSTRUCTIONS, WRITE_FROM_PLAN_PROMPT, type AgentMode } from '../services/agent/plan-mode';
 import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
@@ -74,6 +75,8 @@ export type StudioState = {
     running: boolean;
     items: ChatItem[];
     attachments: Attachment[];
+    /** Write (default) or Plan: discuss and outline without editing. */
+    mode: AgentMode;
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error' } | null;
@@ -113,6 +116,7 @@ const initialState: StudioState = {
     running: false,
     items: [],
     attachments: [],
+    mode: 'write',
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
@@ -641,6 +645,36 @@ export class Studio {
     }
   }
 
+  /** Switch between writing and planning (applies to the current conversation). */
+  async setMode(mode: AgentMode) {
+    if (mode === this.state.agent.mode) return;
+    this.setAgent({ mode });
+    const { sessionId } = this.state.agent;
+    if (!sessionId || !this.agent) return;
+    const planning = mode === 'plan';
+    try {
+      await this.agent.switchAgent(sessionId, planning ? 'plan' : 'build');
+      await this.agent.setEditPolicy(sessionId, this.state.settings.agentEdits === 'allow', planning);
+      if (planning) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, PLAN_INSTRUCTIONS);
+      else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
+      this.pushItem({
+        kind: 'notice',
+        id: uid('n'),
+        tone: 'info',
+        text: planning ? 'Plan mode: the agent discusses and outlines, and can’t change files.' : 'Write mode: the agent can edit the book again.',
+      });
+    } catch (e) {
+      this.setAgent({ mode: planning ? 'write' : 'plan' });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't switch to ${mode} mode: ${errorMessage(e)}` });
+    }
+  }
+
+  /** "Write it": leave plan mode and carry out the agreed plan. */
+  async writeFromPlan() {
+    await this.setMode('write');
+    if (this.state.agent.mode === 'write') await this.send(WRITE_FROM_PLAN_PROMPT);
+  }
+
   newSession() {
     if (this.state.agent.running) return;
     this.setAgent({ sessionId: null, title: null, items: [] });
@@ -697,7 +731,10 @@ export class Studio {
     try {
       let sessionId = this.state.agent.sessionId;
       if (!sessionId) {
-        sessionId = await agent.createSession(this.state.agent.model, { allowEdits: this.state.settings.agentEdits === 'allow' });
+        sessionId = await agent.createSession(this.state.agent.model, {
+          allowEdits: this.state.settings.agentEdits === 'allow',
+          planning: this.state.agent.mode === 'plan',
+        });
         this.setAgent({ sessionId });
         await this.applyInstructions(sessionId);
       }
@@ -745,6 +782,7 @@ export class Studio {
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
       if (this.styleGuideText?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText));
+      if (this.state.agent.mode === 'plan') await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, PLAN_INSTRUCTIONS);
     } catch (e) {
       // Still usable without them, but the agent will behave like a coding assistant: say so.
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't set the writing-assistant instructions: ${errorMessage(e)}` });
@@ -895,7 +933,7 @@ export class Studio {
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
     try {
-      await this.agent.setEditPolicy(sessionId, allowEdits);
+      await this.agent.setEditPolicy(sessionId, allowEdits, this.state.agent.mode === 'plan');
       this.pushItem({
         kind: 'notice',
         id: uid('n'),

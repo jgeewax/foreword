@@ -188,3 +188,7 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .style-bar { display: flex; gap: 6px; align-items: center; padding: 3px 10px; border-bottom: 1px solid var(--border); font-size: 11.5px; }
 .style-bar.setup { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; background: var(--bg-2); line-height: 1.4; }
 .style-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mode-switch { display: inline-flex; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.mode-switch button { border: none; border-radius: 0; background: transparent; padding: 1px 12px; font-size: 11.5px; color: var(--muted); }
+.mode-switch button.active { background: var(--accent); color: var(--accent-fg); }
+.plan-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }

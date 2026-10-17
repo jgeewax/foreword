@@ -78,9 +78,46 @@ function Item({ item }: { item: ChatItem }) {
   }
 }
 
+function ModeSwitch() {
+  const mode = useStore(studio.store, (s) => s.agent.mode);
+  const running = useStore(studio.store, (s) => s.agent.running);
+  return (
+    <div className="mode-switch" role="radiogroup" aria-label="Agent mode">
+      {(['write', 'plan'] as const).map((m) => (
+        <button
+          key={m}
+          role="radio"
+          aria-checked={mode === m}
+          className={mode === m ? 'active' : ''}
+          disabled={running}
+          title={m === 'write' ? 'The agent writes and edits the book' : 'Discuss and outline first; the agent can’t change files'}
+          onClick={() => void studio.setMode(m)}
+        >
+          {m === 'write' ? 'Write' : 'Plan'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Shown in plan mode once the agent has replied: carry out the plan. */
+function PlanActions() {
+  const show = useStore(studio.store, (s) => s.agent.mode === 'plan' && !s.agent.running && s.agent.items.some((i) => i.kind === 'assistant'));
+  if (!show) return null;
+  return (
+    <div className="plan-actions">
+      <span className="muted">Happy with the plan?</span>
+      <button className="primary" onClick={() => void studio.writeFromPlan()}>
+        Write it
+      </button>
+    </div>
+  );
+}
+
 function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
   const running = useStore(studio.store, (s) => s.agent.running);
+  const mode = useStore(studio.store, (s) => s.agent.mode);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const sendKey = useStore(studio.store, (s) => s.settings.sendKey);
   const [text, setText] = useState('');
@@ -95,6 +132,8 @@ function Composer() {
 
   return (
     <div className="composer">
+      <PlanActions />
+      <ModeSwitch />
       {attachments.length > 0 && (
         <div className="chips">
           {attachments.map((a) => (
@@ -111,7 +150,7 @@ function Composer() {
         ref={inputRef}
         value={text}
         rows={3}
-        placeholder={ready ? 'Ask about the selection, or request an edit…' : 'Agent not available'}
+        placeholder={!ready ? 'Agent not available' : mode === 'plan' ? 'What should we plan? A chapter, a section, an argument…' : 'Ask about the selection, or request an edit…'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey) === 'send') {

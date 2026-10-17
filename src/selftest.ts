@@ -257,6 +257,63 @@ async function styleGuideChecks() {
   return out;
 }
 
+/** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
+async function planModeChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const savedPolicy = studio.state.settings.agentEdits;
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.updateSettings({ agentEdits: 'allow' });
+  studio.newSession();
+  await studio.setMode('plan');
+  const hashBefore = await ipc.fsHash(file);
+
+  const plan = await askAgent('Plan a short new section for chapter 2 about the trace of a matrix and how it relates to the eigenvalues.');
+  const sid = studio.state.agent.sessionId!;
+  const session = (await ipc.agentRequest('GET', `/api/session/${sid}`)).body?.data;
+  out.plan = {
+    agent: session?.agent,
+    instructionKeys: (await studio.agent!.getInstructions(sid)).map((e) => e.key),
+    numberedOutline: /^\s*(\d+[.)]|#+\s*\d)/m.test(plan),
+    endsWithQuestion: /\?\s*(\*\*)?\s*$/.test(plan.trim()) || /\?[^?]{0,200}$/.test(plan.trim()),
+    replyStart: plan.slice(0, 500),
+    fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
+  };
+  await sleep(300);
+  out.writeItButtonShown = !!document.querySelector('.plan-actions button');
+  try {
+    out.snapshot = await ipc.previewSnapshot('plan-mode', 'main');
+  } catch (e) {
+    out.snapshot = errorMessage(e);
+  }
+
+  // Asked to write while still planning: nothing changes.
+  const from = studio.state.agent.items.length;
+  const pushy = await askAgent(`Go ahead and add that section to ${file} right now.`);
+  const items = studio.state.agent.items.slice(from);
+  out.writeWhilePlanning = {
+    tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}${(i as any).status === 'failed' ? `: ${(i as any).detail}` : ''}`),
+    fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
+    reply: pushy.slice(0, 300),
+  };
+
+  // "Write it": back to write mode, and the plan gets written.
+  await studio.writeFromPlan();
+  await sleep(1000);
+  await waitFor(() => !studio.state.agent.running, 180000, 'write from plan').catch(() => {});
+  await sleep(1500);
+  const after = (await ipc.fsRead(file)).text;
+  out.writeIt = {
+    mode: studio.state.agent.mode,
+    agent: (await ipc.agentRequest('GET', `/api/session/${sid}`)).body?.data?.agent,
+    fileChanged: (await ipc.fsHash(file)) !== hashBefore,
+    mentionsTrace: /trace/i.test(after),
+    addedLines: after.split('\n').length,
+  };
+  studio.updateSettings({ agentEdits: savedPolicy });
+  return out;
+}
+
 /**
  * Edit setting (TODO #7). Makes real edits, so it only runs with
  * TYPST_STUDIO_SELFTEST_EDITS=1 against a scratch copy of a book.
@@ -573,6 +630,8 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && launch.selftestAgent) {
       log('style guide');
       result.styleGuide = await styleGuideChecks();
+      log('plan mode');
+      result.planMode = await planModeChecks();
       log('edit policy');
       result.editPolicy = await editPolicyChecks();
     }

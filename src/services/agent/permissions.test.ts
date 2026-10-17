@@ -56,3 +56,16 @@ describe('edit policy', () => {
     expect(allow.slice(-NO_COMPILE_RULES.length)).toEqual([...NO_COMPILE_RULES]);
   });
 });
+
+describe('plan mode', () => {
+  it('blocks edits and commands even with auto-edit on, and keeps reading allowed', () => {
+    for (const allowEdits of [false, true]) {
+      const plan = sessionPermissions({ allowEdits, planning: true });
+      expect(effect('edit', 'chapters/ch1.typ', plan)).toBe('deny');
+      expect(effect('edit', 'chapters/new.typ', plan)).toBe('deny');
+      expect(effect('shell', 'ls', plan)).toBe('deny');
+      expect(effect('read', 'chapters/ch1.typ', plan)).toBe('allow');
+      expect(plan.slice(-NO_COMPILE_RULES.length)).toEqual([...NO_COMPILE_RULES]);
+    }
+  });
+});
