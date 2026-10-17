@@ -8,7 +8,7 @@
 
 - [x] Are we customizing the system prompt for this? we need ot be sure that we're not asking the models to write code via opencode. it needs to know its writing .typ files for a book
 
-- [ ] a settings UI for everything we can put into the .typst-studio.json file
+- [x] a settings UI for everything we can put into the .typst-studio.json file
 
 - [ ] advanced multi-option mode (ask the model to fix something, but give you 3 options)
 

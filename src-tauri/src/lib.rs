@@ -242,6 +242,20 @@ pub fn run() {
                 app_menu.insert(&settings, 2)?;
                 app_menu.insert(&PredefinedMenuItem::separator(handle)?, 3)?;
             }
+            if let Some(file) = items
+                .iter()
+                .filter_map(|i| i.as_submenu())
+                .find(|s| s.text().is_ok_and(|t| t == "File"))
+            {
+                let export = MenuItem::with_id(
+                    handle,
+                    "export-pdf",
+                    "Export PDF",
+                    true,
+                    Some("CmdOrCtrl+Shift+E"),
+                )?;
+                file.prepend_items(&[&export, &PredefinedMenuItem::separator(handle)?])?;
+            }
             if let Some(view) = items
                 .iter()
                 .filter_map(|i| i.as_submenu())
@@ -253,7 +267,7 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
-            if id.starts_with("zoom-") || id == "settings" {
+            if id.starts_with("zoom-") || id == "settings" || id == "export-pdf" {
                 let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
             }
         })

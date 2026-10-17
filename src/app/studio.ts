@@ -8,9 +8,18 @@ import { monaco } from '../editor/monaco';
 import { jumpCandidates } from '../editor/preview-sync';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
-import { Channel, errorMessage, ipc, type Bounds, type LaunchOptions, type ToolsStatus, type WorkspaceInfo } from '../lib/ipc';
+import { Channel, errorMessage, ipc, isCmdError, type Bounds, type LaunchOptions, type ToolsStatus, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
+import {
+  absoluteFontPaths,
+  outputPathPattern,
+  parseProjectSettings,
+  PROJECT_FILE,
+  serializeProjectSettings,
+  validateProjectSettings,
+  type ProjectSettings,
+} from './project-settings';
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
@@ -71,6 +80,9 @@ export type StudioState = {
   zoom: number;
   settings: AppSettings;
   settingsOpen: boolean;
+  /** `.typst-studio.json` of the open workspace. */
+  project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
+  exporting: boolean;
 };
 
 const initialState: StudioState = {
@@ -104,6 +116,8 @@ const initialState: StudioState = {
   zoom: 1,
   settings: loadSettings(),
   settingsOpen: false,
+  project: { settings: {}, raw: {}, hash: null, error: null },
+  exporting: false,
 };
 
 const LAST_WORKSPACE = 'studio.lastWorkspace';
@@ -184,6 +198,7 @@ export class Studio {
     });
     void listen<string>('menu', (e) => {
       if (e.payload === 'settings') return this.openSettings();
+      if (e.payload === 'export-pdf') return void this.exportPdf();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
     });
@@ -250,6 +265,7 @@ export class Studio {
     });
     this.store.set({ workspace: info, opening: null, tabs: [], active: null });
 
+    await this.loadProjectSettings();
     void this.startTypst();
     void this.startAgent();
 
@@ -282,14 +298,17 @@ export class Studio {
       compile: { status: 'idle' },
       preview: { status: 'off' },
       agent: initialState.agent,
+      project: initialState.project,
     });
   }
 
   async refreshFiles() {
-    const ws = this.state.workspace;
-    if (!ws) return;
+    const root = this.state.workspace?.root;
+    if (!root) return;
     const files = await ipc.workspaceList();
-    this.store.set({ workspace: { ...ws, files } });
+    // Update only the file list, against the current workspace: other fields (the
+    // entry point) may have changed while the listing was in flight.
+    this.store.set((s) => (s.workspace?.root === root ? { workspace: { ...s.workspace, files } } : {}));
   }
 
   private onDiskChange(paths: string[]) {
@@ -300,6 +319,7 @@ export class Studio {
       this.pendingDisk.clear();
       void this.docs?.diskChanged(batch);
       void this.refreshFiles();
+      if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
     }, 120);
   }
 
@@ -482,7 +502,11 @@ export class Studio {
     }
     this.store.set({ preview: { status: 'starting' } });
     try {
-      const { previewUrl } = await this.typst.start(ws.root, ws.entry);
+      const project = this.state.project.settings;
+      const { previewUrl } = await this.typst.start(ws.root, ws.entry, {
+        outputPath: outputPathPattern(project),
+        fontPaths: absoluteFontPaths(project, ws.root),
+      });
       this.docs?.syncLsp();
       this.store.set({ preview: { status: 'starting', url: previewUrl } });
       await this.showPreview();
@@ -514,6 +538,7 @@ export class Studio {
     this.previewOpened = true;
     try {
       await ipc.previewOpen(url, this.previewBounds);
+      this.syncPreviewVisibility(); // opening shows the webview; respect an open dialog
       setTimeout(() => {
         if (this.state.preview.status === 'starting') this.store.set((s) => ({ preview: { ...s.preview, status: 'ready' } }));
       }, 3000);
@@ -872,6 +897,85 @@ export class Studio {
     }
   }
 
+  // ---- project settings (.typst-studio.json) -----------------------------------------
+
+  /** Read the project file. With `restartIfNeeded`, restart Typst when an entry/font/output setting changed on disk. */
+  async loadProjectSettings({ restartIfNeeded = false } = {}) {
+    let text: string | null = null;
+    let hash: string | null = null;
+    try {
+      const file = await ipc.fsRead(PROJECT_FILE);
+      text = file.text;
+      hash = file.hash;
+    } catch (e) {
+      if (!isCmdError(e) || e.kind !== 'notFound') {
+        this.store.set((s) => ({ project: { ...s.project, error: errorMessage(e) } }));
+        return;
+      }
+    }
+    if (hash !== null && hash === this.state.project.hash) return; // our own write echoing back
+    const before = this.state.project.settings;
+    const parsed = parseProjectSettings(text);
+    this.store.set({ project: { settings: parsed.settings, raw: parsed.raw, hash, error: parsed.error } });
+    if (restartIfNeeded && needsRestart(before, parsed.settings)) await this.applyEntryAndRestart(parsed.settings);
+  }
+
+  /** Save project settings; returns validation or write errors (empty on success). */
+  async updateProjectSettings(patch: ProjectSettings): Promise<string[]> {
+    const ws = this.state.workspace;
+    if (!ws) return ['No project is open.'];
+    const { project } = this.state;
+    if (project.error) return [project.error];
+    const next = { ...project.settings, ...patch };
+    const errors = validateProjectSettings(next, ws.files.filter((f) => f.endsWith('.typ')));
+    if (errors.length) return errors;
+    const text = serializeProjectSettings(project.raw, patch);
+    try {
+      const hash = await ipc.fsWrite(PROJECT_FILE, text, project.hash);
+      const parsed = parseProjectSettings(text);
+      this.store.set({ project: { settings: parsed.settings, raw: parsed.raw, hash, error: null } });
+    } catch (e) {
+      if (isCmdError(e) && e.kind === 'conflict') {
+        await this.loadProjectSettings();
+        return [`${PROJECT_FILE} changed on disk; reloaded it. Try again.`];
+      }
+      return [`Couldn't save ${PROJECT_FILE}: ${errorMessage(e)}`];
+    }
+    if (needsRestart(project.settings, next)) await this.applyEntryAndRestart(next);
+    return [];
+  }
+
+  private async applyEntryAndRestart(settings: ProjectSettings) {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    const entry = settings.entryPoint && ws.files.includes(settings.entryPoint) ? settings.entryPoint : ws.entry;
+    if (entry !== ws.entry) this.store.set({ workspace: { ...ws, entry } });
+    await this.restartTypst();
+  }
+
+  /** Export the entry point to PDF through Tinymist, after saving open edits. */
+  async exportPdf() {
+    const ws = this.state.workspace;
+    if (!ws || this.state.exporting) return;
+    if (!this.typst.running) {
+      this.toast('Export needs the Typst preview running. Restart the preview and try again.', 'error');
+      return;
+    }
+    this.store.set({ exporting: true });
+    try {
+      const failures = (await this.docs?.saveAll()) ?? [];
+      if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
+      const path = await this.typst.exportPdf();
+      const rel = path.startsWith(ws.root + '/') ? path.slice(ws.root.length + 1) : path;
+      this.toast(`Exported ${rel}`);
+      void this.refreshFiles();
+    } catch (e) {
+      this.toast(`Export failed: ${errorMessage(e)}`, 'error');
+    } finally {
+      this.store.set({ exporting: false });
+    }
+  }
+
   // ---- zoom -----------------------------------------------------------------------
 
   /** ⌘= / ⌘− / ⌘0. The same press can arrive as a key event and as a menu event; apply it once. */
@@ -904,6 +1008,11 @@ export class Studio {
   now() {
     return clock();
   }
+}
+
+/** Settings Tinymist reads at start-up: changing them needs a restart. */
+function needsRestart(a: ProjectSettings, b: ProjectSettings): boolean {
+  return a.entryPoint !== b.entryPoint || (a.outputDir ?? '') !== (b.outputDir ?? '') || JSON.stringify(a.fontPaths ?? []) !== JSON.stringify(b.fontPaths ?? []);
 }
 
 function summarizeToolInput(input: unknown): string {

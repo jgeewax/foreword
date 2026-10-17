@@ -13,14 +13,19 @@ const CONFIG = {
   preview: { refresh: 'onType', partialRendering: true },
 };
 
-function lookupConfig(section?: string): unknown {
-  if (!section || section === 'tinymist') return CONFIG;
+type Config = typeof CONFIG & { outputPath?: string; fontPaths?: string[] };
+
+function lookupConfig(config: Config, section?: string): unknown {
+  if (!section || section === 'tinymist') return config;
   if (!section.startsWith('tinymist.')) return null;
   return section
     .slice('tinymist.'.length)
     .split('.')
-    .reduce<any>((o, k) => (o == null ? null : (o[k] ?? null)), CONFIG);
+    .reduce<any>((o, k) => (o == null ? null : (o[k] ?? null)), config);
 }
+
+/** Per-project options that Tinymist reads at start-up. */
+export type TypstOptions = { outputPath?: string; fontPaths?: string[] };
 
 export type CompileStatus = {
   status: 'compiling' | 'compileSuccess' | 'compileError';
@@ -48,8 +53,13 @@ export class TypstService extends Emitter<Events> {
   private pending = new Map<number, Pending>();
   running = false;
   bin = '';
+  private config: Config = CONFIG;
+  private entryAbs = '';
 
-  async start(root: string, entry: string): Promise<{ previewUrl: string }> {
+  async start(root: string, entry: string, options: TypstOptions = {}): Promise<{ previewUrl: string }> {
+    // Export location and fonts are read at initialization (verified: outputPath is
+    // ignored when only answered via workspace/configuration).
+    this.config = { ...CONFIG, ...(options.outputPath ? { outputPath: options.outputPath } : {}), ...(options.fontPaths?.length ? { fontPaths: options.fontPaths } : {}) };
     const channel = new Channel<any>();
     channel.onmessage = (msg) => this.dispatch(msg);
     this.bin = (await ipc.typstStart(channel)).bin;
@@ -66,11 +76,11 @@ export class TypstService extends Emitter<Events> {
         workspace: { configuration: true, workspaceFolders: true },
         window: { workDoneProgress: false, showDocument: { support: true } },
       },
-      initializationOptions: CONFIG,
+      initializationOptions: this.config,
     });
     this.notify('initialized', {});
 
-    const entryAbs = `${root}/${entry}`;
+    const entryAbs = (this.entryAbs = `${root}/${entry}`);
     await this.executeCommand('tinymist.pinMain', [entryAbs]);
     const preview = await this.executeCommand('tinymist.doStartPreview', [
       ['--task-id', PREVIEW_TASK, '--data-plane-host', '127.0.0.1:0', entryAbs],
@@ -109,6 +119,13 @@ export class TypstService extends Emitter<Events> {
   scrollPreviewTo(absPath: string, line: number, character: number) {
     if (!this.running) return Promise.resolve();
     return this.executeCommand('tinymist.scrollPreview', [PREVIEW_TASK, { event: 'panelScrollTo', filepath: absPath, line, character }]);
+  }
+
+  /** Export the entry point to PDF (to the configured output folder). Returns the written path. */
+  async exportPdf(): Promise<string> {
+    const res = await this.executeCommand('tinymist.exportPdf', [this.entryAbs]);
+    if (!res?.path) throw new Error('Tinymist did not report an output file');
+    return res.path as string;
   }
 
   executeCommand(command: string, args: unknown[]) {
@@ -153,7 +170,7 @@ export class TypstService extends Emitter<Events> {
       // Server → client request.
       let result: unknown = null;
       if (msg.method === 'workspace/configuration') {
-        result = msg.params.items.map((i: any) => lookupConfig(i.section));
+        result = msg.params.items.map((i: any) => lookupConfig(this.config, i.section));
       } else if (msg.method === 'window/showDocument') {
         // Preview → source: Tinymist sends this when rendered content is clicked.
         const { uri, selection } = msg.params;

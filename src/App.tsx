@@ -90,6 +90,12 @@ export function App() {
     // Capture phase, so zoom keys win over Monaco; preventDefault also stops the
     // native View-menu shortcut from applying the same press twice.
     const onZoomKey = (e: KeyboardEvent) => {
+      if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        e.stopPropagation();
+        void studio.exportPdf();
+        return;
+      }
       if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key === ',') {
         e.preventDefault();
         e.stopPropagation();

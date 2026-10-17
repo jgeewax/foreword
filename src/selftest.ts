@@ -140,6 +140,57 @@ async function previewChecks(chapter: string, editor: monaco.editor.IStandaloneC
 }
 
 /**
+ * Project settings (TODO #5): .typst-studio.json from the Settings UI. Writes
+ * files, so only with TYPST_STUDIO_SELFTEST_EDITS=1 on a scratch book that has
+ * an alt.typ entry and a .typst-studio.json with an unknown "custom" key.
+ */
+async function projectSettingsChecks() {
+  const out: Record<string, unknown> = {};
+  const raw = async () => JSON.parse((await ipc.fsRead('.typst-studio.json')).text);
+  const compiled = async () => {
+    await sleep(500);
+    await waitFor(() => studio.state.preview.status !== 'starting' && studio.state.compile.status === 'ok', 30000, 'compile').catch(() => {});
+    await sleep(800);
+    return studio.state.compile.pages;
+  };
+  out.initial = { settings: studio.state.project.settings, entry: studio.state.workspace?.entry, pages: await compiled() };
+
+  studio.openSettings();
+  await sleep(500);
+  out.sectionShown = !!document.querySelector('#project-entry');
+  try {
+    out.snapshot = await ipc.previewSnapshot('project-settings', 'main');
+  } catch (e) {
+    out.snapshot = errorMessage(e);
+  }
+  studio.closeSettings();
+
+  // Output folder + export.
+  out.setOutput = await studio.updateProjectSettings({ outputDir: 'dist' });
+  await compiled();
+  await studio.exportPdf();
+  out.exportToast = studio.state.toast?.text;
+  out.pdfWritten = (await ipc.fsHash('dist/main.pdf')) !== null;
+
+  // Validation: refused, file unchanged.
+  const before = await raw();
+  out.badOutputErrors = await studio.updateProjectSettings({ outputDir: '../outside' });
+  out.unchangedAfterBadValue = JSON.stringify(await raw()) === JSON.stringify(before);
+
+  // Entry point switch recompiles from the new file.
+  out.setEntry = await studio.updateProjectSettings({ entryPoint: 'alt.typ' });
+  out.afterEntrySwitch = { entry: studio.state.workspace?.entry, pages: await compiled() };
+  out.fileAfter = await raw();
+
+  // External edit of the file is picked up (and restarts on the main file again).
+  const current = await ipc.fsRead('.typst-studio.json');
+  await ipc.fsWrite('.typst-studio.json', JSON.stringify({ ...JSON.parse(current.text), entryPoint: 'main.typ' }, null, 2) + '\n', current.hash);
+  await sleep(1500);
+  out.afterExternalEdit = { entry: studio.state.workspace?.entry, pages: await compiled(), settingsEntry: studio.state.project.settings.entryPoint };
+  return out;
+}
+
+/**
  * Edit setting (TODO #7). Makes real edits, so it only runs with
  * TYPST_STUDIO_SELFTEST_EDITS=1 against a scratch copy of a book.
  */
@@ -449,6 +500,10 @@ export async function runSelftest(launch: LaunchOptions) {
       result.agent = await agentTurn(chapter, line);
     }
     if (launch.selftestEdits) {
+      log('project settings');
+      result.projectSettings = await projectSettingsChecks();
+    }
+    if (launch.selftestEdits && launch.selftestAgent) {
       log('edit policy');
       result.editPolicy = await editPolicyChecks();
     }

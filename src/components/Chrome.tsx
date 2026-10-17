@@ -6,6 +6,7 @@ const stat = (s: Stat) => (s.n ? `${ms(s.p50)}/${ms(s.p95)} ms` : '–');
 
 export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' | 'agent') => void }) {
   const ws = useStore(studio.store, (s) => s.workspace);
+  const exporting = useStore(studio.store, (s) => s.exporting);
   return (
     <header className="toolbar">
       <button className="icon" title="Toggle explorer (⌘B)" onClick={() => onToggle('explorer')}>
@@ -20,6 +21,11 @@ export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' 
         </>
       )}
       <span className="spacer" />
+      {ws && (
+        <button title="Export the book to PDF (⇧⌘E)" disabled={exporting} onClick={() => void studio.exportPdf()}>
+          {exporting ? 'Exporting…' : 'Export PDF'}
+        </button>
+      )}
       <button title="Open folder (⌘O)" onClick={() => void studio.chooseWorkspace()}>
         Open…
       </button>
