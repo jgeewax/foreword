@@ -139,6 +139,58 @@ async function previewChecks(chapter: string, editor: monaco.editor.IStandaloneC
   return { states, snapshots, clickToSource };
 }
 
+/**
+ * Edit setting (TODO #7). Makes real edits, so it only runs with
+ * TYPST_STUDIO_SELFTEST_EDITS=1 against a scratch copy of a book.
+ */
+async function editPolicyChecks() {
+  const out: Record<string, unknown> = {};
+  const savedPolicy = studio.state.settings.agentEdits;
+  const file = 'chapters/ch1-vectors.typ';
+  const heading = async () => (await ipc.fsRead(file)).text.split('\n')[0];
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.updateSettings({ agentEdits: 'ask' });
+  studio.newSession();
+  out.headingBefore = await heading();
+
+  const turn = async (text: string) => {
+    const from = studio.state.agent.items.length;
+    await studio.send(text);
+    await sleep(1000);
+    // Stop at a permission card or the end of the turn.
+    await waitFor(() => !studio.state.agent.running || studio.state.agent.items.slice(from).some((i) => i.kind === 'permission' && i.state === 'pending'), 120000, text).catch(() => {});
+    return studio.state.agent.items.slice(from);
+  };
+
+  // 1. Ask mode: a permission card appears; rejecting leaves the file alone.
+  const askItems = await turn(`In ${file}, change the first line's heading text "Vectors" to "Vectors (ask test)". Use your edit tool. Change nothing else.`);
+  const card = askItems.find((i) => i.kind === 'permission');
+  out.askMode = { permissionCard: card ? { action: (card as any).action, resources: (card as any).resources, hasPatch: (card as any).patches?.length > 0 } : null };
+  if (card) await studio.replyPermission(card.id, 'reject');
+  await waitFor(() => !studio.state.agent.running, 60000, 'turn end after reject').catch(() => {});
+  await sleep(1000);
+  (out.askMode as any).headingAfterReject = await heading();
+
+  // 2. Switch to automatic mid-conversation: the next edit lands without a prompt.
+  studio.updateSettings({ agentEdits: 'allow' });
+  await sleep(800);
+  out.switchNotice = studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as any).text).pop();
+  const autoItems = await turn(`Now do it: in ${file}, change the first line's heading text "Vectors" to "Vectors (auto test)". Use your edit tool. Change nothing else.`);
+  await sleep(1500);
+  out.allowMode = {
+    permissionCards: autoItems.filter((i) => i.kind === 'permission').length,
+    tools: autoItems.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}`),
+    headingAfter: await heading(),
+  };
+  // The open buffer (if any) follows the file on disk.
+  await studio.openFile(file);
+  await sleep(500);
+  (out.allowMode as any).editorFirstLine = studio.editor?.getModel()?.getLineContent(1);
+
+  studio.updateSettings({ agentEdits: savedPolicy });
+  return out;
+}
+
 /** Searchable model picker (TODO #3). Restores the user's model choice afterwards. */
 async function modelPickerChecks() {
   const out: Record<string, unknown> = {};
@@ -395,6 +447,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestAgent) {
       log('agent');
       result.agent = await agentTurn(chapter, line);
+    }
+    if (launch.selftestEdits) {
+      log('edit policy');
+      result.editPolicy = await editPolicyChecks();
     }
     result.perfHud = studio.state.perf;
     result.ok = true;

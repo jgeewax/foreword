@@ -663,7 +663,7 @@ export class Studio {
     try {
       let sessionId = this.state.agent.sessionId;
       if (!sessionId) {
-        sessionId = await agent.createSession(this.state.agent.model);
+        sessionId = await agent.createSession(this.state.agent.model, { allowEdits: this.state.settings.agentEdits === 'allow' });
         this.setAgent({ sessionId });
         await this.applyInstructions(sessionId);
       }
@@ -848,9 +848,28 @@ export class Studio {
   }
 
   updateSettings(patch: Partial<AppSettings>) {
-    const settings = { ...this.state.settings, ...patch };
+    const before = this.state.settings;
+    const settings = { ...before, ...patch };
     saveSettings(settings);
     this.store.set({ settings });
+    if (settings.agentEdits !== before.agentEdits) void this.applyEditPolicy(settings.agentEdits === 'allow');
+  }
+
+  /** Apply the edit setting to the current session, and say so in the chat. */
+  private async applyEditPolicy(allowEdits: boolean) {
+    const { sessionId } = this.state.agent;
+    if (!sessionId || !this.agent) return;
+    try {
+      await this.agent.setEditPolicy(sessionId, allowEdits);
+      this.pushItem({
+        kind: 'notice',
+        id: uid('n'),
+        tone: 'info',
+        text: allowEdits ? 'The agent can now edit files without asking.' : 'The agent will ask before editing files.',
+      });
+    } catch (e) {
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change edit permissions for this session: ${errorMessage(e)}` });
+    }
   }
 
   // ---- zoom -----------------------------------------------------------------------

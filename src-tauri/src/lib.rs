@@ -79,6 +79,9 @@ struct LaunchOptions {
     selftest_out: Option<String>,
     /// `TYPST_STUDIO_SELFTEST_AGENT=1`: include a real agent turn in the self-test.
     selftest_agent: bool,
+    /// `TYPST_STUDIO_SELFTEST_EDITS=1`: let the self-test's agent edit files
+    /// (only ever pointed at a scratch copy of a book).
+    selftest_edits: bool,
 }
 
 #[tauri::command]
@@ -95,6 +98,7 @@ fn launch_options() -> LaunchOptions {
         }),
         selftest_out: std::env::var("TYPST_STUDIO_SELFTEST").ok(),
         selftest_agent: std::env::var("TYPST_STUDIO_SELFTEST_AGENT").is_ok_and(|v| v == "1"),
+        selftest_edits: std::env::var("TYPST_STUDIO_SELFTEST_EDITS").is_ok_and(|v| v == "1"),
     }
 }
 

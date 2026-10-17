@@ -27,6 +27,25 @@ export const NO_COMPILE_RULES = [
   { action: 'shell', resource: '*tinymist*', effect: 'deny' },
 ] as const;
 
+/**
+ * Auto-edit (setting "allow edits without asking"). The edit tool and the
+ * write tool (new files) both use the `edit` action (verified); .env files
+ * still ask.
+ */
+export const ALLOW_EDIT_RULES = [
+  { action: 'edit', resource: '*', effect: 'allow' },
+  { action: 'edit', resource: '*.env', effect: 'ask' },
+  { action: 'edit', resource: '*.env.*', effect: 'ask' },
+] as const;
+
+export type PermissionRule = { action: string; resource: string; effect: 'allow' | 'ask' | 'deny' };
+
+/** Rules for a session. Build-command denials always come last (last match wins). */
+export function sessionPermissions({ allowEdits }: { allowEdits: boolean }): PermissionRule[] {
+  const base = SESSION_PERMISSIONS.slice(0, SESSION_PERMISSIONS.length - NO_COMPILE_RULES.length);
+  return [...base, ...(allowEdits ? ALLOW_EDIT_RULES : []), ...NO_COMPILE_RULES];
+}
+
 export const SESSION_PERMISSIONS = [
   { action: '*', resource: '*', effect: 'ask' },
   { action: 'read', resource: '*', effect: 'allow' },
@@ -96,13 +115,18 @@ export class OpenCodeAdapter implements AgentAdapter {
     return d ? { providerID: d.providerID, id: d.id } : null;
   }
 
-  async createSession(model: ModelRef | null): Promise<string> {
+  async createSession(model: ModelRef | null, { allowEdits = false } = {}): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? { providerID: model.providerID, id: model.id } : null,
-      permissions: SESSION_PERMISSIONS,
+      permissions: sessionPermissions({ allowEdits }),
     });
     return res.data.id;
+  }
+
+  /** Switch a live session between asking before edits and editing freely (verified to apply mid-session). */
+  async setEditPolicy(sessionId: string, allowEdits: boolean) {
+    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionPermissions({ allowEdits }) });
   }
 
   // Experimental in OpenCode 2.0.20; entries appear as `api/<key>` in the system context (verified).

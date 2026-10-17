@@ -12,7 +12,7 @@
 
 - [ ] advanced multi-option mode (ask the model to fix something, but give you 3 options)
 
-- [ ] setting for whether the model can make edits or not by default
+- [x] setting for whether the model can make edits or not by default
 
 - [ ] a way to track history , maybe git? do lots of auto commits? or something else?
 

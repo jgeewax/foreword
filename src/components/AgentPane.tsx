@@ -139,6 +139,20 @@ function Composer() {
   );
 }
 
+function EditPolicyToggle() {
+  const policy = useStore(studio.store, (s) => s.settings.agentEdits);
+  const allow = policy === 'allow';
+  return (
+    <button
+      className={`chip-toggle${allow ? ' on' : ''}`}
+      title={allow ? 'The agent edits files without asking. Click to ask first.' : 'The agent asks before editing files. Click to allow edits without asking.'}
+      onClick={() => studio.updateSettings({ agentEdits: allow ? 'ask' : 'allow' })}
+    >
+      {allow ? 'Edits: automatic' : 'Edits: ask first'}
+    </button>
+  );
+}
+
 export function AgentPane() {
   const agent = useStore(studio.store, (s) => s.agent);
   const listRef = useRef<HTMLDivElement>(null);
@@ -164,6 +178,8 @@ export function AgentPane() {
           <>
             <span className={agent.connection === 'lost' ? 'bad' : ''}>{agent.connection === 'lost' ? 'Event stream reconnecting…' : agent.title ?? 'New session'}</span>
             {agent.running && <span className="working">working…</span>}
+            <span className="spacer" />
+            <EditPolicyToggle />
           </>
         )}
         {agent.status === 'error' && (

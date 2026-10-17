@@ -3,13 +3,18 @@
 
 export type SendKey = 'enter' | 'mod-enter';
 
+export type EditPolicy = 'ask' | 'allow';
+
 export type AppSettings = {
   /** Which key sends a chat message. */
   sendKey: SendKey;
+  /** Whether the agent may change files without asking each time. */
+  agentEdits: EditPolicy;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   sendKey: 'enter',
+  agentEdits: 'ask',
 };
 
 const KEY = 'studio.settings';
@@ -32,6 +37,7 @@ export function saveSettings(settings: AppSettings) {
 function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const out: Partial<AppSettings> = {};
   if (raw.sendKey === 'enter' || raw.sendKey === 'mod-enter') out.sendKey = raw.sendKey;
+  if (raw.agentEdits === 'ask' || raw.agentEdits === 'allow') out.agentEdits = raw.agentEdits;
   return out;
 }
 

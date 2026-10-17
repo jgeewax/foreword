@@ -23,6 +23,7 @@ export type LaunchOptions = {
   sampleBook: string | null;
   selftestOut: string | null;
   selftestAgent: boolean;
+  selftestEdits: boolean;
 };
 export type Bounds = { x: number; y: number; width: number; height: number };
 export type AgentInfo = { baseUrl: string; bin: string };
