@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeTool, fileName, firstHeading, includedFiles, type BookNames } from './tool-labels';
+import { describePermission, describeTool, fileName, firstHeading, includedFiles, type BookNames } from './tool-labels';
 
 const names: BookNames = {
   root: '/b',
@@ -47,10 +47,27 @@ describe('tool calls in words', () => {
   });
 
   it('describes commands, the web and anything else', () => {
-    expect(describeTool('bash', { command: 'python3 count.py' }, names)).toMatchObject({ done: 'Ran a command', code: 'python3 count.py' });
+    expect(describeTool('bash', { command: 'python3 count.py' }, names)).toMatchObject({ done: 'Ran the Python script count.py', code: 'python3 count.py' });
+    expect(describeTool('bash', { command: "sed -n '1,40p' chapters/01-storm.typ" }, names)).toMatchObject({
+      done: 'Read “The Storm” (chapter 1)',
+      note: 'lines 1–40',
+      path: 'chapters/01-storm.typ',
+    });
     expect(describeTool('webfetch', { url: 'https://typst.app/docs/' }, names).done).toBe('Read a web page (typst.app)');
     expect(describeTool('websearch', { query: 'typst footnotes' }, names).running).toBe('Searching the web for “typst footnotes”');
     expect(describeTool('mystery', {}, names).done).toBe('Used mystery');
     expect(describeTool('question', {}, names, 'User has answered your questions: "Next chapter?"="Determinants". You can now continue.').note).toBe('you said “Determinants”');
+  });
+});
+
+describe('permission questions in words', () => {
+  it('says what the assistant wants to do, with the command kept', () => {
+    expect(describePermission('shell', ["sed -n '205,242p' chapters/01-storm.typ"], names)).toEqual({
+      what: 'read “The Storm” (chapter 1), lines 205–242',
+      code: "sed -n '205,242p' chapters/01-storm.typ",
+    });
+    expect(describePermission('edit', ['/b/chapters/02-harbour.typ', '/b/main.typ'], names).what).toBe('change “The Harbour” (chapter 2) and the main file');
+    expect(describePermission('read', ['/b/.env'], names).what).toBe('read .env, which can hold passwords or keys');
+    expect(describePermission('external_directory', ['/Users/a/Downloads/*'], names).what).toBe('use files outside the book (/Users/a/Downloads/*)');
   });
 });

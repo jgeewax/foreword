@@ -140,7 +140,7 @@
 
 - [x] why is the model trying to run sed so muhc? "Allow shell sed -n '205,242p' chapters/ch01_what_is_a_vector.typ?" thats crazy. why not tell the model to use tools we have that dont need approval?
 
-- [ ] explain all tool calls in english. this is NOT A SYSTEM FOR ENGINEERS ITS FOR WRITERS
+- [x] explain all tool calls in english. this is NOT A SYSTEM FOR ENGINEERS ITS FOR WRITERS
 
 - [ ] sometimes teh book root is inside a subdirectory (like src/). can we make our project config json file understand that ?
 
@@ -157,3 +157,5 @@
 - [ ] when i type im seeing lots of click indicators on the preview like i clicked 4x times. none of them are on the part that im typing in
 
 - [x] update system prompt to encourage one sentence per line.
+
+- [ ] add support for git repository ... i need that for my existing books. they have git repos already.

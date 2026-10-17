@@ -265,7 +265,12 @@ button.tool-label { font-size: 12px; text-align: left; color: var(--fg); text-de
 button.tool-label:hover { color: var(--accent); text-decoration-color: currentColor; }
 .tool.running .tool-label { color: var(--muted); }
 .tool-note { color: var(--muted); white-space: nowrap; }
-.tool-code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; padding: 0 4px; border-radius: 3px; background: var(--bg-2); color: var(--fg); }
+/* The exact command behind a row in words: quiet, one click away. */
+.tool-command { font: 11px/1.4 "SF Mono", Menlo, monospace; color: var(--muted); background: var(--bg-2); border-radius: 5px; padding: 4px 6px; margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto; }
+.permission-title { line-height: 1.45; }
+.permission-command { margin-top: 4px; }
+.permission-command summary { font-size: 11px; color: var(--muted); cursor: default; }
+.permission-command summary:hover { color: var(--fg); }
 .tool-status { flex: none; width: 12px; display: inline-flex; justify-content: center; }
 .tool-spinner { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--border); border-top-color: var(--accent); animation: spin 0.75s linear infinite; align-self: center; }
 .tool-summary { font-family: "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

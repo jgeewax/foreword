@@ -3108,6 +3108,9 @@ export class Studio {
     } catch {}
   }
 
+  /** The progress line while a permission question waits, to go back to once it's answered. */
+  private activityBeforeAsking: StudioState['agent']['activity'] = null;
+
   /** Permission requests answered by the app, and ones it gave back to the author (the reply failed). */
   private answered = new Set<string>();
 
@@ -3265,11 +3268,19 @@ export class Studio {
           patches: e.patches,
           state: 'pending',
         });
+        // Nothing runs until the author answers: say so, not "Running…".
+        this.activityBeforeAsking = this.state.agent.activity;
+        this.setActivity({ phase: 'asking' });
         break;
       case 'permission-replied':
         this.updateItem(e.requestId, (it) =>
           it.kind === 'permission' ? { ...it, state: (['once', 'always', 'reject'].includes(e.reply) ? e.reply : 'reject') as 'once' } : it,
         );
+        if (this.state.agent.activity?.phase === 'asking' && this.activityBeforeAsking) {
+          const { since: _since, ...before } = this.activityBeforeAsking;
+          this.setActivity(e.reply === 'reject' ? { phase: 'thinking' } : before);
+        }
+        this.activityBeforeAsking = null;
         break;
       case 'session-error':
         if (!this.turnErrors.has(e.message)) this.agentError(e.message);

@@ -3,6 +3,7 @@
 // for “lighthouse”"), not tool names and paths. The same text, in the
 // present tense, is the progress line while the tool runs.
 import { bookPath } from './ai-marks';
+import { describeCommand } from './command-words';
 import { resolveRef } from './references';
 
 /** What the book calls its files: the main file, the chapters it includes (in order), and headings. */
@@ -50,7 +51,7 @@ export type ToolLabel = {
   running: string;
   /** Shown after the label, quieter: lines read, matches found. */
   note?: string;
-  /** A command, shown as code. */
+  /** The command itself, shown when the row is opened. */
   code?: string;
   /** The file it's about (for a link). */
   path?: string;
@@ -109,8 +110,11 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
       return { done: `Edited ${what}`, running: `Editing ${what}`, path: files.length === 1 ? files[0] : undefined };
     }
     case 'bash':
-    case 'shell':
-      return { done: 'Ran a command', running: 'Running a command', code: String(o.command ?? '').trim() };
+    case 'shell': {
+      const command = String(o.command ?? '').trim();
+      const words = describeCommand(command, names);
+      return { done: words.done, running: words.running, note: words.note, path: words.path, code: command };
+    }
     case 'webfetch': {
       let host = '';
       try {
@@ -133,6 +137,36 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
       return { done: `Used the ${String(o.name ?? '')} skill`, running: `Using the ${String(o.name ?? '')} skill` };
     default:
       return { done: `Used ${name}`, running: `Using ${name}` };
+  }
+}
+
+/**
+ * A permission question in words, completing "The assistant wants to …":
+ * "read “The Storm” (chapter 1), lines 205–242". `code` is the command, if any.
+ */
+export function describePermission(action: string, resources: readonly string[], names: BookNames): { what: string; code?: string } {
+  const files = () => {
+    const named = resources.map((r) => fileName(bookPath(names.root, r) ?? r, names));
+    return named.length <= 3 ? named.join(', ').replace(/, ([^,]*)$/, ' and $1') : `${named.slice(0, 2).join(', ')} and ${named.length - 2} more files`;
+  };
+  switch (action) {
+    case 'shell':
+    case 'bash': {
+      const command = resources.join('\n');
+      return { what: describeCommand(command, names).ask, code: command };
+    }
+    case 'edit':
+      return { what: `change ${files()}` };
+    case 'read':
+      return { what: `read ${files()}, which can hold passwords or keys` };
+    case 'external_directory':
+      return { what: `use files outside the book (${resources.join(', ')})` };
+    case 'webfetch':
+      return { what: `read a web page (${resources.join(', ')})` };
+    case 'websearch':
+      return { what: `search the web${resources.length ? ` for ${resources.map((r) => `“${r}”`).join(', ')}` : ''}` };
+    default:
+      return { what: `use ${action}${resources.length ? ` (${resources.join(', ')})` : ''}` };
   }
 }
 

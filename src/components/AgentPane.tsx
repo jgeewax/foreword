@@ -13,7 +13,7 @@ import { TypstGuide } from './TypstGuide';
 import { ContextMeter, TaskMenu } from './TaskMenu';
 import { withoutMarker } from '../app/tasks';
 import { withoutAddressed } from '../app/review';
-import { describeTool } from '../app/tool-labels';
+import { describePermission, describeTool } from '../app/tool-labels';
 import { parseSlash, slashMatches } from '../app/slash';
 import type { SourceSelection } from '../editor/selection';
 
@@ -255,6 +255,39 @@ function QuestionCard({ item }: { item: QuestionItem }) {
   );
 }
 
+/** A question about something the assistant may not do without asking, in words; the exact command folds out. */
+function PermissionCard({ item }: { item: Extract<ChatItem, { kind: 'permission' }> }) {
+  const names = useStore(studio.store, (s) => s.names);
+  const pending = item.state === 'pending' || item.state === 'sending';
+  const { what, code } = describePermission(item.action, item.resources, names);
+  return (
+    <div className={`permission ${pending ? 'pending' : item.state}`}>
+      <div className="permission-title">
+        {pending ? 'The assistant wants to' : item.state === 'reject' ? 'You didn’t let the assistant' : 'You let the assistant'} {what}.
+      </div>
+      {code && (
+        <details className="permission-command">
+          <summary>Show the command</summary>
+          <pre className="tool-command">{code}</pre>
+        </details>
+      )}
+      {item.patches.map((p) => (
+        <Patch key={p.file} text={p.patch} />
+      ))}
+      {pending && (
+        <div className="permission-actions">
+          <button className="primary" disabled={item.state === 'sending'} title="Just this once; it asks again next time" onClick={() => void studio.replyPermission(item.id, 'once')}>
+            Allow
+          </button>
+          <button disabled={item.state === 'sending'} onClick={() => void studio.replyPermission(item.id, 'reject')}>
+            Don’t allow
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A tool call in words ("Read “The Storm” (chapter 2) · lines 1–40"); its raw output folds out. */
 function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
   const names = useStore(studio.store, (s) => s.names);
@@ -284,8 +317,9 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
           <span className="tool-label">{text}</span>
         )}
         {note && <span className="tool-note">· {note}</span>}
-        {label.code && <code className="tool-code">{label.code}</code>}
       </summary>
+      {/* The command itself, for the curious: in words above, exact here. */}
+      {label.code && <pre className="tool-command">{label.code}</pre>}
       {item.detail && <pre className="tool-detail">{item.detail}</pre>}
     </details>
   );
@@ -395,31 +429,8 @@ function ItemBody({ item }: { item: ChatItem }) {
       );
     case 'tool':
       return <ToolRow item={item} />;
-    case 'permission': {
-      const pending = item.state === 'pending' || item.state === 'sending';
-      return (
-        <div className={`permission ${pending ? 'pending' : item.state}`}>
-          <div className="permission-title">
-            Allow <strong>{item.action}</strong> {item.resources.join(', ')}?
-          </div>
-          {item.patches.map((p) => (
-            <Patch key={p.file} text={p.patch} />
-          ))}
-          {pending ? (
-            <div className="permission-actions">
-              <button className="primary" disabled={item.state === 'sending'} onClick={() => void studio.replyPermission(item.id, 'once')}>
-                Allow once
-              </button>
-              <button disabled={item.state === 'sending'} onClick={() => void studio.replyPermission(item.id, 'reject')}>
-                Reject
-              </button>
-            </div>
-          ) : (
-            <div className="permission-result">{item.state === 'reject' ? 'Rejected' : 'Allowed'}</div>
-          )}
-        </div>
-      );
-    }
+    case 'permission':
+      return <PermissionCard item={item} />;
     case 'notice':
       return (
         <div className={`notice ${item.tone}`}>

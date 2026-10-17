@@ -1324,8 +1324,7 @@ pane top (off by 0 pt).
     "Read the style guide";
   - "Searched for “lighthouse” in chapters/ · 3 matches", "Looked for
     **/*.typ · 12 files";
-  - "Edited “The Harbour” (chapter 3)", "Ran a command `python3 count.py`",
-    "Read a web page (typst.app)".
+  - "Edited “The Harbour” (chapter 3)", "Read a web page (typst.app)".
 - While a tool runs, the progress line says the same in the present tense
   ("Reading …"), with a small spinner on the row.
 - **Names:** chapters are numbered by the main file's `#include` order
@@ -1335,6 +1334,38 @@ pane top (off by 0 pt).
 - The file in a row is a link: reads open with their lines selected, edits
   open the file. The raw output still folds out under the row, and its tooltip
   keeps the tool name and input.
+- **Shell commands in words too** (`command-words.ts`), since the book is
+  for writers, not engineers. Shell rows used to say "Ran a command" plus the
+  command; permission cards said "Allow shell sed -n '205,242p' …?".
+  - **Commands described:**
+    - reading: `cat`, `head`/`tail` with "the first 40 lines", `sed -n
+      '205,242p'` with "lines 205–242";
+    - `ls`, `find`, `grep`/`rg` (flags with values skipped), `wc`, `diff`;
+    - the Git look commands;
+    - `mv` (rename or move), `cp`, `rm`, `mkdir`;
+    - `echo … > f` and here-documents (wrote f);
+    - scripts ("Ran the Python script plot.py", "Ran some Python code"),
+      installs, downloads (by host), and builds ("Tried to build the book").
+  - **Anything else:** "Ran the command “pandoc”".
+  - **Command lines:** they're split at `&&`, `;` and newlines. In a pipeline
+    only the first command counts, since the rest shape its output. `cd` and
+    bare `echo` separators are left out. Two steps are joined with "then",
+    and more are counted.
+  - The command itself folds out under the row.
+- **Permission cards** say "The assistant wants to read “What Is a Vector”
+  (chapter 1), lines 205–242." with **Allow** (this once) and **Don't allow**.
+  The command is under "Show the command".
+  - Edits name the chapters; `.env` reads say they can hold passwords; other
+    folders and web requests are named.
+  - Once answered: "You let the assistant …" / "You didn't let the
+    assistant …".
+  - While one waits, the progress line says "Waiting for your answer" rather
+    than "Running…", and goes back once it's answered.
+- Verified (self-test `readtools`, real model):
+  - A `sed` row read "Read “Eigenvalues” (chapter 2) · lines 12–14".
+  - A `python3 -c` request asked "The assistant wants to run some Python
+    code.", with the command folded away and the progress line waiting.
+  - Turned down, it said "You didn't let the assistant run some Python code."
 
 ### Printing with Mixam
 

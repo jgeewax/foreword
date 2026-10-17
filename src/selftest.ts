@@ -2442,6 +2442,27 @@ async function readToolsChecks() {
   };
   out.plain = await run("What do lines 12 to 18 of chapters/ch2-eigenvalues.typ say? Don't change anything.");
   out.sed = await run("Run exactly this in the shell and tell me what it prints: sed -n '12,14p' chapters/ch2-eigenvalues.typ");
+  out.rows = [...document.querySelectorAll('.tool summary')].map((e) => e.textContent);
+  out.snapshotRows = await snap('tool-rows');
+  // A command that asks: the question in words, the command folded away; then turned down.
+  studio.newSession();
+  void studio.send("Run exactly this in the shell and tell me the result: python3 -c 'print(6*7)'");
+  await waitFor(() => studio.state.agent.items.some((i) => i.kind === 'permission' && (i as any).state === 'pending'), 90000, 'permission').catch(() => {});
+  await sleep(300);
+  out.question = document.querySelector('.permission.pending .permission-title')?.textContent;
+  out.questionCommand = document.querySelector('.permission.pending .permission-command pre')?.textContent;
+  out.activityWhileAsking = document.querySelector('.activity-line')?.textContent;
+  out.snapshotQuestion = await snap('permission-question');
+  const pending = studio.state.agent.items.find((i) => i.kind === 'permission' && (i as any).state === 'pending');
+  if (pending) await studio.replyPermission(pending.id, 'reject');
+  await sleep(500);
+  out.afterReject = document.querySelector('.permission .permission-title')?.textContent;
+  out.debug = {
+    agentPaneWidth: Math.round(document.querySelector('.agent-pane')?.getBoundingClientRect().width ?? -1),
+    kinds: studio.state.agent.items.map((i) => `${i.kind}${i.kind === 'tool' ? `:${(i as any).name}` : ''}${i.kind === 'permission' ? `:${(i as any).state}` : ''}`),
+    toolEls: document.querySelectorAll('.tool').length,
+  };
+  await waitFor(() => !studio.state.agent.running, 60000, 'stop').catch(() => {});
   studio.updateSettings({ permissions: policy });
   return out;
 }
