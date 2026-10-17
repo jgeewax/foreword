@@ -798,6 +798,46 @@ pane top (off by 0 pt).
   the reasoning parts' times).
 - `prefers-reduced-motion` stops the spinner and the sweep.
 
+### Several tasks at once
+
+- OpenCode runs conversations concurrently and its event stream carries every
+  session's events. The app shows one conversation, while others carry on.
+- **Leaving a conversation** that's at work or waiting on the author (switching,
+  or New task) keeps it in `agent.background`.
+  - Its own events keep a small status up to date: at work and what it's
+    doing ("Reading “The Storm” (chapter 2)", "Writing…", "The model is busy,
+    trying again"), needs you (a question or a permission), new reply, or
+    stopped.
+  - The full transcript isn't mirrored in the background; switching back
+    reloads it from OpenCode.
+- **When a background turn ends:**
+  - its changes become a History version, labelled with the message that
+    started it, and the editor marks refresh;
+  - a notice "“…” is done." (or "needs you: it has a question") has a Show
+    button;
+  - turns that end without an event (a rejected permission) are caught by
+    polling `/api/session/active` every 4 s while any run.
+- **Switching back:**
+  - The transcript, pending permission cards
+    (`GET /api/permission/request`, filtered to the conversation) and
+    pending questions are fetched, and whether it's running comes from
+    `/api/session/active`.
+  - Saved items now get the ids the live events use (text and reasoning
+    numbered per kind within a message; tools by call id), so a reply still
+    being written carries on in the same item.
+  - Switching doesn't go through the end-of-turn hooks, since leaving isn't
+    the end of a turn.
+- **Task menu:** groups In progress (the shown one while it runs, plus the
+  background ones, each with what it's doing), Open and Done. The trigger shows
+  how many others are at work (spinner) and how many need you (orange).
+  Switching and New task are no longer blocked while something runs.
+- **Verified with a real model** (self-test `multitask`):
+  - A carried on in the background while B was asked and answered.
+  - A's finish produced "… is done." with Show and a "new reply" status.
+  - Switching back showed A's replies.
+  - Leaving and returning mid-reply ended with one reply item and the full
+    text.
+
 ### Messages while the assistant works: queue, send now, take back
 
 - **OpenCode 2 does this natively.** Each conversation has an inbox, and

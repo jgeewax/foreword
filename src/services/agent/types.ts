@@ -106,6 +106,10 @@ export interface AgentAdapter {
    * `steer` hands it to the running turn at its next step. Returns its inbox id.
    */
   send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[], delivery?: Delivery): Promise<string | null>;
+  /** Conversations with a turn running now. */
+  activeSessions(): Promise<Set<string>>;
+  /** Permission requests waiting in a conversation (after a switch). */
+  pendingPermissions(sessionId: string): Promise<{ requestId: string; action: string; resources: string[]; patches: FilePatch[] }[]>;
   /** Questions waiting for the author (after a reload or a switch of conversation). */
   pendingForms(sessionId: string): Promise<FormRequest[]>;
   replyForm(sessionId: string, formId: string, answer: FormAnswer): Promise<void>;

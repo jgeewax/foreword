@@ -59,6 +59,19 @@ import { TypstService } from '../services/typst';
 
 export type ToastAction = { label: string; run: () => void };
 
+/** A conversation that isn't shown: what it's doing, and whether it needs the author. */
+export type BackgroundTask = {
+  running: boolean;
+  /** Waiting on the author: a permission card or a question. */
+  attention: 'permission' | 'question' | null;
+  /** Finished, with a reply the author hasn't seen. */
+  unread: boolean;
+  /** What it's doing now ("Reading “The Storm” (chapter 2)"), or how it ended. */
+  label: string;
+  since: number;
+  failed?: string;
+};
+
 /** A message sent while the assistant works: `id` is OpenCode's inbox id once it has one. */
 export type QueuedMessage = { id: string; text: string; attachments: string[]; delivery: Delivery; sending: boolean };
 
@@ -172,6 +185,8 @@ export type StudioState = {
     activity: Activity | null;
     /** Messages sent during a turn, waiting for it (queue) or for its next step (steer). */
     queued: QueuedMessage[];
+    /** Other conversations still at work, or waiting on the author, while another is shown. */
+    background: Record<string, BackgroundTask>;
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error'; actions?: ToastAction[] } | null;
@@ -254,6 +269,7 @@ const initialState: StudioState = {
     compacting: false,
     activity: null,
     queued: [],
+    background: {},
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
@@ -2079,9 +2095,11 @@ export class Studio {
     if (!ws) return;
     const agent = new OpenCodeAdapter(ws.root);
     this.agent = agent;
-    this.setAgent({ status: 'starting', error: undefined });
+    this.setAgent({ status: 'starting', error: undefined, background: {} });
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = agent.subscribe((e) => this.onAgentEvent(e));
+    window.clearInterval(this.backgroundPoll);
+    this.backgroundPoll = window.setInterval(() => void this.pollBackground(), 4000);
     try {
       await agent.start();
       this.setAgent({ status: 'ready' });
@@ -2164,9 +2182,124 @@ export class Studio {
   }
 
   newSession() {
-    if (this.state.agent.running) return;
-    this.setAgent({ sessionId: null, title: null, items: [], contextTokens: null, queued: [] });
+    // A conversation still at work carries on in the background.
+    this.stashCurrent();
+    this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null } }));
     this.setAiReads([]);
+  }
+
+  // ---- several conversations at once ----------------------------------------------------
+
+  private backgroundPoll: number | undefined;
+  /** The message that started each conversation's current turn (History labels its version with it). */
+  private turnMessages = new Map<string, string>();
+
+  private setBackground(sessionId: string, task: BackgroundTask | null) {
+    this.store.set((s) => {
+      const background = { ...s.agent.background };
+      if (task) background[sessionId] = task;
+      else delete background[sessionId];
+      return { agent: { ...s.agent, background } };
+    });
+  }
+
+  /** Leaving the shown conversation: if it's at work or waiting on the author, it's tracked in the background. */
+  private stashCurrent() {
+    const a = this.state.agent;
+    if (!a.sessionId) return;
+    const attention = a.items.some((i) => i.kind === 'question' && i.state === 'pending')
+      ? 'question'
+      : a.items.some((i) => i.kind === 'permission' && i.state === 'pending')
+        ? 'permission'
+        : null;
+    if (!a.running && !attention) return;
+    this.turnMessages.set(a.sessionId, this.turnMessage);
+    this.setBackground(a.sessionId, { running: a.running, attention, unread: false, label: activityText(a.activity), since: a.activity?.since ?? Date.now() });
+  }
+
+  /** A conversation's title; until OpenCode has named it, its first words. */
+  private taskTitle(sessionId: string) {
+    const title = this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title;
+    if (title && title !== 'Untitled task') return title;
+    const first = (this.turnMessages.get(sessionId) ?? '').replace(/\s+/g, ' ').trim();
+    return first ? (first.length > 48 ? `${first.slice(0, 47)}…` : first) : 'A task';
+  }
+
+  /** Events of a conversation that isn't shown: its status in the task list, and a note when it needs the author or ends. */
+  private backgroundEvent(e: AgentEvent) {
+    if (!('sessionId' in e) || !e.sessionId) return;
+    const sessionId = e.sessionId;
+    const bg = this.state.agent.background[sessionId];
+    // Only this book's known conversations.
+    if (!bg && !this.state.agent.tasks.some((t) => t.sessionId === sessionId)) return;
+    const base: BackgroundTask = bg ?? { running: false, attention: null, unread: false, label: '', since: Date.now() };
+    const set = (patch: Partial<BackgroundTask>) => this.setBackground(sessionId, { ...base, ...patch });
+    const show = { label: 'Show', run: () => void this.switchTask(sessionId) };
+    switch (e.type) {
+      case 'turn-started':
+        if (!base.running) set({ running: true, unread: false, since: Date.now(), label: 'Thinking…', failed: undefined });
+        break;
+      case 'step-started':
+      case 'reasoning-delta':
+        if (base.label !== 'Thinking…') set({ label: 'Thinking…' });
+        break;
+      case 'text-delta':
+        if (base.label !== 'Writing…') set({ label: 'Writing…' });
+        break;
+      case 'retry-scheduled':
+        set({ label: 'The model is busy, trying again' });
+        break;
+      case 'tool-started':
+        this.toolCalls.set(e.callId, { name: e.name });
+        set({ label: toolActivity(e.name, undefined, this.state.names) });
+        break;
+      case 'tool-called': {
+        const name = this.toolCalls.get(e.callId)?.name ?? '';
+        set({ label: toolActivity(name, e.input, this.state.names) });
+        break;
+      }
+      case 'tool-succeeded':
+      case 'tool-failed':
+        this.toolCalls.delete(e.callId);
+        break;
+      case 'permission-asked':
+      case 'form-asked': {
+        const attention = e.type === 'form-asked' ? 'question' : 'permission';
+        set({ attention });
+        this.toast(`“${this.taskTitle(sessionId)}” needs you: ${attention === 'question' ? 'it has a question' : 'it asks for permission'}.`, 'info', [show]);
+        break;
+      }
+      case 'permission-replied':
+      case 'form-settled':
+        if (base.attention) set({ attention: null });
+        break;
+      case 'session-renamed':
+        void this.loadTasks();
+        break;
+      case 'turn-finished':
+        this.backgroundFinished(sessionId, e.outcome === 'failed' ? (e.error ?? 'it stopped with an error') : undefined);
+        break;
+    }
+  }
+
+  /** A background conversation's turn ended: its changes become a History version, and the author hears of it. */
+  private backgroundFinished(sessionId: string, failed?: string) {
+    const bg = this.state.agent.background[sessionId];
+    if (!bg?.running) return;
+    this.setBackground(sessionId, { ...bg, running: false, unread: true, label: failed ? `Stopped: ${failed}` : 'Finished', failed });
+    const title = this.taskTitle(sessionId);
+    void this.history.afterAgent(this.turnMessages.get(sessionId) || title).then(() => this.refreshAiEdits());
+    void this.loadTasks();
+    this.toast(failed ? `“${title}” stopped: ${failed}` : `“${title}” is done.`, failed ? 'error' : 'info', [{ label: 'Show', run: () => void this.switchTask(sessionId) }]);
+  }
+
+  /** Turns can end without an event (a rejected permission): check the running background ones now and then. */
+  private async pollBackground() {
+    const running = Object.entries(this.state.agent.background).filter(([, b]) => b.running);
+    if (!running.length || !this.agent) return;
+    const active = await this.agent.activeSessions().catch(() => null);
+    if (!active) return;
+    for (const [sessionId] of running) if (!active.has(sessionId)) this.backgroundFinished(sessionId);
   }
 
   // ---- tasks (conversations) ----------------------------------------------------------
@@ -2199,20 +2332,49 @@ export class Studio {
     }
   }
 
-  /** Open another conversation: its messages come back from OpenCode. */
+  /** Open another conversation: its messages come back from OpenCode. One at work carries on in the background. */
   async switchTask(sessionId: string) {
-    if (!this.agent || this.state.agent.running || sessionId === this.state.agent.sessionId) return;
+    const agent = this.agent;
+    if (!agent || sessionId === this.state.agent.sessionId) return;
     try {
-      const messages = await this.agent.sessionContext(sessionId);
+      const [messages, active, permissions] = await Promise.all([
+        agent.sessionContext(sessionId),
+        agent.activeSessions().catch(() => new Set<string>()),
+        agent.pendingPermissions(sessionId).catch(() => []),
+      ]);
+      this.stashCurrent();
       const task = this.state.agent.tasks.find((t) => t.sessionId === sessionId);
       const root = this.state.workspace?.root ?? '';
-      this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages, root), contextTokens: contextTokens(messages), attachments: [], queued: [] });
+      const bg = this.state.agent.background[sessionId];
+      const running = active.has(sessionId);
+      const items: ChatItem[] = itemsFromContext(messages, root);
+      for (const p of permissions) items.push({ kind: 'permission', id: p.requestId, action: p.action, resources: p.resources, patches: p.patches, state: 'pending' });
+      this.turnMessage = this.turnMessages.get(sessionId) ?? '';
+      // Not setAgent: leaving a running conversation isn't the end of its turn.
+      this.store.set((s) => {
+        const background = { ...s.agent.background };
+        delete background[sessionId];
+        return {
+          agent: {
+            ...s.agent,
+            sessionId,
+            title: task?.title ?? null,
+            items,
+            contextTokens: contextTokens(messages),
+            attachments: [],
+            queued: [],
+            running,
+            activity: running ? { phase: 'thinking', since: bg?.since ?? Date.now() } : null,
+            background,
+          },
+        };
+      });
       this.setAiReads(readsFromContext(messages, root));
       void this.syncQuestions();
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
-      await this.agent.switchAgent(sessionId, config.agent).catch(() => {});
-      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands()).catch(() => {});
+      await agent.switchAgent(sessionId, config.agent).catch(() => {});
+      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands()).catch(() => {});
       await this.applyInstructions(sessionId);
     } catch (e) {
       this.toast(`Couldn't open that conversation: ${errorMessage(e)}`, 'error');
@@ -2651,7 +2813,7 @@ export class Studio {
       this.setAgent({ connection: e.status });
       return;
     }
-    if (e.sessionId !== this.state.agent.sessionId) return;
+    if (e.sessionId !== this.state.agent.sessionId) return this.backgroundEvent(e);
     switch (e.type) {
       case 'turn-started':
         // Also when a queued message starts the next turn by itself.
@@ -3216,6 +3378,13 @@ export class Studio {
 /** Settings Tinymist reads at start-up: changing them needs a restart. */
 function needsRestart(a: ProjectSettings, b: ProjectSettings): boolean {
   return a.entryPoint !== b.entryPoint || (a.outputDir ?? '') !== (b.outputDir ?? '') || JSON.stringify(a.fontPaths ?? []) !== JSON.stringify(b.fontPaths ?? []);
+}
+
+/** A running turn's activity in a few words (the task list). */
+export function activityText(a: Activity | null): string {
+  if (!a) return '';
+  if (a.phase === 'tool') return a.label ?? 'Working';
+  return { sending: 'Sending…', thinking: 'Thinking…', writing: 'Writing…', retrying: 'The model is busy, trying again', asking: 'Waiting for your answer', tool: '' }[a.phase];
 }
 
 function summarizeToolInput(input: unknown): string {

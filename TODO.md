@@ -72,9 +72,9 @@
 
 - [x] less engineery tool calls (read/grep => Reading Chapter 4 (lines 1-200) / Searching for "xyz")
 
-- [ ] i cant switch tasks and have multiple tasks going at the same time... thats aproblem. i need to be able to multi-task
+- [x] i cant switch tasks and have multiple tasks going at the same time... thats aproblem. i need to be able to multi-task
 
-- [ ] easily see which tasks are in progress and group by those so i can easily switch around and see whats going on
+- [x] easily see which tasks are in progress and group by those so i can easily switch around and see whats going on
 
 - [x] allow chat interruptions, queueing by default, push to interrupt if needed
 

@@ -116,6 +116,23 @@ export class OpenCodeAdapter implements AgentAdapter {
     return (res.data?.id as string | undefined) ?? null;
   }
 
+  async activeSessions() {
+    const active = (await call('GET', '/api/session/active')).data ?? {};
+    return new Set<string>(Array.isArray(active) ? active.map((s: any) => s?.id ?? s) : Object.keys(active));
+  }
+
+  async pendingPermissions(sessionId: string) {
+    const res = await call('GET', `/api/permission/request?location[directory]=${encodeURIComponent(this.root)}`);
+    return ((res.data ?? []) as any[])
+      .filter((p) => p?.sessionID === sessionId && typeof p.id === 'string')
+      .map((p) => ({
+        requestId: p.id as string,
+        action: String(p.action ?? ''),
+        resources: Array.isArray(p.resources) ? p.resources.map(String) : [],
+        patches: Array.isArray(p.metadata?.files) ? p.metadata.files.map((f: any) => ({ file: String(f.file ?? ''), patch: String(f.patch ?? '') })) : [],
+      }));
+  }
+
   async pendingForms(sessionId: string) {
     const res = await call('GET', `/api/session/${sessionId}/form`);
     return ((res.data ?? []) as any[]).map(toFormRequest).filter((f): f is FormRequest => !!f);

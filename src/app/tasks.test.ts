@@ -59,6 +59,22 @@ describe('restoring a conversation', () => {
     expect(readsFromContext([{ id: 'c', type: 'compaction', summary: 'x', recent: context }], '/books/b')).toHaveLength(1);
   });
 
+  it('gives items the ids live events use, so a switch mid-reply carries on', () => {
+    const items = itemsFromContext([
+      {
+        id: 'msg_a',
+        type: 'assistant',
+        content: [
+          { type: 'reasoning', text: 'Plan it.' },
+          { type: 'tool', id: 'call_9', name: 'read', state: { status: 'running', input: { path: 'main.typ' } } },
+          { type: 'text', text: '' },
+          { type: 'text', text: 'Second text part.' },
+        ],
+      },
+    ]);
+    expect(items.map((i) => `${i.kind}:${i.id}${i.kind === 'tool' ? `:${i.status}` : ''}`)).toEqual(['thinking:msg_a:r0', 'tool:call_9:running', 'assistant:msg_a:1']);
+  });
+
   it('reads the context size from the latest call', () => {
     expect(contextTokens(context)).toBe(9500);
     expect(contextTokens([])).toBeNull();

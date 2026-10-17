@@ -53,29 +53,59 @@ export function TaskMenu() {
     };
   }, [open]);
 
-  const openTasks = agent.tasks.filter((t) => t.status === 'open');
-  const doneTasks = agent.tasks.filter((t) => t.status === 'done');
-  const row = (t: (typeof agent.tasks)[number]) => (
-    <button
-      key={t.sessionId}
-      className={`task-row${t.sessionId === agent.sessionId ? ' current' : ''}${t.status === 'done' ? ' done' : ''}`}
-      disabled={agent.running}
-      onClick={() => {
-        setOpen(false);
-        void studio.switchTask(t.sessionId);
-      }}
-    >
-      <span className="task-status">{t.status === 'done' ? '✓' : t.sessionId === agent.sessionId ? '●' : '○'}</span>
-      <span className="task-title">{t.title}</span>
-      <span className="task-when">{ago(t.updated)}</span>
-    </button>
-  );
+  // In progress: the shown one while it runs, and any at work or waiting in the background.
+  const busy = (id: string) => (id === agent.sessionId ? agent.running : !!agent.background[id]);
+  const inProgress = agent.tasks.filter((t) => busy(t.sessionId));
+  const openTasks = agent.tasks.filter((t) => t.status === 'open' && !busy(t.sessionId));
+  const doneTasks = agent.tasks.filter((t) => t.status === 'done' && !busy(t.sessionId));
+  const status = (t: (typeof agent.tasks)[number]) => {
+    if (t.sessionId === agent.sessionId) return agent.running ? { icon: <span className="tool-spinner" />, text: 'working', tone: 'busy' } : { icon: '●', text: '', tone: 'current' };
+    const bg = agent.background[t.sessionId];
+    if (bg?.attention) return { icon: '!', text: bg.attention === 'question' ? 'has a question' : 'asks permission', tone: 'attention' };
+    if (bg?.running) return { icon: <span className="tool-spinner" />, text: bg.label, tone: 'busy' };
+    if (bg?.unread) return { icon: '●', text: bg.failed ? 'stopped' : 'new reply', tone: bg.failed ? 'failed' : 'unread' };
+    return { icon: t.status === 'done' ? '✓' : '○', text: '', tone: '' };
+  };
+  const row = (t: (typeof agent.tasks)[number]) => {
+    const st = status(t);
+    return (
+      <button
+        key={t.sessionId}
+        className={`task-row${t.sessionId === agent.sessionId ? ' current' : ''}${t.status === 'done' ? ' done' : ''} ${st.tone}`}
+        onClick={() => {
+          setOpen(false);
+          void studio.switchTask(t.sessionId);
+        }}
+      >
+        <span className="task-status">{st.icon}</span>
+        <span className="task-title">
+          {t.title}
+          {st.text && <span className="task-doing">{st.text}</span>}
+        </span>
+        <span className="task-when">{ago(t.updated)}</span>
+      </button>
+    );
+  };
+  // On the trigger: how many others are at work, and whether any needs the author.
+  const others = Object.values(agent.background);
+  const working = others.filter((b) => b.running).length;
+  const waiting = others.filter((b) => b.attention || b.unread).length;
 
   return (
     <div className="task-menu" ref={rootRef}>
       <button className="task-trigger" aria-haspopup="menu" aria-expanded={open} title="Tasks: one conversation per goal" onClick={() => setOpen((o) => !o)}>
         <span className="task-trigger-title">{agent.sessionId ? (agent.title ?? current?.title ?? 'Task') : 'New task'}</span>
         {current?.status === 'done' && <span className="task-done-badge">done</span>}
+        {working > 0 && (
+          <span className="task-count busy" title={`${working} other task${working > 1 ? 's' : ''} at work`}>
+            <span className="tool-spinner" /> {working}
+          </span>
+        )}
+        {waiting > 0 && (
+          <span className="task-count attention" title={`${waiting} other task${waiting > 1 ? 's need' : ' needs'} you (a question, a permission or a new reply)`}>
+            {waiting}
+          </span>
+        )}
         <span className="model-trigger-chevron">▾</span>
       </button>
       {open && (
@@ -83,7 +113,7 @@ export function TaskMenu() {
           <div className="task-popover-actions">
             <button
               className="primary"
-              disabled={agent.running}
+              title={agent.running ? 'This one carries on in the background' : undefined}
               onClick={() => {
                 setOpen(false);
                 studio.newSession();
@@ -106,6 +136,8 @@ export function TaskMenu() {
             <span className="spacer" />
             <ContextMeter />
           </div>
+          {inProgress.length > 0 && <div className="task-section">In progress</div>}
+          {inProgress.map(row)}
           {openTasks.length > 0 && <div className="task-section">Open</div>}
           {openTasks.map(row)}
           {doneTasks.length > 0 && <div className="task-section">Done</div>}

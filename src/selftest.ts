@@ -2014,6 +2014,58 @@ async function safeCommandChecks() {
   }
 }
 
+/** Several tasks at once (real model): one carries on in the background while another runs; status, notice, switching back mid-reply. */
+async function multitaskChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  await studio.setMode('plan');
+  const a = () => studio.state.agent;
+  const out: Record<string, unknown> = {};
+  const longTask = 'Read every chapter file in chapters/ one by one, then summarize each in two sentences. Do not change anything.';
+
+  // A starts; B is started while A works.
+  studio.newSession();
+  void studio.send(longTask);
+  const taskA = await waitFor(() => a().sessionId, 30000, 'session A');
+  await waitFor(() => a().activity && a().activity!.phase !== 'sending', 60000, 'A working');
+  studio.newSession();
+  await sleep(200);
+  out.afterLeavingA = { background: a().background[taskA] && { running: a().background[taskA].running, label: a().background[taskA].label }, shownRunning: a().running };
+  const replyB = await askAgent('In one sentence: what is main.typ for in this book?');
+  const taskB = a().sessionId;
+  out.taskB = { reply: replyB.slice(0, 120), aStill: a().background[taskA]?.running ?? null };
+
+  // A finishes in the background: status, notice.
+  await waitFor(() => a().background[taskA] && !a().background[taskA].running, 240000, 'A done').catch(() => {});
+  await sleep(500);
+  out.aFinished = { bg: a().background[taskA], toast: studio.state.toast?.text, actions: studio.state.toast?.actions?.map((x) => x.label) };
+  document.querySelector<HTMLButtonElement>('.task-trigger')?.click();
+  await sleep(500);
+  out.menu = [...document.querySelectorAll('.task-popover .task-section, .task-popover .task-row')].slice(0, 8).map((e) => e.textContent);
+  out.snapshotMenu = await snap('multitask-menu');
+  document.querySelector<HTMLButtonElement>('.task-trigger')?.click();
+
+  // Back to A: its reply is there and it's no longer in the background.
+  await studio.switchTask(taskA);
+  await sleep(500);
+  out.backToA = { shown: a().sessionId === taskA, replies: a().items.filter((i) => i.kind === 'assistant').length, inBackground: !!a().background[taskA] };
+
+  // Away and back while a reply is being written: it carries on in the same item.
+  studio.newSession();
+  void studio.send('Write three short paragraphs about why vectors matter, without reading any files.');
+  const taskC = await waitFor(() => a().sessionId, 30000, 'session C');
+  await waitFor(() => a().activity?.phase === 'writing', 120000, 'C writing').catch(() => {});
+  await studio.switchTask(taskB!);
+  await sleep(1500);
+  await studio.switchTask(taskC);
+  const lenAfterSwitch = (a().items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.length ?? 0;
+  await waitFor(() => !a().running, 180000, 'C done').catch(() => {});
+  await sleep(500);
+  const replies = a().items.filter((i) => i.kind === 'assistant');
+  out.midReply = { runningWhenBack: lenAfterSwitch > 0, lenAfterSwitch, finalLen: (replies.at(-1) as { text?: string } | undefined)?.text?.length ?? 0, replyItems: replies.length };
+  await studio.setMode('write');
+  return out;
+}
+
 /** One real turn: which OpenCode event types arrive, with one sample of each (for the chat's progress display). */
 async function eventProbe() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
@@ -2674,6 +2726,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestAgent && want('queue')) result.queue = await queueChecks();
     if (launch.selftestAgent && want('questions')) result.questions = await questionChecks();
     if (launch.selftestAgent && want('safe-commands')) result.safeCommands = await safeCommandChecks();
+    if (launch.selftestAgent && want('multitask')) result.multitask = await multitaskChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

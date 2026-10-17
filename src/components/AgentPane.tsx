@@ -795,7 +795,7 @@ export function AgentPane() {
           {agent.running && <span className="busy-bar" aria-hidden />}
           <span className="spacer" />
           <ContextMeter />
-          <button className="icon" title="New task" aria-label="New task" disabled={agent.running} onClick={() => studio.newSession()}>
+          <button className="icon" title={agent.running ? 'New task (this one carries on in the background)' : 'New task'} aria-label="New task" onClick={() => studio.newSession()}>
             ＋
           </button>
         </header>

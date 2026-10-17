@@ -654,3 +654,15 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .command-chip.editable button { padding: 0 5px; }
 .command-list { display: flex; flex-direction: column; gap: 6px; }
 .command-list .settings-row .settings-input { max-width: 240px; }
+
+/* Tasks at work in the background. */
+.task-count { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 0 6px; height: 16px; border-radius: 8px; font-size: 10.5px; font-weight: 700; }
+.task-count.busy { color: var(--accent); background: var(--sel); }
+.task-count.attention { color: var(--accent-fg); background: var(--warn); }
+.task-title { display: flex; flex-direction: column; min-width: 0; }
+.task-doing { font-size: 11px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-row.busy .task-doing { color: var(--accent); }
+.task-row.attention .task-status { color: var(--warn); font-weight: 800; }
+.task-row.attention .task-doing { color: var(--warn); }
+.task-row.unread .task-status { color: var(--accent); }
+.task-row.failed .task-status, .task-row.failed .task-doing { color: var(--bad); }

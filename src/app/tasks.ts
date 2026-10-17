@@ -94,11 +94,17 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
       const { text, attachments } = splitUserText(m.text ?? '');
       items.push({ kind: 'user', id: m.id, text, attachments });
     } else if (m.type === 'assistant') {
+      // Ids as the live events make them (text and reasoning are numbered per kind within a
+      // message), so a reply still being written carries on in the same item after a switch.
+      let texts = 0;
+      let thoughts = 0;
       (m.content ?? []).forEach((part, i) => {
-        if (part.type === 'text' && part.text?.trim()) {
-          items.push({ kind: 'assistant', id: `${m.id}:${i}`, text: part.text, done: true });
-        } else if (part.type === 'reasoning' && part.text?.trim()) {
-          items.push({ kind: 'thinking', id: `${m.id}:r${i}`, text: part.text, done: true, started: part.time?.created ?? 0, ended: part.time?.completed });
+        if (part.type === 'text') {
+          const n = texts++;
+          if (part.text?.trim()) items.push({ kind: 'assistant', id: `${m.id}:${n}`, text: part.text, done: true });
+        } else if (part.type === 'reasoning') {
+          const n = thoughts++;
+          if (part.text?.trim()) items.push({ kind: 'thinking', id: `${m.id}:r${n}`, text: part.text, done: true, started: part.time?.created ?? 0, ended: part.time?.completed });
         } else if (part.type === 'tool') {
           const status = part.state?.status;
           const output = part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '';
@@ -111,7 +117,7 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
             input: part.state?.input,
             note: describeTool(part.name ?? 'tool', part.state?.input, NO_NAMES, output).note,
             ...(read ? { read: { path: read.path, from: read.start, to: read.start + read.lines.length - 1 } } : {}),
-            status: status === 'error' || status === 'failed' ? 'failed' : 'done',
+            status: status === 'error' || status === 'failed' ? 'failed' : status === 'running' || status === 'pending' ? 'running' : 'done',
             detail: (part.state?.error ?? part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '').slice(0, 4000),
           });
         }
