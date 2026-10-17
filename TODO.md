@@ -110,7 +110,7 @@
 
 - [x] cmd k , w should kill all tabs, but it doesnt.
 
-- [ ] can we make comments be grouped by file?
+- [x] can we make comments be grouped by file?
 
 - [ ] the icons in the file view to expand directories is TINY at 67%, far tinier than they should be... use vs.code icons for comparison...
 

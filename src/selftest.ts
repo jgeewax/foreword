@@ -1481,9 +1481,22 @@ async function reviewChecks(withAgent: boolean) {
   out.highlights = document.querySelectorAll('.review-highlight').length;
   // No mode: the editor stays editable.
   out.editable = !editor.getOption(monaco.editor.EditorOption.readOnly);
+  // One more, in another chapter: the list groups them by file.
+  const other = 'chapters/ch1-vectors.typ';
+  const otherOriginal = (await ipc.fsRead(other)).text;
+  await studio.openFile(other);
+  const m2 = studio.editor!.getModel()!;
+  const phrase = m2.getValue().split('\n').find((l) => l.length > 30)!.slice(0, 20);
+  const i2 = m2.getValue().indexOf(phrase);
+  studio.editor!.setSelection(monaco.Range.fromPositions(m2.getPositionAt(i2), m2.getPositionAt(i2 + phrase.length)));
+  await studio.addComment();
+  await write('A note in another chapter.', 'enter');
+  await studio.openFile(file);
   studio.showReview();
   await sleep(500);
-  out.panel = [...document.querySelectorAll('.review-group, .review-item .review-text')].map((e) => e.textContent);
+  out.panel = [...document.querySelectorAll('.review-group, .review-file-name, .review-item .review-text')].map((e) => `${e.className.split(' ')[0]}: ${e.textContent}`);
+  await studio.deleteComment(studio.state.review.comments.find((c) => c.path === other)!.id);
+  await ipc.fsWrite(other, otherOriginal, await ipc.fsHash(other));
   out.snapshot = await snap('review');
 
   // Edits above move the passages; the comments (and their cards) follow.

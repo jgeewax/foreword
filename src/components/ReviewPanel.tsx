@@ -31,8 +31,19 @@ export function ReviewPanel() {
   const toCheck = review.comments.filter((c) => c.status === 'addressed');
   const resolved = review.comments.filter((c) => c.status === 'resolved');
   const order = (a: ReviewComment, b: ReviewComment) => a.path.localeCompare(b.path) || (lines[a.id] ?? a.line) - (lines[b.id] ?? b.line);
-  const where = (c: ReviewComment) =>
-    `${c.path.split('/').pop()} · ${lines[c.id] != null ? `line ${lines[c.id]}` : c.outcome?.change ? `line ${c.outcome.change.line}` : 'text changed'}`;
+  const where = (c: ReviewComment) => (lines[c.id] != null ? `line ${lines[c.id]}` : c.outcome?.change ? `line ${c.outcome.change.line}` : 'text changed');
+  const names = useStore(studio.store, (s) => s.names);
+  /** A group's comments under their files' names (in file order, then by line). */
+  const byFile = (list: ReviewComment[]) =>
+    [...new Set([...list].sort(order).map((c) => c.path))].map((path) => (
+      <div key={path} className="review-file">
+        <button className="review-file-name" title={path} onClick={() => void studio.openFile(path)}>
+          <span>{names.titles[path] ?? path.split('/').pop()}</span>
+          {names.titles[path] && <span className="muted"> · {path.split('/').pop()}</span>}
+        </button>
+        {[...list.filter((c) => c.path === path)].sort(order).map(item)}
+      </div>
+    ));
 
   const item = (c: ReviewComment) => (
     <div key={c.id} className={`review-item ${c.status}`} role="button" tabIndex={0} onClick={() => void studio.goToComment(c)}>
@@ -104,9 +115,9 @@ export function ReviewPanel() {
         </div>
       )}
       {toCheck.length > 0 && <div className="review-group">To check · {toCheck.length}</div>}
-      {[...toCheck].sort(order).map(item)}
+      {byFile(toCheck)}
       {open.length > 0 && <div className="review-group">Open · {open.length}</div>}
-      {[...open].sort(order).map(item)}
+      {byFile(open)}
       {resolved.length > 0 && (
         <div className="review-footer">
           <label>
@@ -117,7 +128,7 @@ export function ReviewPanel() {
           </button>
         </div>
       )}
-      {showResolved && [...resolved].sort(order).map(item)}
+      {showResolved && byFile(resolved)}
     </div>
   );
 }
