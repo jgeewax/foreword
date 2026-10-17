@@ -6,10 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use tauri::State;
-
 use crate::{
-    AppState,
+    Win, WindowState,
     error::{CmdError, CmdResult},
     workspace::resolve,
 };
@@ -58,11 +56,7 @@ pub fn copy_pdf(from: &Path, to: &Path) -> CmdResult<()> {
 
 /// Copy an exported PDF from the book to where the author chose to save it.
 #[tauri::command]
-pub async fn export_copy(
-    state: State<'_, AppState>,
-    from: String,
-    to: String,
-) -> CmdResult<String> {
+pub async fn export_copy(state: Win, from: String, to: String) -> CmdResult<String> {
     let src = resolve(&state.root()?, &from)?;
     if !src.is_file() {
         return Err(CmdError::NotFound(format!("{from} doesn't exist")));
@@ -73,7 +67,7 @@ pub async fn export_copy(
 }
 
 /// A PDF to open or reveal: workspace-relative or absolute, existing, `.pdf`.
-fn existing_pdf(state: &AppState, path: &str) -> CmdResult<PathBuf> {
+fn existing_pdf(state: &WindowState, path: &str) -> CmdResult<PathBuf> {
     let p = if path.starts_with('/') {
         PathBuf::from(path)
     } else {
@@ -100,14 +94,14 @@ fn run_open(args: &[&std::ffi::OsStr]) -> CmdResult<()> {
 
 /// Open a PDF in the default viewer (Preview, unless the author chose another).
 #[tauri::command]
-pub async fn open_pdf(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+pub async fn open_pdf(state: Win, path: String) -> CmdResult<()> {
     let p = existing_pdf(&state, &path)?;
     run_open(&[p.as_os_str()])
 }
 
 /// Show a PDF in Finder.
 #[tauri::command]
-pub async fn reveal_pdf(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+pub async fn reveal_pdf(state: Win, path: String) -> CmdResult<()> {
     let p = existing_pdf(&state, &path)?;
     run_open(&[std::ffi::OsStr::new("-R"), p.as_os_str()])
 }

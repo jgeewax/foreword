@@ -4,10 +4,9 @@ use std::path::Path;
 
 use lopdf::{Dictionary, Document};
 use serde::Serialize;
-use tauri::State;
 
 use crate::{
-    AppState,
+    Win,
     error::{CmdError, CmdResult},
     workspace::resolve,
 };
@@ -78,7 +77,7 @@ pub fn pdf_info_at(path: &Path) -> CmdResult<PdfInfo> {
 
 /// Page count and page size of an exported PDF in the workspace.
 #[tauri::command]
-pub async fn pdf_info(state: State<'_, AppState>, path: String) -> CmdResult<PdfInfo> {
+pub async fn pdf_info(state: Win, path: String) -> CmdResult<PdfInfo> {
     let target = resolve(&state.root()?, &path)?;
     if !target.is_file() {
         return Err(CmdError::NotFound(format!("{path} doesn't exist")));

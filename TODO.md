@@ -134,7 +134,7 @@
 
 - [x] when we stop, you dont need ot meniton "change the model" . just say that the request was interrrupted.
 
-- [ ] add support for mutliple windows like vs.code?
+- [x] add support for mutliple windows like vs.code?
 
 - [x] if books get long, will we find the need for a single chapter preview at a time? (Answered in docs/decisions.md: not for speed. Measured 113/120 ms edit → preview on a 491-page book; ideas for focus and chapter PDFs in IDEAS.md.)
 

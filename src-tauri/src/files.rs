@@ -4,10 +4,8 @@
 //! macOS Trash (recoverable), never `remove_file`.
 use std::{fs, path::Path};
 
-use tauri::State;
-
 use crate::{
-    AppState,
+    Win,
     error::{CmdError, CmdResult},
     workspace::resolve,
 };
@@ -27,7 +25,7 @@ fn ensure_absent(path: &Path, rel: &str) -> CmdResult<()> {
 }
 
 #[tauri::command]
-pub async fn fs_mkdir(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+pub async fn fs_mkdir(state: Win, path: String) -> CmdResult<()> {
     not_root(&path)?;
     let target = resolve(&state.root()?, &path)?;
     ensure_absent(&target, &path)?;
@@ -37,7 +35,7 @@ pub async fn fs_mkdir(state: State<'_, AppState>, path: String) -> CmdResult<()>
 
 /// Rename or move a file or folder; refuses if the destination exists.
 #[tauri::command]
-pub async fn fs_rename(state: State<'_, AppState>, from: String, to: String) -> CmdResult<()> {
+pub async fn fs_rename(state: Win, from: String, to: String) -> CmdResult<()> {
     not_root(&from)?;
     not_root(&to)?;
     let root = state.root()?;
@@ -63,7 +61,7 @@ pub async fn fs_rename(state: State<'_, AppState>, from: String, to: String) -> 
 
 /// Copy a file (not a folder) to a new name.
 #[tauri::command]
-pub async fn fs_copy(state: State<'_, AppState>, from: String, to: String) -> CmdResult<()> {
+pub async fn fs_copy(state: Win, from: String, to: String) -> CmdResult<()> {
     let root = state.root()?;
     let src = resolve(&root, &from)?;
     let dst = resolve(&root, &to)?;
@@ -83,7 +81,7 @@ pub async fn fs_copy(state: State<'_, AppState>, from: String, to: String) -> Cm
 
 /// Move a file or folder to the Trash (it can be put back from Finder).
 #[tauri::command]
-pub async fn fs_trash(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+pub async fn fs_trash(state: Win, path: String) -> CmdResult<()> {
     not_root(&path)?;
     let target = resolve(&state.root()?, &path)?;
     if fs::symlink_metadata(&target).is_err() {

@@ -2,9 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "preview",
   "description": "Tinymist's preview page (served from 127.0.0.1) may only report paint timings and diagnostics.",
-  "webviews": [
-    "preview"
-  ],
+  "webviews": ["*-preview"],
   "local": false,
   "remote": {
     "urls": [

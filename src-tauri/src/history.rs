@@ -10,11 +10,11 @@ use std::{
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::{Manager, State};
+use tauri::Manager;
 use tokio::process::Command;
 
 use crate::{
-    AppState, discover,
+    Win, WindowState, discover,
     error::{CmdError, CmdResult},
     workspace,
 };
@@ -137,7 +137,7 @@ struct Repo {
     root: PathBuf,
 }
 
-async fn repo(app: &tauri::AppHandle, state: &AppState) -> CmdResult<Repo> {
+async fn repo(app: &tauri::AppHandle, state: &WindowState) -> CmdResult<Repo> {
     let root = state.root()?;
     let git_dir = git_dir_for(app, &root)?;
     if !git_dir.join("HEAD").exists() {
@@ -151,7 +151,7 @@ async fn repo(app: &tauri::AppHandle, state: &AppState) -> CmdResult<Repo> {
 /// Show the open book's history repo in Finder. It's in the app's data folder;
 /// the path is worked out here, not taken from the page.
 #[tauri::command]
-pub async fn history_reveal(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn history_reveal(app: tauri::AppHandle, state: Win) -> CmdResult<()> {
     let r = repo(&app, &state).await?;
     let status = std::process::Command::new("/usr/bin/open")
         .arg("-R")
@@ -171,7 +171,7 @@ pub async fn history_reveal(app: tauri::AppHandle, state: State<'_, AppState>) -
 #[tauri::command]
 pub async fn history_init(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    state: Win,
     exclude: Vec<String>,
 ) -> CmdResult<HistoryInfo> {
     let _guard = state.history.lock().await;
@@ -218,7 +218,7 @@ async fn init(r: &Repo, exclude: &[String]) -> CmdResult<()> {
 #[tauri::command]
 pub async fn history_snapshot(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    state: Win,
     kind: String,
     label: String,
     allow_empty: bool,
@@ -370,7 +370,7 @@ fn parse_log(out: &str) -> Vec<Version> {
 #[tauri::command]
 pub async fn history_list(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    state: Win,
     limit: u32,
     path: Option<String>,
 ) -> CmdResult<Vec<Version>> {
@@ -391,7 +391,7 @@ pub async fn history_list(
 #[tauri::command]
 pub async fn history_changes(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    state: Win,
     from: Option<String>,
     to: String,
 ) -> CmdResult<Vec<FileChange>> {
@@ -444,7 +444,7 @@ fn parse_changes(statuses: &str, numstat: &str) -> Vec<FileChange> {
 #[tauri::command]
 pub async fn history_file(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    state: Win,
     id: String,
     path: String,
 ) -> CmdResult<Option<String>> {

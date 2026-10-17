@@ -16,7 +16,8 @@ use tauri::{
     },
 };
 
-/// Menu ids the page acts on (everything here except "close-window").
+/// Menu ids the page acts on (everything here except "new-window" and
+/// "close-window", which the app handles itself).
 pub const COMMANDS: &[&str] = &[
     "settings",
     // File
@@ -113,6 +114,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &item("new-chapter", "New Chapter…", Some("CmdOrCtrl+Alt+N"))?,
             &item("new-file", "New File…", Some("CmdOrCtrl+N"))?,
             &sep()?,
+            &item("new-window", "New Window", Some("CmdOrCtrl+Alt+Shift+N"))?,
             &item("open-book", "Open Book…", Some("CmdOrCtrl+O"))?,
             &item("go-to-file", "Go to File…", Some("CmdOrCtrl+P"))?,
             &sep()?,

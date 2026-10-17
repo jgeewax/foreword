@@ -7,9 +7,11 @@ use tauri::{
     webview::WebviewBuilder,
 };
 
-use crate::error::{CmdError, CmdResult};
-
-const LABEL: &str = "preview";
+use crate::{
+    Win,
+    error::{CmdError, CmdResult},
+    preview_label,
+};
 
 /// WebKit workarounds for Tinymist's preview renderer (typst.ts). Off-screen
 /// pages are drawn as canvas previews inside `<foreignObject>`:
@@ -178,29 +180,36 @@ fn is_local_preview(url: &Url) -> bool {
     url.scheme() == "http" && url.host_str() == Some("127.0.0.1")
 }
 
-fn preview_webview(app: &AppHandle) -> CmdResult<tauri::Webview> {
-    app.get_webview(LABEL)
+/// The calling window's preview webview (each window has its own).
+fn preview_webview(app: &AppHandle, state: &Win) -> CmdResult<tauri::Webview> {
+    app.get_webview(&preview_label(state.label()))
         .ok_or_else(|| CmdError::Unavailable("preview is not open".into()))
 }
 
 #[tauri::command]
-pub async fn preview_open(app: AppHandle, url: String, bounds: Bounds) -> CmdResult<()> {
+pub async fn preview_open(
+    app: AppHandle,
+    state: Win,
+    url: String,
+    bounds: Bounds,
+) -> CmdResult<()> {
     let url = Url::parse(&url).map_err(|e| CmdError::Invalid(e.to_string()))?;
     if !is_local_preview(&url) {
         return Err(CmdError::Invalid(
             "preview must be served from 127.0.0.1".into(),
         ));
     }
-    if let Some(webview) = app.get_webview(LABEL) {
+    let label = preview_label(state.label());
+    if let Some(webview) = app.get_webview(&label) {
         webview.navigate(url)?;
         webview.set_bounds(bounds.into())?;
         webview.show()?;
         return Ok(());
     }
     let window = app
-        .get_window("main")
-        .ok_or_else(|| CmdError::Unavailable("main window missing".into()))?;
-    let builder = WebviewBuilder::new(LABEL, WebviewUrl::External(url))
+        .get_window(state.label())
+        .ok_or_else(|| CmdError::Unavailable("window missing".into()))?;
+    let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
         .initialization_script(WEBKIT_FIX_SCRIPT)
         .initialization_script(JUMP_SCRIPT)
         .initialization_script(PERF_SCRIPT)
@@ -217,16 +226,16 @@ pub async fn preview_open(app: AppHandle, url: String, bounds: Bounds) -> CmdRes
 }
 
 #[tauri::command]
-pub fn preview_set_bounds(app: AppHandle, bounds: Bounds) -> CmdResult<()> {
-    if let Some(webview) = app.get_webview(LABEL) {
+pub fn preview_set_bounds(app: AppHandle, state: Win, bounds: Bounds) -> CmdResult<()> {
+    if let Some(webview) = app.get_webview(&preview_label(state.label())) {
         webview.set_bounds(bounds.into())?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn preview_set_visible(app: AppHandle, visible: bool) -> CmdResult<()> {
-    if let Some(webview) = app.get_webview(LABEL) {
+pub fn preview_set_visible(app: AppHandle, state: Win, visible: bool) -> CmdResult<()> {
+    if let Some(webview) = app.get_webview(&preview_label(state.label())) {
         if visible {
             webview.show()?
         } else {
@@ -237,8 +246,8 @@ pub fn preview_set_visible(app: AppHandle, visible: bool) -> CmdResult<()> {
 }
 
 #[tauri::command]
-pub fn preview_close(app: AppHandle) -> CmdResult<()> {
-    if let Some(webview) = app.get_webview(LABEL) {
+pub fn preview_close(app: AppHandle, state: Win) -> CmdResult<()> {
+    if let Some(webview) = app.get_webview(&preview_label(state.label())) {
         webview.close()?;
     }
     Ok(())
@@ -246,8 +255,8 @@ pub fn preview_close(app: AppHandle) -> CmdResult<()> {
 
 /// Run a script in the preview page (main webview only; used by the self-test).
 #[tauri::command]
-pub fn preview_eval(app: AppHandle, js: String) -> CmdResult<()> {
-    preview_webview(&app)?.eval(js)?;
+pub fn preview_eval(app: AppHandle, state: Win, js: String) -> CmdResult<()> {
+    preview_webview(&app, &state)?.eval(js)?;
     Ok(())
 }
 
@@ -256,6 +265,7 @@ pub fn preview_eval(app: AppHandle, js: String) -> CmdResult<()> {
 #[tauri::command]
 pub async fn preview_snapshot(
     app: AppHandle,
+    state: Win,
     name: String,
     target: Option<String>,
 ) -> CmdResult<String> {
@@ -267,9 +277,9 @@ pub async fn preview_snapshot(
     let path = format!("{out}.{name}.png");
     let webview = match target.as_deref() {
         Some("main") => app
-            .get_webview("main")
+            .get_webview(state.label())
             .ok_or_else(|| CmdError::Unavailable("main webview missing".into()))?,
-        _ => preview_webview(&app)?,
+        _ => preview_webview(&app, &state)?,
     };
     #[cfg(target_os = "macos")]
     crate::snapshot::snapshot_png(&webview, path.clone().into())
@@ -281,8 +291,8 @@ pub async fn preview_snapshot(
 /// Give keyboard focus back to the app UI (e.g. after a click in the preview
 /// jumped to the source).
 #[tauri::command]
-pub fn focus_main(app: AppHandle) -> CmdResult<()> {
-    if let Some(webview) = app.get_webview("main") {
+pub fn focus_main(app: AppHandle, state: Win) -> CmdResult<()> {
+    if let Some(webview) = app.get_webview(state.label()) {
         webview.set_focus()?;
     }
     Ok(())
@@ -290,14 +300,23 @@ pub fn focus_main(app: AppHandle) -> CmdResult<()> {
 
 /// Called from inside the preview webview (see PERF_SCRIPT).
 #[tauri::command]
-pub fn perf_report(app: AppHandle, samples: Vec<f64>) -> CmdResult<()> {
-    app.emit_to(EventTarget::webview("main"), "perf:preview-paint", samples)?;
+pub fn perf_report(app: AppHandle, state: Win, samples: Vec<f64>) -> CmdResult<()> {
+    app.emit_to(
+        EventTarget::webview(state.label()),
+        "perf:preview-paint",
+        samples,
+    )?;
     Ok(())
 }
 
 /// Called from inside the preview webview: diagnostics for the self-test.
 #[tauri::command]
-pub fn preview_report(app: AppHandle, report: serde_json::Value) -> CmdResult<()> {
-    app.emit_to(EventTarget::webview("main"), "preview:report", report)?;
+pub fn preview_report(app: AppHandle, state: Win, report: serde_json::Value) -> CmdResult<()> {
+    // From inside a preview: to its own window's app webview.
+    app.emit_to(
+        EventTarget::webview(state.label()),
+        "preview:report",
+        report,
+    )?;
     Ok(())
 }

@@ -4,10 +4,7 @@
 use std::{path::PathBuf, process::Stdio};
 
 use serde::Serialize;
-use tauri::{
-    State,
-    ipc::{Channel, InvokeResponseBody},
-};
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::{Child, Command},
@@ -15,7 +12,7 @@ use tokio::{
 };
 
 use crate::{
-    AppState, discover,
+    Win, discover,
     error::{CmdError, CmdResult},
     logs,
 };
@@ -78,7 +75,7 @@ pub struct TypstStarted {
 /// message is sent on `on_message` as JSON; `{"$closed": true}` marks exit.
 #[tauri::command]
 pub async fn typst_start(
-    state: State<'_, AppState>,
+    state: Win,
     on_message: Channel<InvokeResponseBody>,
 ) -> CmdResult<TypstStarted> {
     let root = state.root()?;
@@ -150,7 +147,7 @@ pub async fn typst_start(
 /// them, which keeps `didChange` notifications ordered. (Async commands run
 /// concurrently and could reorder edits.)
 #[tauri::command]
-pub fn typst_send(state: State<'_, AppState>, message: String) -> CmdResult<()> {
+pub fn typst_send(state: Win, message: String) -> CmdResult<()> {
     let guard = state.typst_tx.lock().unwrap();
     let tx = guard
         .as_ref()
@@ -160,7 +157,7 @@ pub fn typst_send(state: State<'_, AppState>, message: String) -> CmdResult<()> 
 }
 
 #[tauri::command]
-pub async fn typst_stop(state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn typst_stop(state: Win) -> CmdResult<()> {
     state.typst_tx.lock().unwrap().take();
     if let Some(mut lsp) = state.typst.lock().await.take() {
         lsp.kill();

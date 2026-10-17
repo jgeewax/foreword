@@ -309,6 +309,43 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### Several windows, one book each (like VS Code)
+
+- **File → New Window** (⌥⇧⌘N) opens another window on the welcome screen.
+  Each window has its own book, with its own:
+  - folder watcher;
+  - Tinymist and preview;
+  - OpenCode;
+  - History lock.
+  It's one process, so there's one Dock icon, and Window ▸ lists the windows
+  by book: each window's title is its book's name.
+- **How (Rust):**
+  - `AppState` became a map from window label ("main", "win-2", …) to a
+    `WindowState` holding what used to be global.
+  - Commands take a `Win` argument, built by Tauri from the webview that
+    called (`CommandArg`), so their bodies didn't change.
+  - Each window's preview is the child webview `<window>-preview`. Its
+    reports go back to its own window's app webview.
+  - The capabilities match `main`/`win-*` and `*-preview`.
+  - Closing a window stops its helpers and drops its state.
+- **The menu bar** is the app's: its items go to the window in front.
+- **The page** listens on its own webview (`getCurrentWebview().listen`):
+  `listen` from the event module also hears events sent to other windows.
+- **One window per book.** Opening a book that's open elsewhere brings that
+  window forward and says so, before this window lets go of its own book.
+  `workspace_open` refuses it too.
+- **A new window starts fresh:** the environment (a book to open, the
+  self-test) is for the first window only, and it doesn't reopen the last
+  book, which is open in the first window.
+- Verified (self-test `windows`):
+  - A new window started without a book, titled "Typst Studio".
+  - It opened another book and was titled "book-in-src".
+  - Asked to open the first window's book, it was refused and kept its own;
+    the first window kept its book.
+  - Closing it removed its state and freed its book.
+  - The regression groups (preview placement, jumps, preview selections,
+    menus, layout…) pass with the per-window labels.
+
 ### Long books: no need for a one-chapter preview (yet)
 
 - **Question (from the author):** as books get long, will the preview need to

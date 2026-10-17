@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-selftest-windows"
+description = "Enables the selftest_windows command without any pre-configured scope."
+commands.allow = ["selftest_windows"]
+
+[[permission]]
+identifier = "deny-selftest-windows"
+description = "Denies the selftest_windows command without any pre-configured scope."
+commands.deny = ["selftest_windows"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-workspace-elsewhere"
+description = "Enables the workspace_elsewhere command without any pre-configured scope."
+commands.allow = ["workspace_elsewhere"]
+
+[[permission]]
+identifier = "deny-workspace-elsewhere"
+description = "Denies the workspace_elsewhere command without any pre-configured scope."
+commands.deny = ["workspace_elsewhere"]

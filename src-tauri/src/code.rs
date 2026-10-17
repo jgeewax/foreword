@@ -9,14 +9,13 @@ use std::{
 };
 
 use serde::Serialize;
-use tauri::State;
 use tokio::{
     io::{AsyncRead, AsyncReadExt},
     process::Command,
 };
 
 use crate::{
-    AppState, discover,
+    Win, discover,
     error::{CmdError, CmdResult},
 };
 
@@ -142,7 +141,7 @@ pub async fn run_code(
 
 #[tauri::command]
 pub async fn code_run(
-    state: State<'_, AppState>,
+    state: Win,
     lang: String,
     code: String,
     timeout_ms: Option<u64>,

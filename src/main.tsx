@@ -27,6 +27,8 @@ void (async () => {
   boot('init');
   // Highlighting is optional: models created before it's ready re-tokenize when it registers.
   void typstReady.then(() => boot('typst highlighting ready'));
+  // Dev builds: reachable from another window's self-test (it drives a second window).
+  if (import.meta.env.DEV) (window as unknown as { __studio: typeof studio }).__studio = studio;
   await studio.init();
   boot(`workspace ${studio.state.workspace?.root ?? '(none)'}`);
   const launch = studio.state.launch;

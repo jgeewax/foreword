@@ -1,4 +1,7 @@
-import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+
+/** Events sent to this window (each window has its own). */
+const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) => getCurrentWebview().listen(event, handler);
 // Scripted end-to-end check run inside the real app (WKWebView, Tinymist,
 // OpenCode) when TYPST_STUDIO_SELFTEST=<out.json> is set. Never saves files;
 // agent edit requests are rejected.
@@ -2487,6 +2490,45 @@ async function subRootChecks() {
   return out;
 }
 
+/**
+ * Several windows, one book each: a new window starts without a book, opens
+ * its own, can't open one that's open elsewhere, and goes away cleanly.
+ * (Needs scratchpad/book-in-src next to the self-test output.)
+ */
+async function windowsChecks() {
+  const out: Record<string, unknown> = {};
+  const own = studio.state.workspace!.root;
+  const other = `${studio.state.launch!.selftestOut!.replace(/[^/]+$/, '')}book-in-src`;
+  const windows = () => ipc.selftestWindows();
+  // waitFor takes a synchronous check: poll the app instead.
+  const until = async (check: (ws: Awaited<ReturnType<typeof windows>>) => boolean, ms: number) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(200)) if (check(await windows())) return true;
+    return false;
+  };
+  const label = await ipc.windowNew();
+  await until((ws) => ws.some((w) => w.label === label), 10000);
+  await sleep(3000); // its page loads and starts
+  const fresh = (await windows()).find((w) => w.label === label);
+  out.fresh = fresh && { root: fresh.root, title: fresh.title };
+  await ipc.selftestEval(label, `window.__studio.openWorkspace(${JSON.stringify(other)})`);
+  out.opened = await until((ws) => !!ws.find((w) => w.label === label)?.root, 20000);
+  const second = (await windows()).find((w) => w.label === label);
+  out.second = second && { root: second.root?.split('/').pop(), title: second.title };
+  // The first window's book, from the second: refused, and the second keeps its own.
+  await ipc.selftestEval(label, `window.__studio.openWorkspace(${JSON.stringify(own)})`);
+  await sleep(2000);
+  const after = await windows();
+  out.guard = { secondStill: after.find((w) => w.label === label)?.root?.split('/').pop(), mainStill: after.find((w) => w.label === 'main')?.root === own };
+  out.elsewhereFromMain = await ipc.workspaceElsewhere(other);
+  out.notElsewhereForOwn = !(await ipc.workspaceElsewhere(own));
+  await ipc.selftestCloseWindow(label);
+  await sleep(1500);
+  const closed = await windows();
+  out.closed = { gone: !closed.some((w) => w.label === label), labels: closed.map((w) => w.label), mainBook: closed.find((w) => w.label === 'main')?.root === own };
+  out.reopenAfterClose = !(await ipc.workspaceElsewhere(other)); // the closed window let go of its book
+  return out;
+}
+
 /** The Conversations view: the book's tasks in groups, opened from the activity bar or the View menu. */
 async function conversationsChecks() {
   const out: Record<string, unknown> = {};
@@ -2703,7 +2745,8 @@ async function menuBarChecks() {
   out.menus = outline.map(([title, items]) => `${title}: ${items.map((i) => i.split('=').pop()).join(' | ')}`);
   const ids = outline.flatMap(([, items]) => items.filter((i) => i.includes('=')).map((i) => i.split('=')[0]));
   const handled = Object.keys(studio.menuCommands);
-  out.withoutHandler = ids.filter((id) => id !== 'close-window' && !handled.includes(id));
+  // New Window and Close Window are handled by the app itself, not the page.
+  out.withoutHandler = ids.filter((id) => id !== 'close-window' && id !== 'new-window' && !handled.includes(id));
   out.withoutItem = handled.filter((id) => !ids.includes(id));
   out.itemsPerMenu = Object.fromEntries(outline.map(([title, items]) => [title, items.filter((i) => i !== '---').length]));
 
@@ -3423,6 +3466,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
+    if (want('windows')) result.windows = await windowsChecks();
     if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();

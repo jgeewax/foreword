@@ -2,9 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "The app UI (local content in the main webview).",
-  "webviews": [
-    "main"
-  ],
+  "webviews": ["main", "win-*"],
   "permissions": [
     "core:default",
     "dialog:allow-open",
@@ -20,8 +18,13 @@
     "allow-set-ui-zoom",
     "allow-selftest-finish",
     "allow-menu-outline",
+    "allow-window-new",
+    "allow-selftest-windows",
+    "allow-selftest-eval",
+    "allow-selftest-close-window",
     "allow-app-logs",
     "allow-workspace-open",
+    "allow-workspace-elsewhere",
     "allow-workspace-list",
     "allow-fs-read",
     "allow-fs-hash",

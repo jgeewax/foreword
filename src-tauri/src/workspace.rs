@@ -9,10 +9,10 @@ use std::{
 use notify::{EventKind, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tauri::{State, ipc::Channel};
+use tauri::{Manager, ipc::Channel};
 
 use crate::{
-    AppState,
+    Win,
     error::{CmdError, CmdResult},
 };
 
@@ -223,17 +223,48 @@ fn find_entry(root: &Path, files: &[String]) -> Option<String> {
         })
 }
 
+/// Whether another window has this book open; if so, that window comes to the front.
+fn open_elsewhere(app: &tauri::AppHandle, state: &Win, root: &Path) -> bool {
+    for (label, other) in app.state::<crate::AppState>().all() {
+        if label != state.label() && other.root.lock().unwrap().as_deref() == Some(root) {
+            if let Some(w) = app.get_window(&label) {
+                let _ = w.set_focus();
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// Checked before a window lets go of its own book to open `path`.
+#[tauri::command]
+pub async fn workspace_elsewhere(
+    app: tauri::AppHandle,
+    state: Win,
+    path: String,
+) -> CmdResult<bool> {
+    let root = PathBuf::from(&path).canonicalize()?;
+    Ok(open_elsewhere(&app, &state, &root))
+}
+
 /// Open a folder as the workspace and start watching it. File-change batches
 /// (workspace-relative paths) are delivered on `on_change`.
 #[tauri::command]
 pub async fn workspace_open(
-    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    state: Win,
     path: String,
     on_change: Channel<Vec<String>>,
 ) -> CmdResult<WorkspaceInfo> {
     let root = PathBuf::from(&path).canonicalize()?;
     if !root.is_dir() {
         return Err(CmdError::Invalid(format!("not a folder: {path}")));
+    }
+    // One window per book: two would fight over its files, History and helpers.
+    if open_elsewhere(&app, &state, &root) {
+        return Err(CmdError::Invalid(
+            "This book is open in another window.".into(),
+        ));
     }
     let files = list_files(&root);
     let entry = find_entry(&root, &files);
@@ -261,6 +292,10 @@ pub async fn workspace_open(
 
     *state.watcher.lock().unwrap() = Some(watcher);
     *state.root.lock().unwrap() = Some(root.clone());
+    // The window's title is its book, so Window ▸ tells windows apart.
+    if let (Some(w), Some(name)) = (app.get_window(state.label()), root.file_name()) {
+        let _ = w.set_title(&name.to_string_lossy());
+    }
     Ok(WorkspaceInfo {
         name: root
             .file_name()
@@ -273,18 +308,18 @@ pub async fn workspace_open(
 }
 
 #[tauri::command]
-pub async fn workspace_list(state: State<'_, AppState>) -> CmdResult<Vec<String>> {
+pub async fn workspace_list(state: Win) -> CmdResult<Vec<String>> {
     Ok(list_files(&state.root()?))
 }
 
 #[tauri::command]
-pub async fn fs_read(state: State<'_, AppState>, path: String) -> CmdResult<FileContent> {
+pub async fn fs_read(state: Win, path: String) -> CmdResult<FileContent> {
     read_text(&resolve(&state.root()?, &path)?)
 }
 
 /// Hash of the file on disk, or null if it doesn't exist.
 #[tauri::command]
-pub async fn fs_hash(state: State<'_, AppState>, path: String) -> CmdResult<Option<String>> {
+pub async fn fs_hash(state: Win, path: String) -> CmdResult<Option<String>> {
     match fs::read(resolve(&state.root()?, &path)?) {
         Ok(bytes) => Ok(Some(hash_bytes(&bytes))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -294,7 +329,7 @@ pub async fn fs_hash(state: State<'_, AppState>, path: String) -> CmdResult<Opti
 
 #[tauri::command]
 pub async fn fs_write(
-    state: State<'_, AppState>,
+    state: Win,
     path: String,
     text: String,
     expected_hash: Option<String>,
@@ -308,7 +343,7 @@ pub async fn fs_write(
 
 /// Show a workspace file or folder in Finder.
 #[tauri::command]
-pub async fn reveal_in_finder(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+pub async fn reveal_in_finder(state: Win, path: String) -> CmdResult<()> {
     let root = state.root()?;
     let target = if path.is_empty() || path == "." {
         root

@@ -7,7 +7,6 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{
-    State,
     async_runtime::JoinHandle,
     ipc::{Channel, InvokeResponseBody},
 };
@@ -17,7 +16,7 @@ use tokio::{
 };
 
 use crate::{
-    AppState, children, discover,
+    Win, children, discover,
     error::{CmdError, CmdResult},
     logs,
 };
@@ -63,7 +62,7 @@ fn free_port() -> std::io::Result<u16> {
 
 /// Start `opencode serve` for the workspace (no-op if already running).
 #[tauri::command]
-pub async fn agent_start(state: State<'_, AppState>) -> CmdResult<AgentInfo> {
+pub async fn agent_start(state: Win) -> CmdResult<AgentInfo> {
     let root = state.root()?;
     let mut guard = state.agent.lock().await;
     if let Some(server) = guard.as_mut()
@@ -171,7 +170,7 @@ pub struct AgentResponse {
 /// Proxy one JSON request to the OpenCode API (`/api/...` only).
 #[tauri::command]
 pub async fn agent_request(
-    state: State<'_, AppState>,
+    state: Win,
     method: String,
     path: String,
     body: Option<Value>,
@@ -227,10 +226,7 @@ pub fn drain_sse(buf: &mut String) -> Vec<String> {
 /// Stream OpenCode's `/api/event` SSE feed to the frontend, reconnecting on
 /// failure. Connection changes arrive as `{"$connection": "open" | "lost"}`.
 #[tauri::command]
-pub async fn agent_subscribe(
-    state: State<'_, AppState>,
-    on_event: Channel<InvokeResponseBody>,
-) -> CmdResult<()> {
+pub async fn agent_subscribe(state: Win, on_event: Channel<InvokeResponseBody>) -> CmdResult<()> {
     let mut guard = state.agent.lock().await;
     let server = guard
         .as_mut()
@@ -293,7 +289,7 @@ pub async fn agent_subscribe(
 }
 
 #[tauri::command]
-pub async fn agent_stop(state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn agent_stop(state: Win) -> CmdResult<()> {
     if let Some(mut server) = state.agent.lock().await.take() {
         server.kill();
     }

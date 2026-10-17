@@ -30,6 +30,8 @@ export type LaunchOptions = {
   selftestEdits: boolean;
   /** Comma-separated self-test groups to run (all when null). */
   selftestOnly: string | null;
+  /** A window from New Window: it starts without a book (not the last one). */
+  fresh: boolean;
 };
 export type Bounds = { x: number; y: number; width: number; height: number };
 export type AgentInfo = { baseUrl: string; bin: string };
@@ -38,12 +40,20 @@ export type AgentResponse = { status: number; body: any };
 export const ipc = {
   toolsStatus: () => invoke<ToolsStatus>('tools_status'),
   launchOptions: () => invoke<LaunchOptions>('launch_options'),
+  /** A new window, without a book. */
+  windowNew: () => invoke<string>('window_new'),
+  /** Self-test only: the windows, their titles and books; run a script in one; close one. */
+  selftestWindows: () => invoke<{ label: string; title: string; root: string | null }[]>('selftest_windows'),
+  selftestEval: (label: string, js: string) => invoke<void>('selftest_eval', { label, js }),
+  selftestCloseWindow: (label: string) => invoke<void>('selftest_close_window', { label }),
   /** The menu bar as [title, items ("id=Label", or a predefined item's label, "---")] (self-test only). */
   menuOutline: () => invoke<[string, string[]][]>('menu_outline'),
   uiLog: (line: string) => invoke<void>('ui_log', { line }).catch(() => {}),
   selftestFinish: (result: unknown) => invoke<void>('selftest_finish', { result }),
   logs: (source?: string) => invoke<{ source: string; line: string }[]>('app_logs', { source }),
 
+  /** Whether another window has this book open (it comes to the front if so). */
+  workspaceElsewhere: (path: string) => invoke<boolean>('workspace_elsewhere', { path }),
   workspaceOpen: (path: string, onChange: Channel<string[]>) => invoke<WorkspaceInfo>('workspace_open', { path, onChange }),
   workspaceList: () => invoke<string[]>('workspace_list'),
   fsRead: (path: string) => invoke<FileContent>('fs_read', { path }),

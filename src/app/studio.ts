@@ -1,6 +1,6 @@
 // App controller: owns the workspace, documents, Typst service, preview
 // webview and agent adapter, and exposes UI state through a Store.
-import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { shortPath } from '../lib/paths';
@@ -465,13 +465,13 @@ export class Studio {
         this.syncPreviewVisibility();
       }
     });
-    void listen<string>('menu', (e) => void this.menuCommand(e.payload));
-    void listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
+    void getCurrentWebview().listen<string>('menu', (e) => void this.menuCommand(e.payload));
+    void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
       if (e.payload?.tag === 'selection') void this.previewSelection(e.payload as { text: string; end?: boolean });
     });
-    void listen<number[]>('perf:preview-paint', (e) => {
+    void getCurrentWebview().listen<number[]>('perf:preview-paint', (e) => {
       this.perf.previewPainted(e.payload);
       this.publishPerf();
       if (this.store.get().preview.status === 'starting') this.store.set((s) => ({ preview: { ...s.preview, status: 'ready' } }));
@@ -597,7 +597,8 @@ export class Studio {
       this.insetTimer = window.setTimeout(() => void this.refreshViewportInset(), 100);
     });
     ipc.toolsStatus().then((tools) => this.store.set({ tools }));
-    const initial = launch.workspace ?? localStorage.getItem(LAST_WORKSPACE);
+    // A new window starts on the welcome screen, not the last book (open in the first window).
+    const initial = launch.workspace ?? (launch.fresh ? null : localStorage.getItem(LAST_WORKSPACE));
     if (initial) await this.openWorkspace(initial);
   }
 
@@ -607,6 +608,11 @@ export class Studio {
   }
 
   async openWorkspace(path: string) {
+    // Each book opens in one window; asking first keeps this window's book if it's elsewhere.
+    if (await ipc.workspaceElsewhere(path).catch(() => false)) {
+      this.toast(`${path.slice(path.lastIndexOf('/') + 1)} is open in another window.`);
+      return;
+    }
     await this.closeWorkspace();
     this.store.set({ opening: path, openError: null });
     const changes = new Channel<string[]>();

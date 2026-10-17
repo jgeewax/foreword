@@ -19,18 +19,29 @@ mod render;
 mod snapshot;
 mod workspace;
 
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU32, Ordering},
+    },
+};
 
 use serde::Serialize;
 use tauri::{
-    Emitter, EventTarget, LogicalPosition, Manager, RunEvent, WebviewUrl, webview::WebviewBuilder,
+    Emitter, EventTarget, LogicalPosition, Manager, RunEvent, WebviewUrl, WindowEvent,
+    ipc::{CommandArg, CommandItem, InvokeError},
+    webview::WebviewBuilder,
     window::WindowBuilder,
 };
 
 use crate::error::{CmdError, CmdResult};
 
+/// One window's book: its folder, file watcher, Tinymist, OpenCode and the
+/// lock on its History repo. Each window has its own, like VS Code's windows.
 #[derive(Default)]
-pub struct AppState {
+pub struct WindowState {
     root: Mutex<Option<PathBuf>>,
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
     typst: tokio::sync::Mutex<Option<lsp::LspProcess>>,
@@ -41,7 +52,75 @@ pub struct AppState {
     history: tokio::sync::Mutex<()>,
 }
 
+/// Every window's state, by window label ("main", then "win-2", "win-3"…).
+#[derive(Default)]
+pub struct AppState {
+    windows: Mutex<HashMap<String, Arc<WindowState>>>,
+    next_window: AtomicU32,
+}
+
 impl AppState {
+    fn window(&self, label: &str) -> Arc<WindowState> {
+        self.windows
+            .lock()
+            .unwrap()
+            .entry(label.to_string())
+            .or_default()
+            .clone()
+    }
+
+    fn all(&self) -> Vec<(String, Arc<WindowState>)> {
+        self.windows
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    fn kill_children(&self) {
+        for (_, w) in self.all() {
+            w.kill_children();
+        }
+    }
+}
+
+/// A command's window: the state of the window whose webview called it (main
+/// or preview). Commands take `state: Win` and use it like the state itself.
+pub struct Win {
+    state: Arc<WindowState>,
+    label: String,
+}
+
+impl Win {
+    /// The window's label, which is also its main webview's.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+}
+
+impl std::ops::Deref for Win {
+    type Target = WindowState;
+    fn deref(&self) -> &WindowState {
+        &self.state
+    }
+}
+
+impl<'de, R: tauri::Runtime> CommandArg<'de, R> for Win {
+    fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
+        let webview = command.message.webview();
+        let label = webview.window().label().to_string();
+        let state = webview.state::<AppState>().window(&label);
+        Ok(Win { state, label })
+    }
+}
+
+/// The preview webview of a window.
+pub fn preview_label(window: &str) -> String {
+    format!("{window}-preview")
+}
+
+impl WindowState {
     fn root(&self) -> CmdResult<PathBuf> {
         self.root
             .lock()
@@ -94,13 +173,19 @@ struct LaunchOptions {
     selftest_edits: bool,
     /// `TYPST_STUDIO_SELFTEST_ONLY=a,b`: run only these self-test groups.
     selftest_only: Option<String>,
+    /// A window opened with New Window: it starts without a book, not the last one.
+    fresh: bool,
 }
 
 #[tauri::command]
-fn launch_options() -> LaunchOptions {
+fn launch_options(state: Win) -> LaunchOptions {
     let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/sample-book");
+    // The environment (a book to open, the self-test) is for the first window only.
+    let first = state.label() == "main";
+    let env = |k: &str| std::env::var(k).ok().filter(|_| first);
     LaunchOptions {
-        workspace: std::env::var("TYPST_STUDIO_WORKSPACE").ok(),
+        fresh: !first,
+        workspace: env("TYPST_STUDIO_WORKSPACE"),
         sample_book: (cfg!(debug_assertions) && sample.is_dir()).then(|| {
             sample
                 .canonicalize()
@@ -108,10 +193,10 @@ fn launch_options() -> LaunchOptions {
                 .to_string_lossy()
                 .into_owned()
         }),
-        selftest_out: std::env::var("TYPST_STUDIO_SELFTEST").ok(),
-        selftest_agent: std::env::var("TYPST_STUDIO_SELFTEST_AGENT").is_ok_and(|v| v == "1"),
-        selftest_edits: std::env::var("TYPST_STUDIO_SELFTEST_EDITS").is_ok_and(|v| v == "1"),
-        selftest_only: std::env::var("TYPST_STUDIO_SELFTEST_ONLY").ok(),
+        selftest_out: env("TYPST_STUDIO_SELFTEST"),
+        selftest_agent: env("TYPST_STUDIO_SELFTEST_AGENT").is_some_and(|v| v == "1"),
+        selftest_edits: env("TYPST_STUDIO_SELFTEST_EDITS").is_some_and(|v| v == "1"),
+        selftest_only: env("TYPST_STUDIO_SELFTEST_ONLY"),
     }
 }
 
@@ -135,12 +220,21 @@ fn ui_log(line: String) {
 /// UI zoom (⌘= / ⌘− / ⌘0): native page zoom of the main webview, like VS Code's
 /// window zoom. The preview webview keeps its own scale (its pages fit the pane).
 #[tauri::command]
-fn set_ui_zoom(app: tauri::AppHandle, factor: f64) -> CmdResult<f64> {
+fn set_ui_zoom(app: tauri::AppHandle, state: Win, factor: f64) -> CmdResult<f64> {
     let factor = factor.clamp(0.5, 2.5);
-    app.get_webview("main")
+    app.get_webview(state.label())
         .ok_or_else(|| CmdError::Unavailable("main webview missing".into()))?
         .set_zoom(factor)?;
     Ok(factor)
+}
+
+/// A webview of the calling window by role: "main" (the app) or "preview".
+fn webview_label(state: &Win, role: &str) -> String {
+    if role == "preview" {
+        preview_label(state.label())
+    } else {
+        state.label().to_string()
+    }
 }
 
 #[derive(Serialize)]
@@ -154,10 +248,13 @@ struct Frame {
 /// Logical (point) frames of the app's webviews; the self-test checks that the
 /// preview stays aligned with its pane at every zoom level.
 #[tauri::command]
-fn webview_frames(app: tauri::AppHandle) -> CmdResult<std::collections::HashMap<String, Frame>> {
+fn webview_frames(
+    app: tauri::AppHandle,
+    state: Win,
+) -> CmdResult<std::collections::HashMap<String, Frame>> {
     let window = app
-        .get_window("main")
-        .ok_or_else(|| CmdError::Unavailable("main window missing".into()))?;
+        .get_window(state.label())
+        .ok_or_else(|| CmdError::Unavailable("window missing".into()))?;
     let scale = window.scale_factor()?;
     let mut out = std::collections::HashMap::new();
     let inner = window.inner_size()?.to_logical::<f64>(scale);
@@ -180,7 +277,15 @@ fn webview_frames(app: tauri::AppHandle) -> CmdResult<std::collections::HashMap<
             height: outer.height,
         },
     );
+    // This window's webviews, by role ("main", "preview").
     for (label, webview) in app.webviews() {
+        let label = if label == state.label() {
+            "main".to_string()
+        } else if label == preview_label(state.label()) {
+            "preview".to_string()
+        } else {
+            continue;
+        };
         let b = webview.bounds()?;
         let pos = b.position.to_logical::<f64>(scale);
         let size = b.size.to_logical::<f64>(scale);
@@ -199,12 +304,16 @@ fn webview_frames(app: tauri::AppHandle) -> CmdResult<std::collections::HashMap<
 
 /// Native geometry of the window and a webview (diagnostics; macOS).
 #[tauri::command]
-async fn native_geometry(app: tauri::AppHandle, label: String) -> CmdResult<serde_json::Value> {
+async fn native_geometry(
+    app: tauri::AppHandle,
+    state: Win,
+    label: String,
+) -> CmdResult<serde_json::Value> {
     let window = app
-        .get_window("main")
-        .ok_or_else(|| CmdError::Unavailable("main window missing".into()))?;
+        .get_window(state.label())
+        .ok_or_else(|| CmdError::Unavailable("window missing".into()))?;
     let webview = app
-        .get_webview(&label)
+        .get_webview(&webview_label(&state, &label))
         .ok_or_else(|| CmdError::NotFound(format!("no webview {label:?}")))?;
     #[cfg(target_os = "macos")]
     return snapshot::window_geometry(&window, &webview)
@@ -227,6 +336,102 @@ fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResul
     Ok(())
 }
 
+/// A window with the app in it (its main webview has the window's label).
+/// Built by hand, not from tauri.conf.json, so the preview can be a second
+/// webview in the same window.
+fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Window> {
+    let window = WindowBuilder::new(app, label)
+        .title("Typst Studio")
+        .inner_size(1600.0, 1000.0)
+        .min_inner_size(960.0, 600.0)
+        .build()?;
+    let size = window
+        .inner_size()?
+        .to_logical::<f64>(window.scale_factor()?);
+    window.add_child(
+        WebviewBuilder::new(label, WebviewUrl::default()).auto_resize(),
+        LogicalPosition::new(0.0, 0.0),
+        size,
+    )?;
+    Ok(window)
+}
+
+/// A new window, without a book (it shows the welcome screen): "win-2", "win-3"…
+fn new_window(app: &tauri::AppHandle) -> tauri::Result<String> {
+    let n = app
+        .state::<AppState>()
+        .next_window
+        .fetch_add(1, Ordering::Relaxed)
+        + 2;
+    let label = format!("win-{n}");
+    open_window(app, &label)?.set_focus()?;
+    Ok(label)
+}
+
+/// File → New Window, from the page.
+#[tauri::command]
+fn window_new(app: tauri::AppHandle) -> CmdResult<String> {
+    Ok(new_window(&app)?)
+}
+
+fn selftest_only() -> CmdResult<()> {
+    match std::env::var_os("TYPST_STUDIO_SELFTEST") {
+        Some(_) => Ok(()),
+        None => Err(CmdError::Invalid("not in self-test mode".into())),
+    }
+}
+
+#[derive(Serialize)]
+struct WindowInfo {
+    label: String,
+    title: String,
+    root: Option<String>,
+}
+
+/// Self-test only: every window, its title and its book.
+#[tauri::command]
+fn selftest_windows(app: tauri::AppHandle) -> CmdResult<Vec<WindowInfo>> {
+    selftest_only()?;
+    let state = app.state::<AppState>();
+    let mut out: Vec<WindowInfo> = app
+        .windows()
+        .into_iter()
+        .map(|(label, w)| WindowInfo {
+            title: w.title().unwrap_or_default(),
+            root: state
+                .window(&label)
+                .root
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|r| r.to_string_lossy().into_owned()),
+            label,
+        })
+        .collect();
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    Ok(out)
+}
+
+/// Self-test only: run a script in another window's app webview.
+#[tauri::command]
+fn selftest_eval(app: tauri::AppHandle, label: String, js: String) -> CmdResult<()> {
+    selftest_only()?;
+    app.get_webview(&label)
+        .ok_or_else(|| CmdError::NotFound(format!("no window {label:?}")))?
+        .eval(js)?;
+    Ok(())
+}
+
+/// Self-test only: close a window.
+#[tauri::command]
+fn selftest_close_window(app: tauri::AppHandle, label: String) -> CmdResult<()> {
+    selftest_only()?;
+    app.get_window(&label)
+        .ok_or_else(|| CmdError::NotFound(format!("no window {label:?}")))?
+        .close()?;
+    Ok(())
+}
+
 /// The menu bar's titles and items (self-test only).
 #[tauri::command]
 fn menu_outline(app: tauri::AppHandle) -> CmdResult<Vec<(String, Vec<String>)>> {
@@ -245,13 +450,38 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .menu(menu::build)
         .on_menu_event(|app, event| {
-            let id = event.id().as_ref();
-            if id == "close-window" {
-                if let Some(w) = app.get_window("main") {
-                    let _ = w.close();
+            // The menu bar is the app's: it acts on the window in front.
+            let front = app
+                .windows()
+                .into_iter()
+                .find(|(_, w)| w.is_focused().unwrap_or(false))
+                .map(|(label, _)| label);
+            match event.id().as_ref() {
+                "new-window" => {
+                    if let Err(e) = new_window(app) {
+                        logs::push("app", format!("couldn't open a window: {e}"));
+                    }
                 }
-            } else if menu::COMMANDS.contains(&id) {
-                let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
+                "close-window" => {
+                    if let Some(w) = front.and_then(|l| app.get_window(&l)) {
+                        let _ = w.close();
+                    }
+                }
+                id if menu::COMMANDS.contains(&id) => {
+                    if let Some(label) = front {
+                        let _ = app.emit_to(EventTarget::webview(&label), "menu", id);
+                    }
+                }
+                _ => {}
+            }
+        })
+        .on_window_event(|window, event| {
+            // A closed window's helpers (Tinymist, OpenCode) stop with it.
+            if let WindowEvent::Destroyed = event {
+                let state = window.state::<AppState>();
+                if let Some(w) = state.windows.lock().unwrap().remove(window.label()) {
+                    w.kill_children();
+                }
             }
         })
         .manage(AppState::default())
@@ -278,21 +508,7 @@ pub fn run() {
                 handle.exit(0);
             });
 
-            // Built by hand (not from tauri.conf.json) so the preview can be a
-            // second webview in the same window.
-            let window = WindowBuilder::new(app, "main")
-                .title("Typst Studio")
-                .inner_size(1600.0, 1000.0)
-                .min_inner_size(960.0, 600.0)
-                .build()?;
-            let size = window
-                .inner_size()?
-                .to_logical::<f64>(window.scale_factor()?);
-            window.add_child(
-                WebviewBuilder::new("main", WebviewUrl::default()).auto_resize(),
-                LogicalPosition::new(0.0, 0.0),
-                size,
-            )?;
+            let window = open_window(app.handle(), "main")?;
             // An occluded window gets no animation frames, which would stall the self-test.
             if std::env::var_os("TYPST_STUDIO_SELFTEST").is_some() {
                 let _ = window.set_focus();
@@ -308,8 +524,13 @@ pub fn run() {
             native_geometry,
             selftest_finish,
             menu_outline,
+            window_new,
+            selftest_windows,
+            selftest_eval,
+            selftest_close_window,
             logs::app_logs,
             workspace::workspace_open,
+            workspace::workspace_elsewhere,
             workspace::workspace_list,
             workspace::fs_read,
             workspace::fs_hash,
