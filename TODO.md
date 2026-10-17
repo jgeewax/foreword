@@ -20,6 +20,6 @@
 
 - [x] formalize and document the writing tone and style (sort of what we'd put into a AGENTS.md for style). help users build that WRITING_STYLE.md file and then make sure that's done
 
-- [ ] better onboarding (help people get going, lots of writers wont be familiar wiht typst)
+- [x] better onboarding (help people get going, lots of writers wont be familiar wiht typst)
 
 - [x] book templates (childrens book, novel, text book, non-fiction book, etc)

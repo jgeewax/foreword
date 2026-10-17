@@ -534,6 +534,122 @@ async function templateChecks() {
   return out;
 }
 
+/**
+ * Onboarding (TODO #11): the Typst basics guide (in the pane and on the
+ * welcome screen), inserting examples, the chat starter, and jumping to /
+ * fixing a Typst error with the assistant. Edits a chapter: scratch book only.
+ */
+async function onboardingChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+
+  // Guide in the right-hand pane; examples go in at the cursor.
+  studio.openGuide();
+  await sleep(400);
+  const button = (title: string, label: string) =>
+    [...document.querySelectorAll('.guide-item')].find((e) => e.querySelector('h3')?.textContent === title)?.querySelector<HTMLButtonElement>(`.guide-actions button:${label === 'Insert' ? 'first-child' : 'last-child'}`);
+  out.guide = {
+    inPane: !!document.querySelector('.agent-pane .guide'),
+    sections: document.querySelectorAll('.guide-section').length,
+    items: document.querySelectorAll('.guide-item').length,
+    insertButtons: [...document.querySelectorAll('.guide-actions button')].filter((b) => b.textContent === 'Insert').length,
+  };
+  try {
+    out.snapshotGuide = await ipc.previewSnapshot('guide', 'main');
+  } catch (e) {
+    out.snapshotGuide = errorMessage(e);
+  }
+  const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+  button('Footnotes', 'Insert')?.click();
+  await sleep(200);
+  out.insertInline = { lineEndsWith: model.getLineContent(line).endsWith('The letter was never sent.#footnote[It is now in the county archive.]') };
+  editor.trigger('selftest', 'undo', null);
+  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+  button('A new page', 'Insert')?.click();
+  await sleep(200);
+  out.insertBlock = { ownParagraph: model.getValue().includes(`${model.getLineContent(line)}\n\n#pagebreak()\n`) };
+  editor.trigger('selftest', 'undo', null);
+  await sleep(200);
+  out.undoRestores = model.getValue() === original;
+  studio.closeGuide();
+  await sleep(200);
+
+  // Chat starter: suggestions fill the composer.
+  studio.newSession();
+  await sleep(300);
+  const suggestions = [...document.querySelectorAll<HTMLButtonElement>('.starter .suggestion')];
+  suggestions[1]?.click();
+  await sleep(300);
+  const composer = document.querySelector<HTMLTextAreaElement>('.composer textarea');
+  out.starter = { shown: !!document.querySelector('.starter'), suggestions: suggestions.length, filled: composer?.value === suggestions[1]?.textContent };
+  studio.events.emit('fill-composer', '');
+  try {
+    out.snapshotStarter = await ipc.previewSnapshot('starter', 'main');
+  } catch (e) {
+    out.snapshotStarter = errorMessage(e);
+  }
+
+  // A Typst error: the status bar jumps to it, and the assistant fixes it.
+  const policy = studio.state.settings.agentEdits;
+  studio.updateSettings({ agentEdits: 'allow' });
+  await studio.setMode('write');
+  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+  editor.trigger('selftest', 'type', { text: ' See #undefined-thing here.' });
+  await waitFor(() => studio.state.problems.errors > 0, 15000, 'error').catch(() => {});
+  editor.setPosition({ lineNumber: 1, column: 1 });
+  await sleep(300);
+  document.querySelector<HTMLButtonElement>('.statusbar .problems .link.bad')?.click();
+  await sleep(500);
+  const sel = editor.getSelection();
+  out.problem = {
+    errors: studio.state.problems.errors,
+    statusText: document.querySelector('.statusbar .problems')?.textContent,
+    jumpedTo: sel && { line: sel.startLineNumber, text: model.getValueInRange(sel) },
+  };
+  try {
+    out.snapshotProblem = await ipc.previewSnapshot('problem', 'main');
+  } catch (e) {
+    out.snapshotProblem = errorMessage(e);
+  }
+  if (studio.state.agent.status === 'ready') {
+    await studio.fixProblem();
+    await sleep(1000);
+    await waitFor(() => !studio.state.agent.running, 180000, 'fix').catch(() => {});
+    await sleep(2500);
+    const replies = studio.state.agent.items.filter((i) => i.kind === 'assistant');
+    out.fix = {
+      sent: (studio.state.agent.items.find((i) => i.kind === 'user') as any)?.text,
+      attachments: (studio.state.agent.items.find((i) => i.kind === 'user') as any)?.attachments,
+      reply: (replies[replies.length - 1] as any)?.text?.slice(0, 400),
+      errorsAfter: studio.state.problems.errors,
+      lineAfter: model.getLineContent(line),
+    };
+  }
+  studio.updateSettings({ agentEdits: policy });
+
+  // Welcome screen and the guide as a dialog there.
+  const root = studio.state.workspace!.root;
+  await (studio as any).closeWorkspace();
+  await sleep(500);
+  out.welcome = { shown: !!document.querySelector('.welcome'), setupRows: document.querySelectorAll('.setup li').length, learn: !!document.querySelector('.welcome-learn') };
+  try {
+    out.snapshotWelcome = await ipc.previewSnapshot('welcome', 'main');
+  } catch (e) {
+    out.snapshotWelcome = errorMessage(e);
+  }
+  studio.openGuide();
+  await sleep(300);
+  out.welcomeGuide = !!document.querySelector('.guide-modal .guide');
+  studio.closeGuide();
+  await studio.openWorkspace(root);
+  return out;
+}
+
 /** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
@@ -926,6 +1042,10 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('style')) {
         log('style guide');
         result.styleGuide = await styleGuideChecks();
+      }
+      if (want('onboarding')) {
+        log('onboarding');
+        result.onboarding = await onboardingChecks();
       }
       if (want('templates')) {
         log('templates');

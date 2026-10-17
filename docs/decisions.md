@@ -306,6 +306,38 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Onboarding for writers new to Typst (TODO #11)
+
+- **Typst basics** (`src/help/typst-basics.json`): plain-language explanations
+  with examples, covering paragraphs, emphasis, quotes and dashes, escaping,
+  headings, lists, chapter files, footnotes, citations, figures, quotations,
+  math, what red squiggles mean, and shortcuts. It opens in the right-hand pane,
+  so the editor and preview stay visible, from the toolbar's ? button or
+  Help → Typst Basics. On the welcome screen it's a dialog. Markup patterns get
+  "Insert", an undoable edit at the cursor; block examples get their own
+  paragraph. The content is JSON so `npm run check-templates` also compiles
+  every example (14) and fails on warnings.
+- **Welcome screen:**
+  - New Book first, then recent books;
+  - "New to Typst?" with a link to the guide;
+  - tool status in plain words ("Live preview", "Writing assistant"). A
+    missing tool shows its install command, checked to be in homebrew-core
+    (`brew install tinymist`, `brew install opencode`).
+  - Versions are parsed cleanly. Homebrew's tinymist reports
+    `VERGEN_IDEMPOTENT_OUTPUT`, so its version is read from the Cellar path.
+- **Chat starter:** before the first message, the assistant pane says what the
+  assistant does and offers suggestions. Clicking one fills the composer
+  without sending.
+- **Errors:** the status bar's error count jumps to the next error. "Ask the
+  assistant to fix it" attaches the error's line and asks for a plain-words
+  explanation plus a fix. Verified in-app with a real model: an unknown
+  variable was explained and removed, leaving 0 errors.
+- The agent's instructions now say many authors are new to Typst: explain
+  unfamiliar markup briefly and prefer the simplest markup.
+- Self-tests no longer write the recent-books list or the last-opened folder.
+  They share localStorage with the author's app, and scratch folders showed up
+  there.
+
 ### Helper processes, revised
 
 The child-process registry is now per app instance (`children-<pid>.json`).

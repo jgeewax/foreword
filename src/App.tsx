@@ -29,6 +29,14 @@ function Workbench() {
     else p.collapse();
   };
 
+  useEffect(
+    () =>
+      studio.events.on('show-agent-pane', () => {
+        if (agent.current?.isCollapsed()) agent.current.expand();
+      }),
+    [],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey || e.altKey || e.ctrlKey) return;

@@ -94,24 +94,70 @@ fn version_of(bin: &Path) -> Option<String> {
         .env("PATH", search_path())
         .output()
         .ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    // tinymist prints a block with "Build Git Describe:  v0.15.8"; others print one line.
-    text.lines()
-        .find_map(|l| {
-            l.strip_prefix("Build Git Describe:")
-                .map(|v| v.trim().to_string())
-        })
-        .or_else(|| {
-            text.lines()
-                .map(str::trim)
-                .find(|l| !l.is_empty())
-                .map(String::from)
-        })
+    clean_version(&String::from_utf8_lossy(&out.stdout))
+        // Homebrew's tinymist doesn't know its own version; its Cellar path does.
+        .or_else(|| bin.canonicalize().ok().and_then(|p| cellar_version(&p)))
+}
+
+/// "0.15.8" from `--version` output: tinymist prints a block with
+/// "Build Git Describe:  v0.15.8", others one line like "opencode v2.0.20".
+fn clean_version(text: &str) -> Option<String> {
+    let raw = text
+        .lines()
+        .find_map(|l| l.strip_prefix("Build Git Describe:"))
+        .or_else(|| text.lines().map(str::trim).find(|l| !l.is_empty()))?;
+    raw.split_whitespace()
+        .map(|w| w.trim_start_matches('v'))
+        .find(|w| w.starts_with(|c: char| c.is_ascii_digit()) && w.contains('.'))
+        .map(String::from)
+}
+
+/// `/opt/homebrew/Cellar/<name>/<version>/bin/<name>` → `<version>`.
+fn cellar_version(path: &Path) -> Option<String> {
+    let parts: Vec<_> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect();
+    let i = parts.iter().position(|p| p == "Cellar")?;
+    parts.get(i + 2).map(|v| v.to_string())
 }
 
 pub fn tool_info(bin: Option<PathBuf>) -> ToolInfo {
     ToolInfo {
         version: bin.as_deref().and_then(version_of),
         path: bin.map(|p| p.to_string_lossy().into_owned()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn versions_are_cleaned_up() {
+        assert_eq!(
+            clean_version("opencode v2.0.20\n").as_deref(),
+            Some("2.0.20")
+        );
+        assert_eq!(
+            clean_version("typst 0.15.1 (unknown commit)").as_deref(),
+            Some("0.15.1")
+        );
+        assert_eq!(
+            clean_version("tinymist \nBuild Git Describe:  v0.15.8\n").as_deref(),
+            Some("0.15.8")
+        );
+        assert_eq!(
+            clean_version("tinymist \nBuild Git Describe:  VERGEN_IDEMPOTENT_OUTPUT\n"),
+            None
+        );
+        assert_eq!(
+            cellar_version(Path::new(
+                "/opt/homebrew/Cellar/tinymist/0.15.8/bin/tinymist"
+            ))
+            .as_deref(),
+            Some("0.15.8")
+        );
+        assert_eq!(cellar_version(Path::new("/usr/local/bin/tinymist")), None);
     }
 }

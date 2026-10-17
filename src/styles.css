@@ -171,13 +171,53 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .toast { position: fixed; left: 12px; bottom: 34px; max-width: 420px; background: var(--bg-3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); }
 .toast.error { border-color: var(--bad); }
 
-.welcome { height: 100%; display: grid; place-items: center; background: var(--bg-2); }
-.welcome-card { width: min(460px, calc(100% - 32px)); }
-.welcome h1 { font-size: 22px; margin: 0 0 16px; }
+.welcome { height: 100%; display: grid; place-items: center; background: var(--bg-2); overflow: auto; }
+.welcome-card { width: min(520px, calc(100% - 32px)); padding: 24px 0; }
+.welcome h1 { font-size: 24px; margin: 0 0 6px; }
+.welcome-lede { color: var(--muted); margin: 0 0 18px; line-height: 1.45; }
 .welcome-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .welcome-actions button { padding: 5px 12px; }
-.tools { margin: 24px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 11.5px; -webkit-user-select: text; user-select: text; }
-.tools li.bad { color: var(--bad); }
+.welcome h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 22px 0 6px; }
+.recent-row { display: flex; width: 100%; gap: 10px; align-items: baseline; border: none; background: transparent; padding: 4px 6px; border-radius: 5px; text-align: left; }
+.recent-row:hover { background: var(--bg-3); }
+.recent-name { font-weight: 600; white-space: nowrap; }
+.recent-path { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome-learn { margin-top: 22px; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); line-height: 1.45; }
+.setup { margin: 18px 0 0; padding: 0; list-style: none; font-size: 12px; display: flex; flex-direction: column; gap: 4px; -webkit-user-select: text; user-select: text; }
+.setup .ok { color: var(--good); }
+.setup li.missing { line-height: 1.45; }
+.selectable { -webkit-user-select: text; user-select: text; }
+
+/* Typst basics */
+.guide { display: flex; flex-direction: column; min-height: 0; flex: 1; background: var(--bg); }
+.guide-header { display: flex; align-items: center; height: 30px; padding: 0 10px; border-bottom: 1px solid var(--border); background: var(--bg-2); flex: none; }
+.guide-body { overflow-y: auto; padding: 10px 14px 20px; -webkit-user-select: text; user-select: text; }
+.guide-intro { color: var(--muted); line-height: 1.45; margin: 0 0 6px; }
+.guide-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin: 18px 0 4px; }
+.guide-item { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.guide-item h3 { font-size: 13px; margin: 0 0 2px; }
+.guide-item p { margin: 0 0 6px; line-height: 1.45; }
+.guide-example { display: flex; gap: 6px; align-items: flex-start; }
+.guide-example pre { flex: 1; min-width: 0; margin: 0; font: 11.5px/1.45 "SF Mono", Menlo, monospace; background: var(--bg-2); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; white-space: pre-wrap; word-wrap: break-word; }
+.guide-actions { display: flex; flex-direction: column; gap: 4px; }
+.guide-keys { border-collapse: collapse; }
+.guide-keys td { padding: 3px 12px 3px 0; }
+.guide-more { margin-top: 16px; }
+.modal.guide-modal { width: min(640px, calc(100% - 32px)); height: calc(100% - 64px); overflow: hidden; }
+.agent-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.agent-body[hidden] { display: none; }
+.toolbar .icon.on { color: var(--accent); }
+.statusbar .problems { display: inline-flex; gap: 8px; }
+.statusbar .link { font-size: 11.5px; padding: 0; }
+
+/* agent starter */
+.starter { padding: 10px 4px; display: flex; flex-direction: column; gap: 6px; color: var(--fg); }
+.starter h3 { margin: 0; font-size: 13px; }
+.starter p { margin: 0; color: var(--muted); line-height: 1.45; }
+.starter-label { margin-top: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.suggestion { text-align: left; white-space: normal; height: auto; padding: 6px 9px; border-radius: 7px; background: var(--bg-2); line-height: 1.35; }
+.suggestion:hover:not(:disabled) { border-color: var(--accent); }
+.starter-tips { margin: 8px 0 0; padding-left: 16px; color: var(--muted); line-height: 1.5; font-size: 12px; }
 
 /* dialogs */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; z-index: 100; }

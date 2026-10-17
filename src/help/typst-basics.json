@@ -1,0 +1,154 @@
+{
+  "sections": [
+    {
+      "title": "Writing text",
+      "items": [
+        {
+          "title": "Paragraphs",
+          "text": "Leave an empty line between paragraphs. Single line breaks are ignored, so wrap lines however you like.",
+          "code": "The storm had passed by morning.\n\nMara walked down to the harbour."
+        },
+        {
+          "title": "Italics and bold",
+          "text": "Underscores make italics; stars make bold.",
+          "code": "She was _absolutely_ sure. *Never* again."
+        },
+        {
+          "title": "Quotes and dashes",
+          "text": "Type plain quotes and Typst curls them. Two hyphens make an en dash, three an em dash.",
+          "code": "\"Come in,\" she said --- and closed the door. Pages 10--12."
+        },
+        {
+          "title": "A line break without a new paragraph",
+          "text": "End the line with a backslash, as in poems or addresses.",
+          "code": "Roses are red, \\\nviolets are blue."
+        },
+        {
+          "title": "Notes to yourself",
+          "text": "Lines starting with // never appear in the book. Use /* … */ for longer notes.",
+          "code": "// TODO: check this date with the archive.\nThe ship sailed in 1820."
+        },
+        {
+          "title": "Characters with a special meaning",
+          "text": "# * _ $ @ < \\ and ` mean something to Typst. To write one as itself, put a backslash in front of it.",
+          "code": "Tickets cost \\$5 \\#1 \\*members only\\* hello\\@example.com"
+        }
+      ]
+    },
+    {
+      "title": "Structure",
+      "items": [
+        {
+          "title": "Chapters and sections",
+          "text": "One = starts a chapter, == a section, === a subsection.",
+          "code": "= The Voyage\n== Leaving port\n=== The first night",
+          "insert": true
+        },
+        {
+          "title": "Lists",
+          "text": "A dash starts a bullet; a plus starts a numbered step.",
+          "code": "- salt\n- flour\n\n+ Mix the dry ingredients.\n+ Add the water.",
+          "insert": true
+        },
+        {
+          "title": "A new page",
+          "text": "Force the next text onto a new page.",
+          "code": "#pagebreak()",
+          "insert": true
+        },
+        {
+          "title": "Adding a chapter file",
+          "text": "Create a file in the chapters folder, then add an #include line for it in main.typ. Chapters appear in the order of these lines.",
+          "code": "#include \"chapters/03-the-island.typ\"",
+          "compile": false
+        }
+      ]
+    },
+    {
+      "title": "Notes, sources and pictures",
+      "items": [
+        {
+          "title": "Footnotes",
+          "text": "The note goes where you put it; Typst numbers it and places it at the bottom of the page.",
+          "code": "The letter was never sent.#footnote[It is now in the county archive.]",
+          "insert": true
+        },
+        {
+          "title": "Citing a source",
+          "text": "Cite with @ and the source's key from your .bib file. The bibliography lists everything you cite.",
+          "code": "As @smith2020 showed, the habit forms within weeks."
+        },
+        {
+          "title": "Pictures with captions",
+          "text": "Put the image in your project (PNG, JPG or SVG). The <label> lets you refer to it elsewhere with @.",
+          "code": "#figure(\n  image(\"figures/map.png\", width: 80%),\n  caption: [The island in 1820.],\n) <fig-map>\n\nThe route is shown in @fig-map.",
+          "insert": true
+        },
+        {
+          "title": "A longer quotation",
+          "text": "Set a quotation apart from the text, with who said it.",
+          "code": "#quote(block: true, attribution: [Jane Austen])[\n  It is a truth universally acknowledged…\n]",
+          "insert": true
+        }
+      ]
+    },
+    {
+      "title": "Math",
+      "items": [
+        {
+          "title": "Formulas",
+          "text": "Dollar signs around math. With spaces inside, it gets its own line.",
+          "code": "The area is $pi r^2$.\n\n$ x = (-b plus.minus sqrt(b^2 - 4 a c)) / (2 a) $",
+          "insert": true
+        }
+      ]
+    },
+    {
+      "title": "When something goes wrong",
+      "items": [
+        {
+          "title": "Red squiggles",
+          "text": "They mark a Typst error. The usual cause is an unclosed *, _ or $, which turns the rest of the paragraph bold, italic or into math: close it, or put a backslash in front if you meant the character itself. Click the error count in the status bar to jump to the problem, or ask the assistant to fix it."
+        },
+        {
+          "title": "Ask the assistant",
+          "text": "Select some text and press ⌘I, then ask anything: \"How do I put this in two columns?\", \"Why is everything after this bold?\" It can explain the markup or make the change for you."
+        }
+      ]
+    }
+  ],
+  "shortcuts": [
+    [
+      "⌘S",
+      "Save"
+    ],
+    [
+      "⌘Z / ⇧⌘Z",
+      "Undo / redo"
+    ],
+    [
+      "⌘I",
+      "Ask the assistant about the selection"
+    ],
+    [
+      "Click in the preview",
+      "Jump to that text"
+    ],
+    [
+      "⇧⌘E",
+      "Export a PDF"
+    ],
+    [
+      "⌘= / ⌘−",
+      "Bigger / smaller"
+    ],
+    [
+      "⌘B",
+      "Show or hide the files"
+    ],
+    [
+      "⇧⌘N",
+      "New book"
+    ]
+  ]
+}

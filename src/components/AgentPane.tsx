@@ -6,6 +6,7 @@ import { AGENT_MODES, modeConfig } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
+import { TypstGuide } from './TypstGuide';
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -193,6 +194,14 @@ function Composer() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => studio.events.on('focus-composer', () => inputRef.current?.focus()), []);
+  useEffect(
+    () =>
+      studio.events.on('fill-composer', (t) => {
+        setText(t);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }),
+    [],
+  );
 
   const send = async () => {
     const message = text;
@@ -301,8 +310,49 @@ function StyleGuideBar() {
   );
 }
 
+const SUGGESTIONS = [
+  'Explain how the files of this book fit together.',
+  'Suggest an outline for my next chapter.',
+  "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet.",
+  'How do I add a footnote?',
+];
+
+/** Shown before the first message: what the assistant does, and things to try. */
+function Starter() {
+  const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
+  return (
+    <div className="starter">
+      <h3>Your writing assistant</h3>
+      <p>
+        It reads your book, follows your style guide, and can edit for you. Every change shows up in the preview, and History keeps a version from before it.
+      </p>
+      <div className="starter-label">Try asking</div>
+      {SUGGESTIONS.map((s) => (
+        <button key={s} className="suggestion" disabled={!ready} onClick={() => studio.events.emit('fill-composer', s)}>
+          {s}
+        </button>
+      ))}
+      <ul className="starter-tips">
+        <li>
+          Select text and press <kbd>⌘I</kbd> to ask about it.
+        </li>
+        <li>
+          <strong>Plan</strong> talks it through and outlines before writing. <strong>Options</strong> gives you three versions to pick from.
+        </li>
+        <li>
+          New to Typst?{' '}
+          <button className="link" onClick={() => studio.openGuide()}>
+            Typst basics
+          </button>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
 export function AgentPane() {
   const agent = useStore(studio.store, (s) => s.agent);
+  const guideOpen = useStore(studio.store, (s) => s.guideOpen);
   const listRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -313,46 +363,48 @@ export function AgentPane() {
 
   return (
     <section className="pane agent-pane">
-      <header className="pane-header">
-        <ModelPicker />
-        <button className="icon" title="New session" disabled={agent.running} onClick={() => studio.newSession()}>
-          ＋
-        </button>
-      </header>
-      <div className="agent-status">
-        {agent.status === 'starting' && 'Starting OpenCode…'}
-        {agent.status === 'error' && <span className="bad">OpenCode: {agent.error}</span>}
-        {agent.status === 'ready' && (
-          <>
-            <span className={agent.connection === 'lost' ? 'bad' : ''}>{agent.connection === 'lost' ? 'Event stream reconnecting…' : agent.title ?? 'New session'}</span>
-            {agent.running && <span className="working">working…</span>}
-            <span className="spacer" />
-            <EditPolicyToggle />
-          </>
-        )}
-        {agent.status === 'error' && (
-          <button className="link" onClick={() => void studio.startAgent()}>
-            Retry
+      {guideOpen && <TypstGuide onClose={() => studio.closeGuide()} />}
+      {/* Hidden, not unmounted, while the guide is open: keeps the draft message and scroll position. */}
+      <div className="agent-body" hidden={guideOpen}>
+        <header className="pane-header">
+          <ModelPicker />
+          <button className="icon" title="New session" disabled={agent.running} onClick={() => studio.newSession()}>
+            ＋
           </button>
-        )}
+        </header>
+        <div className="agent-status">
+          {agent.status === 'starting' && 'Starting OpenCode…'}
+          {agent.status === 'error' && <span className="bad">OpenCode: {agent.error}</span>}
+          {agent.status === 'ready' && (
+            <>
+              <span className={agent.connection === 'lost' ? 'bad' : ''}>{agent.connection === 'lost' ? 'Event stream reconnecting…' : agent.title ?? 'New session'}</span>
+              {agent.running && <span className="working">working…</span>}
+              <span className="spacer" />
+              <EditPolicyToggle />
+            </>
+          )}
+          {agent.status === 'error' && (
+            <button className="link" onClick={() => void studio.startAgent()}>
+              Retry
+            </button>
+          )}
+        </div>
+        <StyleGuideBar />
+        <div
+          className="transcript"
+          ref={listRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+        >
+          {agent.items.length === 0 && <Starter />}
+          {agent.items.map((item) => (
+            <Item key={item.id} item={item} />
+          ))}
+        </div>
+        <Composer />
       </div>
-      <StyleGuideBar />
-      <div
-        className="transcript"
-        ref={listRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        }}
-      >
-        {agent.items.length === 0 && (
-          <div className="empty-hint">Select lines in the editor and press ⌘I to ask about them. Edits need your approval.</div>
-        )}
-        {agent.items.map((item) => (
-          <Item key={item.id} item={item} />
-        ))}
-      </div>
-      <Composer />
     </section>
   );
 }

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Compile every book template in src/templates with the installed `typst`,
-// with a title that needs escaping, and fail on any error or warning.
+// with a title that needs escaping, and every example in the Typst basics
+// guide (src/help/typst-basics.json). Fails on any error or warning.
 // Usage: npm run check-templates [-- --png <dir>]  (also renders page images)
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -42,5 +43,28 @@ for (const id of readdirSync(root).filter((n) => statSync(join(root, n)).isDirec
     rmSync(work, { recursive: true, force: true });
   }
 }
-console.log(`${version}: ${failed ? `${failed} failed` : 'all templates compile'}`);
+
+// Guide examples: each compiled on its own, with the files they refer to.
+const guide = JSON.parse(readFileSync(new URL('../src/help/typst-basics.json', import.meta.url), 'utf8'));
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+const work = mkdtempSync(join(tmpdir(), 'typst-guide-'));
+mkdirSync(join(work, 'figures'));
+writeFileSync(join(work, 'figures/map.png'), Buffer.from(PNG, 'base64'));
+writeFileSync(join(work, 'refs.bib'), '@book{smith2020, author = {Smith, Ann}, title = {Habits}, year = {2020}}\n');
+let examples = 0;
+for (const item of guide.sections.flatMap((s) => s.items)) {
+  if (!item.code || item.compile === false) continue;
+  examples++;
+  const bib = item.code.includes('@smith2020') ? '\n#bibliography("refs.bib")\n' : '';
+  writeFileSync(join(work, 'main.typ'), `${item.code}\n${bib}`);
+  const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', 'main.typ', 'out.pdf'], { cwd: work, encoding: 'utf8' });
+  const output = `${run.stdout}${run.stderr}`.trim();
+  if (run.status !== 0 || /warning/i.test(output)) {
+    failed++;
+    console.log(`FAIL guide: ${item.title}\n${output}`);
+  }
+}
+rmSync(work, { recursive: true, force: true });
+console.log(`ok   ${examples} guide examples`);
+console.log(`${version}: ${failed ? `${failed} failed` : 'all templates and guide examples compile'}`);
 process.exit(failed ? 1 : 0);

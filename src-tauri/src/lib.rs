@@ -15,7 +15,7 @@ use std::{path::PathBuf, sync::Mutex};
 use serde::Serialize;
 use tauri::{
     Emitter, EventTarget, LogicalPosition, Manager, RunEvent, WebviewUrl,
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     webview::WebviewBuilder,
     window::WindowBuilder,
 };
@@ -274,6 +274,16 @@ pub fn run() {
                     &PredefinedMenuItem::separator(handle)?,
                 ])?;
             }
+            let guide =
+                MenuItem::with_id(handle, "typst-guide", "Typst Basics", true, None::<&str>)?;
+            match items
+                .iter()
+                .filter_map(|i| i.as_submenu())
+                .find(|s| s.text().is_ok_and(|t| t == "Help"))
+            {
+                Some(help) => help.prepend(&guide)?,
+                None => menu.append(&Submenu::with_items(handle, "Help", true, &[&guide])?)?,
+            }
             if let Some(view) = items
                 .iter()
                 .filter_map(|i| i.as_submenu())
@@ -285,7 +295,9 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
-            if id.starts_with("zoom-") || ["settings", "export-pdf", "new-book"].contains(&id) {
+            if id.starts_with("zoom-")
+                || ["settings", "export-pdf", "new-book", "typst-guide"].contains(&id)
+            {
                 let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
             }
         })

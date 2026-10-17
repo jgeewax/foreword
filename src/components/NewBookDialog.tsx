@@ -3,6 +3,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
 import { AUTHOR_KEY, NEW_BOOK_PARENT, studio } from '../app/studio';
 import { errorMessage } from '../lib/ipc';
+import { tildePath as tilde } from '../lib/paths';
 import { bookFolderName, TEMPLATES } from '../templates';
 
 const stored = (key: string) => {
@@ -12,9 +13,6 @@ const stored = (key: string) => {
     return '';
   }
 };
-
-/** Shortens /Users/<name>/… to ~/… for display. */
-const tilde = (path: string) => path.replace(/^\/Users\/[^/]+/, '~');
 
 export function NewBookDialog() {
   const [template, setTemplate] = useState(TEMPLATES[0].id);

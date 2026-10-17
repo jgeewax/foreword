@@ -24,6 +24,7 @@ import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, TEMPLATES, templateFiles } from '../templates';
+import { snippetInsertion } from '../help/guide';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
@@ -97,6 +98,10 @@ export type StudioState = {
   settings: AppSettings;
   settingsOpen: boolean;
   newBookOpen: boolean;
+  /** "Typst basics": in the right-hand pane (or a dialog on the welcome screen). */
+  guideOpen: boolean;
+  /** Recently opened books, newest first. */
+  recent: string[];
   /** `.typst-studio.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
   exporting: boolean;
@@ -140,6 +145,8 @@ const initialState: StudioState = {
   settings: loadSettings(),
   settingsOpen: false,
   newBookOpen: false,
+  guideOpen: false,
+  recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false },
@@ -150,6 +157,7 @@ const initialState: StudioState = {
 const LAST_WORKSPACE = 'studio.lastWorkspace';
 const MODEL_KEY = 'studio.model';
 const ZOOM_KEY = 'studio.zoom';
+const RECENT_KEY = 'studio.recentWorkspaces';
 export const NEW_BOOK_PARENT = 'studio.newBookParent';
 export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
@@ -172,7 +180,7 @@ function writeJson(key: string, value: unknown) {
 
 export class Studio {
   readonly store = new Store<StudioState>(initialState);
-  readonly events = new Emitter<{ 'focus-composer': []; 'focus-editor': [] }>();
+  readonly events = new Emitter<{ 'focus-composer': []; 'focus-editor': []; 'fill-composer': [text: string]; 'show-agent-pane': [] }>();
   readonly perf = new PerfTracker();
   readonly typst = new TypstService();
   docs: Documents | null = null;
@@ -244,6 +252,7 @@ export class Studio {
       if (e.payload === 'settings') return this.openSettings();
       if (e.payload === 'export-pdf') return void this.exportPdf();
       if (e.payload === 'new-book') return this.openNewBook();
+      if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
     });
@@ -296,7 +305,13 @@ export class Studio {
       this.store.set({ opening: null, openError: `Couldn't open ${path}: ${errorMessage(e)}` });
       return;
     }
-    localStorage.setItem(LAST_WORKSPACE, info.root);
+    // Self-tests run against scratch folders: keep them out of the author's recent books.
+    if (!this.state.launch?.selftestOut) {
+      localStorage.setItem(LAST_WORKSPACE, info.root);
+      const recent = [info.root, ...this.state.recent.filter((r) => r !== info.root)].slice(0, 8);
+      writeJson(RECENT_KEY, recent);
+      this.store.set({ recent });
+    }
     this.docs = new Documents(info.root, this.typst, {
       onEdit: () => this.perf.edit(() => this.publishPerf()),
       onDirtyChange: (p, dirty) => this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } })),
@@ -322,6 +337,77 @@ export class Studio {
     for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
     const active = saved?.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
     if (active) await this.openFile(active);
+  }
+
+  // ---- help for writers new to Typst ------------------------------------------------
+
+  openGuide() {
+    this.store.set({ guideOpen: true });
+    this.events.emit('show-agent-pane');
+  }
+
+  closeGuide() {
+    this.store.set({ guideOpen: false });
+  }
+
+  /** Put a guide example at the cursor (block examples get their own paragraph). Undoable. */
+  insertSnippet(code: string) {
+    const editor = this.editor;
+    const model = editor?.getModel();
+    const selection = editor?.getSelection();
+    if (!editor || !model || !selection || !this.state.active) {
+      this.toast('Open a chapter first, then put the cursor where the example should go.');
+      return;
+    }
+    const line = model.getLineContent(selection.startLineNumber);
+    const before = line.slice(0, selection.startColumn - 1);
+    const after = model.getLineContent(selection.endLineNumber).slice(selection.endColumn - 1);
+    editor.pushUndoStop();
+    editor.executeEdits('typst-guide', [{ range: selection, text: snippetInsertion(code, before, after), forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+    editor.focus();
+  }
+
+  /** Errors across the book, in file and line order. */
+  private errorList() {
+    return [...this.diagnostics.entries()]
+      .flatMap(([path, list]) => list.filter((d) => d.severity === 1).map((d) => ({ path, d })))
+      .sort((a, b) => a.path.localeCompare(b.path) || a.d.range.start.line - b.d.range.start.line);
+  }
+
+  /** Select the next error after the cursor (wrapping around), opening its file. */
+  async nextProblem() {
+    const errors = this.errorList();
+    if (!errors.length) return null;
+    const cursor = this.state.cursor;
+    const active = this.state.active;
+    const next =
+      errors.find(({ path, d }) => {
+        if (!active || !cursor) return true;
+        const c = path.localeCompare(active);
+        return c > 0 || (c === 0 && d.range.start.line + 1 > cursor.line);
+      }) ?? errors[0];
+    await this.openFile(next.path);
+    const { start, end } = next.d.range;
+    const range = new monaco.Range(start.line + 1, start.character + 1, end.line + 1, end.character + 1);
+    this.editor?.setSelection(range);
+    this.editor?.revealRangeInCenterIfOutsideViewport(range);
+    this.editor?.focus();
+    return next;
+  }
+
+  /** Ask the assistant to explain and fix the next error, with its line attached. */
+  async fixProblem() {
+    const problem = await this.nextProblem();
+    if (!problem || !this.editor) return;
+    const model = this.editor.getModel()!;
+    const { start, end } = problem.d.range;
+    this.editor.setSelection(new monaco.Range(start.line + 1, 1, end.line + 1, model.getLineMaxColumn(end.line + 1)));
+    this.setAgent({ attachments: [] });
+    await this.attachSelection({ focus: false });
+    this.events.emit('show-agent-pane');
+    this.closeGuide();
+    await this.send(`Typst reports an error here: “${problem.d.message}”. Explain in a sentence or two, in plain words, what's wrong, then fix it.`);
   }
 
   // ---- new book from a template ------------------------------------------------------
