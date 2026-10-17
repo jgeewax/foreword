@@ -98,9 +98,164 @@ const itemMenu = (text: string, what: string) =>
     { label: `Copy ${what}`, action: () => studio.copy(text) },
   ]);
 
+type QuestionItem = Extract<ChatItem, { kind: 'question' }>;
+type Field = QuestionItem['fields'][number];
+type Value = string | number | boolean | string[];
+
+const isEmpty = (v: Value | undefined) => v === undefined || v === '' || (Array.isArray(v) && !v.length);
+const shown = (v: Value | undefined) => (Array.isArray(v) ? v.join(', ') : v === undefined || v === '' ? '—' : String(v));
+
+/** One question: its options as buttons (checkboxes for several), plus a free answer when allowed. */
+function QuestionField({ field, value, onChange, disabled, autoFocus }: { field: Field; value: Value | undefined; onChange: (v: Value) => void; disabled: boolean; autoFocus: boolean }) {
+  const options = field.options ?? [];
+  const multi = field.type === 'multiselect';
+  const picked = (o: string) => (multi ? Array.isArray(value) && value.includes(o) : value === o);
+  const isOther = !multi && typeof value === 'string' && value !== '' && !options.some((o) => o.value === value);
+  const [other, setOther] = useState(isOther ? String(value) : '');
+  const pick = (o: string) => {
+    if (multi) {
+      const now = Array.isArray(value) ? value : [];
+      onChange(now.includes(o) ? now.filter((x) => x !== o) : [...now, o]);
+    } else onChange(o);
+  };
+  return (
+    <div className="question-field">
+      {field.title && <div className="question-header">{field.title}</div>}
+      {field.description && <div className="question-text">{field.description}</div>}
+      {options.length > 0 && (
+        <div className="question-options" role={multi ? 'group' : 'radiogroup'}>
+          {options.map((o, i) => (
+            <button
+              key={o.value}
+              type="button"
+              role={multi ? 'checkbox' : 'radio'}
+              aria-checked={picked(o.value)}
+              className={`question-option${picked(o.value) ? ' picked' : ''}`}
+              disabled={disabled}
+              autoFocus={autoFocus && i === 0}
+              onClick={() => pick(o.value)}
+            >
+              <span className="question-key">{multi ? (picked(o.value) ? '☑' : '☐') : i + 1}</span>
+              <span className="question-option-body">
+                <span className="question-label">{o.label}</span>
+                {o.description && <span className="question-desc">{o.description}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {field.type === 'boolean' && (
+        <div className="question-options">
+          {[true, false].map((b) => (
+            <button key={String(b)} type="button" className={`question-option${value === b ? ' picked' : ''}`} disabled={disabled} onClick={() => onChange(b)}>
+              {b ? 'Yes' : 'No'}
+            </button>
+          ))}
+        </div>
+      )}
+      {field.type === 'external' && field.url && (
+        <button type="button" className="link" onClick={() => void studio.openPrinterPage(field.url!)}>
+          Open {field.url}
+        </button>
+      )}
+      {(field.custom || (!options.length && (field.type === 'string' || field.type === 'number' || field.type === 'integer'))) && (
+        <input
+          className="question-other"
+          type={field.type === 'string' || field.type === 'multiselect' ? 'text' : 'number'}
+          placeholder={options.length ? 'Or type your own answer…' : (field.placeholder ?? 'Your answer…')}
+          value={options.length ? other : value === undefined ? '' : String(value)}
+          disabled={disabled}
+          autoFocus={autoFocus && !options.length}
+          onChange={(e) => {
+            const t = e.target.value;
+            if (!options.length) return onChange(field.type === 'string' ? t : t === '' ? '' : Number(t));
+            setOther(t);
+            if (multi) {
+              const known = (Array.isArray(value) ? value : []).filter((x) => options.some((o) => o.value === x));
+              onChange(t.trim() ? [...known, t.trim()] : known);
+            } else onChange(t);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The assistant's question(s): answer and it carries on; dismiss and it's told you declined. */
+function QuestionCard({ item }: { item: QuestionItem }) {
+  const [values, setValues] = useState<Record<string, Value>>(() => (item.answer ? { ...item.answer } : {}));
+  const ref = useRef<HTMLFormElement>(null);
+  const settled = item.state === 'answered' || item.state === 'dismissed';
+  const busy = item.state === 'sending';
+  const questions = item.fields.filter((f) => f.type !== 'external');
+  const ready = questions.every((f) => !isEmpty(values[f.key]));
+  const submit = () => {
+    if (!ready || busy || settled) return;
+    const answer: Record<string, Value> = {};
+    for (const f of questions) {
+      const v = values[f.key];
+      answer[f.key] = typeof v === 'string' ? v.trim() : v;
+    }
+    void studio.answerQuestion(item.id, answer);
+  };
+  if (settled) {
+    return (
+      <div className={`question done ${item.state}`}>
+        <div className="question-head">{item.state === 'answered' ? 'You answered' : 'You dismissed the question'}</div>
+        {item.state === 'answered' &&
+          questions.map((f) => (
+            <div key={f.key} className="question-answer">
+              <span className="muted">{f.title ?? f.description}:</span> {shown(item.answer?.[f.key])}
+            </div>
+          ))}
+      </div>
+    );
+  }
+  return (
+    <form
+      ref={ref}
+      className="question"
+      aria-label="The assistant asks"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      onKeyDown={(e) => {
+        // 1–9 picks an option of the first question still unanswered (single choice).
+        if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+        const n = Number(e.key);
+        const field = questions.find((f) => f.type !== 'multiselect' && f.options?.length && isEmpty(values[f.key])) ?? questions.find((f) => f.type !== 'multiselect' && f.options?.length);
+        if (field && n >= 1 && n <= (field.options?.length ?? 0)) {
+          e.preventDefault();
+          setValues((v) => ({ ...v, [field.key]: field.options![n - 1].value }));
+        } else if (e.key === 'Enter' && ready) {
+          e.preventDefault();
+          submit();
+        }
+      }}
+    >
+      <div className="question-head">The assistant asks</div>
+      {item.fields.map((f, i) => (
+        <QuestionField key={f.key} field={f} value={values[f.key]} disabled={busy} autoFocus={i === 0} onChange={(v) => setValues((vs) => ({ ...vs, [f.key]: v }))} />
+      ))}
+      <div className="question-actions">
+        <button type="button" disabled={busy} onClick={() => void studio.dismissQuestion(item.id)}>
+          Dismiss
+        </button>
+        <button type="submit" className="primary" disabled={!ready || busy}>
+          {busy ? 'Sending…' : 'Answer'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** A tool call in words ("Read “The Storm” (chapter 2) · lines 1–40"); its raw output folds out. */
 function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
   const names = useStore(studio.store, (s) => s.names);
+  // A question asked here is shown by its card.
+  const hasCard = useStore(studio.store, (s) => item.name === 'question' && s.agent.items.some((i) => i.kind === 'question' && i.callId === item.id));
+  if (hasCard) return null;
   const label = describeTool(item.name, item.input, names, undefined, item.read);
   const text = item.status === 'running' ? `${label.running}…` : label.done;
   const note = item.note ?? label.note;
@@ -184,7 +339,9 @@ function ActivityLine() {
           ? `${activity.label ?? 'Working'}…`
           : activity.phase === 'writing'
             ? 'Writing…'
-            : `The model is busy. Trying again${wait ? ` in ${wait} s` : ' now'}${activity.attempt ? ` (attempt ${activity.attempt})` : ''}`;
+            : activity.phase === 'asking'
+              ? 'Waiting for your answer'
+              : `The model is busy. Trying again${wait ? ` in ${wait} s` : ' now'}${activity.attempt ? ` (attempt ${activity.attempt})` : ''}`;
   return (
     <div className={`activity-line phase-${activity.phase}`} role="status" aria-live="polite" title={activity.reason}>
       <span className="activity-spinner" aria-hidden />
@@ -221,6 +378,8 @@ function ItemBody({ item }: { item: ChatItem }) {
       );
     case 'thinking':
       return <Thinking item={item} />;
+    case 'question':
+      return <QuestionCard item={item} />;
     case 'assistant':
       if (item.options) return <OptionsReply item={item} />;
       return (

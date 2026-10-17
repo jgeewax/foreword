@@ -122,11 +122,11 @@ export function sessionRules(p: AgentPermissions, readOnly = false): PermissionR
     ...commandPatterns(['rm', 'rmdir', 'unlink', 'trash', 'git rm', 'shred']).map((resource): PermissionRule => ({ action: 'shell', resource, effect: p.delete })),
     { action: 'webfetch', resource: '*', effect: p.web },
     { action: 'websearch', resource: '*', effect: p.web },
-    // Subagents run under their own allow-all rules; OpenCode's question tool isn't shown by
-    // Typst Studio (the agent asks in its reply instead).
+    // Subagents run under their own allow-all rules. The question tool asks the author
+    // (multiple choice or free text, in the chat): asking needs no permission.
     { action: 'subagent', resource: '*', effect: 'deny' },
     { action: 'task', resource: '*', effect: 'deny' },
-    { action: 'question', resource: '*', effect: 'deny' },
+    { action: 'question', resource: '*', effect: 'allow' },
     ...(readOnly ? READ_ONLY_RULES : []),
     ...NO_COMPILE_RULES,
   ];

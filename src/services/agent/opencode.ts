@@ -3,9 +3,9 @@
 // /openapi.json (OpenCode 2.0.20); the npm SDK (1.x) targets the older API.
 import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
-import { mapOpenCodeEvent } from './opencode-events';
+import { mapOpenCodeEvent, toFormRequest } from './opencode-events';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
-import type { AgentAdapter, AgentEvent, Delivery, ModelInfo, ModelRef, PermissionDecision } from './types';
+import type { AgentAdapter, AgentEvent, Delivery, FormAnswer, FormRequest, ModelInfo, ModelRef, PermissionDecision } from './types';
 
 // Permission rules: see permissions.ts (what the assistant may do).
 export { NO_COMPILE_RULES, READ_ONLY_RULES, sessionRules } from './permissions';
@@ -114,6 +114,19 @@ export class OpenCodeAdapter implements AgentAdapter {
     const text = [message, ...context.map((c) => formatSelectionContext(c.selection, c.stale))].join('\n\n');
     const res = await call('POST', `/api/session/${sessionId}/prompt`, delivery ? { text, delivery } : { text });
     return (res.data?.id as string | undefined) ?? null;
+  }
+
+  async pendingForms(sessionId: string) {
+    const res = await call('GET', `/api/session/${sessionId}/form`);
+    return ((res.data ?? []) as any[]).map(toFormRequest).filter((f): f is FormRequest => !!f);
+  }
+
+  async replyForm(sessionId: string, formId: string, answer: FormAnswer) {
+    await call('POST', `/api/session/${sessionId}/form/${formId}/reply`, { answer });
+  }
+
+  async cancelForm(sessionId: string, formId: string) {
+    await call('DELETE', `/api/session/${sessionId}/form/${formId}`);
   }
 
   async steer(sessionId: string, inboxId: string) {

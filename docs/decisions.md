@@ -819,6 +819,40 @@ pane top (off by 0 pt).
   - A steered one was delivered mid-turn and answered in it.
   - A taken-back one never reached the conversation.
 
+### The assistant asks: multiple choice or free text
+
+- **How OpenCode 2.0.20 does it** (from the server's bundled code, since the
+  OpenAPI file has no question routes): the `question` tool creates a Form
+  with one field per question:
+  - `q0`, `q1`… with the header as the title and the question as the
+    description;
+  - `string`, or `multiselect` when `multiple`;
+  - options of `{value: label, label, description}`;
+  - `custom: true`, so free text is always allowed.
+  It waits for `POST /api/session/{id}/form/{formId}/reply {answer: {q0: …}}`.
+  Cancelling the form (`DELETE`) gives the model "The user dismissed this
+  question". Events: `form.created`, `form.replied`, `form.cancelled`.
+- **Permissions:** the question action is allowed (asking needs no
+  permission); before, it was denied because the app couldn't show it. The
+  instructions ask for the tool when the author must choose: a few options with
+  a line each, the recommendation first.
+- **In the chat:** a card ("The assistant asks") with each question's header
+  and text.
+  - Options are buttons with their descriptions and number keys; 1–9 picks,
+    and ⏎ answers.
+  - Multi-select questions use checkboxes; there's an "Or type your own
+    answer…" field.
+  - Answer and Dismiss buttons; afterwards the card shrinks to "You answered:
+    …".
+  - The progress line says "Waiting for your answer", and the tool's own row is
+    hidden while its card is there.
+- If the form event doesn't arrive, the app lists pending forms 1.5 s after a
+  question tool starts, and again on switching conversations. Saved
+  conversations show the row "Asked you a question · you said “…”".
+- **Verified with a real model** (self-test `questions`): the asked card, an
+  option clicked and answered (the reply followed the choice), and a dismissal
+  that ended the turn.
+
 ### Feeling fast
 
 - **Instant response:** Send clears the composer and shows the message at

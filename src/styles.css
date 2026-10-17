@@ -608,3 +608,24 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .queued-state { flex: none; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .queued-item.steer .queued-state { color: var(--accent); }
 .queued-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The assistant's questions. */
+.question { border: 1px solid var(--accent); border-radius: 10px; padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 10px; animation: pop-in 0.18s ease-out; }
+.question.done { border-color: var(--border); padding: 6px 10px; gap: 2px; font-size: 12px; animation: none; }
+.question-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+.question.done .question-head { color: var(--muted); }
+.question-header { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.question-text { margin: 2px 0 6px; line-height: 1.4; }
+.question-options { display: flex; flex-direction: column; gap: 4px; }
+.question-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; padding: 6px 8px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); }
+.question-option:hover:not(:disabled) { border-color: var(--accent); }
+.question-option.picked { border-color: var(--accent); background: var(--sel); }
+.question-key { flex: none; min-width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); }
+.question-option.picked .question-key { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+.question-option-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.question-label { font-weight: 600; }
+.question-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.question-other { margin-top: 4px; width: 100%; }
+.question-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.question-answer { line-height: 1.4; }
+.activity-line.phase-asking .activity-spinner { animation: pulse 1.2s ease-in-out infinite; border-top-color: var(--border); background: var(--accent); }

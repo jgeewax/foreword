@@ -51,5 +51,6 @@ describe('tool calls in words', () => {
     expect(describeTool('webfetch', { url: 'https://typst.app/docs/' }, names).done).toBe('Read a web page (typst.app)');
     expect(describeTool('websearch', { query: 'typst footnotes' }, names).running).toBe('Searching the web for “typst footnotes”');
     expect(describeTool('mystery', {}, names).done).toBe('Used mystery');
+    expect(describeTool('question', {}, names, 'User has answered your questions: "Next chapter?"="Determinants". You can now continue.').note).toBe('you said “Determinants”');
   });
 });

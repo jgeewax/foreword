@@ -96,6 +96,39 @@ describe('mapOpenCodeEvent (synthetic)', () => {
     ).toEqual({ type: 'retry-scheduled', sessionId: 's', attempt: 2, at: 1792230262146, message: 'Upstream request failed: Endpoint is unavailable.' });
   });
 
+  it('maps the question tool’s form (as OpenCode 2.0.20 builds it) and its settling', () => {
+    const form = {
+      id: 'frm_1',
+      sessionID: 's',
+      title: 'Questions',
+      metadata: { kind: 'question', tool: { messageID: 'm', id: 'call_1' } },
+      fields: [
+        {
+          key: 'q0',
+          title: 'Next chapter',
+          description: 'What should the next chapter be about?',
+          type: 'string',
+          options: [
+            { value: 'Determinants', label: 'Determinants', description: 'A chapter on determinants' },
+            { value: 'Eigenvalues', label: 'Eigenvalues' },
+          ],
+          custom: true,
+        },
+        { key: 'q1', title: 'Extras', type: 'multiselect', options: [{ value: 'Exercises', label: 'Exercises' }] },
+        { key: 'weird', type: 'mystery' },
+      ],
+    };
+    const asked = mapOpenCodeEvent({ type: 'form.created', data: { sessionID: 's', form } });
+    expect(asked).toMatchObject({ type: 'form-asked', sessionId: 's', form: { id: 'frm_1', title: 'Questions', callId: 'call_1' } });
+    const fields = (asked as { form: { fields: unknown[] } }).form.fields;
+    expect(fields).toHaveLength(2);
+    expect(fields[0]).toMatchObject({ key: 'q0', type: 'string', custom: true, options: [{ value: 'Determinants', description: 'A chapter on determinants' }, { label: 'Eigenvalues' }] });
+    // The form itself as the event's data works too.
+    expect(mapOpenCodeEvent({ type: 'form.created', data: form })).toMatchObject({ type: 'form-asked', sessionId: 's' });
+    expect(mapOpenCodeEvent({ type: 'form.replied', data: { sessionID: 's', id: 'frm_1' } })).toEqual({ type: 'form-settled', sessionId: 's', formId: 'frm_1', outcome: 'answered' });
+    expect(mapOpenCodeEvent({ type: 'form.cancelled', data: { sessionID: 's', form: { id: 'frm_1' } } })).toMatchObject({ formId: 'frm_1', outcome: 'cancelled' });
+  });
+
   it('ignores heartbeats and unrelated events', () => {
     expect(mapOpenCodeEvent(null)).toBeNull();
     expect(mapOpenCodeEvent({ type: 'project.updated', data: {} })).toBeNull();

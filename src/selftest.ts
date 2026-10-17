@@ -1940,6 +1940,51 @@ async function queueChecks() {
   return out;
 }
 
+/** The assistant's questions (real model): answered by clicking an option, then dismissed. */
+async function questionChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  await studio.setMode('plan');
+  studio.newSession();
+  const question = () => studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
+  const ask = 'Use your question tool now, before anything else, to ask me one multiple-choice question: should the next chapter be about eigenvalues or determinants? Then answer in one sentence based on my choice.';
+  const out: Record<string, unknown> = {};
+
+  void studio.send(ask);
+  const q = await waitFor(question, 120000, 'question').catch(() => null);
+  await sleep(400);
+  out.asked = q && q.kind === 'question' ? { title: q.title, fields: q.fields.map((f) => ({ key: f.key, type: f.type, title: f.title, options: f.options?.map((o) => o.label), custom: f.custom })) } : null;
+  out.activity = studio.state.agent.activity?.phase;
+  out.questionRows = [...document.querySelectorAll('.tool summary')].filter((t) => /question/i.test(t.textContent ?? '')).length;
+  out.snapshotAsked = await snap('question-asked');
+  // Click the second option, then Answer.
+  const options = [...document.querySelectorAll<HTMLButtonElement>('.question .question-option')];
+  const chosen = options[1]?.querySelector('.question-label')?.textContent ?? null;
+  options[1]?.click();
+  await sleep(150);
+  document.querySelector<HTMLButtonElement>('.question button[type="submit"]')?.click();
+  await waitFor(() => !studio.state.agent.running, 120000, 'reply').catch(() => {});
+  await sleep(500);
+  const replies = studio.state.agent.items.filter((i) => i.kind === 'assistant');
+  out.answered = {
+    chosen,
+    state: studio.state.agent.items.find((i) => i.kind === 'question')?.kind === 'question' ? (studio.state.agent.items.find((i) => i.kind === 'question') as { state: string }).state : null,
+    reply: replies.length ? (replies[replies.length - 1] as { text: string }).text.slice(0, 200) : null,
+    summary: document.querySelector('.question.done')?.textContent,
+  };
+  out.snapshotAnswered = await snap('question-answered');
+
+  // Dismissed: the model is told, and the turn ends.
+  studio.newSession();
+  void studio.send(ask);
+  await waitFor(question, 120000, 'question 2').catch(() => {});
+  await sleep(300);
+  document.querySelector<HTMLButtonElement>('.question .question-actions button:not(.primary)')?.click();
+  await waitFor(() => !studio.state.agent.running, 120000, 'after dismiss').catch(() => {});
+  out.dismissed = { state: (studio.state.agent.items.find((i) => i.kind === 'question') as { state?: string } | undefined)?.state, running: studio.state.agent.running };
+  await studio.setMode('write');
+  return out;
+}
+
 /** One real turn: which OpenCode event types arrive, with one sample of each (for the chat's progress display). */
 async function eventProbe() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
@@ -2536,6 +2581,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();
     if (launch.selftestAgent && want('queue')) result.queue = await queueChecks();
+    if (launch.selftestAgent && want('questions')) result.questions = await questionChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

@@ -1,9 +1,33 @@
 // OpenCode 2.x `/api/event` payloads → AgentEvent. The OpenAPI schema leaves
 // event data untyped, so these shapes come from recorded traffic (see
 // __fixtures__/opencode-events.jsonl and docs/decisions.md).
-import type { AgentEvent } from './types';
+import type { AgentEvent, FormField, FormRequest } from './types';
 
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
+
+const FIELD_TYPES = ['string', 'number', 'integer', 'boolean', 'multiselect', 'external'] as const;
+
+/** An OpenCode Form.Info, defensively (the event schema is untyped). Null if it isn't one. */
+export function toFormRequest(raw: any): FormRequest | null {
+  const f = raw?.form ?? raw;
+  if (!f || typeof f.id !== 'string' || !Array.isArray(f.fields)) return null;
+  const fields: FormField[] = f.fields
+    .filter((x: any) => x && typeof x.key === 'string' && FIELD_TYPES.includes(x.type))
+    .map((x: any) => ({
+      key: x.key,
+      type: x.type,
+      title: typeof x.title === 'string' ? x.title : undefined,
+      description: typeof x.description === 'string' ? x.description : undefined,
+      required: x.required === true,
+      options: Array.isArray(x.options) ? x.options.filter((o: any) => typeof o?.value === 'string').map((o: any) => ({ value: o.value, label: str(o.label, o.value), description: typeof o.description === 'string' ? o.description : undefined })) : undefined,
+      custom: x.custom === true,
+      placeholder: typeof x.placeholder === 'string' ? x.placeholder : undefined,
+      url: typeof x.url === 'string' ? x.url : undefined,
+    }));
+  const metadata = f.metadata && typeof f.metadata === 'object' ? f.metadata : undefined;
+  const callId = typeof metadata?.tool?.id === 'string' ? metadata.tool.id : undefined;
+  return fields.length ? { id: f.id, title: str(f.title, 'Questions'), fields, metadata, callId } : null;
+}
 
 function toolOutput(content: unknown): string {
   if (!Array.isArray(content)) return typeof content === 'string' ? content : '';
@@ -27,6 +51,18 @@ export function mapOpenCodeEvent(raw: any): AgentEvent | null {
       return { type: 'session-renamed', sessionId, title: str(d.title) };
     case 'session.step.started':
       return { type: 'step-started', sessionId };
+    case 'form.created': {
+      const form = toFormRequest(d);
+      return form ? { type: 'form-asked', sessionId: str(d.sessionID ?? d.form?.sessionID), form } : null;
+    }
+    case 'form.replied':
+    case 'form.cancelled':
+      return {
+        type: 'form-settled',
+        sessionId: str(d.sessionID ?? d.form?.sessionID),
+        formId: str(d.id ?? d.formID ?? d.form?.id),
+        outcome: type === 'form.replied' ? 'answered' : 'cancelled',
+      };
     case 'session.inbox.delivered':
       return { type: 'inbox-delivered', sessionId, inboxId: str(d.inboxID) };
     case 'session.step.ended':

@@ -26,13 +26,13 @@ describe('always', () => {
     }
   });
 
-  it('allows reading the book, asks for .env, and blocks subagents and the question tool', () => {
+  it('allows reading the book and asking the author, asks for .env, and blocks subagents', () => {
     for (const rules of [ask, edit, ro]) {
       expect(effect('read', 'chapters/ch1.typ', rules)).toBe('allow');
       expect(effect('grep', 'x', rules)).toBe('allow');
       expect(effect('read', '.env', rules)).toBe('ask');
       expect(effect('subagent', 'explore', rules)).toBe('deny');
-      expect(effect('question', 'q', rules)).toBe('deny');
+      expect(effect('question', 'q', rules)).toBe('allow');
       expect(effect('something-new', 'x', rules)).toBe('ask');
     }
   });

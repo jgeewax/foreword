@@ -17,6 +17,29 @@ export type PermissionDecision = 'once' | 'always' | 'reject';
 
 export type FilePatch = { file: string; patch: string };
 
+/** A field of an OpenCode form (the question tool asks with one string or multiselect field per question). */
+export type FormField = {
+  key: string;
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'multiselect' | 'external';
+  title?: string;
+  description?: string;
+  required?: boolean;
+  options?: { value: string; label: string; description?: string }[];
+  /** Free text allowed besides the options. */
+  custom?: boolean;
+  placeholder?: string;
+  url?: string;
+};
+export type FormRequest = {
+  id: string;
+  title: string;
+  fields: FormField[];
+  metadata?: Record<string, unknown>;
+  /** For the question tool: the tool call that asked. */
+  callId?: string;
+};
+export type FormAnswer = Record<string, string | number | boolean | string[]>;
+
 /** How a message sent during a turn reaches it (OpenCode's inbox). */
 export type Delivery = 'queue' | 'steer';
 
@@ -26,6 +49,9 @@ export type AgentEvent =
   | { type: 'turn-started'; sessionId: string }
   | { type: 'turn-finished'; sessionId: string; outcome: 'succeeded' | 'failed' | 'interrupted' | 'stopped'; error?: string }
   | { type: 'step-started'; sessionId: string }
+  /** The assistant asks (the question tool): answer with replyForm, or dismiss. */
+  | { type: 'form-asked'; sessionId: string; form: FormRequest }
+  | { type: 'form-settled'; sessionId: string; formId: string; outcome: 'answered' | 'cancelled' }
   /** A message (ours, queued or not) reached the conversation. */
   | { type: 'inbox-delivered'; sessionId: string; inboxId: string }
   | { type: 'step-finished'; sessionId: string; finish: string }
@@ -77,6 +103,10 @@ export interface AgentAdapter {
    * `steer` hands it to the running turn at its next step. Returns its inbox id.
    */
   send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[], delivery?: Delivery): Promise<string | null>;
+  /** Questions waiting for the author (after a reload or a switch of conversation). */
+  pendingForms(sessionId: string): Promise<FormRequest[]>;
+  replyForm(sessionId: string, formId: string, answer: FormAnswer): Promise<void>;
+  cancelForm(sessionId: string, formId: string): Promise<void>;
   /** A queued message: send it to the running turn now, or take it back. */
   steer(sessionId: string, inboxId: string): Promise<void>;
   unqueue(sessionId: string, inboxId: string): Promise<void>;

@@ -53,7 +53,7 @@ import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleG
 import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions } from '../services/agent/permissions';
-import type { AgentAdapter, AgentEvent, Delivery, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
 
 export type ToastAction = { label: string; run: () => void };
@@ -63,7 +63,7 @@ export type QueuedMessage = { id: string; text: string; attachments: string[]; d
 
 /** A running turn's progress: sending, thinking, using a tool, writing, or waiting to retry a busy model. */
 export type Activity = {
-  phase: 'sending' | 'thinking' | 'tool' | 'writing' | 'retrying';
+  phase: 'sending' | 'thinking' | 'tool' | 'writing' | 'retrying' | 'asking';
   /** When the turn started (ms), for the elapsed time. */
   since: number;
   /** For a tool: what it's doing ("Reading chapters/ch1.typ"). */
@@ -77,6 +77,17 @@ export type Activity = {
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
   | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
+  /** The assistant asks (multiple choice or free text) and waits for the answer. */
+  | {
+      kind: 'question';
+      id: string;
+      title: string;
+      fields: FormField[];
+      state: 'pending' | 'sending' | 'answered' | 'dismissed';
+      answer?: FormAnswer;
+      /** The question tool call that asked (its chat row is then left out: the card is the record). */
+      callId?: string;
+    }
   /** The model's reasoning, as it streams (shown faintly, then folded to "Thought for 4 s"). */
   | { kind: 'thinking'; id: string; text: string; done: boolean; started: number; ended?: number }
   | {
@@ -2190,6 +2201,7 @@ export class Studio {
       const root = this.state.workspace?.root ?? '';
       this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages, root), contextTokens: contextTokens(messages), attachments: [], queued: [] });
       this.setAiReads(readsFromContext(messages, root));
+      void this.syncQuestions();
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
       await this.agent.switchAgent(sessionId, config.agent).catch(() => {});
@@ -2383,6 +2395,51 @@ export class Studio {
       return true;
     } catch (e) {
       return unsend(`Message not sent: ${errorMessage(e)}`);
+    }
+  }
+
+  // ---- questions from the assistant (OpenCode forms) ---------------------------------
+
+  private addQuestion(form: FormRequest) {
+    if (this.state.agent.items.some((it) => it.id === form.id)) return;
+    this.pushItem({ kind: 'question', id: form.id, title: form.title, fields: form.fields, state: 'pending', callId: form.callId });
+    this.setActivity({ phase: 'asking' });
+    this.events.emit('show-agent-pane');
+  }
+
+  /** Questions still waiting in this conversation (after a switch, or if an event was missed). */
+  async syncQuestions() {
+    const sessionId = this.state.agent.sessionId;
+    if (!this.agent || !sessionId) return;
+    try {
+      for (const form of await this.agent.pendingForms(sessionId)) if (this.state.agent.sessionId === sessionId) this.addQuestion(form);
+    } catch (e) {
+      console.warn('questions: list failed', e);
+    }
+  }
+
+  async answerQuestion(formId: string, answer: FormAnswer) {
+    const sessionId = this.state.agent.sessionId;
+    if (!this.agent || !sessionId) return;
+    this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'sending', answer } : it));
+    try {
+      await this.agent.replyForm(sessionId, formId, answer);
+      this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'answered' } : it));
+      this.setActivity({ phase: 'thinking' });
+    } catch (e) {
+      this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'pending' } : it));
+      this.toast(`Couldn't send the answer: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  async dismissQuestion(formId: string) {
+    const sessionId = this.state.agent.sessionId;
+    if (!this.agent || !sessionId) return;
+    try {
+      await this.agent.cancelForm(sessionId, formId);
+      this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'dismissed' } : it));
+    } catch (e) {
+      this.toast(`Couldn't dismiss the question: ${errorMessage(e)}`, 'error');
     }
   }
 
@@ -2607,6 +2664,15 @@ export class Studio {
       case 'inbox-delivered':
         this.queuedDelivered(e.inboxId);
         break;
+      case 'form-asked':
+        this.addQuestion(e.form);
+        break;
+      case 'form-settled':
+        this.updateItem(e.formId, (it) =>
+          it.kind === 'question' && (it.state === 'pending' || it.state === 'sending') ? { ...it, state: e.outcome === 'answered' ? 'answered' : 'dismissed' } : it,
+        );
+        if (this.state.agent.activity?.phase === 'asking') this.setActivity({ phase: 'thinking' });
+        break;
       case 'step-finished':
         void this.checkTurnEnded(1500);
         break;
@@ -2666,6 +2732,8 @@ export class Studio {
       }
       case 'tool-started':
         this.setActivity({ phase: 'tool', label: toolActivity(e.name, undefined) });
+        // Should the form event not arrive, look for the question ourselves.
+        if (e.name === 'question') window.setTimeout(() => void this.syncQuestions(), 1500);
         this.toolCalls.set(e.callId, { name: e.name });
         this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '' });
         break;

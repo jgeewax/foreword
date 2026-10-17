@@ -78,7 +78,7 @@
 
 - [x] allow chat interruptions, queueing by default, push to interrupt if needed
 
-- [ ] question answering like in claude code (prompt for multiple choice or free text, give access to those tools)
+- [x] question answering like in claude code (prompt for multiple choice or free text, give access to those tools)
 
 - [x] much more animation when things are in progress. it needs to feel extra fast.
 

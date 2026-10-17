@@ -124,8 +124,11 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
       return { done: `Searched the web for ${quote(o.query)}`, running: `Searching the web for ${quote(o.query)}` };
     case 'todowrite':
       return { done: 'Updated its to-do list', running: 'Updating its to-do list' };
-    case 'question':
-      return { done: 'Asked you a question', running: 'Asking you a question' };
+    case 'question': {
+      // OpenCode's result: User has answered your questions: "Q"="A", "Q2"="B". …
+      const answers = [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*?"="((?:[^"\\]|\\.)*?)"/g)].map((m) => m[1]);
+      return { done: 'Asked you a question', running: 'Asking you a question', note: answers.length ? `you said ${answers.map((a) => `“${a}”`).join(', ')}` : undefined };
+    }
     case 'skill':
       return { done: `Used the ${String(o.name ?? '')} skill`, running: `Using the ${String(o.name ?? '')} skill` };
     default:
