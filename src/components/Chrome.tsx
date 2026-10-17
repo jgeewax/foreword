@@ -49,21 +49,63 @@ export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' 
   );
 }
 
+type Tone = 'ok' | 'busy' | 'warn' | 'bad' | 'off';
+
+/** A status item with a coloured dot; clickable when it offers an action. */
+function Indicator({ tone, icon, label, title, onClick }: { tone: Tone; icon: string; label: string; title: string; onClick?: () => void }) {
+  const body = (
+    <>
+      <span className={`dot ${tone}`} aria-hidden />
+      <span className="indicator-icon" aria-hidden>
+        {icon}
+      </span>
+      {label}
+    </>
+  );
+  return onClick ? (
+    <button className={`indicator ${tone}`} title={title} onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <span className={`indicator ${tone}`} title={title}>
+      {body}
+    </span>
+  );
+}
+
 export function StatusBar() {
   const active = useStore(studio.store, (s) => s.active);
   const cursor = useStore(studio.store, (s) => s.cursor);
   const problems = useStore(studio.store, (s) => s.problems);
   const compile = useStore(studio.store, (s) => s.compile);
-  const preview = useStore(studio.store, (s) => s.preview.status);
+  const preview = useStore(studio.store, (s) => s.preview);
   const agent = useStore(studio.store, (s) => s.agent.status);
+  const agentError = useStore(studio.store, (s) => s.agent.error);
+  const connection = useStore(studio.store, (s) => s.agent.connection);
   const running = useStore(studio.store, (s) => s.agent.running);
   const model = useStore(studio.store, (s) => s.agent.model);
   const perf = useStore(studio.store, (s) => s.perf);
   const zoom = useStore(studio.store, (s) => s.zoom);
-  const canAsk = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
+  const canAsk = agent === 'ready' && !running;
+
+  const compileTone: Tone = compile.status === 'ok' ? 'ok' : compile.status === 'compiling' ? 'busy' : compile.status === 'error' ? 'bad' : 'off';
+  const compileLabel =
+    compile.status === 'ok'
+      ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}${compile.words != null ? ` · ${compile.words.toLocaleString()} words` : ''}`
+      : compile.status === 'compiling'
+        ? 'Typesetting…'
+        : compile.status === 'error'
+          ? "Can't typeset"
+          : '';
+  const previewTone: Tone = preview.status === 'ready' ? 'ok' : preview.status === 'starting' ? 'warn' : preview.status === 'error' ? 'bad' : 'off';
+  const agentTone: Tone =
+    agent === 'error' ? 'bad' : agent === 'starting' || connection === 'lost' ? 'warn' : running ? 'busy' : agent === 'ready' ? 'ok' : 'off';
+  const agentLabel =
+    agent === 'error' ? 'Assistant unavailable' : agent === 'starting' ? 'Assistant starting…' : connection === 'lost' ? 'Reconnecting…' : running ? 'Assistant working…' : agent === 'ready' ? 'Assistant ready' : 'Assistant off';
+
   return (
     <footer className="statusbar">
-      <span>{active ?? 'No file'}</span>
+      <span className="status-file">{active ?? 'No file'}</span>
       {cursor && active && (
         <span>
           Ln {cursor.line}, Col {cursor.column}
@@ -71,7 +113,8 @@ export function StatusBar() {
       )}
       {problems.errors > 0 ? (
         <span className="problems">
-          <button className="link bad" title="Go to the next error" onClick={() => void studio.nextProblem()}>
+          <button className="indicator bad" title="Go to the next error" onClick={() => void studio.nextProblem()}>
+            <span className="indicator-icon">⊗</span>
             {problems.errors} {problems.errors === 1 ? 'error' : 'errors'}
           </button>
           {canAsk && (
@@ -81,25 +124,43 @@ export function StatusBar() {
           )}
         </span>
       ) : (
-        <span>0 errors</span>
+        <span className="indicator ok" title="No Typst errors">
+          <span className="indicator-icon">✓</span>No errors
+        </span>
       )}
-      <span>{problems.warnings} warnings</span>
-      <span className={compile.status === 'error' ? 'bad' : ''}>
-        {compile.status === 'compiling' ? 'compiling…' : compile.status === 'error' ? 'compile error' : compile.status === 'ok' ? `compiled · ${compile.pages} pp` : ''}
-      </span>
+      {problems.warnings > 0 && (
+        <span className="indicator warn" title="Typst warnings (hover the yellow squiggles in the editor)">
+          <span className="indicator-icon">⚠</span>
+          {problems.warnings} {problems.warnings === 1 ? 'warning' : 'warnings'}
+        </span>
+      )}
+      {compileLabel && <Indicator tone={compileTone} icon="" label={compileLabel} title="Typesetting status of the whole book" />}
       <span className="spacer" />
       {Math.abs(zoom - 1) > 0.001 && (
         <button className="link zoom-indicator" title="Zoom (⌘= / ⌘− / ⌘0). Click to reset." onClick={() => void studio.zoom('reset', 'key')}>
           Zoom {Math.round(zoom * 100)}%
         </button>
       )}
-      <span title="Keystroke → editor paint, p50/p95 (SPEC §6 target ≤16 ms p95)">⌨ {stat(perf.input)}</span>
-      <span title="Edit → preview paint, p50/p95 (SPEC §6 target ≤150/400 ms)">⇢ preview {stat(perf.preview)}</span>
-      <span className={preview === 'error' ? 'bad' : ''}>preview {preview}</span>
-      <span className={agent === 'error' ? 'bad' : ''}>
-        agent {running ? 'working' : agent}
-        {model ? ` · ${model.providerID}/${model.id}` : ''}
+      <span className="perf" title="Keystroke → editor paint, p50/p95 (SPEC §6 target ≤16 ms p95)">
+        ⌨ {stat(perf.input)}
       </span>
+      <span className="perf" title="Edit → preview paint, p50/p95 (SPEC §6 target ≤150/400 ms)">
+        ⇢ {stat(perf.preview)}
+      </span>
+      <Indicator
+        tone={previewTone}
+        icon="◧"
+        label={preview.status === 'error' ? 'Preview stopped' : preview.status === 'starting' ? 'Preview starting…' : preview.status === 'ready' ? 'Preview' : 'Preview off'}
+        title={preview.status === 'error' ? `${preview.error ?? 'The preview stopped.'} Click to restart it.` : 'Live preview (Tinymist)'}
+        onClick={preview.status === 'error' ? () => void studio.restartTypst() : undefined}
+      />
+      <Indicator
+        tone={agentTone}
+        icon="✦"
+        label={`${agentLabel}${model && agent === 'ready' ? ` · ${model.id}` : ''}`}
+        title={agent === 'error' ? `${agentError ?? 'OpenCode is not running.'} Click to try again.` : model ? `${model.providerID}/${model.id}` : 'Writing assistant (OpenCode)'}
+        onClick={agent === 'error' ? () => void studio.startAgent() : undefined}
+      />
     </footer>
   );
 }

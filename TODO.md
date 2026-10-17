@@ -26,7 +26,7 @@
 
 - [x] option for history to be BELOW the files in the left side panel
 
-- [ ] slightly more color on the bottom bar (its all grey. icons + colors for agents ready vs unavailable)
+- [x] slightly more color on the bottom bar (its all grey. icons + colors for agents ready vs unavailable)
 
 - [ ] model selector needs to be at the bottom, close to where we're typing, maybe right above the box? or near the mode selector?
 

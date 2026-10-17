@@ -603,7 +603,7 @@ async function onboardingChecks() {
   await waitFor(() => studio.state.problems.errors > 0, 15000, 'error').catch(() => {});
   editor.setPosition({ lineNumber: 1, column: 1 });
   await sleep(300);
-  document.querySelector<HTMLButtonElement>('.statusbar .problems .link.bad')?.click();
+  document.querySelector<HTMLButtonElement>('.statusbar .problems .indicator.bad')?.click();
   await sleep(500);
   const sel = editor.getSelection();
   out.problem = {
@@ -656,6 +656,30 @@ async function snap(name: string, target: 'main' | 'preview' = 'main') {
   } catch (e) {
     return errorMessage(e);
   }
+}
+
+/** Status bar colours: ready, then with a Typst error (typed, then undone). */
+async function statusbarChecks() {
+  const out: Record<string, unknown> = {};
+  const indicators = () => [...document.querySelectorAll('.statusbar .indicator')].map((e) => `${e.className.replace('indicator ', '')}: ${e.textContent}`);
+  await waitFor(() => studio.state.agent.status === 'ready', 60000, 'agent').catch(() => {});
+  await sleep(500);
+  out.ready = indicators();
+  await studio.openFile('chapters/ch1-vectors.typ');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  editor.setPosition({ lineNumber: 3, column: 1 });
+  editor.trigger('selftest', 'type', { text: '#nope ' });
+  await waitFor(() => studio.state.problems.errors > 0, 15000, 'error').catch(() => {});
+  await sleep(500);
+  out.withError = indicators();
+  const bar = document.querySelector('.statusbar')!.getBoundingClientRect();
+  out.snapshot = await snap('statusbar-error');
+  out.barHeight = bar.height;
+  while (model.getValue() !== original && model.canUndo()) await model.undo();
+  await sleep(300);
+  return out;
 }
 
 /** History below the files (layout option). Restores the author's setting. */
@@ -1055,6 +1079,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (want('statusbar')) {
+      log('statusbar');
+      result.statusbar = await statusbarChecks();
+    }
     if (want('layout')) {
       log('layout');
       result.layout = await layoutChecks();
