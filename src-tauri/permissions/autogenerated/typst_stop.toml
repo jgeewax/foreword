@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-typst-stop"
+description = "Enables the typst_stop command without any pre-configured scope."
+commands.allow = ["typst_stop"]
+
+[[permission]]
+identifier = "deny-typst-stop"
+description = "Denies the typst_stop command without any pre-configured scope."
+commands.deny = ["typst_stop"]

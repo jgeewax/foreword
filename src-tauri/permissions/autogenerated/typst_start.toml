@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-typst-start"
+description = "Enables the typst_start command without any pre-configured scope."
+commands.allow = ["typst_start"]
+
+[[permission]]
+identifier = "deny-typst-start"
+description = "Denies the typst_start command without any pre-configured scope."
+commands.deny = ["typst_start"]

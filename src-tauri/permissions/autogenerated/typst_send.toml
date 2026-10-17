@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-typst-send"
+description = "Enables the typst_send command without any pre-configured scope."
+commands.allow = ["typst_send"]
+
+[[permission]]
+identifier = "deny-typst-send"
+description = "Denies the typst_send command without any pre-configured scope."
+commands.deny = ["typst_send"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-report"
+description = "Enables the preview_report command without any pre-configured scope."
+commands.allow = ["preview_report"]
+
+[[permission]]
+identifier = "deny-preview-report"
+description = "Denies the preview_report command without any pre-configured scope."
+commands.deny = ["preview_report"]

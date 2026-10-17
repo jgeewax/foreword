@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Live Preview Spike</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --border: #d0d7de; --bar: #f6f8fa;
+    --ok: #1a7f37; --err: #d1242f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1e1e1e; --fg: #d4d4d4; --muted: #9da5b4; --border: #333333; --bar: #252526; --ok: #3fb950; --err: #f85149; }
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px -apple-system, BlinkMacSystemFont, sans-serif; }
+  body { display: grid; grid-template-rows: auto 1fr auto; }
+  header, footer { display: flex; gap: 14px; align-items: center; padding: 5px 10px; background: var(--bar); }
+  header { border-bottom: 1px solid var(--border); }
+  footer { border-top: 1px solid var(--border); color: var(--muted); font-variant-numeric: tabular-nums; }
+  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  #editor { min-height: 0; border-right: 1px solid var(--border); }
+  iframe { width: 100%; height: 100%; border: 0; background: #ffffff; }
+  #note { color: var(--muted); }
+  .ok { color: var(--ok); }
+  .err { color: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <strong>Live preview spike</strong>
+  <select id="file" aria-label="File"></select>
+  <span id="note">Edits stay in memory — nothing is saved to disk. Scroll the preview by hand.</span>
+</header>
+<main>
+  <div id="editor"></div>
+  <iframe id="preview" title="Typst preview"></iframe>
+</main>
+<footer>
+  <span id="compile">starting…</span>
+  <span id="latency"></span>
+  <span id="input"></span>
+  <span id="diag"></span>
+  <span id="cursor"></span>
+</footer>
+<script src="/monaco/vs/loader.js"></script>
+<script>
+require.config({ paths: { vs: '/monaco/vs' } });
+require(['vs/editor/editor.main'], async () => {
+  const $ = (id) => document.getElementById(id);
+  const session = await (await fetch('/api/session')).json();
+  const chapters = session.files.filter((f) => f !== session.entry);
+  const initial = new URLSearchParams(location.search).get('file') ?? chapters[Math.floor(chapters.length / 2)];
+
+  // Timing hooks (also read by browser-bench.mjs). Timestamps are epoch ms with
+  // sub-ms precision so they compare across the cross-origin preview frame.
+  const clock = () => performance.timeOrigin + performance.now();
+  const spike = (window.__spike = { keys: [], inputToPaint: [], edits: [], compiles: [], ready: false });
+
+  const editor = monaco.editor.create($('editor'), {
+    automaticLayout: true,
+    wordWrap: 'on',
+    minimap: { enabled: false },
+    fontSize: 13,
+    theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'vs-dark' : 'vs',
+  });
+  spike.editor = editor;
+
+  // ---- open files: one Monaco model per file --------------------------------
+  const models = new Map();
+  async function openFile(path) {
+    if (!models.has(path)) {
+      const { text } = await (await fetch('/api/open', { method: 'POST', body: JSON.stringify({ path }) })).json();
+      const model = monaco.editor.createModel(text, 'plaintext', monaco.Uri.file('/' + path));
+      model.onDidChangeContent((e) => onEdit(path, e));
+      models.set(path, model);
+      applyMarkers(path);
+    }
+    editor.setModel(models.get(path));
+    $('file').value = path;
+    spike.path = path;
+  }
+  for (const f of session.files) $('file').add(new Option(f, f));
+  $('file').onchange = () => openFile($('file').value).then(() => editor.focus());
+
+  // ---- edits → LSP didChange, sent strictly in order --------------------------
+  // Monaco's change list for one event is meant to be applied in order, which is
+  // exactly LSP's contentChanges semantics, so ranges convert 1:1 (1-based → 0-based).
+  const queue = [];
+  let inflight = false;
+  let pendingKey = null;
+  let lastEditAt = null;
+  function onEdit(path, e) {
+    const changes = e.changes.map((c) => ({
+      range: {
+        start: { line: c.range.startLineNumber - 1, character: c.range.startColumn - 1 },
+        end: { line: c.range.endLineNumber - 1, character: c.range.endColumn - 1 },
+      },
+      text: c.text,
+    }));
+    queue.push({ path, changes });
+    lastEditAt = clock();
+    spike.edits.push(lastEditAt);
+    flush();
+    if (pendingKey != null) {
+      const keyAt = pendingKey;
+      pendingKey = null;
+      // rAF runs just before the frame paints; the message posted from it runs just after.
+      requestAnimationFrame(() => {
+        const ch = new MessageChannel();
+        ch.port1.onmessage = () => recordInput(clock() - keyAt);
+        ch.port2.postMessage(0);
+      });
+    }
+  }
+  async function flush() {
+    if (inflight || !queue.length) return;
+    inflight = true;
+    const path = queue[0].path;
+    const changes = [];
+    while (queue.length && queue[0].path === path) changes.push(...queue.shift().changes);
+    try {
+      await fetch('/api/change', { method: 'POST', body: JSON.stringify({ path, changes }) });
+    } finally {
+      inflight = false;
+      flush();
+    }
+  }
+  addEventListener('keydown', (e) => {
+    pendingKey = e.timeStamp > 1e12 ? e.timeStamp : performance.timeOrigin + e.timeStamp;
+    spike.keys.push(pendingKey);
+  }, true);
+  function recordInput(ms) {
+    spike.inputToPaint.push(ms);
+    const s = [...spike.inputToPaint].sort((a, b) => a - b);
+    const p = (q) => s[Math.min(s.length - 1, Math.ceil(q * s.length) - 1)].toFixed(1);
+    $('input').textContent = `key → editor paint p50 ${p(0.5)} ms · p95 ${p(0.95)} ms (n=${s.length})`;
+  }
+
+  // ---- compile status, diagnostics -------------------------------------------
+  const diagnostics = new Map();
+  function applyMarkers(path) {
+    const model = models.get(path);
+    if (!model) return;
+    monaco.editor.setModelMarkers(model, 'tinymist', (diagnostics.get(path) ?? []).map((d) => ({
+      startLineNumber: d.range.start.line + 1,
+      startColumn: d.range.start.character + 1,
+      endLineNumber: d.range.end.line + 1,
+      endColumn: d.range.end.character + 1,
+      message: d.message,
+      severity: d.severity === 1 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+    })));
+  }
+  const events = new EventSource('/api/events');
+  events.addEventListener('compile', (e) => {
+    const s = JSON.parse(e.data);
+    spike.compiles.push({ t: clock(), status: s.status });
+    if (s.status === 'compiling') return;
+    const ok = s.status === 'compileSuccess';
+    $('compile').innerHTML = ok
+      ? `<span class="ok">● compiled</span> ${s.pageCount} pages${s.wordsCount ? `, ${s.wordsCount.words} words` : ''}`
+      : '<span class="err">● error</span> — preview keeps last good render';
+    if (ok && lastEditAt != null) {
+      $('latency').textContent = `last edit → compiled ${(clock() - lastEditAt).toFixed(0)} ms`;
+      lastEditAt = null;
+    }
+  });
+  events.addEventListener('diagnostics', (e) => {
+    const { path, diagnostics: list } = JSON.parse(e.data);
+    diagnostics.set(path, list);
+    applyMarkers(path);
+    const errors = [...diagnostics.values()].flat().filter((d) => d.severity === 1).length;
+    $('diag').innerHTML = errors ? `<span class="err">${errors} error${errors > 1 ? 's' : ''}</span>` : '0 errors';
+  });
+  events.addEventListener('server-exit', () => ($('compile').innerHTML = '<span class="err">● tinymist exited</span>'));
+
+  // ---- source → preview scroll -------------------------------------------------
+  function scrollPreviewToCursor() {
+    const pos = editor.getPosition();
+    return fetch('/api/scroll', {
+      method: 'POST',
+      body: JSON.stringify({ path: spike.path, line: pos.lineNumber - 1, character: pos.column - 1 }),
+    });
+  }
+  spike.scrollPreviewToCursor = scrollPreviewToCursor;
+  // Off by default: tinymist.scrollPreview never sends a jump here, and in WebKit
+  // with partial rendering the diff it sends corrupts the preview. ?scroll=1 to reproduce.
+  const autoScroll = new URLSearchParams(location.search).get('scroll') === '1';
+  editor.onDidChangeCursorPosition((e) => {
+    $('cursor').textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+    if (autoScroll && e.source === 'mouse') scrollPreviewToCursor();
+  });
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    $('note').textContent = 'Not saved: this spike never writes files. Live preview does not need a save.';
+  });
+
+  await openFile(initial);
+  const firstPara = models.get(initial).getLinesContent().findIndex((l) => /^[A-Za-z]/.test(l)) + 1;
+  editor.setPosition({ lineNumber: Math.max(1, firstPara), column: 1 });
+  editor.focus();
+  $('preview').addEventListener('load', () => setTimeout(() => {
+    if (autoScroll) scrollPreviewToCursor();
+    spike.ready = true;
+  }, 800), { once: true });
+  $('preview').src = session.previewUrl;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-subscribe"
+description = "Enables the agent_subscribe command without any pre-configured scope."
+commands.allow = ["agent_subscribe"]
+
+[[permission]]
+identifier = "deny-agent-subscribe"
+description = "Denies the agent_subscribe command without any pre-configured scope."
+commands.deny = ["agent_subscribe"]

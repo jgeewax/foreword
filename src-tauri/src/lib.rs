@@ -1,0 +1,333 @@
+mod agent;
+mod children;
+mod discover;
+mod error;
+mod logs;
+mod lsp;
+mod preview;
+#[cfg(target_os = "macos")]
+mod snapshot;
+mod workspace;
+
+use std::{path::PathBuf, sync::Mutex};
+
+use serde::Serialize;
+use tauri::{
+    Emitter, EventTarget, LogicalPosition, Manager, RunEvent, WebviewUrl,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    webview::WebviewBuilder,
+    window::WindowBuilder,
+};
+
+use crate::error::{CmdError, CmdResult};
+
+#[derive(Default)]
+pub struct AppState {
+    root: Mutex<Option<PathBuf>>,
+    watcher: Mutex<Option<notify::RecommendedWatcher>>,
+    typst: tokio::sync::Mutex<Option<lsp::LspProcess>>,
+    /// Writer queue to Tinymist's stdin; separate so `typst_send` can stay synchronous.
+    typst_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>,
+    agent: tokio::sync::Mutex<Option<agent::AgentServer>>,
+}
+
+impl AppState {
+    fn root(&self) -> CmdResult<PathBuf> {
+        self.root
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| CmdError::Unavailable("no workspace is open".into()))
+    }
+
+    fn kill_children(&self) {
+        if let Ok(mut typst) = self.typst.try_lock()
+            && let Some(lsp) = typst.as_mut()
+        {
+            lsp.kill();
+        }
+        if let Ok(mut agent) = self.agent.try_lock()
+            && let Some(server) = agent.as_mut()
+        {
+            server.kill();
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ToolsStatus {
+    tinymist: discover::ToolInfo,
+    opencode: discover::ToolInfo,
+}
+
+#[tauri::command]
+async fn tools_status() -> ToolsStatus {
+    ToolsStatus {
+        tinymist: discover::tool_info(discover::find_tinymist()),
+        opencode: discover::tool_info(discover::find_opencode()),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LaunchOptions {
+    /// `TYPST_STUDIO_WORKSPACE`: open this folder at launch.
+    workspace: Option<String>,
+    /// Dev builds only: the repo's sample book, for the welcome screen.
+    sample_book: Option<String>,
+    /// `TYPST_STUDIO_SELFTEST`: run the scripted self-test and write results here.
+    selftest_out: Option<String>,
+    /// `TYPST_STUDIO_SELFTEST_AGENT=1`: include a real agent turn in the self-test.
+    selftest_agent: bool,
+}
+
+#[tauri::command]
+fn launch_options() -> LaunchOptions {
+    let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/sample-book");
+    LaunchOptions {
+        workspace: std::env::var("TYPST_STUDIO_WORKSPACE").ok(),
+        sample_book: (cfg!(debug_assertions) && sample.is_dir()).then(|| {
+            sample
+                .canonicalize()
+                .unwrap_or(sample)
+                .to_string_lossy()
+                .into_owned()
+        }),
+        selftest_out: std::env::var("TYPST_STUDIO_SELFTEST").ok(),
+        selftest_agent: std::env::var("TYPST_STUDIO_SELFTEST_AGENT").is_ok_and(|v| v == "1"),
+    }
+}
+
+/// Frontend diagnostics (uncaught errors, self-test progress) into the app log;
+/// in self-test mode also appended to `<out>.log` so a hung run can be diagnosed.
+#[tauri::command]
+fn ui_log(line: String) {
+    if let Ok(out) = std::env::var("TYPST_STUDIO_SELFTEST") {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(format!("{out}.log"))
+        {
+            let _ = writeln!(f, "{line}");
+        }
+    }
+    logs::push("ui", line);
+}
+
+/// UI zoom (⌘= / ⌘− / ⌘0): native page zoom of the main webview, like VS Code's
+/// window zoom. The preview webview keeps its own scale (its pages fit the pane).
+#[tauri::command]
+fn set_ui_zoom(app: tauri::AppHandle, factor: f64) -> CmdResult<f64> {
+    let factor = factor.clamp(0.5, 2.5);
+    app.get_webview("main")
+        .ok_or_else(|| CmdError::Unavailable("main webview missing".into()))?
+        .set_zoom(factor)?;
+    Ok(factor)
+}
+
+#[derive(Serialize)]
+struct Frame {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+/// Logical (point) frames of the app's webviews; the self-test checks that the
+/// preview stays aligned with its pane at every zoom level.
+#[tauri::command]
+fn webview_frames(app: tauri::AppHandle) -> CmdResult<std::collections::HashMap<String, Frame>> {
+    let window = app
+        .get_window("main")
+        .ok_or_else(|| CmdError::Unavailable("main window missing".into()))?;
+    let scale = window.scale_factor()?;
+    let mut out = std::collections::HashMap::new();
+    let inner = window.inner_size()?.to_logical::<f64>(scale);
+    let outer = window.outer_size()?.to_logical::<f64>(scale);
+    out.insert(
+        "window-inner".into(),
+        Frame {
+            x: 0.0,
+            y: 0.0,
+            width: inner.width,
+            height: inner.height,
+        },
+    );
+    out.insert(
+        "window-outer".into(),
+        Frame {
+            x: 0.0,
+            y: 0.0,
+            width: outer.width,
+            height: outer.height,
+        },
+    );
+    for (label, webview) in app.webviews() {
+        let b = webview.bounds()?;
+        let pos = b.position.to_logical::<f64>(scale);
+        let size = b.size.to_logical::<f64>(scale);
+        out.insert(
+            label,
+            Frame {
+                x: pos.x,
+                y: pos.y,
+                width: size.width,
+                height: size.height,
+            },
+        );
+    }
+    Ok(out)
+}
+
+/// Native geometry of the window and a webview (diagnostics; macOS).
+#[tauri::command]
+async fn native_geometry(app: tauri::AppHandle, label: String) -> CmdResult<serde_json::Value> {
+    let window = app
+        .get_window("main")
+        .ok_or_else(|| CmdError::Unavailable("main window missing".into()))?;
+    let webview = app
+        .get_webview(&label)
+        .ok_or_else(|| CmdError::NotFound(format!("no webview {label:?}")))?;
+    #[cfg(target_os = "macos")]
+    return snapshot::window_geometry(&window, &webview)
+        .await
+        .map_err(CmdError::Io);
+    #[cfg(not(target_os = "macos"))]
+    Ok(serde_json::Value::Null)
+}
+
+/// Self-test only: write the results and quit.
+#[tauri::command]
+fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResult<()> {
+    let out = std::env::var("TYPST_STUDIO_SELFTEST")
+        .map_err(|_| CmdError::Invalid("not in self-test mode".into()))?;
+    std::fs::write(
+        &out,
+        serde_json::to_string_pretty(&result).unwrap_or_default(),
+    )?;
+    app.exit(0);
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .menu(|handle| {
+            // The standard macOS menu, plus View → Zoom In / Zoom Out / Actual Size.
+            // Menu shortcuts work whichever webview (editor or preview) has focus.
+            let menu = Menu::default(handle)?;
+            let zoom_in =
+                MenuItem::with_id(handle, "zoom-in", "Zoom In", true, Some("CmdOrCtrl+="))?;
+            let zoom_out =
+                MenuItem::with_id(handle, "zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
+            let zoom_reset = MenuItem::with_id(
+                handle,
+                "zoom-reset",
+                "Actual Size",
+                true,
+                Some("CmdOrCtrl+0"),
+            )?;
+            let separator = PredefinedMenuItem::separator(handle)?;
+            let items = menu.items()?;
+            if let Some(view) = items
+                .iter()
+                .filter_map(|i| i.as_submenu())
+                .find(|s| s.text().is_ok_and(|t| t == "View"))
+            {
+                view.prepend_items(&[&zoom_in, &zoom_out, &zoom_reset, &separator])?;
+            }
+            Ok(menu)
+        })
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            if id.starts_with("zoom-") {
+                let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
+            }
+        })
+        .manage(AppState::default())
+        .setup(|app| {
+            children::init(app.path().app_data_dir()?);
+
+            // SIGTERM/SIGINT/SIGHUP (kill, Ctrl+C on `tauri dev`, logout) go through
+            // the normal exit path so helper processes are stopped too.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use tokio::signal::unix::{SignalKind, signal};
+                let (Ok(mut term), Ok(mut int), Ok(mut hup)) = (
+                    signal(SignalKind::terminate()),
+                    signal(SignalKind::interrupt()),
+                    signal(SignalKind::hangup()),
+                ) else {
+                    return;
+                };
+                tokio::select! {
+                    _ = term.recv() => {}
+                    _ = int.recv() => {}
+                    _ = hup.recv() => {}
+                }
+                handle.exit(0);
+            });
+
+            // Built by hand (not from tauri.conf.json) so the preview can be a
+            // second webview in the same window.
+            let window = WindowBuilder::new(app, "main")
+                .title("Typst Studio")
+                .inner_size(1600.0, 1000.0)
+                .min_inner_size(960.0, 600.0)
+                .build()?;
+            let size = window
+                .inner_size()?
+                .to_logical::<f64>(window.scale_factor()?);
+            window.add_child(
+                WebviewBuilder::new("main", WebviewUrl::default()).auto_resize(),
+                LogicalPosition::new(0.0, 0.0),
+                size,
+            )?;
+            // An occluded window gets no animation frames, which would stall the self-test.
+            if std::env::var_os("TYPST_STUDIO_SELFTEST").is_some() {
+                let _ = window.set_focus();
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            tools_status,
+            launch_options,
+            ui_log,
+            set_ui_zoom,
+            webview_frames,
+            native_geometry,
+            selftest_finish,
+            logs::app_logs,
+            workspace::workspace_open,
+            workspace::workspace_list,
+            workspace::fs_read,
+            workspace::fs_hash,
+            workspace::fs_write,
+            lsp::typst_start,
+            lsp::typst_send,
+            lsp::typst_stop,
+            preview::preview_open,
+            preview::preview_set_bounds,
+            preview::preview_set_visible,
+            preview::preview_close,
+            preview::preview_eval,
+            preview::preview_snapshot,
+            preview::focus_main,
+            preview::perf_report,
+            preview::preview_report,
+            agent::agent_start,
+            agent::agent_request,
+            agent::agent_subscribe,
+            agent::agent_stop,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building Typst Studio")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                app.state::<AppState>().kill_children();
+                children::clear();
+            }
+        });
+}

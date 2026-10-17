@@ -1,0 +1,38 @@
+fn main() {
+    // Generates `allow-<command>` permissions per app command so capabilities can
+    // grant the preview webview only `perf_report`.
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
+        tauri_build::AppManifest::new().commands(&[
+            "tools_status",
+            "launch_options",
+            "ui_log",
+            "set_ui_zoom",
+            "webview_frames",
+            "native_geometry",
+            "selftest_finish",
+            "app_logs",
+            "workspace_open",
+            "workspace_list",
+            "fs_read",
+            "fs_hash",
+            "fs_write",
+            "typst_start",
+            "typst_send",
+            "typst_stop",
+            "preview_open",
+            "preview_set_bounds",
+            "preview_set_visible",
+            "preview_close",
+            "preview_eval",
+            "preview_snapshot",
+            "focus_main",
+            "perf_report",
+            "preview_report",
+            "agent_start",
+            "agent_request",
+            "agent_subscribe",
+            "agent_stop",
+        ]),
+    ))
+    .expect("failed to run tauri-build");
+}

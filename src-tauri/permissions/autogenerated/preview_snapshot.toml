@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-snapshot"
+description = "Enables the preview_snapshot command without any pre-configured scope."
+commands.allow = ["preview_snapshot"]
+
+[[permission]]
+identifier = "deny-preview-snapshot"
+description = "Denies the preview_snapshot command without any pre-configured scope."
+commands.deny = ["preview_snapshot"]

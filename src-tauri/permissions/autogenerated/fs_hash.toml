@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fs-hash"
+description = "Enables the fs_hash command without any pre-configured scope."
+commands.allow = ["fs_hash"]
+
+[[permission]]
+identifier = "deny-fs-hash"
+description = "Denies the fs_hash command without any pre-configured scope."
+commands.deny = ["fs_hash"]

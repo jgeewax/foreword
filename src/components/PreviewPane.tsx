@@ -1,0 +1,75 @@
+import { useLayoutEffect, useRef } from 'react';
+import { studio } from '../app/studio';
+import { useStore } from '../lib/store';
+
+/**
+ * Placeholder for the preview. The preview itself is a separate native webview
+ * (see src-tauri/src/preview.rs) positioned exactly over `.preview-body`.
+ */
+export function PreviewPane() {
+  const preview = useStore(studio.store, (s) => s.preview);
+  const compile = useStore(studio.store, (s) => s.compile);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = bodyRef.current!;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // Page CSS pixels → window points: scale by the UI zoom, then offset by
+        // where the page's viewport starts in the window (title-bar inset).
+        const r = el.getBoundingClientRect();
+        const z = studio.zoomFactor;
+        const { top, left } = studio.viewportInset;
+        studio.setPreviewBounds({ x: left + r.left * z, y: top + r.top * z, width: r.width * z, height: r.height * z });
+      });
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    window.addEventListener('studio-layout', measure);
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('studio-layout', measure);
+      studio.setPreviewBounds(null);
+    };
+  }, []);
+
+  const status =
+    preview.status === 'error'
+      ? 'error'
+      : compile.status === 'error'
+        ? 'error in source (showing last good render)'
+        : compile.status === 'compiling'
+          ? 'compiling…'
+          : compile.pages
+            ? `${compile.pages} pages`
+            : preview.status;
+
+  return (
+    <section className="pane preview-pane">
+      <header className="pane-header">
+        <span className="pane-title">Preview</span>
+        <span className={`pill ${compile.status === 'error' || preview.status === 'error' ? 'bad' : ''}`}>{status}</span>
+        <span className="spacer" />
+        <button className="icon" title="Restart preview" onClick={() => void studio.restartTypst()}>
+          ↻
+        </button>
+      </header>
+      <div className="preview-body" ref={bodyRef}>
+        {preview.status === 'error' ? (
+          <div className="preview-message">
+            <p>{preview.error}</p>
+            <button onClick={() => void studio.restartTypst()}>Restart preview</button>
+          </div>
+        ) : (
+          <div className="preview-message muted">{preview.status === 'starting' ? 'Starting Tinymist…' : ''}</div>
+        )}
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-webview-frames"
+description = "Enables the webview_frames command without any pre-configured scope."
+commands.allow = ["webview_frames"]
+
+[[permission]]
+identifier = "deny-webview-frames"
+description = "Denies the webview_frames command without any pre-configured scope."
+commands.deny = ["webview_frames"]

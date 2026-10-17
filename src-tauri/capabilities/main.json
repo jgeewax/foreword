@@ -1,0 +1,42 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "The app UI (local content in the main webview).",
+  "webviews": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "dialog:allow-confirm",
+    "dialog:allow-ask",
+    "allow-tools-status",
+    "allow-launch-options",
+    "allow-ui-log",
+    "allow-webview-frames",
+    "allow-native-geometry",
+    "allow-set-ui-zoom",
+    "allow-selftest-finish",
+    "allow-app-logs",
+    "allow-workspace-open",
+    "allow-workspace-list",
+    "allow-fs-read",
+    "allow-fs-hash",
+    "allow-fs-write",
+    "allow-typst-start",
+    "allow-typst-send",
+    "allow-typst-stop",
+    "allow-preview-open",
+    "allow-preview-set-bounds",
+    "allow-preview-set-visible",
+    "allow-preview-close",
+    "allow-focus-main",
+    "allow-preview-snapshot",
+    "allow-preview-eval",
+    "allow-agent-start",
+    "allow-agent-request",
+    "allow-agent-subscribe",
+    "allow-agent-stop"
+  ]
+}
