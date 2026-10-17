@@ -144,7 +144,7 @@
 
 - [ ] sometimes teh book root is inside a subdirectory (like src/). can we make our project config json file understand that ?
 
-- [ ] display // NOTE: and // TODO: , etc as something prettier in the editor UI ?
+- [x] display // NOTE: and // TODO: , etc as something prettier in the editor UI ?
 
 - [ ] the only way to see what's going on right now is that one little drop down of the things that i have as tasks (sort of) for the ai chat box. can we build another tab perhaps of the conversational history? and things that are resolved or not?
 

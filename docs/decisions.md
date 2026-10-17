@@ -309,6 +309,25 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### Tagged comments look like notes
+
+- `// TODO:`, `// NOTE:`, `// FIXME`, `// IDEA:`, `// QUESTION:` (also
+  `XXX`, `HACK`, `WARNING`) in .typ files:
+  - the tag becomes a bold label on a soft background in its colour:
+    amber to do, red fix, blue note, green idea, purple question;
+  - the `//` fades;
+  - the comment reads upright in the same hue, and the line is faintly
+    tinted;
+  - TODO and FIXME also mark the scrollbar.
+- Only colours, weight and backgrounds change, never widths or padding, so
+  Monaco's character positions stay true and the cursor moves through the
+  real text. Measured: the end of a tagged comment is drawn 0.3 px from where
+  Monaco puts it.
+- Tags must be in capitals after a `//` that starts the line or follows a
+  space, so `https://…` and "// a todo list" aren't caught.
+- Verified (self-test `ctags`): five tags labelled in their colours, five
+  lines tinted, an ordinary comment left alone.
+
 ### One sentence per line
 
 - Every session's instructions ask for one sentence per line in .typ files

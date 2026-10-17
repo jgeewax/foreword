@@ -773,3 +773,25 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .history-about { margin-top: 6px; padding: 8px 10px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--fg); }
 .history-about p { margin: 0 0 6px; line-height: 1.45; }
 .history-about-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+/* Tagged comments in the editor (// TODO:, // NOTE: …): the tag as a label in
+   its colour, the slashes faded, the line faintly tinted. Only colours change,
+   so every character keeps its width and the cursor its place. */
+.monaco-editor .ctag-slashes { opacity: 0.4; }
+.monaco-editor .ctag-label { font-weight: 700; font-style: normal !important; border-radius: 3px; }
+.monaco-editor .ctag-text { font-style: normal !important; }
+.monaco-editor .ctag-label.ctag-todo { color: light-dark(#9a6700, #e3b341) !important; background: light-dark(rgba(212, 160, 23, 0.2), rgba(227, 179, 65, 0.18)); }
+.monaco-editor .ctag-text.ctag-todo { color: light-dark(#7d5600, #d9b15c) !important; }
+.monaco-editor .ctag-line.ctag-todo { background: light-dark(rgba(212, 160, 23, 0.07), rgba(227, 179, 65, 0.06)); }
+.monaco-editor .ctag-label.ctag-fix { color: light-dark(#cf222e, #ff7b72) !important; background: light-dark(rgba(207, 34, 46, 0.14), rgba(255, 123, 114, 0.16)); }
+.monaco-editor .ctag-text.ctag-fix { color: light-dark(#a40e26, #f0a29c) !important; }
+.monaco-editor .ctag-line.ctag-fix { background: light-dark(rgba(207, 34, 46, 0.05), rgba(255, 123, 114, 0.06)); }
+.monaco-editor .ctag-label.ctag-note { color: light-dark(#0969da, #79b8ff) !important; background: light-dark(rgba(9, 105, 218, 0.12), rgba(121, 184, 255, 0.16)); }
+.monaco-editor .ctag-text.ctag-note { color: light-dark(#0550ae, #a5c8f2) !important; }
+.monaco-editor .ctag-line.ctag-note { background: light-dark(rgba(9, 105, 218, 0.05), rgba(121, 184, 255, 0.05)); }
+.monaco-editor .ctag-label.ctag-idea { color: light-dark(#1a7f37, #56d364) !important; background: light-dark(rgba(26, 127, 55, 0.13), rgba(86, 211, 100, 0.15)); }
+.monaco-editor .ctag-text.ctag-idea { color: light-dark(#116329, #98d9a2) !important; }
+.monaco-editor .ctag-line.ctag-idea { background: light-dark(rgba(26, 127, 55, 0.05), rgba(86, 211, 100, 0.05)); }
+.monaco-editor .ctag-label.ctag-question { color: light-dark(#8250df, #d2a8ff) !important; background: light-dark(rgba(130, 80, 223, 0.13), rgba(210, 168, 255, 0.16)); }
+.monaco-editor .ctag-text.ctag-question { color: light-dark(#6639ba, #dcc2fb) !important; }
+.monaco-editor .ctag-line.ctag-question { background: light-dark(rgba(130, 80, 223, 0.05), rgba(210, 168, 255, 0.05)); }

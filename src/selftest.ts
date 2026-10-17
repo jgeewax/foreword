@@ -2399,6 +2399,32 @@ async function quickOpenChecks() {
   return out;
 }
 
+/** Tagged comments (// TODO:, // NOTE: …) shown as coloured labels, with the cursor still in step. (Undone after.) */
+async function commentTagChecks() {
+  const out: Record<string, unknown> = {};
+  await studio.openFile('chapters/ch1-vectors.typ');
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const before = model.getAlternativeVersionId();
+  const lines = ['// TODO: check this proof again', 'A sentence. // NOTE: Heron asked about this', '// FIXME the figure is too wide', '// IDEA: a margin note here', '// QUESTION: is this the right order?', '// an ordinary comment'];
+  editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: `${lines.join('\n')}\n` }]);
+  editor.revealLine(2);
+  await sleep(500);
+  const labels = [...document.querySelectorAll<HTMLElement>('.monaco-editor .ctag-label')];
+  out.labels = labels.map((e) => `${e.textContent} ${getComputedStyle(e).color}`);
+  out.tintedLines = document.querySelectorAll('.monaco-editor .ctag-line').length;
+  // The end of the TODO comment where Monaco thinks it is, and where it's drawn.
+  const todoText = document.querySelector<HTMLElement>('.monaco-editor .ctag-text.ctag-todo');
+  const end = editor.getScrolledVisiblePosition({ lineNumber: 2, column: model.getLineMaxColumn(2) });
+  const host = editor.getDomNode()!.getBoundingClientRect(); // getScrolledVisiblePosition is relative to the whole editor
+  out.cursorDrift = todoText && end ? Math.round((todoText.getBoundingClientRect().right - host.left - end.left) * 10) / 10 : null;
+  out.snapshot = await snap('comment-tags');
+  while (model.getAlternativeVersionId() !== before && model.canUndo()) await model.undo();
+  await studio.save().catch(() => {});
+  return out;
+}
+
 /**
  * Typing doesn't flash the preview: while typing, at most one jump per pause and
  * no visible ripple; an arrow key still gets one visible ripple. (The chapter is
@@ -3272,6 +3298,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
+    if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();

@@ -6,6 +6,7 @@ import { monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
+import { commentTags, type TagKind } from '../editor/comment-tags';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { Icon } from './icons';
 import { useStore } from '../lib/store';
@@ -169,6 +170,35 @@ export function EditorPane() {
       clearTimeout(aiTimer);
       aiTimer = window.setTimeout(paintAi, 300);
     });
+    // Tagged comments (// TODO:, // NOTE:): the tag as a coloured label, the line tinted; TODO and FIXME in the scrollbar.
+    const tagMarks = editor.createDecorationsCollection();
+    const tagRuler: Partial<Record<TagKind, string>> = { todo: '#d29922', fix: '#e5534b' };
+    const paintTags = () => {
+      const model = editor.getModel();
+      if (!model || model.getLanguageId() !== 'typst') return tagMarks.clear();
+      tagMarks.set(
+        commentTags(model.getLinesContent()).flatMap((t): monaco.editor.IModelDeltaDecoration[] => [
+          {
+            range: new monaco.Range(t.line, 1, t.line, 1),
+            options: {
+              isWholeLine: true,
+              className: `ctag-line ctag-${t.kind}`,
+              overviewRuler: tagRuler[t.kind] ? { color: tagRuler[t.kind]!, position: monaco.editor.OverviewRulerLane.Right } : undefined,
+            },
+          },
+          { range: new monaco.Range(t.line, t.slashes[0], t.line, t.slashes[1]), options: { inlineClassName: 'ctag-slashes' } },
+          { range: new monaco.Range(t.line, t.tag[0], t.line, t.tag[1]), options: { inlineClassName: `ctag-label ctag-${t.kind}` } },
+          { range: new monaco.Range(t.line, t.tag[1], t.line, t.end), options: { inlineClassName: `ctag-text ctag-${t.kind}` } },
+        ]),
+      );
+    };
+    let tagTimer: number | undefined;
+    editor.onDidChangeModel(paintTags);
+    editor.onDidChangeModelContent(() => {
+      clearTimeout(tagTimer);
+      tagTimer = window.setTimeout(paintTags, 120);
+    });
+    paintTags();
     // ▶ Run above each code example, with its status.
     const runCommand = monaco.editor.registerCommand('studio.runCodeExample', (_accessor, name: string) => void studio.code.run([name]));
     const lensChanged = new monaco.Emitter<monaco.languages.CodeLensProvider>();
