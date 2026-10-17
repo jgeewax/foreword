@@ -901,6 +901,16 @@ pane top (off by 0 pt).
 
 ### Helper processes, revised
 
+- **Leak found (October 2026):** quitting while OpenCode was still starting
+  left it running. `agent_start` holds the agent lock for the whole start-up
+  (up to 30 s), the exit handler's `try_lock` failed, and the registry file was
+  deleted anyway, so the next launch couldn't reap it either. Self-tests that
+  end by reopening a book hit this every time: 31 orphaned servers in a day.
+  At exit, `children::kill_all()` now also stops everything in the instance's
+  registry, without any lock. Each PID's command line is checked first, then
+  SIGTERM, with SIGKILL after 300 ms. A test checks it stops a matching child
+  and leaves a non-matching one alone.
+
 The child-process registry is now per app instance (`children-<pid>.json`).
 The first version used one file, so a second instance (e.g. a self-test next
 to the user's window) would have terminated the first instance's OpenCode.

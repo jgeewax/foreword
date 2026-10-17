@@ -98,9 +98,84 @@ pub fn unregister(pid: u32) {
     save(&entries);
 }
 
+/// Stop every helper this instance registered, without needing any lock
+/// elsewhere: at exit a helper can still be starting (its lock held for up to
+/// 30 s), and skipping it then would leave it running with no record. Each PID
+/// is checked against its command line first; SIGTERM, then SIGKILL after 300 ms.
+pub fn kill_all() {
+    let entries = ENTRIES.lock().map(|e| e.clone()).unwrap_or_default();
+    kill_entries(&entries);
+}
+
+fn kill_entries(entries: &[Entry]) {
+    let live: Vec<&Entry> = entries
+        .iter()
+        .filter(|e| command_line(e.pid).is_some_and(|cmd| cmd.contains(&e.signature)))
+        .collect();
+    for e in &live {
+        // SAFETY: plain kill(2) on a PID whose command line we just checked.
+        unsafe { libc::kill(e.pid as libc::pid_t, libc::SIGTERM) };
+    }
+    if live.is_empty() {
+        return;
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(300);
+    while std::time::Instant::now() < deadline {
+        // SAFETY: signal 0 only checks whether the process exists.
+        if live
+            .iter()
+            .all(|e| unsafe { libc::kill(e.pid as libc::pid_t, 0) } != 0)
+        {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    for e in &live {
+        if command_line(e.pid).is_some_and(|cmd| cmd.contains(&e.signature)) {
+            // SAFETY: as above.
+            unsafe { libc::kill(e.pid as libc::pid_t, libc::SIGKILL) };
+        }
+    }
+}
+
 /// Remove our registry file on a clean exit.
 pub fn clear() {
     if let Some(path) = FILE.get() {
         let _ = fs::remove_file(path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kills_registered_helpers_and_only_those() {
+        let mut ours = std::process::Command::new("/bin/sleep")
+            .arg("37.123")
+            .spawn()
+            .unwrap();
+        let mut other = std::process::Command::new("/bin/sleep")
+            .arg("38.456")
+            .spawn()
+            .unwrap();
+        // A matching entry, and one whose command line doesn't match (a recycled PID, say).
+        kill_entries(&[
+            Entry {
+                pid: ours.id(),
+                signature: "sleep 37.123".into(),
+            },
+            Entry {
+                pid: other.id(),
+                signature: "opencode serve".into(),
+            },
+        ]);
+        assert!(ours.try_wait().unwrap().is_some() || ours.wait().is_ok());
+        assert!(
+            other.try_wait().unwrap().is_none(),
+            "a process that doesn't match is left alone"
+        );
+        other.kill().unwrap();
+        other.wait().unwrap();
     }
 }

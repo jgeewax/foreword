@@ -236,13 +236,12 @@ fn remove_close_window<R: tauri::Runtime>(menu: &Submenu<R>) -> tauri::Result<()
             menu.remove(&item)?;
         }
     }
-    if let Some(last) = menu.items()?.last() {
-        if last
+    if let Some(last) = menu.items()?.last()
+        && last
             .as_predefined_menuitem()
             .is_some_and(|p| p.text().is_ok_and(|t| t.is_empty()))
-        {
-            menu.remove(last)?;
-        }
+    {
+        menu.remove(last)?;
     }
     Ok(())
 }
@@ -528,6 +527,8 @@ pub fn run() {
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 app.state::<AppState>().kill_children();
+                // Also anything whose lock was busy (e.g. OpenCode still starting).
+                children::kill_all();
                 children::clear();
             }
         });
