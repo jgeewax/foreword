@@ -26,6 +26,7 @@ import {
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
+import { parseConfig, serializeConfig } from './config';
 import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
@@ -204,6 +205,8 @@ export type StudioState = {
   coverDialogOpen: boolean;
   /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
   names: BookNames;
+  /** The settings file: where it is, and why it can't be used (if so). */
+  configFile: { path: string; error: string | null } | null;
   /** Bumped when the assistant's marks change (the editor repaints them). */
   aiMarks: number;
   /** Print with Mixam: the print files and the checks on them. */
@@ -274,6 +277,7 @@ const initialState: StudioState = {
   print: { open: false, status: 'idle', checks: [], files: {} },
   aiMarks: 0,
   names: NO_NAMES,
+  configFile: null,
   sidebar: 'files',
 };
 
@@ -453,6 +457,9 @@ export class Studio {
     this.store.set({ launch });
     const zoom = readJson<number>(ZOOM_KEY);
     if (zoom && zoom !== 1) await this.setZoom(zoom, { persist: false }).catch(() => {});
+    // The settings file wins over this machine's cached copy; edits made elsewhere apply on return.
+    await this.loadConfig();
+    window.addEventListener('focus', () => void this.loadConfig());
     await this.refreshViewportInset();
     // The inset changes with the title bar (e.g. full screen hides it).
     window.addEventListener('resize', () => {
@@ -2140,7 +2147,7 @@ export class Studio {
     const config = modeConfig(mode);
     try {
       await this.agent.switchAgent(sessionId, config.agent);
-      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly);
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands());
       if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
@@ -2205,7 +2212,7 @@ export class Studio {
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
       await this.agent.switchAgent(sessionId, config.agent).catch(() => {});
-      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly).catch(() => {});
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands()).catch(() => {});
       await this.applyInstructions(sessionId);
     } catch (e) {
       this.toast(`Couldn't open that conversation: ${errorMessage(e)}`, 'error');
@@ -2387,6 +2394,7 @@ export class Studio {
           permissions: this.state.settings.permissions,
           readOnly: config.readOnly,
           agent: config.agent,
+          allowCommands: this.allowedCommands(),
         });
         this.setAgent({ sessionId });
         await this.applyInstructions(sessionId);
@@ -2816,12 +2824,76 @@ export class Studio {
     this.events.emit('focus-editor');
   }
 
-  updateSettings(patch: Partial<AppSettings>) {
+  updateSettings(patch: Partial<AppSettings>, { write = true } = {}) {
     const before = this.state.settings;
     const settings = { ...before, ...patch };
     saveSettings(settings);
     this.store.set({ settings });
-    if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) void this.applyPermissions();
+    if (write) this.scheduleConfigWrite();
+    if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions) || settings.allowCommands.join() !== before.allowCommands.join()) void this.applyPermissions();
+  }
+
+  /** Commands the assistant may run without asking: from the settings file and from this book's. */
+  allowedCommands(): string[] {
+    return [...new Set([...this.state.settings.allowCommands, ...(this.state.project.settings.allowCommands ?? [])])];
+  }
+
+  // ---- the settings file (~/.typst-studio/settings.json) ---------------------------------
+
+  /** The file's last known text (to notice edits made elsewhere) and its parsed object (to keep unknown keys). */
+  private config: { text: string | null; raw: Record<string, unknown> } = { text: null, raw: {} };
+  private configTimer: number | undefined;
+
+  /** Read the settings file; with none yet, write it from the settings this machine had. */
+  async loadConfig() {
+    try {
+      const { path, text } = await ipc.configRead();
+      this.store.set({ configFile: { path, error: null } });
+      if (text === null) {
+        this.config = { text: null, raw: {} };
+        this.scheduleConfigWrite(0);
+        return;
+      }
+      if (text === this.config.text) return;
+      const parsed = parseConfig(text);
+      if (parsed.error) {
+        // Keep using the last good settings, and leave the file alone until it's fixed.
+        this.config = { text, raw: this.config.raw };
+        this.store.set({ configFile: { path, error: parsed.error } });
+        return;
+      }
+      this.config = { text, raw: parsed.raw };
+      this.updateSettings(parsed.settings, { write: false });
+      if (parsed.zoom && Math.abs(parsed.zoom - this.state.zoom) > 0.001) await this.setZoom(parsed.zoom, { persist: false, write: false });
+    } catch (e) {
+      console.warn('settings file: read failed', e);
+    }
+  }
+
+  private scheduleConfigWrite(delay = 300) {
+    window.clearTimeout(this.configTimer);
+    this.configTimer = window.setTimeout(() => void this.writeConfig(), delay);
+  }
+
+  private async writeConfig() {
+    if (this.state.configFile?.error) return; // a broken file is the author's to fix
+    const text = serializeConfig(this.config.raw, this.state.settings, this.state.zoom);
+    if (text === this.config.text) return;
+    try {
+      await ipc.configWrite(text);
+      this.config = { text, raw: JSON.parse(text) };
+    } catch (e) {
+      console.warn('settings file: write failed', e);
+    }
+  }
+
+  async openConfigFile() {
+    try {
+      await this.writeConfig();
+      await ipc.configOpen();
+    } catch (e) {
+      this.toast(`Couldn't open the settings file: ${errorMessage(e)}`, 'error');
+    }
   }
 
   /** Apply the permission settings to the current conversation, and say so in the chat. */
@@ -2830,8 +2902,14 @@ export class Studio {
     if (!sessionId || !this.agent) return;
     const permissions = this.state.settings.permissions;
     try {
-      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly);
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: describePermissions(permissions) });
+      const commands = this.allowedCommands();
+      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly, commands);
+      this.pushItem({
+        kind: 'notice',
+        id: uid('n'),
+        tone: 'info',
+        text: `${describePermissions(permissions)}${commands.length ? ` Also runs without asking: ${commands.join(', ')}.` : ''}`,
+      });
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change permissions for this conversation: ${errorMessage(e)}` });
     }
@@ -2858,6 +2936,7 @@ export class Studio {
     const parsed = parseProjectSettings(text);
     this.store.set({ project: { settings: parsed.settings, raw: parsed.raw, hash, error: parsed.error } });
     if (restartIfNeeded && needsRestart(before, parsed.settings)) await this.applyEntryAndRestart(parsed.settings);
+    if ((before.allowCommands ?? []).join() !== (parsed.settings.allowCommands ?? []).join()) void this.applyPermissions();
   }
 
   /** Save project settings; returns validation or write errors (empty on success). */
@@ -2882,6 +2961,7 @@ export class Studio {
       return [`Couldn't save ${PROJECT_FILE}: ${errorMessage(e)}`];
     }
     if (needsRestart(project.settings, next)) await this.applyEntryAndRestart(next);
+    if ((project.settings.allowCommands ?? []).join() !== (next.allowCommands ?? []).join()) void this.applyPermissions();
     return [];
   }
 
@@ -3101,7 +3181,8 @@ export class Studio {
     await this.setZoom(nextZoom(this.state.zoom, action));
   }
 
-  async setZoom(factor: number, { persist = true } = {}) {
+  async setZoom(factor: number, { persist = true, write }: { persist?: boolean; write?: boolean } = {}) {
+    write ??= persist;
     this.zoomFactor = factor;
     const applied = await ipc.setUiZoom(factor);
     this.zoomFactor = applied;
@@ -3109,6 +3190,7 @@ export class Studio {
     document.documentElement.style.setProperty('--ui-zoom', String(applied));
     this.store.set({ zoom: applied });
     if (persist) writeJson(ZOOM_KEY, applied);
+    if (write) this.scheduleConfigWrite();
     monaco.editor.remeasureFonts();
     window.dispatchEvent(new Event('studio-layout')); // re-place the preview webview
   }

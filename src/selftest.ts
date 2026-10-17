@@ -2030,6 +2030,58 @@ async function eventProbe() {
   return { model: studio.state.agent.model, reply: reply.slice(0, 200), types: Object.fromEntries(seen) };
 }
 
+/**
+ * The settings file (a folder of the self-test's own, never the author's): written
+ * at first start, changes from the app reach it, edits made elsewhere apply on
+ * focus, and the Settings page adds commands for every book and for this one.
+ */
+async function configChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.settings;
+  const projectBefore = await ipc.fsRead('.typst-studio.json').catch(() => null);
+  await sleep(500);
+  const first = await ipc.configRead();
+  out.firstWrite = { path: first.path, written: first.text !== null, keys: first.text ? Object.keys(JSON.parse(first.text)) : [] };
+  studio.updateSettings({ markAiReads: false });
+  await sleep(600);
+  out.appChange = JSON.parse((await ipc.configRead()).text ?? '{}').markAiReads;
+  // Edited elsewhere (as in a text editor), then back to the app.
+  const edited = { ...JSON.parse((await ipc.configRead()).text ?? '{}'), sendKey: 'mod-enter', allowCommands: ['python3'], myNote: 'kept' };
+  await ipc.configWrite(JSON.stringify(edited, null, 2));
+  window.dispatchEvent(new Event('focus'));
+  await sleep(400);
+  out.externalEdit = { sendKey: studio.state.settings.sendKey, allowCommands: studio.state.settings.allowCommands };
+  // The Settings page: add a command for every book, and one for this book.
+  studio.openSettings();
+  await sleep(300);
+  [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Permissions')?.click();
+  await sleep(300);
+  const add = async (index: number, command: string) => {
+    const input = document.querySelectorAll<HTMLInputElement>('.command-list input')[index];
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, command);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(100);
+    input.closest('form')?.requestSubmit();
+    await sleep(700);
+  };
+  await add(0, 'Rscript');
+  await add(1, 'node');
+  out.snapshot = await snap('settings-commands');
+  studio.closeSettings();
+  const file = JSON.parse((await ipc.configRead()).text ?? '{}');
+  out.afterUi = {
+    fileCommands: file.allowCommands,
+    keptUnknownKey: file.myNote,
+    bookCommands: JSON.parse((await ipc.fsRead('.typst-studio.json')).text).allowCommands,
+    effective: studio.allowedCommands(),
+  };
+  // Put everything back.
+  studio.updateSettings({ ...saved });
+  if (projectBefore) await ipc.fsWrite('.typst-studio.json', projectBefore.text, (await ipc.fsHash('.typst-studio.json')) ?? null);
+  await studio.loadProjectSettings();
+  return out;
+}
+
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
 async function tabChecks() {
   const out: Record<string, unknown> = {};
@@ -2616,6 +2668,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
+    if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();
     if (launch.selftestAgent && want('queue')) result.queue = await queueChecks();

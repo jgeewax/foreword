@@ -17,6 +17,8 @@ export type AppSettings = {
   markAiEdits: boolean;
   /** Mark the lines the assistant read in the current conversation. */
   markAiReads: boolean;
+  /** Commands the assistant may run without asking, in every book (e.g. "python3"), besides those that only look. */
+  allowCommands: string[];
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   historyPlacement: 'tab',
   markAiEdits: true,
   markAiReads: true,
+  allowCommands: [],
 };
 
 const KEY = 'studio.settings';
@@ -44,7 +47,17 @@ export function saveSettings(settings: AppSettings) {
   } catch {}
 }
 
-function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
+/** A command name to allow ("python3", "git add"): one or two plain words, no wildcards or shell syntax. */
+export const isCommandName = (c: string) => /^[A-Za-z0-9][\w.+-]*( [A-Za-z0-9][\w.+-]*)?$/.test(c) && c.length <= 40;
+
+export function sanitizeCommands(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const c of raw) if (typeof c === 'string' && isCommandName(c.trim()) && !out.includes(c.trim())) out.push(c.trim());
+  return out.slice(0, 50);
+}
+
+export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const out: Partial<AppSettings> = {};
   if (raw.sendKey === 'enter' || raw.sendKey === 'mod-enter') out.sendKey = raw.sendKey;
   const permissions = sanitizePermissions(raw.permissions);
@@ -54,6 +67,7 @@ function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (raw.historyPlacement === 'tab' || raw.historyPlacement === 'below') out.historyPlacement = raw.historyPlacement;
   if (typeof raw.markAiEdits === 'boolean') out.markAiEdits = raw.markAiEdits;
   if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
+  if (Array.isArray(raw.allowCommands)) out.allowCommands = sanitizeCommands(raw.allowCommands);
   return out;
 }
 

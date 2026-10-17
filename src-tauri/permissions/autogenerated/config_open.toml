@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-config-open"
+description = "Enables the config_open command without any pre-configured scope."
+commands.allow = ["config_open"]
+
+[[permission]]
+identifier = "deny-config-open"
+description = "Denies the config_open command without any pre-configured scope."
+commands.deny = ["config_open"]

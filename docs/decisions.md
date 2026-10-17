@@ -819,6 +819,33 @@ pane top (off by 0 pt).
   - A steered one was delivered mid-turn and answered in it.
   - A taken-back one never reached the conversation.
 
+### The settings file, and commands allowed without asking
+
+- **`~/.typst-studio/settings.json`** holds every preference: send key,
+  History's place, editor marks, zoom, permissions and `allowCommands`. It's
+  like Claude Code's `~/.claude/settings.json`: plain JSON, editable by hand.
+  - Unknown keys are kept when the app writes.
+  - Edits made elsewhere apply when the window regains focus.
+  - A file with a JSON mistake is never overwritten. The app keeps the last
+    good settings, and Settings → General shows the problem, with the
+    file's path and "Open in text editor".
+  - On first start the file is written from the settings this Mac had (local
+    storage, which stays as a fast cache).
+- **Self-tests never touch it.** With `TYPST_STUDIO_SELFTEST` set, the folder
+  is next to the results file (`TYPST_STUDIO_CONFIG_DIR` overrides). Before
+  this, tests shared the author's local storage.
+- **Commands:** `allowCommands` in the settings file applies to every book; in
+  `.typst-studio.json` to one book (it travels with it). Both add to the
+  built-in look commands and are edited in Settings → Permissions. Names are
+  one or two plain words (`python3`, `uv run`), with no wildcards or shell
+  syntax; the app adds `cmd` and `cmd *`. A line still asks if any part isn't
+  allowed, writes with `>`, or deletes, and building stays blocked. Changes
+  apply to the current conversation at once, with a note in the chat.
+- **Verified** (self-test `config`, in its own folder): the first write; an
+  app change reaching the file; an outside edit applied on focus with an
+  unknown key kept; and commands added from the Settings page for every book
+  (`Rscript`) and this book (`node`).
+
 ### Settings, full size
 
 - A 960×700 window, with sections in a sidebar: General, Assistant,

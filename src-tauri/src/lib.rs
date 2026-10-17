@@ -2,6 +2,7 @@ mod agent;
 mod children;
 mod clipboard;
 mod code;
+mod config;
 mod discover;
 mod error;
 mod export;
@@ -496,6 +497,9 @@ pub fn run() {
             clipboard::clipboard_write,
             print::pdf_info,
             export::export_copy,
+            config::config_read,
+            config::config_write,
+            config::config_open,
             export::open_pdf,
             export::reveal_pdf,
             print::open_url,

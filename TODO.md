@@ -96,8 +96,8 @@
 
 - [x] the preview panels selector icons are TINY (got way too small. lets fix teh size of that ? make them always at least a certain size?)
 
-- [ ] indicate which CLIs we can run by default? like python, etc? maybe in a config file like how claude code does it ?
+- [x] indicate which CLIs we can run by default? like python, etc? maybe in a config file like how claude code does it ?
 
-- [ ] save all settings in the config file?
+- [x] save all settings in the config file?
 
 - [x] similar keyboard shortcuts for tab management as vs code (cmd+k w for closing all, etc)

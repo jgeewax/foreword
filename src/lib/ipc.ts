@@ -59,6 +59,11 @@ export const ipc = {
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
   /** Page count and page boxes of a PDF in the workspace (for the print checks). */
   pdfInfo: (path: string) => invoke<PdfInfo>('pdf_info', { path }),
+  /** The settings file (~/.typst-studio/settings.json): its text, or null when there's none yet. */
+  configRead: () => invoke<{ path: string; text: string | null }>('config_read'),
+  configWrite: (text: string) => invoke<void>('config_write', { text }),
+  /** Open it in the default text editor. */
+  configOpen: () => invoke<void>('config_open'),
   /** Copy an exported PDF (in the book) to where the author chose to save it (an absolute .pdf path). */
   exportCopy: (from: string, to: string) => invoke<string>('export_copy', { from, to }),
   /** Open a PDF (book-relative or absolute) in the default viewer, or show it in Finder. */

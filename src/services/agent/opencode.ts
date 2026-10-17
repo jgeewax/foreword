@@ -72,20 +72,20 @@ export class OpenCodeAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan' } = {},
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[] } = {},
   ): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? { providerID: model.providerID, id: model.id } : null,
       agent: agent === 'build' ? null : agent,
-      permissions: sessionRules(permissions, readOnly),
+      permissions: sessionRules(permissions, readOnly, allowCommands),
     });
     return res.data.id;
   }
 
   /** Update a live session's rules (verified to apply mid-session). */
-  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false) {
-    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly) });
+  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, allowCommands: string[] = []) {
+    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly, allowCommands) });
   }
 
   /** OpenCode's built-in agents: `build` (default) or `plan`. */

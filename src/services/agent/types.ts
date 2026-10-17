@@ -82,9 +82,12 @@ export interface AgentAdapter {
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;
-  createSession(model: ModelRef | null, opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan' }): Promise<string>;
-  /** What the agent may do (`readOnly` forces no changes: Plan and Options); applies to a running session. */
-  setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean): Promise<void>;
+  createSession(model: ModelRef | null, opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan'; allowCommands?: string[] }): Promise<string>;
+  /**
+   * What the agent may do (`readOnly` forces no changes: Plan and Options; `allowCommands`
+   * run without asking); applies to a running session.
+   */
+  setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean, allowCommands?: string[]): Promise<void>;
   switchAgent(sessionId: string, agent: 'build' | 'plan'): Promise<void>;
   /** Add (or replace) a named instruction block in the session's system context. */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;

@@ -6,6 +6,7 @@ import { useStore } from '../lib/store';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
+import { isCommandName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -149,6 +150,29 @@ function readPage(): Page {
   }
 }
 
+/** Where all of these are kept: a file the author can edit by hand. */
+function SettingsFileSection() {
+  const file = useStore(studio.store, (s) => s.configFile);
+  if (!file) return null;
+  return (
+    <Section title="Settings file">
+      <div className="settings-row">
+        <code className="selectable">{file.path}</code>
+        <button className="small" onClick={() => void studio.openConfigFile()}>
+          Open in text editor
+        </button>
+      </div>
+      {file.error ? (
+        <p className="settings-help bad">
+          The file can’t be read: {file.error} Typst Studio keeps your last settings and won’t change the file until it’s fixed.
+        </p>
+      ) : (
+        <p className="settings-help">Everything here is kept in this file. Edit it by hand if you like: changes apply when you come back to Typst Studio.</p>
+      )}
+    </Section>
+  );
+}
+
 function GeneralPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const zoom = useStore(studio.store, (s) => s.zoom);
@@ -162,6 +186,7 @@ function GeneralPage() {
           <p className="settings-help">While the assistant works, the same key queues a message; ⌥⏎ sends it to the assistant right away.</p>
         </div>
       </Section>
+      <SettingsFileSection />
       <Section title="Layout">
         <div className="settings-field">
           <div className="settings-label">History</div>
@@ -250,7 +275,48 @@ function AssistantPage() {
   );
 }
 
+/** A list of commands to allow, with an add box. */
+function CommandList({ commands, onChange, disabled = false }: { commands: string[]; onChange: (next: string[]) => void; disabled?: boolean }) {
+  const [draft, setDraft] = useState('');
+  const valid = isCommandName(draft.trim()) && !commands.includes(draft.trim());
+  const add = () => {
+    if (!valid) return;
+    onChange([...commands, draft.trim()]);
+    setDraft('');
+  };
+  return (
+    <div className="command-list">
+      <div className="command-chips">
+        {commands.length === 0 && <span className="settings-help">None yet.</span>}
+        {commands.map((c) => (
+          <span key={c} className="command-chip editable">
+            <code>{c}</code>
+            <button className="icon" aria-label={`Stop allowing ${c}`} disabled={disabled} onClick={() => onChange(commands.filter((x) => x !== c))}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <form
+        className="settings-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <input className="settings-input" aria-label="Command to allow" placeholder="e.g. python3" value={draft} disabled={disabled} onChange={(e) => setDraft(e.target.value)} />
+        <button type="submit" disabled={!valid || disabled}>
+          Allow
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function PermissionsPage() {
+  const settings = useStore(studio.store, (s) => s.settings);
+  const project = useStore(studio.store, (s) => s.project);
+  const ws = useStore(studio.store, (s) => s.workspace);
   return (
     <>
       <Section title="What the assistant may do">
@@ -265,6 +331,29 @@ function PermissionsPage() {
             </code>
           ))}
         </div>
+      </Section>
+      <Section title="More commands to run without asking">
+        <p className="settings-help">
+          Tools your books use, like <code>python3</code> or <code>Rscript</code>. A command line still asks if any part of it isn’t allowed, writes with &gt;, or
+          deletes; building the book stays blocked.
+        </p>
+        <div className="settings-field">
+          <div className="settings-label">In every book</div>
+          <CommandList commands={settings.allowCommands} onChange={(allowCommands) => studio.updateSettings({ allowCommands })} />
+        </div>
+        {ws && (
+          <div className="settings-field">
+            <div className="settings-label">In this book only</div>
+            <CommandList
+              commands={project.settings.allowCommands ?? []}
+              disabled={!!project.error}
+              onChange={(allowCommands) => void studio.updateProjectSettings({ allowCommands })}
+            />
+            <p className="settings-help">
+              Saved in <code>{PROJECT_FILE}</code>, so it travels with the book.
+            </p>
+          </div>
+        )}
       </Section>
     </>
   );

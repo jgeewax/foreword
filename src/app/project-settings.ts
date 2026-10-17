@@ -1,7 +1,9 @@
 // Project settings: `.typst-studio.json` in the project root (SPEC §4). Only
 // non-secret, per-book settings. Unknown keys are preserved when saving.
+import { sanitizeCommands } from './settings';
 
 export const PROJECT_FILE = '.typst-studio.json';
+
 
 export type ProjectSettings = {
   /** Main file the preview and export compile, e.g. "main.typ". */
@@ -10,6 +12,8 @@ export type ProjectSettings = {
   outputDir?: string;
   /** Extra font folders (relative to the project root, or absolute). */
   fontPaths?: string[];
+  /** Commands the assistant may run in this book without asking (e.g. "python3"). */
+  allowCommands?: string[];
 };
 
 export type ParsedProjectSettings = {
@@ -35,6 +39,7 @@ export function parseProjectSettings(text: string | null): ParsedProjectSettings
   if (typeof r.entryPoint === 'string') settings.entryPoint = r.entryPoint;
   if (typeof r.outputDir === 'string') settings.outputDir = r.outputDir;
   if (Array.isArray(r.fontPaths)) settings.fontPaths = r.fontPaths.filter((p): p is string => typeof p === 'string');
+  if (Array.isArray(r.allowCommands)) settings.allowCommands = sanitizeCommands(r.allowCommands);
   return { settings, raw: r, error: null };
 }
 
