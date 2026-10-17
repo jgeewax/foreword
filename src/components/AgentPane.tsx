@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
 import { useStore } from '../lib/store';
+import { AGENT_MODES, modeConfig } from '../services/agent/modes';
+import { parseOptions } from '../services/agent/options-mode';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
 
@@ -15,6 +17,68 @@ function Patch({ text }: { text: string }) {
         </div>
       ))}
     </pre>
+  );
+}
+
+type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
+
+function copyText(text: string) {
+  navigator.clipboard.writeText(text).then(
+    () => studio.toast('Copied'),
+    (e) => studio.toast(`Couldn't copy: ${e}`, 'error'),
+  );
+}
+
+/** Options-mode reply: one card per option; picking one replaces the passage in the editor. */
+function OptionsReply({ item }: { item: AssistantItem }) {
+  const parsed = useMemo(() => parseOptions(item.text), [item.text]);
+  const { target, applied } = item.options!;
+  if (!parsed.options.some((o) => o.text != null)) {
+    return (
+      <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
+        <Markdown text={item.text} />
+      </div>
+    );
+  }
+  const where = target && `${target.path.split('/').pop()}:${target.start.line}`;
+  return (
+    <div className="msg assistant options-reply">
+      {parsed.intro && (
+        <div className="md">
+          <Markdown text={parsed.intro} />
+        </div>
+      )}
+      <div className="options-target">{target ? `Pick one to ${target.text ? 'replace' : 'insert at'} ${where}` : 'Nothing was selected: copy the one you want.'}</div>
+      {parsed.options.map((o, i) => (
+        <div key={i} className={`option-card${applied === i ? ' applied' : ''}`}>
+          <div className="option-head">
+            <span className="option-n">Option {o.n}</span>
+            {o.label && <span className="option-label">{o.label}</span>}
+          </div>
+          {o.text != null && <pre className={`option-text${o.complete ? '' : ' streaming'}`}>{o.text}</pre>}
+          {o.note && (
+            <div className="option-note md">
+              <Markdown text={o.note} />
+            </div>
+          )}
+          <div className="option-actions">
+            {target && (
+              <button
+                className={applied === i ? '' : 'primary'}
+                disabled={!item.done || !o.complete || o.text == null}
+                title={applied === i ? 'This option is in the editor (⌘Z to undo)' : `Put this in place of ${where} (⌘Z to undo)`}
+                onClick={() => void studio.applyOption(item.id, i)}
+              >
+                {applied === i ? 'In use ✓' : applied != null ? 'Use this instead' : target.text ? 'Use this' : 'Insert'}
+              </button>
+            )}
+            <button disabled={!o.complete || o.text == null} onClick={() => copyText(o.text ?? '')}>
+              Copy
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -36,6 +100,7 @@ function Item({ item }: { item: ChatItem }) {
         </div>
       );
     case 'assistant':
+      if (item.options) return <OptionsReply item={item} />;
       return (
         <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
           <Markdown text={item.text} />
@@ -87,17 +152,17 @@ function ModeSwitch() {
   const running = useStore(studio.store, (s) => s.agent.running);
   return (
     <div className="mode-switch" role="radiogroup" aria-label="Agent mode">
-      {(['write', 'plan'] as const).map((m) => (
+      {AGENT_MODES.map((m) => (
         <button
           key={m}
           role="radio"
           aria-checked={mode === m}
           className={mode === m ? 'active' : ''}
           disabled={running}
-          title={m === 'write' ? 'The agent writes and edits the book' : 'Discuss and outline first; the agent can’t change files'}
+          title={modeConfig(m).description}
           onClick={() => void studio.setMode(m)}
         >
-          {m === 'write' ? 'Write' : 'Plan'}
+          {modeConfig(m).label}
         </button>
       ))}
     </div>
@@ -154,7 +219,15 @@ function Composer() {
         ref={inputRef}
         value={text}
         rows={3}
-        placeholder={!ready ? 'Agent not available' : mode === 'plan' ? 'What should we plan? A chapter, a section, an argument…' : 'Ask about the selection, or request an edit…'}
+        placeholder={
+          !ready
+            ? 'Agent not available'
+            : mode === 'plan'
+              ? 'What should we plan? A chapter, a section, an argument…'
+              : mode === 'options'
+                ? 'Select text, then say what to change (e.g. “make it punchier”)…'
+                : 'Ask about the selection, or request an edit…'
+        }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey) === 'send') {

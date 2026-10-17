@@ -131,6 +131,18 @@ selected lines attached as `chapters/ch2-eigenvalues.typ:3–4`, the agent ran
 - **The model list fills in lazily.** The first `/api/model` call after startup
   listed only `openai`; a few seconds later it listed all providers. The server
   default (`opencode/exo-free`) isn't in the list at all.
+- **Modes** (`src/services/agent/modes.ts`): Write, Plan (OpenCode's `plan`
+  agent) and Options (the `build` agent). Plan and Options are read-only by
+  permission rules (edit and shell denied, whatever the edit setting), and each
+  sets the `mode` instruction entry.
+- **Options mode** asks for exactly three `### Option N: label` sections, each
+  with a fenced code block holding the full replacement. The UI turns them into
+  cards (`parseOptions`). Picking one is an ordinary Monaco edit
+  (`executeEdits`: undoable, unsaved), never a file write by the agent. The
+  editor selection is attached automatically. Picking another option replaces
+  the one in use, or the original passage if the author undid it. If the text
+  moved, it's found again only when exactly one match exists; otherwise nothing
+  changes and the chat says why.
 
 ### Bugs found by testing the app
 

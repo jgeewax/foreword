@@ -8,7 +8,11 @@ import { runSelftest } from './selftest';
 import './styles.css';
 
 window.addEventListener('error', (e) => void ipc.uiLog(`error: ${e.message} at ${e.filename}:${e.lineno}`));
-window.addEventListener('unhandledrejection', (e) => void ipc.uiLog(`unhandled rejection: ${e.reason?.stack ?? e.reason}`));
+window.addEventListener('unhandledrejection', (e) => {
+  // Monaco cancels its own pending promises (e.g. its WebKit clipboard workaround on every click).
+  if (e.reason?.name === 'Canceled') return;
+  void ipc.uiLog(`unhandled rejection: ${e.reason?.stack ?? e.reason}`);
+});
 const boot = (step: string) => void ipc.uiLog(`[boot +${Math.round(performance.now())}ms] ${step}`);
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

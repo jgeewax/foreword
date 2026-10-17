@@ -1,10 +1,6 @@
 // Plan mode: discuss and outline before writing (like Claude Code's plan mode).
 // The session switches to OpenCode's `plan` agent, edits are denied by
-// permission rules, and this instruction entry shapes the conversation.
-
-export type AgentMode = 'write' | 'plan';
-
-export const MODE_INSTRUCTIONS_KEY = 'mode';
+// permission rules, and this instruction entry shapes the conversation (see modes.ts).
 
 export const PLAN_INSTRUCTIONS = `# Planning mode
 

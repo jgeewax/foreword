@@ -40,16 +40,16 @@ export const ALLOW_EDIT_RULES = [
 
 export type PermissionRule = { action: string; resource: string; effect: 'allow' | 'ask' | 'deny' };
 
-/** Plan mode: no file changes and no commands, whatever the edit setting. */
-export const PLAN_MODE_RULES = [
+/** Plan and Options modes: no file changes and no commands, whatever the edit setting. */
+export const READ_ONLY_RULES = [
   { action: 'edit', resource: '*', effect: 'deny' },
   { action: 'shell', resource: '*', effect: 'deny' },
 ] as const;
 
 /** Rules for a session. Build-command denials always come last (last match wins). */
-export function sessionPermissions({ allowEdits, planning = false }: { allowEdits: boolean; planning?: boolean }): PermissionRule[] {
+export function sessionPermissions({ allowEdits, readOnly = false }: { allowEdits: boolean; readOnly?: boolean }): PermissionRule[] {
   const base = SESSION_PERMISSIONS.slice(0, SESSION_PERMISSIONS.length - NO_COMPILE_RULES.length);
-  return [...base, ...(allowEdits ? ALLOW_EDIT_RULES : []), ...(planning ? PLAN_MODE_RULES : []), ...NO_COMPILE_RULES];
+  return [...base, ...(allowEdits ? ALLOW_EDIT_RULES : []), ...(readOnly ? READ_ONLY_RULES : []), ...NO_COMPILE_RULES];
 }
 
 export const SESSION_PERMISSIONS = [
@@ -121,19 +121,19 @@ export class OpenCodeAdapter implements AgentAdapter {
     return d ? { providerID: d.providerID, id: d.id } : null;
   }
 
-  async createSession(model: ModelRef | null, { allowEdits = false, planning = false } = {}): Promise<string> {
+  async createSession(model: ModelRef | null, { allowEdits = false, readOnly = false, agent = 'build' as 'build' | 'plan' } = {}): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? { providerID: model.providerID, id: model.id } : null,
-      agent: planning ? 'plan' : null,
-      permissions: sessionPermissions({ allowEdits, planning }),
+      agent: agent === 'build' ? null : agent,
+      permissions: sessionPermissions({ allowEdits, readOnly }),
     });
     return res.data.id;
   }
 
-  /** Update a live session's rules: edit policy and plan mode (verified to apply mid-session). */
-  async setEditPolicy(sessionId: string, allowEdits: boolean, planning = false) {
-    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionPermissions({ allowEdits, planning }) });
+  /** Update a live session's rules: edit policy and read-only modes (verified to apply mid-session). */
+  async setEditPolicy(sessionId: string, allowEdits: boolean, readOnly = false) {
+    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionPermissions({ allowEdits, readOnly }) });
   }
 
   /** OpenCode's built-in agents: `build` (default) or `plan`. */

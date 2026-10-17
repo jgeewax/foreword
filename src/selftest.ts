@@ -5,6 +5,7 @@ import { studio } from './app/studio';
 import { monaco } from './editor/monaco';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
+import { parseOptions } from './services/agent/options-mode';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const log = (step: string) => void ipc.uiLog(`[selftest +${Math.round(performance.now())}ms] ${step}`);
@@ -284,6 +285,76 @@ async function markdownChecks() {
   } catch (e) {
     out.snapshot = errorMessage(e);
   }
+  return out;
+}
+
+/**
+ * Options mode (TODO #6): three versions of a selected sentence, applied as
+ * undoable buffer edits. Never saves, and restores the buffer. Scratch book only.
+ */
+async function optionsChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.newSession();
+  await studio.setMode('options');
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const diskBefore = await ipc.fsHash(file);
+  const line = model.getLinesContent().findIndex((l) => /^The eigenvalues of/.test(l)) + 1;
+  const sentence = model.getLineContent(line);
+  editor.setSelection(new monaco.Range(line, 1, line, model.getLineMaxColumn(line)));
+  await sleep(300);
+
+  // No ⌘I: Options mode attaches the editor selection itself.
+  const reply = await askAgent('Make this sentence more inviting for a reader meeting eigenvalues for the first time.');
+  await sleep(300);
+  const user = [...studio.state.agent.items].reverse().find((i) => i.kind === 'user') as { attachments: string[] } | undefined;
+  const item = [...studio.state.agent.items].reverse().find((i) => i.kind === 'assistant' && i.options) as any;
+  const parsed = parseOptions(reply);
+  out.reply = {
+    attachments: user?.attachments,
+    target: item?.options?.target,
+    options: parsed.options.map((o) => ({ n: o.n, label: o.label, complete: o.complete, text: o.text })),
+    keepsMath: parsed.options.every((o) => o.text?.includes('$A$')),
+    tools: studio.state.agent.items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}`),
+    cards: document.querySelectorAll('.option-card').length,
+    diskUnchanged: (await ipc.fsHash(file)) === diskBefore,
+  };
+  try {
+    out.snapshot = await ipc.previewSnapshot('options', 'main');
+  } catch (e) {
+    out.snapshot = errorMessage(e);
+  }
+  if (!item || parsed.options.length < 3) return out;
+
+  const lineText = () => model.getValueInRange(new monaco.Range(line, 1, line + 20, 1));
+  const has = (n: number) => lineText().startsWith(parsed.options[n].text!);
+  const click = async (n: number) => {
+    (document.querySelectorAll('.option-card')[n]?.querySelector('.option-actions button') as HTMLButtonElement | null)?.click();
+    await sleep(400);
+  };
+  await click(1);
+  out.useSecond = { inBuffer: has(1), sentenceGone: !model.getValue().includes(sentence), dirty: !!studio.state.dirty[file], button: document.querySelectorAll('.option-card')[1]?.querySelector('button')?.textContent };
+  await click(2);
+  out.switchToThird = { inBuffer: has(2), secondGone: !model.getValue().includes(parsed.options[1].text!) };
+  editor.trigger('selftest', 'undo', null);
+  editor.trigger('selftest', 'undo', null);
+  await sleep(200);
+  out.undoTwice = { originalBack: model.getValue() === original };
+  await click(0);
+  out.useFirstAfterUndo = { inBuffer: has(0) };
+  try {
+    out.snapshotApplied = await ipc.previewSnapshot('options-applied', 'main');
+  } catch (e) {
+    out.snapshotApplied = errorMessage(e);
+  }
+  for (let i = 0; i < 20 && model.getValue() !== original && model.canUndo(); i++) editor.trigger('selftest', 'undo', null);
+  await sleep(300);
+  out.restored = { buffer: model.getValue() === original, dirty: !!studio.state.dirty[file], diskUnchanged: (await ipc.fsHash(file)) === diskBefore };
+  await studio.setMode('write');
   return out;
 }
 
@@ -679,6 +750,10 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('style')) {
         log('style guide');
         result.styleGuide = await styleGuideChecks();
+      }
+      if (want('options')) {
+        log('options mode');
+        result.options = await optionsChecks();
       }
       if (want('plan')) {
         log('plan mode');

@@ -24,7 +24,9 @@ import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
-import { MODE_INSTRUCTIONS_KEY, PLAN_INSTRUCTIONS, WRITE_FROM_PLAN_PROMPT, type AgentMode } from '../services/agent/plan-mode';
+import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
+import { parseOptions } from '../services/agent/options-mode';
+import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
@@ -33,7 +35,7 @@ import { TypstService } from '../services/typst';
 
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
-  | { kind: 'assistant'; id: string; text: string; done: boolean }
+  | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState }
   | { kind: 'tool'; id: string; name: string; summary: string; status: 'running' | 'done' | 'failed'; detail: string }
   | {
       kind: 'permission';
@@ -46,6 +48,14 @@ export type ChatItem =
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error' };
 
 export type Attachment = { id: string; label: string; selection: SourceSelection };
+
+/** Where a picked option goes: the passage as it stands in the buffer (1-based positions). */
+export type OptionTarget = { path: string; start: { line: number; column: number }; end: { line: number; column: number }; text: string };
+/**
+ * An Options-mode reply: where a picked option goes (null: nothing to replace,
+ * copy only), the passage as originally selected, and the option in use.
+ */
+export type OptionsState = { target: OptionTarget | null; original: OptionTarget | null; applied: number | null };
 
 export type Stat = { p50: number | null; p95: number | null; n: number };
 
@@ -75,7 +85,7 @@ export type StudioState = {
     running: boolean;
     items: ChatItem[];
     attachments: Attachment[];
-    /** Write (default) or Plan: discuss and outline without editing. */
+    /** Write (default), Plan (discuss and outline) or Options (three versions to pick from). */
     mode: AgentMode;
   };
   perf: { input: Stat; preview: Stat };
@@ -169,6 +179,8 @@ export class Studio {
   /** Errors already shown for the current turn (OpenCode reports a failure more than once). */
   private turnErrors = new Set<string>();
   private styleGuideText: string | null = null;
+  /** Options mode: the passage the current turn's options replace. */
+  private optionsTurn: { target: OptionTarget | null } | null = null;
   private syncTimer: number | undefined;
   /** Cursor moves caused by a preview click must not bounce back to the preview. */
   private suppressSyncUntil = 0;
@@ -645,27 +657,23 @@ export class Studio {
     }
   }
 
-  /** Switch between writing and planning (applies to the current conversation). */
+  /** Switch between Write, Plan and Options (applies to the current conversation). */
   async setMode(mode: AgentMode) {
-    if (mode === this.state.agent.mode) return;
+    const previous = this.state.agent.mode;
+    if (mode === previous) return;
     this.setAgent({ mode });
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
-    const planning = mode === 'plan';
+    const config = modeConfig(mode);
     try {
-      await this.agent.switchAgent(sessionId, planning ? 'plan' : 'build');
-      await this.agent.setEditPolicy(sessionId, this.state.settings.agentEdits === 'allow', planning);
-      if (planning) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, PLAN_INSTRUCTIONS);
+      await this.agent.switchAgent(sessionId, config.agent);
+      await this.agent.setEditPolicy(sessionId, this.state.settings.agentEdits === 'allow', config.readOnly);
+      if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
-      this.pushItem({
-        kind: 'notice',
-        id: uid('n'),
-        tone: 'info',
-        text: planning ? 'Plan mode: the agent discusses and outlines, and can’t change files.' : 'Write mode: the agent can edit the book again.',
-      });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
     } catch (e) {
-      this.setAgent({ mode: planning ? 'write' : 'plan' });
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't switch to ${mode} mode: ${errorMessage(e)}` });
+      this.setAgent({ mode: previous });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't switch to ${config.label} mode: ${errorMessage(e)}` });
     }
   }
 
@@ -681,13 +689,13 @@ export class Studio {
   }
 
   /** ⌘I: attach the selection (or cursor position) to the chat and focus it. */
-  async attachSelection() {
+  async attachSelection({ focus = true } = {}) {
     const path = this.state.active;
     const editor = this.editor;
     const model = editor?.getModel();
     const selection = editor?.getSelection();
     if (!path || !model || !selection) {
-      this.events.emit('focus-composer');
+      if (focus) this.events.emit('focus-composer');
       return;
     }
     const captured = await captureSelection(path, model, selection);
@@ -695,7 +703,7 @@ export class Studio {
     this.setAgent((a) => ({
       attachments: [...a.attachments.filter((x) => x.label !== label), { id: uid('a'), label, selection: captured }],
     }));
-    this.events.emit('focus-composer');
+    if (focus) this.events.emit('focus-composer');
   }
 
   removeAttachment(id: string) {
@@ -718,11 +726,18 @@ export class Studio {
       return false;
     }
     this.turnErrors.clear();
-    const attachments = state.attachments;
+    // Options replace a passage: use the editor's selection (or cursor) when nothing is attached.
+    if (state.mode === 'options' && !state.attachments.length) await this.attachSelection({ focus: false });
+    const attachments = this.state.agent.attachments;
     const context = attachments.map((a) => ({
       selection: a.selection,
       stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
     }));
+    const target = attachments[0]?.selection;
+    this.optionsTurn =
+      state.mode === 'options'
+        ? { target: target ? { path: target.relativePath, start: target.start, end: target.end, text: target.selectedText } : null }
+        : null;
     this.setAgent((a) => ({
       running: true,
       attachments: [],
@@ -731,9 +746,11 @@ export class Studio {
     try {
       let sessionId = this.state.agent.sessionId;
       if (!sessionId) {
+        const config = modeConfig(this.state.agent.mode);
         sessionId = await agent.createSession(this.state.agent.model, {
           allowEdits: this.state.settings.agentEdits === 'allow',
-          planning: this.state.agent.mode === 'plan',
+          readOnly: config.readOnly,
+          agent: config.agent,
         });
         this.setAgent({ sessionId });
         await this.applyInstructions(sessionId);
@@ -782,11 +799,64 @@ export class Studio {
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
       if (this.styleGuideText?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText));
-      if (this.state.agent.mode === 'plan') await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, PLAN_INSTRUCTIONS);
+      const modeText = modeConfig(this.state.agent.mode).instructions;
+      if (modeText) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, modeText);
     } catch (e) {
       // Still usable without them, but the agent will behave like a coding assistant: say so.
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't set the writing-assistant instructions: ${errorMessage(e)}` });
     }
+  }
+
+  private newOptionsState(): { options?: OptionsState } {
+    const target = this.optionsTurn?.target ?? null;
+    return this.optionsTurn ? { options: { target, original: target, applied: null } } : {};
+  }
+
+  /**
+   * Put option `index` of an Options reply in place of its passage: an ordinary
+   * editor edit (undoable, unsaved until the author saves). Picking another
+   * option afterwards replaces the one in use (or the original passage, if the
+   * author undid it). If the text moved, it's found again only when that's
+   * unambiguous; otherwise nothing changes.
+   */
+  async applyOption(itemId: string, index: number) {
+    const item = this.state.agent.items.find((i) => i.id === itemId);
+    if (item?.kind !== 'assistant' || !item.options?.target) return;
+    const option = parseOptions(item.text).options[index];
+    if (option?.text == null || !option.complete) return;
+    const { target, original } = item.options;
+    const fail = (why: string) => this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Option ${option.n} not applied: ${why}` });
+    try {
+      await this.openFile(target.path);
+    } catch (e) {
+      return fail(errorMessage(e));
+    }
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!editor || !model || this.state.active !== target.path) return fail(`couldn't open ${target.path}.`);
+    const locate = (t: OptionTarget | null): monaco.Range | null => {
+      if (!t) return null;
+      const at = new monaco.Range(t.start.line, t.start.column, t.end.line, t.end.column);
+      if (model.validateRange(at).equalsRange(at) && model.getValueInRange(at) === t.text) return at;
+      const matches = t.text ? model.findMatches(t.text, false, false, true, null, false, 2) : [];
+      return matches.length === 1 ? matches[0].range : null;
+    };
+    const range = locate(target) ?? locate(original);
+    if (!range) return fail('the passage has changed since you asked. Select it and ask again, or copy the option.');
+    const start = range.getStartPosition();
+    editor.pushUndoStop();
+    editor.executeEdits('agent-option', [{ range, text: option.text, forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+    const end = model.getPositionAt(model.getOffsetAt(start) + option.text.length);
+    editor.setSelection(monaco.Range.fromPositions(start, end));
+    editor.revealRangeInCenterIfOutsideViewport(monaco.Range.fromPositions(start, end));
+    const applied: OptionTarget = {
+      path: target.path,
+      start: { line: start.lineNumber, column: start.column },
+      end: { line: end.lineNumber, column: end.column },
+      text: model.getValueInRange(monaco.Range.fromPositions(start, end)),
+    };
+    this.updateItem(itemId, (it) => (it.kind === 'assistant' && it.options ? { ...it, options: { ...it.options, target: applied, applied: index } } : it));
   }
 
   private agentError(message: string) {
@@ -841,7 +911,7 @@ export class Studio {
         const id = `${e.messageId}:${e.ordinal}`;
         this.setAgent((a) => {
           const idx = a.items.findIndex((it) => it.id === id);
-          if (idx < 0) return { items: [...a.items, { kind: 'assistant', id, text: e.delta, done: false }] };
+          if (idx < 0) return { items: [...a.items, { kind: 'assistant', id, text: e.delta, done: false, ...this.newOptionsState() }] };
           const items = a.items.slice();
           const it = items[idx] as Extract<ChatItem, { kind: 'assistant' }>;
           items[idx] = { ...it, text: it.text + e.delta };
@@ -854,7 +924,7 @@ export class Studio {
         this.setAgent((a) =>
           a.items.some((it) => it.id === id)
             ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true } : it)) }
-            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true }] },
+            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState() }] },
         );
         break;
       }
@@ -933,7 +1003,7 @@ export class Studio {
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
     try {
-      await this.agent.setEditPolicy(sessionId, allowEdits, this.state.agent.mode === 'plan');
+      await this.agent.setEditPolicy(sessionId, allowEdits, modeConfig(this.state.agent.mode).readOnly);
       this.pushItem({
         kind: 'notice',
         id: uid('n'),

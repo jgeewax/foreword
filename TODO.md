@@ -10,7 +10,7 @@
 
 - [x] a settings UI for everything we can put into the .typst-studio.json file
 
-- [ ] advanced multi-option mode (ask the model to fix something, but give you 3 options)
+- [x] advanced multi-option mode (ask the model to fix something, but give you 3 options)
 
 - [x] setting for whether the model can make edits or not by default
 
