@@ -141,11 +141,11 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
   const { view: current, below } = useSidebarView();
   const { hasCode, todoCount, hasReview, reviewOpen } = useViews();
   const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
-    { id: 'files', icon: 'folder', label: 'Files' },
-    ...(below ? [] : [{ id: 'history' as const, icon: 'clock' as const, label: 'History: saved versions of the book' }]),
+    { id: 'files', icon: 'files', label: 'Files' },
+    ...(below ? [] : [{ id: 'history' as const, icon: 'history' as const, label: 'History: saved versions of the book' }]),
     ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples' }] : []),
-    ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'checklist' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
-    ...(hasReview ? [{ id: 'review' as const, icon: 'comment' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
+    ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'todos' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
+    ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
   ];
   return (
     <nav className="activity-bar" role="tablist" aria-label="Sidebar" aria-orientation="vertical">

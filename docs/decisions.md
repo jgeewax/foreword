@@ -283,7 +283,12 @@ pane top (off by 0 pt).
   - No icon is marked while the sidebar is hidden.
 - Before, the bar was inside the sidebar, so hiding the sidebar (⌘B, the
   toolbar) hid the icons too, and clicking the open view did nothing.
-- Verified (self-test `activity`): Files closes it (width 0, bar still 32 pt);
+- It looks like VS Code's: 22 pt icons in a 44 pt bar, dimmed until hovered
+  or open, and an accent stripe on the open view's edge rather than a filled
+  button. The icons follow VS Code's codicons: stacked pages for Files, a
+  clock with a back arrow for History, two speech bubbles for Review, a ticked
+  list for To do, `< >` for Code.
+- Verified (self-test `activity`): Files closes it (width 0, the bar stays);
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 

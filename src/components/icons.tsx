@@ -36,21 +36,34 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="9" cy="17" r="2" />
     </>
   ),
-  folder: <path d="M3 7.5A2 2 0 0 1 5 5.5h4l2 2h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
-  clock: (
+  // The sidebar's views, shaped like VS Code's (codicons): files, history, comments, to-do list.
+  files: (
     <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3.2 2" />
+      <path d="M9 7.5h5.5l4 4V20a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z" />
+      <path d="M14.5 7.5v4h4" />
+      <path d="M5 16.5V4a1 1 0 0 1 1-1h7" />
+    </>
+  ),
+  history: (
+    <>
+      <path d="M4 12a8 8 0 1 0 2.35-5.65L4 8.7" />
+      <path d="M4 4.5v4.2h4.2" />
+      <path d="M12 8v4.2l2.8 1.8" />
     </>
   ),
   code: <path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5" />,
-  checklist: (
+  todos: (
     <>
-      <rect x="4" y="4" width="16" height="16" rx="2.5" />
-      <path d="M8 12.2l2.8 2.8L16.2 9" />
+      <path d="M4 6.5l1.5 1.5L8 5.5M4 12.5l1.5 1.5L8 11.5M4 18.5l1.5 1.5L8 17.5" />
+      <path d="M11 7h9M11 13h9M11 19h9" />
     </>
   ),
-  comment: <path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z" />,
+  comments: (
+    <>
+      <path d="M3.5 4.5h11v8H9l-3 2.5v-2.5H3.5z" />
+      <path d="M17.5 9h3v8h-2.5v2.5l-3-2.5h-4.5v-2" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,

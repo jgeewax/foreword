@@ -152,7 +152,7 @@
 
 - [x] click on the current icon on the left nav should close the left nav. if im on the files tab and i click on it again, it should close the nav
 
-- [ ] use vs-code style icons for the left nav. files for example.
+- [x] use vs-code style icons for the left nav. files for example.
 
 - [ ] when i type im seeing lots of click indicators on the preview like i clicked 4x times. none of them are on the part that im typing in
 
