@@ -155,7 +155,11 @@ button.indicator:hover { background: var(--bg-3); }
 .tree-row { display: flex; align-items: center; gap: 4px; height: 22px; padding-right: 8px; white-space: nowrap; }
 .tree-row:hover { background: var(--bg-3); }
 .tree-row.active { background: var(--sel); }
-.twisty { width: 10px; color: var(--muted); font-size: 10px; }
+/* Folder chevrons: a 16px icon column beside 12.5px names, as in VS Code. */
+.twisty { flex: none; width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); }
+.twisty .icon-svg { transition: transform 0.12s ease; }
+.twisty.open .icon-svg { transform: rotate(90deg); }
+.tree-row:hover .twisty { color: var(--fg); }
 .file, .dir { overflow: hidden; text-overflow: ellipsis; }
 .badge { font-size: 9.5px; padding: 0 4px; border-radius: 3px; background: var(--bg-3); color: var(--muted); }
 .dirty-dot { color: var(--accent); font-size: 9px; margin-left: auto; }

@@ -112,7 +112,7 @@
 
 - [x] can we make comments be grouped by file?
 
-- [ ] the icons in the file view to expand directories is TINY at 67%, far tinier than they should be... use vs.code icons for comparison...
+- [x] the icons in the file view to expand directories is TINY at 67%, far tinier than they should be... use vs.code icons for comparison...
 
 - [ ] the "selected" blue box with dashes doesnt look very pretty. can we make this more elegant and useful and less odd?
 

@@ -136,4 +136,11 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 
 - Custom layouts (writing: editor + preview; reviewing: preview large + comments), switched from the pane toggles.
 - A focus mode: only the editor, full width, typewriter scrolling.
+- Indent guides in the file tree (VS Code's thin vertical lines), shown on hover or for the active file's folder.
+- A separate "chrome size" setting (compact / regular / large) apart from the writing zoom.
 
+## Go to file
+
+- ⌘P with ":" for a line (`ch2:40`) and "@" for a heading in the open chapter, as in VS Code.
+- Recently opened files remembered across launches, first in ⌘P's empty list.
+- ⌘⇧O: headings, figures and labels across the book (`<eq-eigen>`), not only files.

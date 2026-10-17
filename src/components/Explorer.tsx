@@ -63,7 +63,7 @@ function FileTree() {
             ];
           })}
         >
-          <span className="twisty">{n.dir ? (expanded.has(n.path) ? '▾' : '▸') : ''}</span>
+          <span className={`twisty${n.dir && expanded.has(n.path) ? ' open' : ''}`}>{n.dir && <Icon name="chevronRight" size={16} />}</span>
           <span className={n.dir ? 'dir' : 'file'}>{n.name}</span>
           {n.path === ws?.entry && <span className="badge">main</span>}
           {dirty[n.path] && <span className="dirty-dot">●</span>}
