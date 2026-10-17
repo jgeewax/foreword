@@ -2399,6 +2399,28 @@ async function quickOpenChecks() {
   return out;
 }
 
+/** Reading part of a file: the read tool, never a question; an explicit `sed -n` runs without one too (real model, Ask first). */
+async function readToolsChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: PRESETS.ask.permissions });
+  const run = async (prompt: string) => {
+    studio.newSession();
+    const reply = await askAgent(prompt);
+    const items = studio.state.agent.items;
+    return {
+      reply: reply.slice(0, 160),
+      tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} ${(i as any).summary} → ${(i as any).status}`),
+      asked: items.filter((i) => i.kind === 'permission').map((i) => `${(i as any).action}: ${(i as any).resources?.join(' ')}`),
+    };
+  };
+  out.plain = await run("What do lines 12 to 18 of chapters/ch2-eigenvalues.typ say? Don't change anything.");
+  out.sed = await run("Run exactly this in the shell and tell me what it prints: sed -n '12,14p' chapters/ch2-eigenvalues.typ");
+  studio.updateSettings({ permissions: policy });
+  return out;
+}
+
 /** One sentence per line in what the assistant writes (real model; the chapter is put back). */
 async function sentencesChecks() {
   const out: Record<string, unknown> = {};
@@ -3157,6 +3179,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
+    if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

@@ -138,7 +138,7 @@
 
 - [ ] if books get long, will we find the need for a single chapter preview at a time?
 
-- [ ] why is the model trying to run sed so muhc? "Allow shell sed -n '205,242p' chapters/ch01_what_is_a_vector.typ?" thats crazy. why not tell the model to use tools we have that dont need approval?
+- [x] why is the model trying to run sed so muhc? "Allow shell sed -n '205,242p' chapters/ch01_what_is_a_vector.typ?" thats crazy. why not tell the model to use tools we have that dont need approval?
 
 - [ ] explain all tool calls in english. this is NOT A SYSTEM FOR ENGINEERS ITS FOR WRITERS
 

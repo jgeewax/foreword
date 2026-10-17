@@ -53,7 +53,7 @@ import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
-import { allowedWithoutRedirects, describePermissions, PRESETS, sessionRules } from '../services/agent/permissions';
+import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
@@ -3112,17 +3112,16 @@ export class Studio {
   private answered = new Set<string>();
 
   /**
-   * "ls figures 2>/dev/null" asks (OpenCode asks about any ">"), but only looks:
-   * once the redirections that write nothing are left out, the session's own
-   * rules allow it, so the app says yes for the author. Background
-   * conversations are judged as read-only, whatever their mode.
+   * Requests that only look although OpenCode asks ("ls figures 2>/dev/null",
+   * "sed -n '205,242p' ch1.typ"; see `onlyLooks`): the app says yes for the
+   * author. Background conversations are judged as read-only, whatever their mode.
    */
   private answerForAuthor(e: Extract<AgentEvent, { type: 'permission-asked' }>): boolean {
     const agent = this.agent;
     if (!agent || this.answered.has(e.requestId)) return false;
     const foreground = e.sessionId === this.state.agent.sessionId;
     const rules = sessionRules(this.state.settings.permissions, foreground ? modeConfig(this.state.agent.mode).readOnly : true, this.allowedCommands());
-    if (!allowedWithoutRedirects(e.action, e.resources, rules)) return false;
+    if (!onlyLooks(e.action, e.resources, rules)) return false;
     this.answered.add(e.requestId);
     agent.replyPermission(e.sessionId, e.requestId, 'once').catch(() => this.onAgentEvent(e)); // the author answers after all
     return true;

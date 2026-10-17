@@ -1233,6 +1233,20 @@ pane top (off by 0 pt).
   - Background conversations are judged as read-only, whatever their mode.
   - Verified (self-test `figures`, real model): that exact command ran
     without a question, and the turn went on to write the figure.
+- **Reading part of a file with sed:** models often read line ranges with
+  `sed -n '205,242p' file`. sed isn't a look command, since it can write (-i,
+  `w`), so it asked.
+  - The instructions now say to read part of a file with the read tool's
+    offset and limit, not sed, head or tail, and to search and list with the
+    tools. The shell can stop for approval; the tools never do.
+  - The app also answers for `sed -n` when the script is only line addresses
+    with `p`, applied to plain file names (`onlyLooks`, which also covers the
+    redirections above).
+  - `sed -i`, `w`, `e`, substitutions, `$(…)` and redirects into files still
+    ask.
+  - Verified (self-test `readtools`, Ask first, deepseek-v4-flash): "What do
+    lines 12 to 18 say?" used the read tool (lines 12–18), with no question.
+    An explicit `sed -n '12,14p' …` ran with no question.
 
 ### The assistant asks: multiple choice or free text
 

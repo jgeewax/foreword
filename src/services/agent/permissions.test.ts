@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allowedWithoutRedirects,
+  onlyLooks,
   describePermissions,
   NO_COMPILE_RULES,
   presetOf,
@@ -159,16 +159,25 @@ describe('redirections that write nothing', () => {
 
   it('answer for the author only when the commands would be allowed without them', () => {
     const lookOnly = ['ls -la . figures 2>&1', 'echo', 'cat style.typ 2>/dev/null'];
-    for (const rules of [ask, edit, ro]) expect(allowedWithoutRedirects('shell', lookOnly, rules)).toBe(true);
+    for (const rules of [ask, edit, ro]) expect(onlyLooks('shell', lookOnly, rules)).toBe(true);
     // Writing into a file, a command that isn't a look command, hidden commands, other actions: still ask.
     for (const cmd of ['ls > files.txt', 'ls 2>/dev/null > files.txt', 'python3 x.py 2>/dev/null', 'rm a 2>/dev/null', 'find . -delete 2>/dev/null', 'echo $(rm a) 2>/dev/null', 'typst compile main.typ 2>&1', 'sort a < b']) {
-      expect(allowedWithoutRedirects('shell', [cmd], edit), cmd).toBe(false);
+      expect(onlyLooks('shell', [cmd], edit), cmd).toBe(false);
     }
-    expect(allowedWithoutRedirects('edit', ['main.typ'], edit)).toBe(false);
-    expect(allowedWithoutRedirects('shell', [], edit)).toBe(false);
+    expect(onlyLooks('edit', ['main.typ'], edit)).toBe(false);
+    expect(onlyLooks('shell', [], edit)).toBe(false);
     // Commands the author allowed count too, but not in read-only modes.
-    expect(allowedWithoutRedirects('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, false, ['python3']))).toBe(true);
-    expect(allowedWithoutRedirects('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(false);
-    expect(allowedWithoutRedirects('shell', ['ls 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(true);
+    expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, false, ['python3']))).toBe(true);
+    expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(false);
+    expect(onlyLooks('shell', ['ls 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(true);
+  });
+
+  it('count sed printing line ranges as looking, and no other sed', () => {
+    for (const cmd of ["sed -n '205,242p' chapters/ch01_what_is_a_vector.typ", 'sed -n 10p main.typ', `sed -n "1,20p;40,$p" a.typ b.typ`, "sed -n '5,9p' main.typ 2>/dev/null"]) {
+      expect(onlyLooks('shell', [cmd], ask), cmd).toBe(true);
+    }
+    for (const cmd of ["sed -i 's/a/b/' main.typ", "sed -n '1,5w out.txt' main.typ", "sed -n '1,5p' main.typ > out.txt", "sed 's/a/b/' main.typ", "sed -n '1p' $(cat list)", "sed -n '1p;e rm x' a"]) {
+      expect(onlyLooks('shell', [cmd], ask), cmd).toBe(false);
+    }
   });
 });

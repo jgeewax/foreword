@@ -28,6 +28,10 @@ describe('buildInstructions', () => {
     expect(text).toMatch(/one to three plain sentences/);
   });
 
+  it('steers reading and searching to the tools, which never ask', () => {
+    expect(text).toMatch(/read tool with an offset and a limit \(not sed, head or tail\)/);
+  });
+
   it('asks for one sentence per line, only in what it writes', () => {
     expect(text).toMatch(/One sentence per line/);
     expect(text).toMatch(/even where the file's existing paragraphs are wrapped differently/);

@@ -190,18 +190,29 @@ export function withoutHarmlessRedirects(command: string): string {
 }
 
 /**
- * OpenCode asks about any command with a ">" in it, so "ls figures 2>/dev/null"
- * asks although it only looks. True when, without the redirections that write
- * nothing, the session's own rules allow every command in the request; the app
- * then answers for the author. Anything else that could hide a command
- * (`$(…)`, backticks) or still redirects keeps asking.
+ * `sed -n '205,242p' file`: printing lines, which only looks. Models reach for
+ * it to read part of a file. sed can also write (-i, the w command), so only
+ * line addresses with p, and plain file names, count.
  */
-export function allowedWithoutRedirects(action: string, resources: readonly string[], rules: readonly PermissionRule[]): boolean {
+const SED_PRINT = /^sed -n +(['"]?)\d+(,(\d+|\$))?p(;\d+(,(\d+|\$))?p)*\1( +[\w./-]+)+$/;
+
+/**
+ * Requests OpenCode asks about although they only look, which the app answers
+ * for the author:
+ * - with a ">" (OpenCode asks about any), when every redirection writes nothing
+ *   ("ls figures 2>/dev/null") and the session's own rules allow the commands
+ *   without them;
+ * - `sed -n` printing line ranges of files.
+ * Anything that could hide a command (`$(…)`, backticks) or still redirects
+ * keeps asking.
+ */
+export function onlyLooks(action: string, resources: readonly string[], rules: readonly PermissionRule[]): boolean {
   if (action !== 'shell' || !resources.length) return false;
   return resources.every((r) => {
     if (/\$\(|`/.test(r)) return false;
     const bare = withoutHarmlessRedirects(r);
-    return !/[<>]/.test(bare) && ruleEffect('shell', bare, rules) === 'allow';
+    if (/[<>]/.test(bare)) return false;
+    return SED_PRINT.test(bare) || ruleEffect('shell', bare, rules) === 'allow';
   });
 }
 
