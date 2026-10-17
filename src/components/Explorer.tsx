@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
+import { HistoryPanel } from './HistoryPanel';
 
 export function Explorer() {
   const ws = useStore(studio.store, (s) => s.workspace);
+  const view = useStore(studio.store, (s) => s.sidebar);
   const active = useStore(studio.store, (s) => s.active);
   const dirty = useStore(studio.store, (s) => s.dirty);
   const tree = useMemo(() => buildTree(ws?.files ?? []), [ws?.files]);
@@ -47,12 +49,21 @@ export function Explorer() {
   return (
     <section className="pane explorer">
       <header className="pane-header">
-        <span className="pane-title">{ws?.name ?? 'Explorer'}</span>
-        <button className="icon" title="Refresh" onClick={() => void studio.refreshFiles()}>
-          ↻
-        </button>
+        <div className="sidebar-tabs" role="tablist">
+          <button role="tab" aria-selected={view === 'files'} className={view === 'files' ? 'active' : ''} title="Files" onClick={() => studio.showSidebar('files')}>
+            {ws?.name ?? 'Files'}
+          </button>
+          <button role="tab" aria-selected={view === 'history'} className={view === 'history' ? 'active' : ''} title="Saved versions of the book" onClick={() => studio.showSidebar('history')}>
+            History
+          </button>
+        </div>
+        {view === 'files' && (
+          <button className="icon" title="Refresh" onClick={() => void studio.refreshFiles()}>
+            ↻
+          </button>
+        )}
       </header>
-      <div className="tree">{render(tree, 0)}</div>
+      {view === 'files' ? <div className="tree">{render(tree, 0)}</div> : <HistoryPanel />}
     </section>
   );
 }

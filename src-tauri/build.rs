@@ -32,6 +32,11 @@ fn main() {
             "agent_request",
             "agent_subscribe",
             "agent_stop",
+            "history_init",
+            "history_snapshot",
+            "history_list",
+            "history_changes",
+            "history_file",
         ]),
     ))
     .expect("failed to run tauri-build");

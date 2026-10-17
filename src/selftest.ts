@@ -358,6 +358,128 @@ async function optionsChecks() {
   return out;
 }
 
+/**
+ * History (TODO #8): automatic versions, the panel and diff, restores, and
+ * undoing an agent turn. Writes files: scratch book only.
+ */
+async function historyChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const h = studio.history;
+  const hs = () => studio.state.history;
+  await waitFor(() => ['ready', 'unavailable'].includes(hs().status), 30000, 'history');
+  out.start = { status: hs().status, error: hs().error, versions: hs().versions.length, latest: hs().versions[0] && { kind: hs().versions[0].kind, label: hs().versions[0].label } };
+  if (hs().status !== 'ready') return out;
+  const savedConfirm = h.confirm;
+  h.confirm = async () => true;
+  const file = 'chapters/ch1-vectors.typ';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const disk = async () => (await ipc.fsRead(file)).text;
+  const lastToast = () => studio.state.toast?.text ?? '';
+
+  // A save becomes a version once things are quiet.
+  const count = hs().versions.length;
+  const end = model.getFullModelRange().getEndPosition();
+  editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: '\nA sentence added by the history self-test.\n' }]);
+  const edited = model.getValue();
+  await studio.save(file);
+  const t0 = clock();
+  await waitFor(() => hs().versions.length > count && hs().versions[0].kind === 'save', 30000, 'save version').catch(() => {});
+  const saveVersion = hs().versions[0];
+  out.saveVersion = { label: saveVersion?.label, kind: saveVersion?.kind, files: saveVersion?.files, added: saveVersion?.added, afterMs: Math.round(clock() - t0) };
+  const before = hs().versions[1];
+
+  // Panel: expand the version, open the file's diff.
+  studio.showSidebar('history');
+  await sleep(400);
+  (document.querySelector('.history-row') as HTMLElement | null)?.click();
+  await waitFor(() => hs().open?.changes != null, 10000, 'changes').catch(() => {});
+  await sleep(200);
+  out.panel = { rows: document.querySelectorAll('.history-row').length, files: [...document.querySelectorAll('.history-file .history-path')].map((e) => e.textContent) };
+  (document.querySelector('.history-file') as HTMLElement | null)?.click();
+  await waitFor(() => !!hs().diff, 10000, 'diff').catch(() => {});
+  await sleep(1200);
+  out.diff = {
+    open: !!hs().diff,
+    path: hs().diff?.path,
+    beforeIsOriginal: hs().diff?.before === original,
+    afterIsEdited: hs().diff?.after === edited,
+    monacoDiff: !!document.querySelector('.history-diff .monaco-diff-editor'),
+    insertedLines: document.querySelectorAll('.history-diff .line-insert, .history-diff .char-insert').length,
+  };
+  try {
+    out.snapshotDiff = await ipc.previewSnapshot('history-diff', 'main');
+  } catch (e) {
+    out.snapshotDiff = errorMessage(e);
+  }
+  h.closeDiff();
+  await sleep(200);
+
+  // Restore the version before the edit: the file (and its open buffer) go back.
+  await h.restoreVersion(before);
+  await sleep(500);
+  out.restoreVersion = {
+    disk: (await disk()) === original,
+    buffer: model.getValue() === original,
+    dirty: !!studio.state.dirty[file],
+    latest: { kind: hs().versions[0]?.kind, label: hs().versions[0]?.label },
+    toast: lastToast(),
+  };
+
+  // One file from a version (as the diff's "Restore this file" does).
+  await h.restoreFile(saveVersion, file);
+  await sleep(500);
+  out.restoreFile = { disk: (await disk()) === edited, buffer: model.getValue() === edited, toast: lastToast() };
+
+  // Unsaved edits are never overwritten.
+  editor.pushUndoStop();
+  editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(model.getFullModelRange().getEndPosition()), text: 'unsaved' }]);
+  const dirtyText = model.getValue();
+  await h.restoreVersion(before);
+  await sleep(300);
+  out.unsavedBlocks = { buffer: model.getValue() === dirtyText, disk: (await disk()) === edited, toast: lastToast() };
+  editor.pushUndoStop();
+  model.undo();
+  await sleep(100);
+  out.undoneTyping = { buffer: model.getValue() === edited, dirty: !!studio.state.dirty[file] };
+  await h.restoreVersion(before);
+  await sleep(300);
+  out.cleanAgain = { disk: (await disk()) === original, dirty: !!studio.state.dirty[file] };
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    const policy = studio.state.settings.agentEdits;
+    studio.updateSettings({ agentEdits: 'allow' });
+    await studio.setMode('write');
+    studio.newSession();
+    const textBefore = await disk();
+    await askAgent(`Add one short sentence at the very end of ${file} saying that vectors can also be added geometrically, tip to tail. Edit the file directly.`);
+    await sleep(1500);
+    await waitFor(() => hs().versions[0]?.kind === 'agent', 15000, 'agent version').catch(() => {});
+    const agentVersion = hs().versions[0];
+    const agentChanged = (await disk()) !== textBefore;
+    out.agentTurn = { latest: { kind: agentVersion?.kind, label: agentVersion?.label, files: agentVersion?.files }, fileChanged: agentChanged };
+    if (agentVersion?.kind === 'agent') {
+      studio.showSidebar('history');
+      await sleep(300);
+      try {
+        out.snapshotPanel = await ipc.previewSnapshot('history-panel', 'main');
+      } catch (e) {
+        out.snapshotPanel = errorMessage(e);
+      }
+      await h.undoVersion(agentVersion);
+      await sleep(500);
+      out.undoAgent = { disk: (await disk()) === textBefore, buffer: model.getValue() === textBefore, latest: hs().versions[0]?.label, toast: lastToast() };
+    }
+    studio.updateSettings({ agentEdits: policy });
+  }
+  h.confirm = savedConfirm;
+  studio.showSidebar('files');
+  return out;
+}
+
 /** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
@@ -750,6 +872,10 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('style')) {
         log('style guide');
         result.styleGuide = await styleGuideChecks();
+      }
+      if (want('history')) {
+        log('history');
+        result.history = await historyChecks(true);
       }
       if (want('options')) {
         log('options mode');

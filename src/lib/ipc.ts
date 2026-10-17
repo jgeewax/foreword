@@ -16,6 +16,9 @@ export function errorMessage(e: unknown): string {
 
 export type WorkspaceInfo = { root: string; name: string; entry: string | null; files: string[] };
 export type FileContent = { text: string; hash: string };
+/** A snapshot in the book's history (app-owned Git repo, see history.rs). */
+export type Version = { id: string; parent: string | null; time: number; label: string; kind: string; files: number; added: number; deleted: number };
+export type FileChange = { path: string; status: 'A' | 'M' | 'D'; added: number | null; deleted: number | null };
 export type ToolInfo = { path: string | null; version: string | null };
 export type ToolsStatus = { tinymist: ToolInfo; opencode: ToolInfo };
 export type LaunchOptions = {
@@ -65,6 +68,15 @@ export const ipc = {
     invoke<AgentResponse>('agent_request', { method, path, body: body ?? null }),
   agentSubscribe: (onEvent: Channel<any>) => invoke<void>('agent_subscribe', { onEvent }),
   agentStop: () => invoke<void>('agent_stop'),
+
+  historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
+  /** `{files}` in the label becomes the names of the changed files. Null: nothing changed. */
+  historySnapshot: (kind: string, label: string, allowEmpty = false) => invoke<Version | null>('history_snapshot', { kind, label, allowEmpty }),
+  historyList: (limit: number) => invoke<Version[]>('history_list', { limit }),
+  /** Files that differ between two versions; `from` null = the version's parent. */
+  historyChanges: (from: string | null, to: string) => invoke<FileChange[]>('history_changes', { from, to }),
+  /** A file's text at a version, or null if it didn't exist then. */
+  historyFile: (id: string, path: string) => invoke<string | null>('history_file', { id, path }),
 };
 
 export { Channel };

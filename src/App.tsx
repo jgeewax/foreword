@@ -6,6 +6,7 @@ import { StatusBar, Toast, Toolbar, Welcome } from './components/Chrome';
 import { EditorPane } from './components/EditorPane';
 import { Explorer } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
+import { HistoryDiff } from './components/HistoryDiff';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
 import { zoomActionForKey } from './lib/zoom';
@@ -126,6 +127,7 @@ export function App() {
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
       {settingsOpen && <SettingsDialog />}
+      <HistoryDiff />
     </>
   );
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-history-init"
+description = "Enables the history_init command without any pre-configured scope."
+commands.allow = ["history_init"]
+
+[[permission]]
+identifier = "deny-history-init"
+description = "Denies the history_init command without any pre-configured scope."
+commands.deny = ["history_init"]

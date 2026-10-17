@@ -14,7 +14,7 @@
 
 - [x] setting for whether the model can make edits or not by default
 
-- [ ] a way to track history , maybe git? do lots of auto commits? or something else?
+- [x] a way to track history , maybe git? do lots of auto commits? or something else?
 
 - [x] advanced mode for discussion and planning before writing. equiv to like claude codes plan mode. extra verbose, clear with the narrative and plan in short form, then expand from there
 

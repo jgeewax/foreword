@@ -22,6 +22,7 @@ import {
 } from './project-settings';
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
+import { History, initialHistory, type HistoryState } from './history';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
@@ -99,6 +100,9 @@ export type StudioState = {
   exporting: boolean;
   /** WRITING_STYLE.md: whether it exists, and whether the user dismissed the setup prompt. */
   styleGuide: { exists: boolean; chars: number; dismissed: boolean };
+  history: HistoryState;
+  /** Left pane: the file tree or the book's history. */
+  sidebar: 'files' | 'history';
 };
 
 const initialState: StudioState = {
@@ -136,6 +140,8 @@ const initialState: StudioState = {
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false },
+  history: initialHistory,
+  sidebar: 'files',
 };
 
 const LAST_WORKSPACE = 'studio.lastWorkspace';
@@ -167,6 +173,18 @@ export class Studio {
   docs: Documents | null = null;
   agent: AgentAdapter | null = null;
   editor: monaco.editor.IStandaloneCodeEditor | null = null;
+  readonly history = new History({
+    get: () => this.state.history,
+    set: (patch) => {
+      this.store.set((s) => ({ history: { ...s.history, ...patch } }));
+      if ('diff' in patch) this.syncPreviewVisibility(); // the diff dialog must not be drawn under the preview
+    },
+    docs: () => this.docs,
+    agentRunning: () => this.state.agent.running,
+    report: (text, tone) => this.toast(text, tone),
+  });
+  /** The message of the agent turn in progress (names its history version). */
+  private turnMessage = '';
 
   private viewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>();
   private diagnostics = new Map<string, LspDiagnostic[]>();
@@ -288,6 +306,7 @@ export class Studio {
 
     await this.loadProjectSettings();
     await this.loadStyleGuide();
+    void this.history.start(this.historyExcludes());
     void this.startTypst();
     void this.startAgent();
 
@@ -299,8 +318,21 @@ export class Studio {
     if (active) await this.openFile(active);
   }
 
+  showSidebar(view: StudioState['sidebar']) {
+    this.store.set({ sidebar: view });
+    if (view === 'history') void this.history.refresh().catch(() => {});
+  }
+
+  /** Exported PDFs aren't part of the book's history. */
+  private historyExcludes(): string[] {
+    const dir = this.state.project.settings.outputDir?.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
+    const entry = this.state.workspace?.entry;
+    return [...(dir ? [`/${dir}/`] : []), ...(entry ? [`/${entry.replace(/\.typ$/, '')}.pdf`] : [])];
+  }
+
   private async closeWorkspace() {
     if (!this.state.workspace) return;
+    await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
     await Promise.allSettled([this.typst.stop(), this.agent?.stop(), ipc.previewClose()]);
@@ -343,6 +375,7 @@ export class Studio {
       this.pendingDisk.clear();
       void this.docs?.diskChanged(batch);
       void this.refreshFiles();
+      this.history.scheduleSave();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
       if (batch.includes(STYLE_GUIDE_FILE)) void this.loadStyleGuide({ updateSession: true });
     }, 120);
@@ -485,6 +518,7 @@ export class Studio {
     if (!path || !this.docs) return;
     try {
       await this.docs.save(path, opts);
+      this.history.scheduleSave();
     } catch (e) {
       this.toast(`Not saved: ${errorMessage(e)}`, 'error');
     }
@@ -554,7 +588,7 @@ export class Studio {
     const ok = this.state.preview.status !== 'error';
     // The preview is a native view above the page; hide it while a dialog is open
     // so the dialog isn't drawn underneath it.
-    void ipc.previewSetVisible(this.previewVisible && ok && !this.state.settingsOpen);
+    void ipc.previewSetVisible(this.previewVisible && ok && !this.state.settingsOpen && !this.state.history.diff);
   }
 
   private async showPreview() {
@@ -592,7 +626,10 @@ export class Studio {
   // ---- agent -----------------------------------------------------------------------
 
   private setAgent(patch: Partial<StudioState['agent']> | ((a: StudioState['agent']) => Partial<StudioState['agent']>)) {
+    const wasRunning = this.state.agent.running;
     this.store.set((s) => ({ agent: { ...s.agent, ...(typeof patch === 'function' ? patch(s.agent) : patch) } }));
+    // What the agent changed in this turn becomes one history version.
+    if (wasRunning && !this.state.agent.running) void this.history.afterAgent(this.turnMessage);
   }
 
   async startAgent() {
@@ -725,6 +762,9 @@ export class Studio {
       });
       return false;
     }
+    // Everything up to now is its own version, so the agent's changes can be undone separately.
+    await this.history.beforeAgent();
+    this.turnMessage = text;
     this.turnErrors.clear();
     // Options replace a passage: use the editor's selection (or cursor) when nothing is attached.
     if (state.mode === 'options' && !state.attachments.length) await this.attachSelection({ focus: false });

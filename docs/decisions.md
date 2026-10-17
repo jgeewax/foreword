@@ -241,6 +241,42 @@ bottom). It now adds the main webview's native safe-area inset, re-read on
 resize (full screen removes the title bar). Verified natively: preview top =
 pane top (off by 0 pt).
 
+### Book history (TODO #8)
+
+- **A snapshot repo owned by the app, separate from the author's Git.** Each workspace
+  gets a Git repo under `<app data>/history/<sha256(root)[..16]>.git`, with the
+  book folder as its work tree (`--git-dir`/`--work-tree`). The author's own
+  `.git` is never read or written. Git ignores `.git` entries anyway, and a test
+  checks the book's `.git` is byte-for-byte untouched. Snapshots respect the
+  book's `.gitignore`, and also exclude the PDF output and our temp files.
+- **Isolated from the author's Git config.** `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_CONFIG_NOSYSTEM=1`, hooks off, signing off, and no `GIT_DIR`-style env vars.
+  Without this, a global pre-commit hook or commit signing would run on every
+  snapshot. Arguments are arrays, and version ids are checked to be hex before
+  they reach git.
+- **When versions are recorded:**
+  - on open ("Started keeping history", or "Changed outside Typst Studio: …");
+  - 10 s after the last save or disk change ("Edited {files}");
+  - right before each agent turn, so the author's own edits are separate;
+  - right after each agent turn (`Agent: …` with the message, only if files changed);
+  - named versions, which are always recorded, even with no changes;
+  - before and after every restore.
+  Disk changes during an agent turn are folded into that turn's version, so
+  edits the author saves mid-turn are attributed to the agent (Phase 4 can
+  split them).
+- **Restores never use git on the work tree** (no checkout/reset). The frontend
+  reads blobs (`history_file`) and writes them through the normal
+  expected-hash `fs_write`.
+  - Open buffers with unsaved edits are skipped and named.
+  - Clean open buffers are reloaded as an undoable edit.
+  - "Undo these changes" (agent versions) only reverts files that are still
+    exactly as the agent left them.
+  - Files that would need deleting (added later, or created by the agent) are
+    left in place and named. There's no delete command yet; moving files to the
+    Trash is a later option.
+- No pruning yet: history grows with the book (text compresses well). Moving
+  the book folder starts a new history (the key is its path).
+
 ### Helper processes, revised
 
 The child-process registry is now per app instance (`children-<pid>.json`).

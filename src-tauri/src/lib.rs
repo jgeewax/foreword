@@ -2,6 +2,7 @@ mod agent;
 mod children;
 mod discover;
 mod error;
+mod history;
 mod logs;
 mod lsp;
 mod preview;
@@ -29,6 +30,8 @@ pub struct AppState {
     /// Writer queue to Tinymist's stdin; separate so `typst_send` can stay synchronous.
     typst_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>,
     agent: tokio::sync::Mutex<Option<agent::AgentServer>>,
+    /// Serializes history (Git) operations on the snapshot repo.
+    history: tokio::sync::Mutex<()>,
 }
 
 impl AppState {
@@ -349,6 +352,11 @@ pub fn run() {
             agent::agent_request,
             agent::agent_subscribe,
             agent::agent_stop,
+            history::history_init,
+            history::history_snapshot,
+            history::history_list,
+            history::history_changes,
+            history::history_file,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Typst Studio")
