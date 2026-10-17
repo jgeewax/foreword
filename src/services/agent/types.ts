@@ -22,7 +22,12 @@ export type AgentEvent =
   | { type: 'session-renamed'; sessionId: string; title: string }
   | { type: 'turn-started'; sessionId: string }
   | { type: 'turn-finished'; sessionId: string; outcome: 'succeeded' | 'failed' | 'interrupted' | 'stopped'; error?: string }
+  | { type: 'step-started'; sessionId: string }
   | { type: 'step-finished'; sessionId: string; finish: string }
+  | { type: 'reasoning-delta'; sessionId: string; messageId: string; ordinal: number; delta: string }
+  | { type: 'reasoning-ended'; sessionId: string; messageId: string; ordinal: number; text: string }
+  /** The provider failed (busy, rate limit): OpenCode tries again at `at` (ms since 1970). */
+  | { type: 'retry-scheduled'; sessionId: string; attempt: number; at: number; message: string }
   | { type: 'text-delta'; sessionId: string; messageId: string; ordinal: number; delta: string }
   | { type: 'text-ended'; sessionId: string; messageId: string; ordinal: number; text: string }
   | { type: 'tool-started'; sessionId: string; callId: string; name: string }

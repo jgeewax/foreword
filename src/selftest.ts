@@ -7,6 +7,7 @@ import { monaco } from './editor/monaco';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { menuRecorder, type MenuEntry } from './lib/context-menu';
+import { rawEventTap } from './services/agent/opencode';
 import { parseOptions } from './services/agent/options-mode';
 import { PRESETS } from './services/agent/permissions';
 import { TEMPLATES } from './templates';
@@ -1841,6 +1842,72 @@ async function exportChecks() {
   return out;
 }
 
+/** The chat while a turn runs: the progress line's phases, the model's thinking, then folded thinking after. */
+async function thinkingChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const phases: string[] = [];
+  const off = studio.store.subscribe(() => {
+    const a = studio.state.agent.activity;
+    const key = a ? `${a.phase}${a.label ? `: ${a.label}` : ''}` : 'none';
+    if (phases[phases.length - 1] !== key) phases.push(key);
+  });
+  await studio.setMode('plan');
+  studio.newSession();
+  const shots: string[] = [];
+  const done = askAgent('Think briefly, then read main.typ and the first chapter it includes, and tell me in two sentences what the book is about.');
+  // Pictures while it works: once something is showing, and once a tool runs.
+  await waitFor(() => document.querySelector('.activity-line'), 10000, 'activity line').catch(() => {});
+  await sleep(300);
+  shots.push(await snap('thinking-1'));
+  await waitFor(() => studio.state.agent.activity?.phase === 'tool' || !studio.state.agent.running, 60000, 'tool').catch(() => {});
+  await sleep(200);
+  shots.push(await snap('thinking-2'));
+  const reply = await done;
+  off();
+  await studio.setMode('write');
+  await sleep(500);
+  shots.push(await snap('thinking-3'));
+  // Reasoning, in the shape OpenCode sends it (the model above may or may not have reasoned).
+  const emit = (e: Record<string, unknown>) => (studio as unknown as { onAgentEvent(e: unknown): void }).onAgentEvent({ sessionId: studio.state.agent.sessionId, ...e });
+  emit({ type: 'turn-started' });
+  emit({ type: 'step-started' });
+  const words = 'The author wants a short summary. I should read main.typ first to see which chapters it includes, then skim the first chapter, and answer in two sentences without changing anything.'.split(' ');
+  for (const w of words) emit({ type: 'reasoning-delta', messageId: 'selftest', ordinal: 0, delta: `${w} ` });
+  await sleep(400);
+  const live = { head: document.querySelector('.thinking.live .thinking-head')?.textContent, tail: document.querySelector('.thinking-tail')?.textContent?.slice(-40) };
+  shots.push(await snap('thinking-live'));
+  await sleep(1100);
+  emit({ type: 'reasoning-ended', messageId: 'selftest', ordinal: 0, text: words.join(' ') });
+  emit({ type: 'turn-finished', outcome: 'succeeded' });
+  await sleep(500);
+  const thinking = studio.state.agent.items.filter((i) => i.kind === 'thinking');
+  return {
+    live,
+    reply: reply.slice(0, 160),
+    phases,
+    thinking: thinking.map((t) => (t.kind === 'thinking' ? { done: t.done, seconds: t.ended && Math.round((t.ended - t.started) / 1000), text: t.text.slice(0, 80) } : null)),
+    folded: [...document.querySelectorAll('.thinking .thinking-head')].map((e) => e.textContent),
+    lineGone: !document.querySelector('.activity-line'),
+    shots,
+  };
+}
+
+/** One real turn: which OpenCode event types arrive, with one sample of each (for the chat's progress display). */
+async function eventProbe() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const seen = new Map<string, unknown>();
+  rawEventTap.fn = (raw) => {
+    const type = raw?.type ?? (raw?.$connection ? '$connection' : '?');
+    if (!seen.has(type)) seen.set(type, JSON.stringify(raw?.data ?? raw).slice(0, 400));
+  };
+  await studio.setMode('plan');
+  studio.newSession();
+  const reply = await askAgent('Think it through briefly, then read main.typ and tell me its first heading in one sentence.');
+  await studio.setMode('write');
+  rawEventTap.fn = undefined;
+  return { model: studio.state.agent.model, reply: reply.slice(0, 200), types: Object.fromEntries(seen) };
+}
+
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
 async function tabChecks() {
   const out: Record<string, unknown> = {};
@@ -2418,6 +2485,8 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
+    if (launch.selftestAgent && want('events')) result.events = await eventProbe();
+    if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

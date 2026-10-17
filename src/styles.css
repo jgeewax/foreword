@@ -105,6 +105,19 @@ button.indicator:hover { background: var(--bg-3); }
 .sdot.busy { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .sdot.off { background: transparent; box-shadow: inset 0 0 0 1px var(--muted); }
 @keyframes pulse { 50% { opacity: 0.35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(4px); } }
+/* Text with a light sweeping across it: something is happening. */
+.shimmer {
+  background: linear-gradient(90deg, var(--muted) 35%, var(--fg) 50%, var(--muted) 65%) 0 0 / 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer, .activity-spinner { animation: none !important; }
+  .shimmer { color: var(--muted); background: none; }
+}
 .brand { font-weight: 600; }
 .sep-dot { color: var(--muted); }
 
@@ -541,3 +554,16 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .mode-name { font-weight: 600; }
 .mode-description { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 .plan-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
+
+/* The chat's live progress line, and the model's reasoning. */
+.activity-line { display: flex; align-items: center; gap: 8px; padding: 6px 2px 2px; font-size: 12.5px; animation: rise-in 0.18s ease-out; }
+.activity-spinner { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin 0.75s linear infinite; }
+.activity-line.phase-retrying .activity-spinner { border-top-color: var(--warn); }
+.activity-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-time { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.thinking { font-size: 12px; color: var(--muted); animation: rise-in 0.18s ease-out; }
+.thinking-head { background: none; border: none; padding: 0; color: var(--muted); font-size: 12px; }
+button.thinking-head:hover { color: var(--fg); }
+.thinking-text { margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); white-space: pre-wrap; line-height: 1.45; }
+/* While it streams, only the last few lines, fading out at the top. */
+.thinking-tail { margin-top: 3px; padding-left: 10px; border-left: 2px solid var(--border); max-height: 4.4em; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; line-height: 1.45; white-space: pre-wrap; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 45%); mask-image: linear-gradient(to bottom, transparent, #000 45%); }

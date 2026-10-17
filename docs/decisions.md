@@ -775,6 +775,29 @@ pane top (off by 0 pt).
 - A press can reach both the page and the native menu (as zoom found), so the
   same tab command within 300 ms runs once.
 
+### Showing that the assistant is working
+
+- **Live events** (recorded from OpenCode 2.0.20 with a real turn, through a
+  raw-event tap in the self-tests):
+  - `session.step.started` (a model call starts);
+  - `session.reasoning.started` / `.delta` / `.ended` (the model's thinking);
+  - `session.tool.input.started` (the tool chosen) and `session.tool.called`
+    (its input);
+  - the text events;
+  - `session.retry.scheduled` (`attempt`, `at`, and an error such as a 429
+    from a busy free model). Before this, a retry looked like the app hanging.
+- **The progress line** at the end of the chat, from the moment Send is
+  pressed: a spinner, a label with a light sweeping across it, and the time so
+  far. The label is Sending…, Thinking…, the tool's own label (Reading …),
+  Writing…, or "The model is busy. Trying again in 8 s (attempt 2)" with a
+  countdown and the provider's message as a tooltip. It's hidden while a
+  thinking block already says "Thinking…".
+- **Thinking blocks:** while the model reasons, its last lines stream in
+  faintly, fading out at the top. When it's done they fold to "Thought for
+  4 s", which opens the full text. Saved conversations show them folded (from
+  the reasoning parts' times).
+- `prefers-reduced-motion` stops the spinner and the sweep.
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and

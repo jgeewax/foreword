@@ -26,6 +26,9 @@ async function call<T = any>(method: string, path: string, body?: unknown): Prom
   throw new AgentApiError(res.status, `${message}${res.body?._tag ? ` (${res.body._tag})` : ''}`);
 }
 
+/** Every raw OpenCode event, for self-tests that check what the server sends. */
+export const rawEventTap: { fn?: (raw: any) => void } = {};
+
 export class OpenCodeAdapter implements AgentAdapter {
   private listeners = new Set<(e: AgentEvent) => void>();
 
@@ -35,6 +38,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     await ipc.agentStart();
     const channel = new Channel<any>();
     channel.onmessage = (raw) => {
+      rawEventTap.fn?.(raw);
       const event = mapOpenCodeEvent(raw);
       if (event) for (const l of this.listeners) l(event);
     };

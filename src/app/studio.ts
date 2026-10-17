@@ -26,6 +26,7 @@ import {
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
+import { toolActivity } from './tool-labels';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
@@ -57,9 +58,24 @@ import { TypstService } from '../services/typst';
 
 export type ToastAction = { label: string; run: () => void };
 
+/** A running turn's progress: sending, thinking, using a tool, writing, or waiting to retry a busy model. */
+export type Activity = {
+  phase: 'sending' | 'thinking' | 'tool' | 'writing' | 'retrying';
+  /** When the turn started (ms), for the elapsed time. */
+  since: number;
+  /** For a tool: what it's doing ("Reading chapters/ch1.typ"). */
+  label?: string;
+  /** For a retry: when (ms since 1970), which attempt, and why. */
+  retryAt?: number;
+  attempt?: number;
+  reason?: string;
+};
+
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
   | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
+  /** The model's reasoning, as it streams (shown faintly, then folded to "Thought for 4 s"). */
+  | { kind: 'thinking'; id: string; text: string; done: boolean; started: number; ended?: number }
   | {
       kind: 'tool';
       id: string;
@@ -134,6 +150,8 @@ export type StudioState = {
     /** Input tokens of the latest call: how full the context window is. */
     contextTokens: number | null;
     compacting: boolean;
+    /** What the running turn is doing right now (the chat's live progress line). */
+    activity: Activity | null;
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error'; actions?: ToastAction[] } | null;
@@ -210,6 +228,7 @@ const initialState: StudioState = {
     tasks: [],
     contextTokens: null,
     compacting: false,
+    activity: null,
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
@@ -2001,12 +2020,22 @@ export class Studio {
     this.store.set((s) => ({ agent: { ...s.agent, ...(typeof patch === 'function' ? patch(s.agent) : patch) } }));
     // What the agent changed in this turn becomes one history version.
     if (wasRunning && !this.state.agent.running) {
+      // The turn is over: no progress line, and no thinking left open.
+      this.store.set((s) => ({
+        agent: { ...s.agent, activity: null, items: s.agent.items.map((it) => (it.kind === 'thinking' && !it.done ? { ...it, done: true, ended: Date.now() } : it)) },
+      }));
       void this.afterReviewTurn();
       void this.loadTasks();
       void this.refreshContextSize();
       void this.history.afterAgent(this.turnMessage).then(() => this.refreshAiEdits());
       void this.code.afterAgentTurn();
     }
+  }
+
+  /** What the running turn is doing now (keeps the turn's start time). */
+  private setActivity(next: Omit<Activity, 'since'>) {
+    if (!this.state.agent.running) return;
+    this.setAgent((a) => ({ activity: { since: a.activity?.since ?? Date.now(), ...next } }));
   }
 
   async startAgent() {
@@ -2316,6 +2345,7 @@ export class Studio {
     this.setAgent((a) => ({
       running: true,
       attachments: [],
+      activity: { phase: 'sending', since: Date.now() },
       items: [...a.items, { kind: 'user', id: uid('u'), text, attachments: attachments.map((x) => x.label) }],
     }));
     try {
@@ -2478,14 +2508,46 @@ export class Studio {
           this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Stopped.' });
         }
         break;
+      case 'step-started':
+        this.setActivity({ phase: 'thinking' });
+        break;
       case 'step-finished':
         void this.checkTurnEnded(1500);
+        break;
+      case 'reasoning-delta': {
+        const id = `${e.messageId}:r${e.ordinal}`;
+        this.setActivity({ phase: 'thinking' });
+        this.setAgent((a) => {
+          const idx = a.items.findIndex((it) => it.id === id);
+          if (idx < 0) return { items: [...a.items, { kind: 'thinking', id, text: e.delta, done: false, started: Date.now() }] };
+          const items = a.items.slice();
+          const it = items[idx] as Extract<ChatItem, { kind: 'thinking' }>;
+          items[idx] = { ...it, text: it.text + e.delta };
+          return { items };
+        });
+        break;
+      }
+      case 'reasoning-ended': {
+        const id = `${e.messageId}:r${e.ordinal}`;
+        const now = Date.now();
+        this.setAgent((a) =>
+          a.items.some((it) => it.id === id)
+            ? { items: a.items.map((it) => (it.id === id && it.kind === 'thinking' ? { ...it, text: e.text || it.text, done: true, ended: now } : it)) }
+            : e.text.trim()
+              ? { items: [...a.items, { kind: 'thinking', id, text: e.text, done: true, started: now, ended: now }] }
+              : {},
+        );
+        break;
+      }
+      case 'retry-scheduled':
+        this.setActivity({ phase: 'retrying', retryAt: e.at, attempt: e.attempt, reason: e.message });
         break;
       case 'session-renamed':
         this.setAgent({ title: e.title });
         break;
       case 'text-delta': {
         const id = `${e.messageId}:${e.ordinal}`;
+        if (this.state.agent.activity?.phase !== 'writing') this.setActivity({ phase: 'writing' });
         this.setAgent((a) => {
           const idx = a.items.findIndex((it) => it.id === id);
           if (idx < 0) return { items: [...a.items, { kind: 'assistant', id, text: e.delta, done: false, ...this.newOptionsState() }] };
@@ -2507,14 +2569,17 @@ export class Studio {
         break;
       }
       case 'tool-started':
+        this.setActivity({ phase: 'tool', label: toolActivity(e.name, undefined) });
         this.toolCalls.set(e.callId, { name: e.name });
         this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '' });
         break;
       case 'tool-called':
         this.toolCalls.set(e.callId, { name: this.toolCalls.get(e.callId)?.name ?? '', input: e.input });
+        this.setActivity({ phase: 'tool', label: toolActivity(this.toolCalls.get(e.callId)!.name, e.input) });
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, summary: summarizeToolInput(e.input) } : it));
         break;
       case 'tool-succeeded': {
+        this.setActivity({ phase: 'thinking' });
         const call = this.toolCalls.get(e.callId);
         this.toolCalls.delete(e.callId);
         const read = call && this.state.workspace ? readOf(this.state.workspace.root, call.name, call.input, e.output) : null;
@@ -2532,6 +2597,7 @@ export class Studio {
         break;
       }
       case 'tool-failed':
+        this.setActivity({ phase: 'thinking' });
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, status: 'failed', detail: e.error } : it));
         break;
       case 'permission-asked':

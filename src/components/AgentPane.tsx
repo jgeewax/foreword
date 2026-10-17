@@ -97,6 +97,69 @@ const itemMenu = (text: string, what: string) =>
     { label: `Copy ${what}`, action: () => studio.copy(text) },
   ]);
 
+/** The model's reasoning: its last lines while it streams, then folded to "Thought for 4 s". */
+function Thinking({ item }: { item: Extract<ChatItem, { kind: 'thinking' }> }) {
+  const [open, setOpen] = useState(false);
+  if (!item.done) {
+    return (
+      <div className="thinking live">
+        <div className="thinking-head shimmer">Thinking…</div>
+        <div className="thinking-tail">
+          <div>{item.text}</div>
+        </div>
+      </div>
+    );
+  }
+  const secs = item.ended && item.started ? Math.max(1, Math.round((item.ended - item.started) / 1000)) : null;
+  return (
+    <div className="thinking">
+      <button className="thinking-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {secs ? `Thought for ${secs} s` : 'Thought'} <span aria-hidden>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="thinking-text">{item.text}</div>}
+    </div>
+  );
+}
+
+const clockTime = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+
+/** While a turn runs: what it's doing now, animated, with the time so far. */
+function ActivityLine() {
+  const running = useStore(studio.store, (s) => s.agent.running);
+  const activity = useStore(studio.store, (s) => s.agent.activity);
+  // A live thinking block already says "Thinking…".
+  const thinkingShown = useStore(studio.store, (s) => {
+    const last = s.agent.items[s.agent.items.length - 1];
+    return last?.kind === 'thinking' && !last.done;
+  });
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(t);
+  }, [running]);
+  if (!running || !activity || (thinkingShown && activity.phase === 'thinking')) return null;
+  const elapsed = Math.max(0, Math.floor((now - activity.since) / 1000));
+  const wait = activity.retryAt ? Math.max(0, Math.ceil((activity.retryAt - now) / 1000)) : 0;
+  const label =
+    activity.phase === 'sending'
+      ? 'Sending…'
+      : activity.phase === 'thinking'
+        ? 'Thinking…'
+        : activity.phase === 'tool'
+          ? `${activity.label ?? 'Working'}…`
+          : activity.phase === 'writing'
+            ? 'Writing…'
+            : `The model is busy. Trying again${wait ? ` in ${wait} s` : ' now'}${activity.attempt ? ` (attempt ${activity.attempt})` : ''}`;
+  return (
+    <div className={`activity-line phase-${activity.phase}`} role="status" aria-live="polite" title={activity.reason}>
+      <span className="activity-spinner" aria-hidden />
+      <span className="activity-label shimmer">{label}</span>
+      <span className="activity-time">{clockTime(elapsed)}</span>
+    </div>
+  );
+}
+
 function Item({ item }: { item: ChatItem }) {
   return (
     <div className="item-wrap" onContextMenu={item.kind === 'user' || item.kind === 'assistant' ? itemMenu(item.text, 'Message') : item.kind === 'tool' ? itemMenu(`${item.name} ${item.summary}\n${item.detail}`, 'Details') : undefined}>
@@ -122,6 +185,8 @@ function ItemBody({ item }: { item: ChatItem }) {
           <div className="msg-text">{item.text}</div>
         </div>
       );
+    case 'thinking':
+      return <Thinking item={item} />;
     case 'assistant':
       if (item.options) return <OptionsReply item={item} />;
       return (
@@ -494,7 +559,7 @@ export function AgentPane() {
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [agent.items]);
+  }, [agent.items, agent.activity]);
 
   return (
     <section className="pane agent-pane">
@@ -537,6 +602,7 @@ export function AgentPane() {
           {agent.items.map((item) => (
             <Item key={item.id} item={item} />
           ))}
+          <ActivityLine />
         </div>
         <Composer />
       </div>

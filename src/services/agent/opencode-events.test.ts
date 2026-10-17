@@ -74,6 +74,28 @@ describe('mapOpenCodeEvent (synthetic)', () => {
     expect(mapOpenCodeEvent({ type: 'session.execution.interrupted', data: { sessionID: 's' } })).toMatchObject({ outcome: 'interrupted' });
   });
 
+  it('maps thinking and retries (as recorded from OpenCode 2.0.20)', () => {
+    const m = 'msg_1';
+    expect(mapOpenCodeEvent({ type: 'session.step.started', data: { sessionID: 's', assistantMessageID: m } })).toEqual({ type: 'step-started', sessionId: 's' });
+    expect(mapOpenCodeEvent({ type: 'session.reasoning.delta', data: { sessionID: 's', assistantMessageID: m, ordinal: 0, delta: 'The task' } })).toEqual({
+      type: 'reasoning-delta',
+      sessionId: 's',
+      messageId: m,
+      ordinal: 0,
+      delta: 'The task',
+    });
+    expect(mapOpenCodeEvent({ type: 'session.reasoning.ended', data: { sessionID: 's', assistantMessageID: m, ordinal: 0, text: 'The task: read it.' } })).toMatchObject({
+      type: 'reasoning-ended',
+      text: 'The task: read it.',
+    });
+    expect(
+      mapOpenCodeEvent({
+        type: 'session.retry.scheduled',
+        data: { sessionID: 's', attempt: 2, at: 1792230262146, error: { type: 'provider.rate-limit', message: 'Upstream request failed: Endpoint is unavailable.', status: 429 } },
+      }),
+    ).toEqual({ type: 'retry-scheduled', sessionId: 's', attempt: 2, at: 1792230262146, message: 'Upstream request failed: Endpoint is unavailable.' });
+  });
+
   it('ignores heartbeats and unrelated events', () => {
     expect(mapOpenCodeEvent(null)).toBeNull();
     expect(mapOpenCodeEvent({ type: 'project.updated', data: {} })).toBeNull();

@@ -25,8 +25,22 @@ export function mapOpenCodeEvent(raw: any): AgentEvent | null {
       return { type: 'turn-started', sessionId };
     case 'session.renamed':
       return { type: 'session-renamed', sessionId, title: str(d.title) };
+    case 'session.step.started':
+      return { type: 'step-started', sessionId };
     case 'session.step.ended':
       return { type: 'step-finished', sessionId, finish: str(d.finish) };
+    case 'session.reasoning.delta':
+      return { type: 'reasoning-delta', sessionId, messageId: str(d.assistantMessageID), ordinal: d.ordinal ?? 0, delta: str(d.delta) };
+    case 'session.reasoning.ended':
+      return { type: 'reasoning-ended', sessionId, messageId: str(d.assistantMessageID), ordinal: d.ordinal ?? 0, text: str(d.text) };
+    case 'session.retry.scheduled':
+      return {
+        type: 'retry-scheduled',
+        sessionId,
+        attempt: typeof d.attempt === 'number' ? d.attempt : 1,
+        at: typeof d.at === 'number' ? d.at : Date.now(),
+        message: str(d.error?.message) || str(d.error?.type) || 'The model is busy',
+      };
     case 'session.text.delta':
       return { type: 'text-delta', sessionId, messageId: str(d.assistantMessageID), ordinal: d.ordinal ?? 0, delta: str(d.delta) };
     case 'session.text.ended':

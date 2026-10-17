@@ -46,7 +46,14 @@ export function splitUserText(text: string): { text: string; attachments: string
   return { text: text.replace(CONTEXT_TAIL, ''), attachments };
 }
 
-type ContextPart = { type: string; text?: string; name?: string; id?: string; state?: { status?: string; input?: Record<string, unknown>; content?: { text?: string }[]; error?: string } };
+type ContextPart = {
+  type: string;
+  text?: string;
+  name?: string;
+  id?: string;
+  state?: { status?: string; input?: Record<string, unknown>; content?: { text?: string }[]; error?: string };
+  time?: { created?: number; completed?: number };
+};
 type ContextMessage = {
   id: string;
   type: string;
@@ -89,6 +96,8 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
       (m.content ?? []).forEach((part, i) => {
         if (part.type === 'text' && part.text?.trim()) {
           items.push({ kind: 'assistant', id: `${m.id}:${i}`, text: part.text, done: true });
+        } else if (part.type === 'reasoning' && part.text?.trim()) {
+          items.push({ kind: 'thinking', id: `${m.id}:r${i}`, text: part.text, done: true, started: part.time?.created ?? 0, ended: part.time?.completed });
         } else if (part.type === 'tool') {
           const status = part.state?.status;
           const output = part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '';

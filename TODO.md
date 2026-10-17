@@ -68,7 +68,7 @@
 
 - [x] in history, i want to understand the delta from one version/commit to the next
 
-- [ ] add thinking animations, something to the user know things are happening in the ai chatbox
+- [x] add thinking animations, something to the user know things are happening in the ai chatbox
 
 - [ ] less engineery tool calls (read/grep => Reading Chapter 4 (lines 1-200) / Searching for "xyz")
 
