@@ -50,3 +50,7 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Pinned environments: a requirements.txt / package.json next to the book, set up in a per-book virtualenv.
 - Test the whole book in CI: a small CLI that runs every example and fails on mismatches (same rules as code.typ).
 - More languages: TypeScript (deno/tsx), Go, Rust, C, Java (compile, then run).
+
+## Selection and context
+- "Selected in preview" for images and figures: clicking a figure in the preview attaches its #figure call.
+- Attach a whole file or chapter to the chat by dragging it from the file tree onto the message box.

@@ -31,6 +31,7 @@ import { message } from '@tauri-apps/plugin-dialog';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
 import { referencesTo, removeIncludes, updateReferences } from './references';
+import { findInSource, findPartial } from '../editor/find-text';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -59,6 +60,9 @@ export type ChatItem =
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt: string } };
 
 export type Attachment = { id: string; label: string; selection: SourceSelection };
+
+/** Identifies a selection for "leave it out" (same place and same text). */
+const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string };
 
@@ -98,6 +102,10 @@ export type StudioState = {
     running: boolean;
     items: ChatItem[];
     attachments: Attachment[];
+    /** The current selection (editor, or mapped from the preview): sent with each message unless dismissed. */
+    selection: { attachment: Attachment; from: 'editor' | 'preview' } | null;
+    /** A selection the author dismissed for now (key: label + text; until it changes). */
+    selectionDismissed: string | null;
     /** Write (default), Plan (discuss and outline) or Options (three versions to pick from). */
     mode: AgentMode;
   };
@@ -151,6 +159,8 @@ const initialState: StudioState = {
     running: false,
     items: [],
     attachments: [],
+    selection: null,
+    selectionDismissed: null,
     mode: 'write',
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
@@ -281,7 +291,11 @@ export class Studio {
         },
       }));
     });
-    this.typst.on('scrollSource', (jump) => void this.revealSource(jump));
+    this.typst.on('scrollSource', (jump) => {
+      // While mapping a preview selection, jumps are caught, not shown.
+      if (this.jumpCatcher) return this.jumpCatcher(jump);
+      void this.revealSource(jump);
+    });
     this.typst.on('closed', () => {
       if (this.store.get().workspace) {
         this.store.set({ preview: { status: 'error', error: 'Tinymist stopped. Editing still works; restart the preview to continue.' } });
@@ -301,6 +315,7 @@ export class Studio {
     void listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
+      if (e.payload?.tag === 'selection') void this.previewSelection(e.payload as { text: string; end?: boolean });
     });
     void listen<number[]>('perf:preview-paint', (e) => {
       this.perf.previewPainted(e.payload);
@@ -822,6 +837,59 @@ export class Studio {
       () => this.toast(what),
       (e) => this.toast(`Couldn't copy: ${errorMessage(e)}`, 'error'),
     );
+  }
+
+  private jumpCatcher: ((jump: SourceJump) => void) | null = null;
+
+  /** Click a marked text run in the preview and catch where Tinymist says it comes from. */
+  private async sourceOf(which: 'start' | 'end'): Promise<SourceJump | null> {
+    const jump = new Promise<SourceJump | null>((resolve) => {
+      const timer = window.setTimeout(() => resolve(null), 1500);
+      this.jumpCatcher = (j) => {
+        clearTimeout(timer);
+        resolve(j);
+      };
+    });
+    await ipc.previewEval(
+      `(() => { const el = document.querySelector('[data-studio-sel="${which}"]'); if (el) { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + 1, clientY: r.top + r.height / 2 })); } })()`,
+    );
+    const result = await jump;
+    this.jumpCatcher = null;
+    return result;
+  }
+
+  /**
+   * Text selected in the preview: find it in the source (where the preview's
+   * click-to-source mapping points, then the exact text nearby) and select it
+   * in the editor, so it goes with the next chat message.
+   */
+  private async previewSelection(report: { text: string; end?: boolean }) {
+    if (!report.text.trim() || this.jumpCatcher) return;
+    const start = await this.sourceOf('start');
+    const end = report.end ? await this.sourceOf('end') : null;
+    const root = this.state.workspace?.root;
+    if (!start?.start || !root || !start.filepath.startsWith(root + '/')) return;
+    const path = start.filepath.slice(root.length + 1);
+    this.suppressSyncUntil = performance.now() + 800;
+    await this.openFile(path);
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!editor || !model || this.state.active !== path) return;
+    const a = model.getOffsetAt({ lineNumber: start.start[0] + 1, column: start.start[1] + 1 });
+    const sameFile = end?.start && end.filepath === start.filepath;
+    const b = sameFile ? model.getOffsetAt({ lineNumber: end!.end![0] + 1, column: end!.end![1] + 1 }) : a;
+    // Look for the text around where the preview says it starts.
+    const from = model.getOffsetAt({ lineNumber: Math.max(1, start.start[0] - 2), column: 1 });
+    const toLine = Math.min(model.getLineCount(), (sameFile ? end!.start![0] : start.start[0]) + 4);
+    const to = model.getOffsetAt({ lineNumber: toLine, column: model.getLineMaxColumn(toLine) });
+    const windowText = model.getValue().slice(from, to);
+    const found = findInSource(windowText, report.text, a - from) ?? findPartial(windowText, report.text, a - from);
+    const [s0, s1] = found ? [from + found[0], from + found[1]] : [Math.min(a, b), Math.max(a, b, model.getOffsetAt({ lineNumber: start.start[0] + 1, column: model.getLineMaxColumn(start.start[0] + 1) }))];
+    const range = monaco.Range.fromPositions(model.getPositionAt(s0), model.getPositionAt(s1));
+    this.selectionFrom = 'preview';
+    editor.setSelection(range);
+    editor.revealRangeInCenterIfOutsideViewport(range);
+    this.onEditorSelection();
   }
 
   /** Right-click in the preview (reported by the preview webview). */
@@ -1348,6 +1416,57 @@ export class Studio {
     if (focus) this.events.emit('focus-composer');
   }
 
+  private selectionTimer: number | undefined;
+  /** Set while a preview selection is being mapped, so it's labelled as coming from the preview. */
+  private selectionFrom: 'editor' | 'preview' = 'editor';
+
+  /** The editor's selection changed: keep the chat's live selection in step (debounced). */
+  onEditorSelection() {
+    clearTimeout(this.selectionTimer);
+    this.selectionTimer = window.setTimeout(() => void this.captureLiveSelection(), 150);
+  }
+
+  private async captureLiveSelection() {
+    const path = this.state.active;
+    const editor = this.editor;
+    const model = editor?.getModel();
+    const range = editor?.getSelection();
+    const from = this.selectionFrom;
+    this.selectionFrom = 'editor';
+    if (!path || !model || !range || range.isEmpty()) {
+      if (this.state.agent.selection) this.setAgent({ selection: null });
+      return;
+    }
+    const captured = await captureSelection(path, model, range);
+    if (!captured.selectedText.trim()) return this.setAgent({ selection: null });
+    const label = selectionLabel(captured);
+    const key = selectionKey(captured);
+    this.setAgent((a) => ({
+      selection: { attachment: { id: uid('s'), label, selection: captured }, from },
+      selectionDismissed: a.selectionDismissed === key ? key : null,
+    }));
+  }
+
+  /** Whether the live selection goes with the next message (not dismissed). */
+  isSelectionIncluded() {
+    const { selection, selectionDismissed } = this.state.agent;
+    return !!selection && selectionKey(selection.attachment.selection) !== selectionDismissed;
+  }
+
+  /** Leave the current selection out of messages until it changes. */
+  dismissSelection() {
+    const sel = this.state.agent.selection?.attachment.selection;
+    this.setAgent({ selectionDismissed: sel ? selectionKey(sel) : null });
+  }
+
+  /** What goes with the next message: pinned attachments, plus the live selection. */
+  private outgoingAttachments(): Attachment[] {
+    const { attachments, selection, selectionDismissed } = this.state.agent;
+    const live =
+      selection && selectionKey(selection.attachment.selection) !== selectionDismissed && !attachments.some((a) => a.label === selection.attachment.label) ? [selection.attachment] : [];
+    return [...attachments, ...live];
+  }
+
   removeAttachment(id: string) {
     this.setAgent((a) => ({ attachments: a.attachments.filter((x) => x.id !== id) }));
   }
@@ -1371,9 +1490,9 @@ export class Studio {
     await this.history.beforeAgent();
     this.turnMessage = text;
     this.turnErrors.clear();
-    // Options replace a passage: use the editor's selection (or cursor) when nothing is attached.
-    if (state.mode === 'options' && !state.attachments.length) await this.attachSelection({ focus: false });
-    const attachments = this.state.agent.attachments;
+    // Options replace a passage: use the editor's cursor when nothing is selected or attached.
+    if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
+    const attachments = this.outgoingAttachments();
     const context = attachments.map((a) => ({
       selection: a.selection,
       stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,

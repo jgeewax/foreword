@@ -94,6 +94,31 @@ window.addEventListener('contextmenu', (e) => {
 }, true);
 "#;
 
+/// Text selected in the preview (Tinymist's text layer holds the real
+/// characters): once the selection settles, mark its first and last text runs
+/// (so the app can click them to find the source) and report the text.
+const SELECTION_SCRIPT: &str = r#"
+(() => {
+  let timer = 0, last = '';
+  const report = (r) => { try { window.__TAURI_INTERNALS__.invoke('preview_report', { report: r }); } catch (_) {} };
+  const run = (node) => (node && (node.nodeType === 1 ? node : node.parentElement))?.closest?.('.typst-text');
+  const settle = () => {
+    const sel = window.getSelection();
+    const text = sel ? String(sel).trim() : '';
+    if (text === last) return;
+    last = text;
+    document.querySelectorAll('[data-studio-sel]').forEach((e) => e.removeAttribute('data-studio-sel'));
+    if (!text || !sel.rangeCount) return report({ tag: 'selection', text: '' });
+    const range = sel.getRangeAt(0);
+    const start = run(range.startContainer), end = run(range.endContainer);
+    if (start) start.setAttribute('data-studio-sel', 'start');
+    if (end && end !== start) end.setAttribute('data-studio-sel', 'end');
+    report({ tag: 'selection', text: text.slice(0, 20000), start: !!start, end: !!end && end !== start });
+  };
+  document.addEventListener('selectionchange', () => { clearTimeout(timer); timer = setTimeout(settle, 350); });
+})();
+"#;
+
 /// Reports each preview DOM update (as painted) back to the app for the
 /// keystroke → preview latency HUD. Runs on every page load in the preview.
 const PERF_SCRIPT: &str = r#"
@@ -171,6 +196,7 @@ pub async fn preview_open(app: AppHandle, url: String, bounds: Bounds) -> CmdRes
         .initialization_script(JUMP_SCRIPT)
         .initialization_script(PERF_SCRIPT)
         .initialization_script(CONTEXT_MENU_SCRIPT)
+        .initialization_script(SELECTION_SCRIPT)
         .focused(false)
         .on_navigation(is_local_preview);
     window.add_child(

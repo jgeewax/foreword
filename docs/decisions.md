@@ -351,6 +351,30 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Selections go with chat messages (editor or preview)
+
+- **Automatic, like Claude Code:** the editor's current selection appears in
+  the message box as a dashed "Selected" chip (label, length). Clicking it
+  shows the text; × leaves it out of the next message, keyed on place and
+  text, so a different selection comes back. It's sent with every message
+  while selected. ⌘I still pins a selection as a fixed attachment.
+- **Preview selections:** Tinymist's preview has a real text layer
+  (`.typst-text` holds the characters), so a drag there gives text. An init
+  script waits for the selection to settle, marks the first and last text
+  runs, and reports the text. The app then:
+  1. clicks those runs through Tinymist's own click-to-source, catching the
+     `window/showDocument` positions instead of moving the editor;
+  2. finds the selected text near them, ignoring whitespace, markup
+     characters (`_ * $ # \`) and typographic quotes and dashes;
+  3. if math blocks a full match (the preview shows "λ", the source says
+     `lambda`), uses the longest matching start and end;
+  4. selects that range in the editor, labelled "From preview".
+- Verified in-app:
+  - The chip, its preview, dismissing and its return.
+  - A message sent without ⌘I carried the selection; the model repeated the
+    sentence word for word.
+  - A two-run preview selection mapped to the exact source text.
+
 ### Runnable code examples (technical books)
 
 - **Markup:** `#run("name", ```python …```, expect: "…")`, from a `code.typ`

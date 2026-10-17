@@ -258,12 +258,35 @@ function PlanActions() {
   );
 }
 
+/** The live selection: sent with the message; click to see it, × to leave it out. */
+function LiveSelectionChip({ live, open, onToggle }: { live: NonNullable<ReturnType<typeof studio.store.get>['agent']['selection']>; open: boolean; onToggle: () => void }) {
+  const sel = live.attachment.selection;
+  const lines = sel.end.line - sel.start.line + 1;
+  return (
+    <span className={`chip live${open ? ' open' : ''}`} title="Sent with your message. Click to see it.">
+      <button className="chip-main" aria-expanded={open} onClick={onToggle}>
+        <span className="chip-kind">{live.from === 'preview' ? 'From preview' : 'Selected'}</span>
+        {live.attachment.label}
+        <span className="chip-meta">· {lines === 1 ? `${sel.selectedText.length} chars` : `${lines} lines`}</span>
+        <span className="chip-caret">{open ? '▴' : '▾'}</span>
+      </button>
+      <button aria-label="Leave the selection out" title="Leave it out of the next message" onClick={() => studio.dismissSelection()}>
+        ×
+      </button>
+    </span>
+  );
+}
+
 function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
   const running = useStore(studio.store, (s) => s.agent.running);
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const sendKey = useStore(studio.store, (s) => s.settings.sendKey);
+  const live = useStore(studio.store, (s) => s.agent.selection);
+  useStore(studio.store, (s) => s.agent.selectionDismissed);
+  const liveShown = !!live && studio.isSelectionIncluded() && !attachments.some((a) => a.label === live.attachment.label);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [text, setTextState] = useState(() => studio.composerDraft);
   const setText = (t: string) => {
     studio.composerDraft = t;
@@ -289,7 +312,7 @@ function Composer() {
   return (
     <div className="composer">
       <PlanActions />
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || liveShown) && (
         <div className="chips">
           {attachments.map((a) => (
             <span key={a.id} className="chip" title={a.selection.selectedText || 'cursor position'}>
@@ -299,8 +322,10 @@ function Composer() {
               </button>
             </span>
           ))}
+          {liveShown && live && <LiveSelectionChip live={live} open={previewOpen} onToggle={() => setPreviewOpen((o) => !o)} />}
         </div>
       )}
+      {liveShown && live && previewOpen && <pre className="selection-preview">{live.attachment.selection.selectedText}</pre>}
       <textarea
         ref={inputRef}
         value={text}
@@ -334,7 +359,7 @@ function Composer() {
         )}
       </div>
       <div className="composer-hint" title="Change in Settings (⌘,)">
-        ⌘I attach selection · {sendHint(sendKey)}
+        Selected text goes with your message · ⌘I keeps it attached · {sendHint(sendKey)}
       </div>
     </div>
   );

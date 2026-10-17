@@ -1,3 +1,4 @@
+import { listen } from '@tauri-apps/api/event';
 // Scripted end-to-end check run inside the real app (WKWebView, Tinymist,
 // OpenCode) when TYPST_STUDIO_SELFTEST=<out.json> is set. Never saves files;
 // agent edit requests are rejected.
@@ -1014,6 +1015,86 @@ async function menuChecks() {
   return out;
 }
 
+/** The selection goes with chat messages; text selected in the preview maps to the source. */
+async function selectionChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  await studio.openFile('chapters/ch2-eigenvalues.typ');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => l.startsWith('The eigenvalues of')) + 1;
+  editor.setSelection(new monaco.Range(line, 1, line, model.getLineMaxColumn(line)));
+  await sleep(500);
+  out.editor = { selection: studio.state.agent.selection?.attachment.label, from: studio.state.agent.selection?.from, chip: document.querySelector('.chip.live')?.textContent };
+  document.querySelector<HTMLButtonElement>('.chip.live .chip-main')?.click();
+  await sleep(200);
+  out.previewBox = document.querySelector('.selection-preview')?.textContent;
+  out.snapshotChip = await snap('selection-chip');
+  document.querySelector<HTMLButtonElement>('.chip.live .chip-main')?.click();
+  document.querySelector<HTMLButtonElement>('.chip.live button[aria-label="Leave the selection out"]')?.click();
+  await sleep(200);
+  out.dismissed = { chip: !!document.querySelector('.chip.live') };
+  editor.setSelection(new monaco.Range(line, 1, line, 20));
+  await sleep(400);
+  out.backAfterChange = !!document.querySelector('.chip.live');
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    studio.newSession();
+    editor.setSelection(new monaco.Range(line, 1, line, model.getLineMaxColumn(line)));
+    await sleep(400);
+    const reply = await askAgent('Repeat the selected sentence back to me, word for word, and nothing else.');
+    const user = studio.state.agent.items.find((i) => i.kind === 'user') as any;
+    out.sent = { attachments: user?.attachments, reply: reply.slice(0, 200) };
+  }
+
+  // Select two text runs in the preview, as a drag would.
+  editor.setPosition({ lineNumber: line, column: 5 });
+  await studio.syncPreviewToCursor().catch(() => {});
+  await sleep(1200);
+  editor.setPosition({ lineNumber: 1, column: 1 });
+  await sleep(300);
+  await ipc.previewEval(`(() => {
+    const runs = [...document.querySelectorAll('.typst-text')].filter((e) => { const r = e.getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight && (e.textContent || '').includes('roots'); });
+    const t = runs[0];
+    if (!t) return;
+    const all = [...document.querySelectorAll('.typst-text')];
+    const next = all[all.indexOf(t) + 1] || t;
+    const range = document.createRange();
+    range.setStart(t, 0);
+    range.setEnd(next, next.childNodes.length);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  })()`);
+  await waitFor(() => studio.state.agent.selection?.from === 'preview', 8000, 'preview selection').catch(() => {});
+  await sleep(300);
+  const sel = studio.state.agent.selection;
+  out.preview = { from: sel?.from, label: sel?.attachment.label, text: sel?.attachment.selection.selectedText, active: studio.state.active, chip: document.querySelector('.chip.live')?.textContent };
+  out.snapshotPreviewSel = await snap('selection-from-preview');
+  await ipc.previewEval('window.getSelection().removeAllRanges()');
+  return out;
+}
+
+/** Probe: what the preview's text elements contain (is the rendered text selectable?). */
+async function previewProbe() {
+  let report: any = null;
+  const off = await listen<any>('preview:report', (e) => {
+    if (e.payload?.tag === 'probe') report = e.payload;
+  });
+  await ipc.previewEval(`(() => {
+    const t = [...document.querySelectorAll('.typst-text')].find((e) => e.getBoundingClientRect().top > 100);
+    const sel = window.getSelection();
+    let selected = '';
+    if (t) { const r = document.createRange(); r.selectNodeContents(t); sel.removeAllRanges(); sel.addRange(r); selected = String(sel); sel.removeAllRanges(); }
+    const all = document.querySelectorAll('.typst-text').length;
+    const withText = [...document.querySelectorAll('.typst-text')].filter((e) => (e.textContent || '').trim()).length;
+    window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'probe', all, withText, sample: t ? t.outerHTML.slice(0, 600) : null, text: t ? t.textContent : null, selected, userSelect: t ? getComputedStyle(t).userSelect : null, classes: [...new Set([...document.querySelectorAll('[class]')].map((e) => e.getAttribute('class')))].slice(0, 30) } });
+  })()`);
+  await waitFor(() => !!report, 5000, 'probe').catch(() => {});
+  off();
+  return report;
+}
+
 /** Status bar colours: ready, then with a Typst error (typed, then undone). */
 async function statusbarChecks() {
   const out: Record<string, unknown> = {};
@@ -1545,6 +1626,11 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('menus')) {
       log('menus');
       result.menus = await menuChecks();
+    }
+    if (want('probe')) result.probe = await previewProbe();
+    if (want('selection')) {
+      log('selection');
+      result.selection = await selectionChecks(launch.selftestAgent);
     }
     if (want('statusbar')) {
       log('statusbar');

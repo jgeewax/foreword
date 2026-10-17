@@ -44,9 +44,9 @@
 
 - [x] often in technical books we need ability to run code to verify output. e.g., if we're writing a book that uses python code, we need a way to have code snippets and make them runnable, test the output, etc. we need this system to be really good at that
 
-- [ ] i cant select text in the preview to chat about in the chatbox. i should be able to select from either the preview panel or the text panel
+- [x] i cant select text in the preview to chat about in the chatbox. i should be able to select from either the preview panel or the text panel
 
-- [ ] selecting text by default should appear and be used in the chatbox. i shouldnt have to hit cmd + i to use it. it should just ALWAYS be used, just like claude code. but we should see that selection somewhere in the chatbox (to let the user know we've got that selected), and then be able to preview it
+- [x] selecting text by default should appear and be used in the chatbox. i shouldnt have to hit cmd + i to use it. it should just ALWAYS be used, just like claude code. but we should see that selection somewhere in the chatbox (to let the user know we've got that selected), and then be able to preview it
 
 - [ ] TODOs in the text should show up somewhere in a panel. suggestions in the chatbox should include the todos we've written
 

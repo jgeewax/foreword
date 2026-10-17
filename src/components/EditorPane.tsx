@@ -101,6 +101,8 @@ export function EditorPane() {
       studio.perf.keyDown(ts > 1e12 ? ts : performance.timeOrigin + ts);
     });
     editor.onDidChangeCursorPosition((e) => studio.setCursor(e.position.lineNumber, e.position.column));
+    editor.onDidChangeCursorSelection(() => studio.onEditorSelection());
+    editor.onDidChangeModel(() => studio.onEditorSelection());
     studio.attachEditor(editor);
     const off = studio.events.on('focus-editor', () => editor.focus());
     return () => {

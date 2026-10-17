@@ -168,6 +168,12 @@ button.indicator:hover { background: var(--bg-3); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .chip { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-family: "SF Mono", Menlo, monospace; background: var(--sel); border-radius: 4px; padding: 1px 3px 1px 6px; }
 .chip button { background: none; border: none; padding: 0 3px; line-height: 1; }
+.chip.live { background: transparent; border: 1px dashed var(--accent); padding-left: 0; }
+.chip.live .chip-main { display: inline-flex; gap: 4px; align-items: baseline; padding: 1px 4px 1px 6px; font: inherit; color: inherit; }
+.chip-kind { font-family: -apple-system, system-ui, sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent); }
+.chip-meta { color: var(--muted); }
+.chip-caret { color: var(--muted); font-size: 9px; }
+.selection-preview { margin: 0 0 6px; max-height: 140px; overflow: auto; font: 11px/1.45 "SF Mono", Menlo, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; white-space: pre-wrap; word-wrap: break-word; }
 .tool { font-size: 11.5px; color: var(--muted); }
 .tool summary { display: flex; gap: 6px; align-items: baseline; list-style: none; }
 .tool summary::-webkit-details-marker { display: none; }
