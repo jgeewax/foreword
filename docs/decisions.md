@@ -854,6 +854,24 @@ pane top (off by 0 pt).
   the reasoning parts' times).
 - `prefers-reduced-motion` stops the spinner and the sweep.
 
+### Slash commands
+
+- Typing `/` at the start of the message box lists the commands. It narrows as
+  you type (by name, or by description when no name fits). ↑↓ choose; Tab or
+  ⏎ pick; Esc closes the list.
+- Commands without an argument run when picked. `/model` and `/permissions`
+  wait for theirs.
+- Commands act on the app and are never sent to the model. An unknown
+  `/word` says so instead of going out as a message.
+- **The commands:**
+  - /write, /plan, /options, /figures (modes);
+  - /new, /done, /compact, /stop, /resume;
+  - /model <part of a name> (prefers a recently used match);
+  - /permissions ask | edit | readonly;
+  - /fix (all open review comments), /export, /pdf, /help.
+- Verified (self-test `slash`): the list, ⏎ picking Plan, /model, /permissions,
+  an unknown command, /help and /new.
+
 ### Resume after Stop (or a failure)
 
 - When a turn is stopped or fails, the conversation is marked `stopped`. With

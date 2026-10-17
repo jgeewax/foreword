@@ -51,9 +51,10 @@ import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/a
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
-import { pushRecent } from '../services/agent/model-search';
+import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
-import { describePermissions } from '../services/agent/permissions';
+import { describePermissions, PRESETS } from '../services/agent/permissions';
+import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
 
@@ -2885,6 +2886,78 @@ export class Studio {
       text: m ? `${m.providerID}/${m.id}: ${message}` : message,
       ...(this.state.agent.sessionId ? { action: { label: 'Resume', resume: true } } : {}),
     });
+  }
+
+  /**
+   * A slash command typed in the message box ("/plan", "/model sonnet"). True if the
+   * text was a command (run, or explained), so it isn't sent to the assistant.
+   */
+  async runSlash(text: string): Promise<boolean> {
+    const cmd = parseSlash(text);
+    if (!cmd) return false;
+    const say = (t: string, tone: 'info' | 'error' = 'info') => this.pushItem({ kind: 'notice', id: uid('n'), tone, text: t });
+    switch (cmd.name) {
+      case 'write':
+      case 'plan':
+      case 'options':
+      case 'figures':
+        await this.setMode(cmd.name);
+        break;
+      case 'new':
+        this.newSession();
+        break;
+      case 'done':
+        if (!this.state.agent.sessionId) say('There’s no task to finish yet.', 'error');
+        else await this.finishTask();
+        break;
+      case 'compact':
+        await this.compactTask();
+        break;
+      case 'stop':
+        await this.cancel();
+        break;
+      case 'resume':
+        if (!this.state.agent.stopped) say('Nothing to resume: the last turn wasn’t stopped.', 'error');
+        else await this.resume();
+        break;
+      case 'model': {
+        if (!cmd.arg) {
+          say(`Model: ${this.state.agent.model?.id ?? 'the default'}. Switch with /model and part of a name, e.g. /model sonnet.`);
+          break;
+        }
+        const recent = this.state.agent.recentModels;
+        const found = this.state.agent.models.filter((m) => m.supportsTools && matchesQuery(m, cmd.arg));
+        const pick = found.find((m) => recent.some((r) => r.providerID === m.providerID && r.id === m.id)) ?? found[0];
+        if (!pick) say(`No model matches “${cmd.arg}”.`, 'error');
+        else {
+          await this.selectModel({ providerID: pick.providerID, id: pick.id });
+          say(`Model: ${pick.name} (${pick.providerName}).`);
+        }
+        break;
+      }
+      case 'permissions': {
+        const preset = PERMISSION_WORDS[cmd.arg.toLowerCase()];
+        if (!preset) say('Use /permissions ask, /permissions edit or /permissions readonly.', 'error');
+        else this.updateSettings({ permissions: PRESETS[preset].permissions });
+        break;
+      }
+      case 'fix':
+        if (!this.state.review.comments.some((c) => c.status === 'open')) say('No open review comments to fix.', 'error');
+        else await this.addressComments();
+        break;
+      case 'export':
+        await this.exportPdf();
+        break;
+      case 'pdf':
+        await this.openExportedPdf();
+        break;
+      case 'help':
+        say(`Commands: ${SLASH_COMMANDS.map((c) => `/${c.name}${c.arg ? ` <${c.arg}>` : ''} — ${c.description}`).join('; ')}.`);
+        break;
+      default:
+        say(`There’s no /${cmd.name} command. Type / to see them all.`, 'error');
+    }
+    return true;
   }
 
   /** Carry on with a stopped or failed turn (with the model chosen now). */

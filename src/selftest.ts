@@ -2247,6 +2247,52 @@ async function configChecks() {
   return out;
 }
 
+/** Slash commands in the message box: the list, picking with ⏎, and what each does. Mode, model and permissions are put back. */
+async function slashChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready', 60000, 'agent').catch(() => {});
+  const out: Record<string, unknown> = {};
+  const saved = { mode: studio.state.agent.mode, model: studio.state.agent.model, permissions: studio.state.settings.permissions };
+  const box = document.querySelector<HTMLTextAreaElement>('.composer textarea')!;
+  const type = async (value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, value);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(200);
+  };
+  const enter = async () => {
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await sleep(600);
+  };
+  const notice = () => (studio.state.agent.items.filter((i) => i.kind === 'notice').pop() as { text?: string } | undefined)?.text;
+  await type('/');
+  out.all = document.querySelectorAll('.slash-menu button').length;
+  await type('/pl');
+  out.narrowed = [...document.querySelectorAll('.slash-menu .slash-name')].map((e) => e.textContent);
+  out.snapshot = await snap('slash-menu');
+  await enter();
+  out.mode = studio.state.agent.mode;
+  const query = (saved.model?.id ?? '').slice(0, 5);
+  await type(`/model ${query}`);
+  await enter();
+  out.model = { query, now: studio.state.agent.model?.id, said: notice() };
+  await type('/permissions readonly');
+  await enter();
+  out.permissions = studio.state.settings.permissions.edit;
+  await type('/nope');
+  await enter();
+  out.unknown = notice();
+  await type('/help');
+  await enter();
+  out.help = notice()?.slice(0, 80);
+  await type('/new');
+  await enter();
+  out.newTask = studio.state.agent.sessionId === null && studio.state.agent.items.length === 0;
+  out.boxCleared = box.value === '';
+  studio.updateSettings({ permissions: saved.permissions });
+  if (saved.model) await studio.selectModel(saved.model);
+  await studio.setMode(saved.mode);
+  return out;
+}
+
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
 async function tabChecks() {
   const out: Record<string, unknown> = {};
@@ -2844,6 +2890,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
+    if (want('slash')) result.slash = await slashChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

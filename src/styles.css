@@ -705,3 +705,12 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .header-button.new-task { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .header-button.new-task:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
 .agent-pane .pane-header { min-height: calc(30px * var(--chrome-scale)); height: auto; }
+
+/* Slash commands: the list above the message box. */
+.composer { position: relative; }
+.slash-menu { position: absolute; left: 0; right: 0; bottom: 100%; margin-bottom: 4px; max-height: 260px; overflow: auto; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); z-index: 20; animation: pop-in 0.12s ease-out; }
+.slash-menu button { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 4px 8px; border: none; border-radius: 5px; background: transparent; text-align: left; font-size: 12.5px; }
+.slash-menu button.active { background: var(--sel); }
+.slash-name { flex: none; font-family: "SF Mono", Menlo, monospace; font-weight: 600; color: var(--fg); }
+.slash-arg { font-weight: 400; color: var(--muted); }
+.slash-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }

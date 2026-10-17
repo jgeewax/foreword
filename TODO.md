@@ -126,6 +126,6 @@
 
 - [x] after asking a question, i have no way to resolve teh task and mark it as done... is there a way to do this im missing? if not we need to make sure thats doable?
 
-- [ ] slash commands int he ai chatbxo to change modes, etc
+- [x] slash commands int he ai chatbxo to change modes, etc
 
 - [x] ability to resume. if i click stop, change models, i want to resuem and start again... i need to be able to resume (if the box is empty and we aborted the request)

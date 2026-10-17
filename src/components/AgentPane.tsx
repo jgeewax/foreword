@@ -14,6 +14,7 @@ import { ContextMeter, TaskMenu } from './TaskMenu';
 import { withoutMarker } from '../app/tasks';
 import { withoutAddressed } from '../app/review';
 import { describeTool } from '../app/tool-labels';
+import { parseSlash, slashMatches } from '../app/slash';
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -577,10 +578,31 @@ function Composer() {
   const stopped = useStore(studio.store, (s) => s.agent.stopped && !!s.agent.sessionId);
   // An empty box after a stop: Send (and ⏎) resume instead.
   const canResume = stopped && !running && !text.trim();
+  // "/…": the list of commands, until a space (or Esc).
+  const matches = slashMatches(text);
+  const [highlight, setHighlight] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
+  const showSlash = matches.length > 0 && slashDismissed !== text;
+  useEffect(() => setHighlight(0), [text]);
+  const pickSlash = (name: string) => {
+    const cmd = matches.find((c) => c.name === name);
+    if (!cmd) return;
+    if (cmd.immediate) {
+      setText('');
+      void studio.runSlash(`/${cmd.name}`);
+    } else setText(`/${cmd.name} `);
+    inputRef.current?.focus();
+  };
   const send = async (delivery: 'queue' | 'steer' = 'queue') => {
     const message = text;
     if (!message.trim()) {
       if (canResume) void studio.resume();
+      return;
+    }
+    // A command acts on the app; it isn't sent.
+    if (message.trim().startsWith('/') && parseSlash(message)) {
+      setText('');
+      await studio.runSlash(message);
       return;
     }
     // Cleared at once (it feels instant); put back if it couldn't be sent.
@@ -606,6 +628,27 @@ function Composer() {
         </div>
       )}
       {liveShown && live && previewOpen && <pre className="selection-preview">{live.attachment.selection.selectedText}</pre>}
+      {showSlash && (
+        <div className="slash-menu" role="listbox" aria-label="Commands">
+          {matches.map((c, i) => (
+            <button
+              key={c.name}
+              role="option"
+              aria-selected={i === highlight}
+              className={i === highlight ? 'active' : ''}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setHighlight(i)}
+              onClick={() => pickSlash(c.name)}
+            >
+              <span className="slash-name">
+                /{c.name}
+                {c.arg && <span className="slash-arg"> {c.arg}</span>}
+              </span>
+              <span className="slash-desc">{c.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <textarea
         ref={inputRef}
         value={text}
@@ -613,6 +656,23 @@ function Composer() {
         placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
+          if (showSlash) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlight((h) => (h + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+              return;
+            }
+            if ((e.key === 'Tab' || e.key === 'Enter') && !e.shiftKey) {
+              e.preventDefault();
+              pickSlash(matches[Math.min(highlight, matches.length - 1)].name);
+              return;
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setSlashDismissed(text);
+              return;
+            }
+          }
           const action = composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey);
           if (action) {
             e.preventDefault();
@@ -661,7 +721,7 @@ function Composer() {
       <div className="composer-hint" title="Change in Settings (⌘,)">
         {running
           ? `While it works: ${sendHint(sendKey).split(' · ')[0].replace('send', 'queue')} · ⌥⏎ send now`
-          : `Selected text goes with your message · ⌘I keeps it attached · ${sendHint(sendKey)}`}
+          : `/ for commands · Selected text goes with your message · ${sendHint(sendKey)}`}
       </div>
     </div>
   );
