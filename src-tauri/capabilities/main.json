@@ -25,6 +25,7 @@
     "allow-fs-hash",
     "allow-fs-write",
     "allow-project-create",
+    "allow-project-create-from-package",
     "allow-reveal-in-finder",
     "allow-clipboard-write",
     "allow-typst-start",

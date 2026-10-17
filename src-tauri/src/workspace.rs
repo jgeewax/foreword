@@ -301,10 +301,31 @@ pub struct NewFile {
     text: String,
 }
 
+/// (path, bytes) pairs for [`create_project_bytes`].
+pub fn new_file_parts(files: Vec<NewFile>) -> Vec<(String, Vec<u8>)> {
+    files
+        .into_iter()
+        .map(|f| (f.path, f.text.into_bytes()))
+        .collect()
+}
+
 /// New book from a template: create `parent/name` and write `files` into it.
 /// Only ever writes inside a folder it has just created (refuses an existing
 /// one, never overwrites); on failure that new folder is removed again.
 pub fn create_project(parent: &Path, name: &str, files: &[NewFile]) -> CmdResult<PathBuf> {
+    let bytes: Vec<(String, Vec<u8>)> = files
+        .iter()
+        .map(|f| (f.path.clone(), f.text.clone().into_bytes()))
+        .collect();
+    create_project_bytes(parent, name, &bytes)
+}
+
+/// [`create_project`] with arbitrary (binary) file contents.
+pub fn create_project_bytes(
+    parent: &Path,
+    name: &str,
+    files: &[(String, Vec<u8>)],
+) -> CmdResult<PathBuf> {
     if !parent.is_absolute() || !parent.is_dir() {
         return Err(CmdError::Invalid(format!(
             "not a folder: {}",
@@ -328,12 +349,11 @@ pub fn create_project(parent: &Path, name: &str, files: &[NewFile]) -> CmdResult
         _ => e.into(),
     })?;
     let written = (|| -> CmdResult<()> {
-        for f in files {
-            let rel = Path::new(&f.path);
-            if f.path.is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_))) {
+        for (rel_path, contents) in files {
+            let rel = Path::new(rel_path);
+            if rel_path.is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_))) {
                 return Err(CmdError::Invalid(format!(
-                    "bad template path: {:?}",
-                    f.path
+                    "bad template path: {rel_path:?}"
                 )));
             }
             let path = root.join(rel);
@@ -344,7 +364,7 @@ pub fn create_project(parent: &Path, name: &str, files: &[NewFile]) -> CmdResult
                 .write(true)
                 .create_new(true)
                 .open(&path)?
-                .write_all(f.text.as_bytes())?;
+                .write_all(contents)?;
         }
         Ok(())
     })();

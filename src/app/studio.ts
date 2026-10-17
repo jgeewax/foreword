@@ -23,7 +23,7 @@ import {
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
-import { bookFolderName, TEMPLATES, templateFiles } from '../templates';
+import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles } from '../templates';
 import { snippetInsertion } from '../help/guide';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
@@ -204,6 +204,11 @@ export class Studio {
     agentRunning: () => this.state.agent.running,
     report: (text, tone) => this.toast(text, tone),
   });
+  /**
+   * The message box's text, kept here so it survives the composer remounting
+   * (collapsing the pane, opening a book) and can be filled before it mounts.
+   */
+  composerDraft = '';
   /** The message of the agent turn in progress (names its history version). */
   private turnMessage = '';
 
@@ -347,6 +352,12 @@ export class Studio {
     for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
     const active = saved?.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
     if (active) await this.openFile(active);
+  }
+
+  /** Put text in the message box (without sending). */
+  fillComposer(text: string) {
+    this.composerDraft = text;
+    this.events.emit('fill-composer', text);
   }
 
   // ---- small dialogs ------------------------------------------------------------------
@@ -609,6 +620,8 @@ export class Studio {
 
   /** Create `parent/<title>` from a template and open it. Throws (for the dialog) if that fails. */
   async createBook(templateId: string, info: { title: string; author: string; size?: { width: string; height: string } }, parent: string) {
+    const paper = PAPER_TEMPLATES.find((t) => t.id === templateId);
+    if (paper) return this.createPaper(paper, info, parent);
     const template = TEMPLATES.find((t) => t.id === templateId);
     if (!template) throw new Error(`Unknown template ${templateId}`);
     const files = templateFiles(template, { ...info, year: String(new Date().getFullYear()) });
@@ -622,6 +635,35 @@ export class Studio {
     await this.openWorkspace(root);
     await this.openFile(template.firstFile).catch(() => {});
     this.toast(`Created “${root.split('/').pop()}” from the ${template.name} template`);
+  }
+
+  /**
+   * A paper from an official template package (downloaded from Typst
+   * Universe). Its title and authors live in the template's own markup, so the
+   * assistant is offered the job of filling them in (the message waits in
+   * the composer).
+   */
+  private async createPaper(paper: (typeof PAPER_TEMPLATES)[number], info: { title: string; author: string }, parent: string) {
+    const created = await ipc.projectCreateFromPackage(parent, bookFolderName(info.title), paper.package, paperExtras(info));
+    if (!this.state.launch?.selftestOut) {
+      localStorage.setItem(NEW_BOOK_PARENT, parent);
+      if (info.author.trim()) localStorage.setItem(AUTHOR_KEY, info.author.trim());
+    }
+    this.closeNewBook();
+    await this.openWorkspace(created.root);
+    await this.openFile(created.entry).catch(() => {});
+    const fonts = paper.fonts ?? [];
+    if (fonts.length) {
+      this.pushItem({
+        kind: 'notice',
+        id: uid('n'),
+        tone: 'info',
+        text: `The ${paper.name} template looks best with ${fonts.map((f) => f.name).join(' and ')} (free). Without them Typst uses similar fonts and shows a warning. To install: brew install --cask ${fonts.map((f) => f.cask).join(' ')}`,
+      });
+    }
+    this.events.emit('show-agent-pane');
+    this.fillComposer(paperSetupMessage(info));
+    this.toast(`Created “${created.root.split('/').pop()}” from the ${paper.name} template (${paper.package.name} ${paper.package.version})`);
   }
 
   showSidebar(view: StudioState['sidebar']) {
@@ -638,6 +680,7 @@ export class Studio {
 
   private async closeWorkspace() {
     if (!this.state.workspace) return;
+    this.composerDraft = '';
     await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;

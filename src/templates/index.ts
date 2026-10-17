@@ -187,3 +187,81 @@ export function templateFiles(template: BookTemplate, info: BookInfo): { path: s
     { path: STYLE_GUIDE_FILE, text: styleGuideTemplate(info.title.trim() || 'Untitled', template.styleHints) },
   ];
 }
+
+// ---- research papers: official templates from Typst Universe ---------------------
+
+export type PaperTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  /**
+   * A Typst Universe template package, verified to compile with Typst 0.15.1
+   * (`npm run check-templates -- --papers`). Not offered: lucky-icml 0.7.0 and
+   * clear-iclr 0.7.0, which don't compile with 0.15 yet.
+   */
+  package: { name: string; version: string };
+  /** Free fonts the template asks for (it falls back without them). */
+  fonts?: { name: string; cask: string }[];
+};
+
+const TERMES = [
+  { name: 'TeX Gyre Termes', cask: 'font-tex-gyre-termes' },
+  { name: 'TeX Gyre Cursor', cask: 'font-tex-gyre-cursor' },
+];
+
+export const PAPER_TEMPLATES: PaperTemplate[] = [
+  { id: 'ieee', name: 'IEEE', description: 'IEEE conference and journal papers, two columns.', package: { name: 'charged-ieee', version: '0.1.4' }, fonts: TERMES },
+  { id: 'acm', name: 'ACM', description: 'ACM papers matching LaTeX acmart (sigconf and other formats).', package: { name: 'faithful-acmart', version: '0.2.0' }, fonts: [{ name: 'Libertinus', cask: 'font-libertinus' }] },
+  { id: 'neurips', name: 'NeurIPS', description: 'Conference on Neural Information Processing Systems.', package: { name: 'bloated-neurips', version: '0.8.0' } },
+  { id: 'cvpr', name: 'CVPR', description: 'Computer Vision and Pattern Recognition.', package: { name: 'blind-cvpr', version: '0.7.0' } },
+  { id: 'aaai', name: 'AAAI', description: 'AAAI Conference on Artificial Intelligence.', package: { name: 'triple-aaai', version: '0.8.0' } },
+  {
+    id: 'acl',
+    name: 'ACL',
+    description: '*ACL venues (ACL, EMNLP, NAACL…).',
+    package: { name: 'tracl', version: '0.8.1' },
+    fonts: [TERMES[0], { name: 'Inconsolata', cask: 'font-inconsolata' }],
+  },
+  {
+    id: 'lncs',
+    name: 'Springer LNCS',
+    description: 'Lecture Notes in Computer Science.',
+    package: { name: 'fine-lncs', version: '0.6.5' },
+    fonts: [{ name: 'New Computer Modern', cask: 'font-new-computer-modern' }],
+  },
+  { id: 'arxiv', name: 'arXiv preprint', description: 'The look of popular arXiv papers.', package: { name: 'arkheion', version: '0.1.2' } },
+  {
+    id: 'ams',
+    name: 'AMS',
+    description: 'American Mathematical Society papers.',
+    package: { name: 'unequivocal-ams', version: '0.1.2' },
+    fonts: [{ name: 'New Computer Modern', cask: 'font-new-computer-modern' }],
+  },
+  { id: 'apa', name: 'APA 7', description: 'Manuscripts in APA style (psychology and social sciences).', package: { name: 'apa7-ish', version: '0.3.0' } },
+];
+
+const PAPER_STYLE: Partial<Record<StyleSection, string>> = {
+  Audience: "Reviewers and researchers in your field: what do they already know, and what's new to them?",
+  'Voice and tone': 'e.g. precise and direct; every claim backed by evidence or a citation; no hype ("novel", "groundbreaking").',
+  'Point of view and tense': 'e.g. "we" for the authors; present tense for what the paper shows, past tense for what was done.',
+  'Formatting in Typst': `- Sections \`=\`, subsections \`==\` (the template numbers them).
+- Cite with \`@key\` from the .bib file.
+- Figures and tables get captions and labels (\`<fig-…>\`, \`<tab-…>\`), referred to as @fig-….
+- Keep to the venue's page limit: watch the page count in the status bar.`,
+};
+
+/** Files Typst Studio adds to a paper made from a template package (never replacing the template's own). */
+export function paperExtras(info: { title: string }): { path: string; text: string }[] {
+  return [
+    { path: PROJECT_FILE, text: serializeProjectSettings({}, { entryPoint: 'main.typ', outputDir: 'export' }) },
+    { path: '.gitignore', text: '# Exported PDFs\nexport/\n' },
+    { path: STYLE_GUIDE_FILE, text: styleGuideTemplate(info.title.trim() || 'Untitled', PAPER_STYLE) },
+  ];
+}
+
+/** The chat message that fills in the template's title and authors (sent when the author is ready). */
+export function paperSetupMessage(info: { title: string; author: string }): string {
+  const who = info.author.trim() ? ` and the author(s) to “${info.author.trim()}”` : '';
+  return `This paper was just created from a template. In main.typ, set the title to “${info.title.trim()}”${who}, replacing the template's placeholder title, authors and affiliations. Keep the template's layout, and leave the sample text in place for now.`;
+}
+

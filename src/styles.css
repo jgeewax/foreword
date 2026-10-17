@@ -270,6 +270,10 @@ button.indicator:hover { background: var(--bg-3); }
 .template-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; padding: 9px 10px; border-radius: 8px; background: var(--bg-2); white-space: normal; height: auto; }
 .template-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--sel); }
 .template-name { font-weight: 650; }
+.template-grid.papers { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.kind-switch { display: inline-flex; margin-left: 14px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.kind-switch button { border: none; border-radius: 0; background: transparent; padding: 2px 10px; font-size: 12px; color: var(--muted); }
+.kind-switch button.active { background: var(--accent); color: var(--accent-fg); }
 .template-description { font-size: 12px; line-height: 1.35; }
 .template-details { font-size: 11px; color: var(--muted); }
 .field { display: flex; flex-direction: column; gap: 3px; }

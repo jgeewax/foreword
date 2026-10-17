@@ -588,7 +588,7 @@ async function onboardingChecks() {
   await sleep(300);
   const composer = document.querySelector<HTMLTextAreaElement>('.composer textarea');
   out.starter = { shown: !!document.querySelector('.starter'), suggestions: suggestions.length, filled: composer?.value === suggestions[1]?.textContent };
-  studio.events.emit('fill-composer', '');
+  studio.fillComposer('');
   try {
     out.snapshotStarter = await ipc.previewSnapshot('starter', 'main');
   } catch (e) {
@@ -724,6 +724,57 @@ async function journeyChecks() {
   };
   out.snapshotPreview = await snap('journey-preview', 'preview');
   out.book = studio.state.workspace?.root;
+  await studio.openWorkspace(original);
+  return out;
+}
+
+/** Research papers from Typst Universe templates (downloads packages; agent fills in the title). */
+async function paperChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const stamp = Date.now().toString(36);
+  studio.openNewBook();
+  await sleep(300);
+  [...document.querySelectorAll<HTMLButtonElement>('.kind-switch button')].find((b) => b.textContent?.includes('Research'))?.click();
+  await sleep(300);
+  out.dialog = { title: document.querySelector('.new-book h1')?.textContent, cards: document.querySelectorAll('.template-grid.papers .template-card').length };
+  out.snapshotDialog = await snap('papers-dialog');
+  studio.closeNewBook();
+
+  const papers: Record<string, unknown> = {};
+  for (const id of ['neurips', 'ieee']) {
+    const title = `Sparse Attention ${id} ${stamp}`;
+    try {
+      await studio.createBook(id, { title, author: 'Ada Example and Bo Sample' }, parent);
+      await waitFor(() => studio.state.preview.status === 'ready' && ['ok', 'error'].includes(studio.state.compile.status), 120000, `${id} compile`).catch(() => {});
+      await sleep(2000);
+      const composer = document.querySelector<HTMLTextAreaElement>('.composer textarea')?.value ?? '';
+      papers[id] = {
+        files: studio.state.workspace?.files,
+        active: studio.state.active,
+        compile: studio.state.compile,
+        problems: studio.state.problems,
+        composerFilled: composer.includes(title),
+        notices: studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as any).text),
+        snapshot: await snap(`paper-${id}`, 'preview'),
+      };
+      if (withAgent && id === 'ieee') {
+        await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+        const policy = studio.state.settings.agentEdits;
+        studio.updateSettings({ agentEdits: 'allow' });
+        await askAgent(composer);
+        await sleep(2500);
+        const main = (await ipc.fsRead('main.typ')).text;
+        (papers[id] as any).afterAgent = { hasTitle: main.includes(`Sparse Attention ${id}`), hasAuthor: main.includes('Ada Example'), errors: studio.state.problems.errors, compile: studio.state.compile.status };
+        (papers[id] as any).snapshotAfter = await snap('paper-ieee-after', 'preview');
+        studio.updateSettings({ agentEdits: policy });
+      }
+    } catch (e) {
+      papers[id] = { error: errorMessage(e) };
+    }
+  }
+  out.papers = papers;
   await studio.openWorkspace(original);
   return out;
 }
@@ -1271,6 +1322,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (launch.selftestEdits && want('papers')) {
+      log('papers');
+      result.papers = await paperChecks(launch.selftestAgent);
+    }
     if (want('journey')) {
       log('journey');
       result.journey = await journeyChecks();

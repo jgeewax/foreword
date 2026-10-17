@@ -23,3 +23,11 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 ## Menus and commands
 - A command palette (⌘K or ⇧⌘P) listing every action with its shortcut. The context menus already define most of them.
 - "Copy as plain text" / "Copy as Markdown" for a selection in the preview or the chat.
+
+## New books and papers
+- Import an existing manuscript (Word .docx, Markdown, LaTeX) with pandoc (`pandoc -t typst`), split into chapter files by top-level heading. Needs pandoc installed, or bundled.
+- ICML and ICLR paper templates, once their Typst Universe packages work with Typst 0.15 (lucky-icml 0.7.0 and clear-iclr 0.7.0 fail today). Re-check with `npm run check-templates -- --papers`.
+- Thesis templates: many universities have one on Typst Universe. Search by university name in the New Book dialog.
+- Venue page limits: warn when the paper goes over (e.g. "NeurIPS: 9 pages of content").
+- Reorder chapters by dragging in the file tree, which rewrites the `#include` order and optionally renumbers the files.
+- "Install fonts" button: run the `brew install --cask …` command for the author, with a confirmation.

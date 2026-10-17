@@ -6,6 +6,7 @@ mod error;
 mod history;
 mod logs;
 mod lsp;
+mod packages;
 mod preview;
 #[cfg(target_os = "macos")]
 mod snapshot;
@@ -377,6 +378,7 @@ pub fn run() {
             workspace::fs_hash,
             workspace::fs_write,
             workspace::project_create,
+            packages::project_create_from_package,
             workspace::reveal_in_finder,
             clipboard::clipboard_write,
             lsp::typst_start,

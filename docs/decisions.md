@@ -351,6 +351,48 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### New-book journey: sizes, chapters, research papers
+
+- **Page sizes.** Each template offers trim sizes plus Custom. The size is a
+  validated Typst length (`^\d+(\.\d+)?(in|mm|cm|pt)$`, positive), inserted
+  as-is into `book.with(width:, height:)` in main.typ, so it's easy to change
+  later. Titles still go only into escaped strings.
+- **New Chapter** (⌥⌘N, File menu, + in the files header, right-click):
+  - creates `chapters/NN-slug.typ`, numbered after the highest existing
+    number and keeping the digit width;
+  - copies the `#import` lines from an existing chapter and escapes the title's
+    markup characters;
+  - inserts `#include` after the last chapter include (else before
+    `#bibliography`, else at the end), using a path relative to the main file;
+  - the main file changes in its buffer (undoable) and is saved unless it
+    already had unsaved edits.
+- **Research papers** come from official Typst Universe template packages.
+  The Rust side downloads `packages.typst.org/preview/<name>-<version>.tar.gz`
+  over HTTPS, the same as `typst init`. reqwest gained `native-tls`, which uses
+  the macOS Security framework. The package is checked against
+  `[a-z0-9-]+` / `N.N.N` and size-limited to 50 MB, then unpacked with the
+  system bsdtar, which refuses `..` and absolute paths. Only regular files from
+  the `[template]` folder are copied, never symlinks, into a new folder only.
+- **Venues offered:** IEEE (charged-ieee), ACM (faithful-acmart), NeurIPS,
+  CVPR, AAAI, ACL (tracl), Springer LNCS (fine-lncs), arXiv (arkheion), AMS,
+  APA 7. Each one's `main.typ` compiles with Typst 0.15.1
+  (`npm run check-templates -- --papers`).
+- **Not offered:** ICML (lucky-icml 0.7.0) and ICLR (clear-iclr 0.7.0). Their
+  main.typ fails on 0.15 ("cannot add string and type", "unknown variable:
+  diff"). A first check had wrongly compiled `appendix.typ`.
+- **Fonts.** Several venues want free fonts (TeX Gyre Termes/Cursor,
+  Libertinus, Inconsolata, New Computer Modern). Without them Typst falls back
+  with a warning. The app names the exact `brew install --cask …` command,
+  checked to exist in homebrew/cask.
+- **Title and authors.** These live in each template's own markup, so the app
+  doesn't guess. It puts a ready message in the composer asking the assistant
+  to fill them in; verified in-app with IEEE (title and both authors set,
+  0 errors).
+- **The message box's text lives in the studio** (`composerDraft`), not only in
+  the component. It survives the composer remounting, e.g. when a book opens,
+  and can be filled before it mounts. The first try, a consume-once pending
+  draft, lost the text on remount.
+
 ### Onboarding for writers new to Typst (TODO #11)
 
 - **Typst basics** (`src/help/typst-basics.json`): plain-language explanations

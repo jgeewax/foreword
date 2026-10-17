@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookFolderName, TEMPLATES, templateFiles, typstLength, typstString } from './index';
+import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength, typstString } from './index';
 
 const info = { title: 'The "Quiet" Harbour \\ Part One', author: 'Ada Example', year: '2026' };
 
@@ -64,3 +64,25 @@ describe('bookFolderName', () => {
     expect(bookFolderName('   ')).toBe('Untitled Book');
   });
 });
+
+describe('paper templates', () => {
+  it('name exact package versions and Homebrew font casks', () => {
+    expect(new Set(PAPER_TEMPLATES.map((p) => p.id)).size).toBe(PAPER_TEMPLATES.length);
+    for (const p of PAPER_TEMPLATES) {
+      expect(p.package.name, p.id).toMatch(/^[a-z0-9-]+$/);
+      expect(p.package.version, p.id).toMatch(/^\d+\.\d+\.\d+$/);
+      for (const f of p.fonts ?? []) expect(f.cask).toMatch(/^font-[a-z0-9-]+$/);
+    }
+  });
+
+  it('adds project settings, a .gitignore and an academic style guide', () => {
+    const files = paperExtras({ title: 'Sparse Attention' });
+    expect(files.map((f) => f.path)).toEqual(['.typst-studio.json', '.gitignore', 'WRITING_STYLE.md']);
+    expect(files[2].text).toContain('page limit');
+  });
+
+  it('asks the assistant to fill in title and authors', () => {
+    expect(paperSetupMessage({ title: 'Sparse Attention', author: 'A. Example' })).toContain('“Sparse Attention” and the author(s) to “A. Example”');
+  });
+});
+

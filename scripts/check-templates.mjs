@@ -68,5 +68,22 @@ for (const item of guide.sections.flatMap((s) => s.items)) {
 }
 rmSync(work, { recursive: true, force: true });
 console.log(`ok   ${examples} guide examples`);
+
+// --papers: the research-paper templates (downloads packages; missing-font warnings are expected).
+if (process.argv.includes('--papers')) {
+  const src = readFileSync(new URL('../src/templates/index.ts', import.meta.url), 'utf8');
+  const specs = [...src.matchAll(/package: \{ name: '([a-z0-9-]+)', version: '([\d.]+)' \}/g)].map((m) => `${m[1]}:${m[2]}`);
+  for (const spec of specs) {
+    const dir = mkdtempSync(join(tmpdir(), 'typst-paper-'));
+    const init = spawnSync('typst', ['init', `@preview/${spec}`, 'paper'], { cwd: dir, encoding: 'utf8' });
+    const run = init.status === 0 ? spawnSync('typst', ['compile', '--diagnostic-format', 'short', 'main.typ', 'out.pdf'], { cwd: join(dir, 'paper'), encoding: 'utf8' }) : init;
+    const output = `${run.stdout}${run.stderr}`.split('\n').filter((l) => /error|warning/.test(l) && !/unknown font family/.test(l)).join('\n');
+    if (run.status !== 0 || output) {
+      failed++;
+      console.log(`FAIL paper ${spec}\n${output || run.stderr}`);
+    } else console.log(`ok   paper ${spec}`);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 console.log(`${version}: ${failed ? `${failed} failed` : 'all templates and guide examples compile'}`);
 process.exit(failed ? 1 : 0);

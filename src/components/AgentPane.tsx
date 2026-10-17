@@ -254,7 +254,11 @@ function Composer() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const sendKey = useStore(studio.store, (s) => s.settings.sendKey);
-  const [text, setText] = useState('');
+  const [text, setTextState] = useState(() => studio.composerDraft);
+  const setText = (t: string) => {
+    studio.composerDraft = t;
+    setTextState(t);
+  };
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => studio.events.on('focus-composer', () => inputRef.current?.focus()), []);
@@ -389,7 +393,7 @@ function Starter() {
       </p>
       <div className="starter-label">Try asking</div>
       {SUGGESTIONS.map((s) => (
-        <button key={s} className="suggestion" disabled={!ready} onClick={() => studio.events.emit('fill-composer', s)}>
+        <button key={s} className="suggestion" disabled={!ready} onClick={() => studio.fillComposer(s)}>
           {s}
         </button>
       ))}

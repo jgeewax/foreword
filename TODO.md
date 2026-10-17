@@ -34,7 +34,7 @@
 
 - [x] right clicking doesnt open context menus appropriately. we need to add that
 
-- [ ] work through a typical journey for users: create a new book, from a template maybe, maybe not. templates should be nvoels, non fiction books, let you customize sizes, childrens books, research paper (include popular conference templates), etc. for books with chapters we need a quick way to add chpaters.
+- [x] work through a typical journey for users: create a new book, from a template maybe, maybe not. templates should be nvoels, non fiction books, let you customize sizes, childrens books, research paper (include popular conference templates), etc. for books with chapters we need a quick way to add chpaters.
 
 - [ ] how do we create/rename/etc files?
 
@@ -61,3 +61,9 @@
 - [ ] can we build an integration with a printer like Mixam to print the book?
 
 - [ ] cover designer: can we make a cover.typ and give people templates to make that work? aligning w the book templates? maybe this depends on the printer also? not sure if this is a good idea?
+
+- [ ] I want to be able to see what lines were read on a file by the ai
+
+- [ ] i want to be able to see what edits were made on a file by the ai
+
+- [ ] in history, i want to understand the delta from one version/commit to the next

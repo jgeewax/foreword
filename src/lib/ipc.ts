@@ -49,6 +49,9 @@ export const ipc = {
   projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
     invoke<string>('project_create', { parent, name, files }),
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
+  /** New project from a Typst Universe template package (downloaded from packages.typst.org). */
+  projectCreateFromPackage: (parent: string, name: string, pkg: { name: string; version: string }, extra: { path: string; text: string }[]) =>
+    invoke<{ root: string; entry: string }>('project_create_from_package', { parent, name, package: pkg, extra }),
   revealInFinder: (path: string) => invoke<void>('reveal_in_finder', { path }),
   fsWrite: (path: string, text: string, expectedHash: string | null) =>
     invoke<string>('fs_write', { path, text, expectedHash }),
