@@ -53,14 +53,50 @@ describe('presets', () => {
     expect(effect('shell', 'mv chapters/a.typ chapters/b.typ', edit)).toBe('allow');
     expect(effect('shell', 'git mv a b', edit)).toBe('allow');
     expect(effect('shell', 'rm chapters/a.typ', edit)).toBe('ask');
-    expect(effect('shell', 'ls', edit)).toBe('ask');
+    expect(effect('shell', 'python3 count.py', edit)).toBe('ask');
   });
 
   it('Read-only never changes anything', () => {
     expect(effect('edit', 'chapters/ch1.typ', ro)).toBe('deny');
-    expect(effect('shell', 'ls', ro)).toBe('deny');
+    expect(effect('shell', 'python3 x.py', ro)).toBe('deny');
     expect(effect('shell', 'mv a b', ro)).toBe('deny');
     expect(effect('external_directory', '/etc', ro)).toBe('deny');
+  });
+});
+
+describe('commands that only look', () => {
+  // Each command of a chained line arrives on its own (as OpenCode splits them).
+  const plan = sessionRules(PRESETS.edit.permissions, true);
+
+  it('never ask, in any preset or mode (ls, cat, grep, git status…)', () => {
+    for (const rules of [ask, edit, ro, plan]) {
+      for (const cmd of ['ls', 'ls -la chapters', 'cat main.typ', 'head -5 chapters/a.typ', 'wc -l main.typ', 'grep -n Storm chapters/a.typ', 'rg lighthouse', 'find . -name "*.typ"', 'git status', 'git log --oneline -5', 'echo done', 'cd chapters']) {
+        expect(effect('shell', cmd, rules), cmd).toBe('allow');
+      }
+    }
+  });
+
+  it('fall back to the shell setting when they would write', () => {
+    for (const cmd of ['echo hi > notes.txt', 'cat a.typ >> b.typ', 'find . -name x -delete', 'find . -exec wc {} ;', 'sort -o sorted.txt main.typ', 'git diff --output=x.patch']) {
+      expect(effect('shell', cmd, ask), cmd).toBe('ask');
+      expect(effect('shell', cmd, plan), cmd).toBe('deny');
+      expect(effect('shell', cmd, sessionRules({ ...PRESETS.ask.permissions, shell: 'allow' })), cmd).toBe('allow');
+    }
+  });
+
+  it('keep other commands, and the delete and build rules, as they were', () => {
+    // find -exec rm: the delete rule still has the last word.
+    expect(effect('shell', 'find . -exec rm {} ;', sessionRules({ ...PRESETS.ask.permissions, shell: 'allow' }))).toBe('ask');
+    expect(effect('shell', 'git commit -m x', ask)).toBe('ask');
+    expect(effect('shell', 'git branch -D old', ask)).toBe('ask');
+    expect(effect('shell', 'rm a.typ', sessionRules({ ...PRESETS.ask.permissions, delete: 'deny' }))).toBe('deny');
+    expect(effect('shell', 'make', edit)).toBe('deny');
+  });
+
+  it('take more commands from the config file', () => {
+    const rules = sessionRules(PRESETS.ask.permissions, false, ['python3']);
+    expect(effect('shell', 'python3 count.py', rules)).toBe('allow');
+    expect(effect('shell', 'python3 x.py > out.txt', rules)).toBe('ask');
   });
 });
 

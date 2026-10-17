@@ -1985,6 +1985,35 @@ async function questionChecks() {
   return out;
 }
 
+/** Commands that only look run without asking ("Ask first"); a write through a redirect still asks (rejected here). */
+async function safeCommandChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: { ...policy, shell: 'ask' } });
+  const asked: unknown[] = [];
+  rawEventTap.fn = (raw) => {
+    if (raw?.type === 'permission.asked') asked.push({ action: raw.data?.action, resources: raw.data?.resources });
+  };
+  const out: Record<string, unknown> = {};
+  try {
+    await studio.setMode('write');
+    studio.newSession();
+    await askAgent('Run exactly this shell command line and tell me the output in one sentence: ls chapters && wc -l main.typ');
+    out.look = { asked: [...asked], rows: studio.state.agent.items.filter((i) => i.kind === 'tool').map((i) => (i.kind === 'tool' ? `${i.status}: ${i.summary}` : '')) };
+    asked.length = 0;
+    studio.newSession();
+    void studio.send('Run exactly this shell command line, unchanged: echo hi > probe-out.txt');
+    const card = await waitFor(() => studio.state.agent.items.find((i) => i.kind === 'permission' && i.state === 'pending'), 120000, 'permission').catch(() => null);
+    if (card && card.kind === 'permission') await studio.replyPermission(card.id, 'reject');
+    await waitFor(() => !studio.state.agent.running, 60000, 'idle').catch(() => {});
+    out.write = { asked: [...asked], fileWritten: !!(await ipc.fsHash('probe-out.txt')) };
+    return out;
+  } finally {
+    rawEventTap.fn = undefined;
+    studio.updateSettings({ permissions: policy });
+  }
+}
+
 /** One real turn: which OpenCode event types arrive, with one sample of each (for the chat's progress display). */
 async function eventProbe() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
@@ -2582,6 +2611,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();
     if (launch.selftestAgent && want('queue')) result.queue = await queueChecks();
     if (launch.selftestAgent && want('questions')) result.questions = await questionChecks();
+    if (launch.selftestAgent && want('safe-commands')) result.safeCommands = await safeCommandChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

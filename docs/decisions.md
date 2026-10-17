@@ -819,6 +819,30 @@ pane top (off by 0 pt).
   - A steered one was delivered mid-turn and answered in it.
   - A taken-back one never reached the conversation.
 
+### Commands that only look never ask
+
+- **How OpenCode checks shell commands** (verified live in 2.0.20):
+  - A command line is split into its commands, and each is checked on its own:
+    `ls a && wc -l b; echo x | cat` asks about four.
+  - `$(…)` and backticks are checked too.
+  - Redirections and flags stay in the command (`echo hi > f.txt`,
+    `find … -delete`, `sort -o out`).
+  - So an allowlist is safe as long as the writing forms are caught.
+- **The rules (last match wins):**
+  - `shell *` takes the author's setting;
+  - then the commands that only look are allowed: ls, pwd, cd, cat,
+    head/tail, wc, file, stat, du, tree, which, echo, printf, date, basename,
+    dirname, realpath, diff, cmp, grep/egrep/fgrep/rg, find, sort, cut, tr, nl,
+    column, jq, shasum, md5, and git status/log/diff/show/blame/ls-files;
+  - then the writing forms (`*>*`, find's -delete/-exec/-ok/-fprint/-fls,
+    `sort -o`, `--output`, `tree -o`) fall back to the shell setting;
+  - then rename/delete and the build block, as before.
+  - In Plan, Options and Read-only, the look commands still run and the
+    writing forms are denied.
+- `sessionRules` takes extra commands to allow (the config file, next).
+- **Verified live in "Ask first":** `ls chapters && wc -l main.typ` ran without
+  a question; `echo hi > probe-out.txt` asked, was rejected, and wrote nothing.
+
 ### The assistant asks: multiple choice or free text
 
 - **How OpenCode 2.0.20 does it** (from the server's bundled code, since the

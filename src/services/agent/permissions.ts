@@ -1,9 +1,14 @@
 // What the assistant may do, as OpenCode session permission rules.
 //
 // OpenCode 2.x actions (verified against the server's built-in agents, 2.0.20):
-// read, glob, grep, edit (also covers creating files), shell (resource = the
-// whole command line), external_directory (any path outside the project),
-// webfetch, websearch, subagent, question. Rules are last-match-wins.
+// read, glob, grep, edit (also covers creating files), shell, external_directory
+// (any path outside the project), webfetch, websearch, subagent, question.
+// Rules are last-match-wins.
+//
+// Shell: OpenCode splits a command line into its commands and checks each one
+// (`ls a && wc -l b; echo x | cat` asks about "ls a", "wc -l b", "echo x",
+// "cat"; `$(…)` and backticks are checked on their own too). Redirections
+// and flags stay in the command ("echo hi > f.txt"). Verified live, 2.0.20.
 
 export type Level = 'allow' | 'ask' | 'deny';
 
@@ -29,7 +34,7 @@ export const PERMISSION_ITEMS: { key: keyof AgentPermissions; label: string; det
   { key: 'move', label: 'Rename or move files', detail: 'The mv command.' },
   { key: 'delete', label: 'Delete files', detail: 'rm and similar commands. History keeps a copy.' },
   { key: 'outside', label: 'Files outside this book', detail: 'Reading or changing other folders on this Mac.' },
-  { key: 'shell', label: 'Run other commands', detail: 'Anything else in a terminal. Building the book is always blocked.' },
+  { key: 'shell', label: 'Run other commands', detail: 'Anything else in a terminal. Commands that only look (ls, cat, grep, git status…) always run; building the book is always blocked.' },
   { key: 'web', label: 'Search and read the web', detail: 'Web search and fetching pages.' },
 ];
 
@@ -96,10 +101,38 @@ export const READ_ONLY_RULES: readonly PermissionRule[] = [
   { action: 'shell', resource: '*', effect: 'deny' },
 ];
 
+/**
+ * Commands that only look (list, read, search, compare) and never need asking:
+ * in every mode, like the read and search tools. Each command of a chained
+ * line is checked on its own, so `ls; rm x` still asks about `rm x`.
+ */
+export const LOOK_COMMANDS = [
+  'ls', 'pwd', 'cd', 'cat', 'head', 'tail', 'wc', 'file', 'stat', 'du', 'tree', 'which', 'echo', 'printf', 'date', 'basename', 'dirname',
+  'realpath', 'diff', 'cmp', 'grep', 'egrep', 'fgrep', 'rg', 'find', 'sort', 'cut', 'tr', 'nl', 'column', 'jq', 'shasum', 'md5', 'true',
+  'git status', 'git log', 'git diff', 'git show', 'git blame', 'git ls-files',
+] as const;
+
+const lookRules = (extra: readonly string[] = []): PermissionRule[] =>
+  [...LOOK_COMMANDS, ...extra].flatMap((c) => [
+    { action: 'shell', resource: c, effect: 'allow' },
+    { action: 'shell', resource: `${c} *`, effect: 'allow' },
+  ]);
+
+/**
+ * Forms of those commands that write after all: redirection into a file, find's
+ * -delete/-exec, sort -o, --output. They fall back to the shell setting.
+ */
+const WRITING_FORMS = ['*>*', 'find *-delete*', 'find *-exec*', 'find *-ok*', 'find *-fprint*', 'find *-fls*', 'sort *-o*', '*--output*', 'tree *-o *'];
+const writingRules = (effect: Level): PermissionRule[] => WRITING_FORMS.map((resource) => ({ action: 'shell', resource, effect }));
+
 /** Shell patterns for a command at the start or after a separator ("cd x && rm y"). */
 const commandPatterns = (cmds: string[]) => cmds.flatMap((c) => [`${c} *`, `* ${c} *`, `*;${c} *`, `*&&${c} *`, `*|${c} *`]);
 
-export function sessionRules(p: AgentPermissions, readOnly = false): PermissionRule[] {
+/**
+ * `allowCommands`: more commands the author lets run without asking (from the
+ * config file, e.g. "python3"), on top of LOOK_COMMANDS.
+ */
+export function sessionRules(p: AgentPermissions, readOnly = false, allowCommands: readonly string[] = []): PermissionRule[] {
   return [
     // Anything not named below asks.
     { action: '*', resource: '*', effect: 'ask' },
@@ -118,6 +151,8 @@ export function sessionRules(p: AgentPermissions, readOnly = false): PermissionR
         ] as PermissionRule[])
       : []),
     { action: 'shell', resource: '*', effect: p.shell },
+    ...lookRules(allowCommands),
+    ...writingRules(p.shell),
     ...commandPatterns(['mv', 'git mv']).map((resource): PermissionRule => ({ action: 'shell', resource, effect: p.move })),
     ...commandPatterns(['rm', 'rmdir', 'unlink', 'trash', 'git rm', 'shred']).map((resource): PermissionRule => ({ action: 'shell', resource, effect: p.delete })),
     { action: 'webfetch', resource: '*', effect: p.web },
@@ -127,7 +162,8 @@ export function sessionRules(p: AgentPermissions, readOnly = false): PermissionR
     { action: 'subagent', resource: '*', effect: 'deny' },
     { action: 'task', resource: '*', effect: 'deny' },
     { action: 'question', resource: '*', effect: 'allow' },
-    ...(readOnly ? READ_ONLY_RULES : []),
+    // Read-only: commands that only look still run; writing forms never do.
+    ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny')] : []),
     ...NO_COMPILE_RULES,
   ];
 }
