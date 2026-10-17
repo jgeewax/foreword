@@ -158,4 +158,4 @@
 
 - [x] update system prompt to encourage one sentence per line.
 
-- [ ] add support for git repository ... i need that for my existing books. they have git repos already.
+- [x] add support for git repository ... i need that for my existing books. they have git repos already.

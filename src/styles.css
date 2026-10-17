@@ -815,3 +815,24 @@ img.typst-page { display: block; max-width: 100%; }
 .change-formula-was, .change-formula-now { padding: 2px 6px; border-radius: 4px; }
 .change-formula-was { background: var(--del); }
 .change-formula-now { background: var(--add); }
+
+/* Source Control: the book's own Git repository. */
+.git-panel { flex: 1; overflow: auto; padding: 6px 0 10px; }
+.git-branch { display: flex; align-items: center; gap: 6px; padding: 2px 10px 6px; font-size: 12px; flex-wrap: wrap; }
+.git-commit { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 8px; }
+.git-commit textarea { width: 100%; resize: vertical; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; }
+.git-commit textarea:focus { border-color: var(--accent); outline: none; }
+.git-section { display: flex; align-items: center; gap: 6px; }
+.git-section .link { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11.5px; }
+.git-file, .git-commit-row { display: flex; align-items: baseline; gap: 7px; width: 100%; padding: 3px 10px; border: none; border-radius: 0; background: transparent; text-align: left; min-width: 0; }
+.git-file:hover, .git-commit-row:hover { background: var(--sel); }
+.git-status { flex: none; width: 12px; font: 700 11px/1 "SF Mono", Menlo, monospace; text-align: center; }
+.git-file.s-M .git-status { color: #d29922; }
+.git-file.s-A .git-status, .git-file.s-new .git-status { color: var(--good); }
+.git-file.s-D .git-status { color: var(--bad); }
+.git-file.s-D .git-name { text-decoration: line-through; color: var(--muted); }
+.git-file.s-R .git-status { color: var(--accent); }
+.git-file.s-U .git-status { color: var(--bad); }
+.git-name, .git-subject { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-folder { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.git-when { flex: none; margin-left: auto; font-size: 11px; }

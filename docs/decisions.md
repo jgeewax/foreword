@@ -309,6 +309,54 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### Source Control: the book's own Git repository
+
+- **The need:** existing books already have Git repositories. History
+  deliberately never touches them (it keeps its own snapshots), so there was
+  no way to commit from the app.
+- **The Source Control view** (activity bar: branches, with a badge of
+  uncommitted files; View → Source Control) appears when the book is in a
+  repository. It shows:
+  - the branch and its remote, with **Pull** (↓ behind) and **Push** (↑
+    ahead);
+  - a commit message and **Commit N files** (⌘⏎), which commits every change
+    in the book's folder, new files too;
+  - the changed files (M, N(ew), D, R, ! conflict), each by its chapter
+    heading;
+  - the recent commits.
+  Files and commits open **What changed** in words, the same view as History
+  (shared `Passage`), with formulas drawn. A passage of uncommitted changes
+  opens the file there.
+- **Scoped and safe** (`src-tauri/src/git.rs`):
+  - **The author's Git:** it uses their config, hooks, signing and
+    credentials, unlike History.
+  - **Only the book's folder:** everything is limited to it (`-- .`).
+    `commit -- .` leaves anything staged elsewhere in a larger repository
+    alone.
+  - **Pull** is `--ff-only`, never a merge or rebase. **Push** sets the
+    upstream to origin on a branch's first push.
+  - **Nothing destructive:** no discard, reset, clean or checkout of files.
+  - **No hanging:** Git never waits on a terminal (`GIT_TERMINAL_PROMPT=0`,
+    SSH in batch mode); timeouts are 20 s to read and 120 s to write.
+  - **Checked arguments:** commit ids must be hex (or HEAD, `^`), and paths
+    must stay in the book, after `--`.
+- **When it refreshes:** when the book opens, 0.8 s after files change on
+  disk (saves, the assistant), and when the window comes back to the front
+  (commits made in a terminal).
+- **The assistant** is told not to commit, push, pull, stash or switch
+  branches unless asked.
+- Verified:
+  - Rust tests: status parsing (ahead/behind, renames, conflicts, a book in a
+    subfolder of the repository), argument checks, and a real commit that
+    takes only the book's folder.
+  - Self-test `git`, on a scratch repository with a local bare remote:
+    - an edited and a new chapter showed as M and N with a badge of 2;
+    - What changed listed both, with the preview hidden;
+    - Commit through the panel made "Add chapter two" (ahead 1);
+    - Push emptied "ahead" and the remote has the commit; Pull said "Up to
+      date";
+    - the commit's What changed listed both files.
+
 ### Several windows, one book each (like VS Code)
 
 - **File → New Window** (⌥⇧⌘N) opens another window on the welcome screen.

@@ -33,6 +33,10 @@ export type LaunchOptions = {
   /** A window from New Window: it starts without a book (not the last one). */
   fresh: boolean;
 };
+/** A book file in Git: M modified, A added, D deleted, R renamed, ? new (not yet in Git), U conflict. */
+export type GitFile = { path: string; status: 'M' | 'A' | 'D' | 'R' | '?' | 'U' };
+export type GitStatus = { root: string; prefix: string; branch: string | null; upstream: string | null; ahead: number; behind: number; files: GitFile[] };
+export type GitCommit = { hash: string; short: string; subject: string; author: string; time: number; parent: boolean };
 export type Bounds = { x: number; y: number; width: number; height: number };
 export type AgentInfo = { baseUrl: string; bin: string };
 export type AgentResponse = { status: number; body: any };
@@ -52,6 +56,14 @@ export const ipc = {
   selftestFinish: (result: unknown) => invoke<void>('selftest_finish', { result }),
   logs: (source?: string) => invoke<{ source: string; line: string }[]>('app_logs', { source }),
 
+  /** The author's own Git repository (src-tauri/src/git.rs); null when the book isn't in one. */
+  gitStatus: () => invoke<GitStatus | null>('git_status'),
+  gitFile: (rev: string, path: string) => invoke<string | null>('git_file', { rev, path }),
+  gitLog: (limit: number) => invoke<GitCommit[]>('git_log', { limit }),
+  gitCommitFiles: (hash: string) => invoke<GitFile[]>('git_commit_files', { hash }),
+  gitCommit: (message: string) => invoke<string>('git_commit', { message }),
+  gitPull: () => invoke<string>('git_pull'),
+  gitPush: () => invoke<string>('git_push'),
   /** Whether another window has this book open (it comes to the front if so). */
   workspaceElsewhere: (path: string) => invoke<boolean>('workspace_elsewhere', { path }),
   workspaceOpen: (path: string, onChange: Channel<string[]>) => invoke<WorkspaceInfo>('workspace_open', { path, onChange }),

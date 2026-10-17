@@ -29,6 +29,7 @@ import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
 import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
+import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
@@ -216,6 +217,8 @@ export type StudioState = {
   /** WRITING_STYLE.md: whether it exists, and whether the user dismissed the setup prompt. */
   styleGuide: { exists: boolean; chars: number; dismissed: boolean };
   history: HistoryState;
+  /** The author's own Git repository, if the book is in one. */
+  git: GitState;
   /** Runnable code examples in the book. */
   code: CodeState;
   /** TODOs left in the book's files. */
@@ -247,7 +250,7 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks';
+  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks' | 'git';
 };
 
 const initialState: StudioState = {
@@ -300,6 +303,7 @@ const initialState: StudioState = {
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false },
   history: initialHistory,
+  git: initialGit,
   code: initialCode,
   todos: [],
   review: { comments: [], draft: null, busy: [] },
@@ -364,6 +368,19 @@ export class Studio {
   docs: Documents | null = null;
   agent: AgentAdapter | null = null;
   editor: monaco.editor.IStandaloneCodeEditor | null = null;
+  readonly git = new SourceControl({
+    get: () => this.state.git,
+    set: (patch) => this.store.set((s) => ({ git: { ...s.git, ...patch } })),
+    report: (text, tone) => this.toast(text, tone),
+  });
+  private gitTimer: number | undefined;
+
+  /** Source Control's status, soon after files change (saves, the assistant, another app). */
+  private scheduleGitRefresh(delay = 800) {
+    clearTimeout(this.gitTimer);
+    this.gitTimer = window.setTimeout(() => void this.git.refresh(), delay);
+  }
+
   readonly history = new History({
     get: () => this.state.history,
     set: (patch) => {
@@ -506,6 +523,7 @@ export class Studio {
     'show-review': () => this.showReview(),
     'show-history': () => this.revealSidebar(this.state.settings.historyPlacement === 'below' ? 'files' : 'history'),
     'show-tasks': () => this.revealSidebar('tasks'),
+    'show-git': () => this.revealSidebar('git'),
     'show-in-preview': () => this.syncPreviewToCursor(),
     'zoom-in': () => this.zoom('in', 'menu'),
     'zoom-out': () => this.zoom('out', 'menu'),
@@ -589,7 +607,11 @@ export class Studio {
     if (zoom && zoom !== 1) await this.setZoom(zoom, { persist: false }).catch(() => {});
     // The settings file wins over this machine's cached copy; edits made elsewhere apply on return.
     await this.loadConfig();
-    window.addEventListener('focus', () => void this.loadConfig());
+    window.addEventListener('focus', () => {
+      void this.loadConfig();
+      // Commits made in a terminal or another app while this window was in the background.
+      if (this.state.workspace) this.scheduleGitRefresh(0);
+    });
     await this.refreshViewportInset();
     // The inset changes with the title bar (e.g. full screen hides it).
     window.addEventListener('resize', () => {
@@ -665,6 +687,7 @@ export class Studio {
     this.aiReads = [];
     void this.refreshNames();
     void this.history.start(this.historyExcludes()).then(() => this.refreshAiEdits());
+    void this.git.refresh();
     void this.code.scan();
     void this.scanTodos();
     void this.loadReview();
@@ -1927,6 +1950,7 @@ export class Studio {
     this.code.reset();
     this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', bookPages: null, compile: { status: 'idle' } });
     await this.history.stop();
+    this.git.reset();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
     await Promise.allSettled([this.typst.stop(), this.agent?.stop(), ipc.previewClose()]);
@@ -1975,6 +1999,7 @@ export class Studio {
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
       });
       this.history.scheduleSave();
+      this.scheduleGitRefresh();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
       if (batch.includes(STYLE_GUIDE_FILE)) void this.loadStyleGuide({ updateSession: true });
     }, 120);
@@ -2303,7 +2328,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.newBookOpen || !!s.history.diff || !!s.history.changes || !!s.prompt || s.coverDialogOpen || s.print.open || s.quickOpen;
+    return s.settingsOpen || s.newBookOpen || !!s.history.diff || !!s.history.changes || !!s.git.view || !!s.prompt || s.coverDialogOpen || s.print.open || s.quickOpen;
   }
 
   private syncPreviewVisibility() {

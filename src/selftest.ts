@@ -2491,6 +2491,53 @@ async function subRootChecks() {
 }
 
 /**
+ * Source Control on a book with its own Git repository (run with a scratch
+ * repo and a local bare remote as the workspace): status, what changed,
+ * commit, push, pull and a commit's changes.
+ */
+async function gitChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.git.status === 'ready', 20000, 'git').catch(() => {});
+  const g = () => studio.state.git;
+  out.start = { branch: g().repo?.branch, upstream: g().repo?.upstream, files: g().repo?.files.length, commits: g().log.length };
+  // Change a chapter and add one, as the author would (on disk).
+  const file = 'src/chapters/one.typ';
+  const { text, hash } = await ipc.fsRead(file);
+  await ipc.fsWrite(file, text.replace('Hello from the first chapter.', 'Hello again from the first chapter.'), hash);
+  await ipc.fsWrite('src/chapters/two.typ', '= Two\n\nA second chapter.\n', null);
+  await waitFor(() => (g().repo?.files.length ?? 0) >= 2, 10000, 'changes').catch(() => {});
+  out.changed = g().repo?.files.map((f) => `${f.status} ${f.path}`);
+  studio.showSidebar('git');
+  await sleep(400);
+  out.badge = document.querySelector('.activity-bar button[aria-label^="Source control"] .activity-badge')?.textContent;
+  out.rows = [...document.querySelectorAll('.git-file')].map((e) => e.textContent);
+  out.snapshotPanel = await snap('git-panel');
+  await studio.git.showWorking();
+  await waitFor(() => !!g().view?.files, 10000, 'diff');
+  await sleep(300);
+  out.working = { files: g().view?.files?.map((f) => `${f.status} ${f.path} +${f.diff?.added}`), previewHidden: (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden };
+  out.snapshotChanges = await snap('git-changes');
+  studio.git.closeView();
+  // Commit through the panel.
+  const box = document.querySelector<HTMLTextAreaElement>('.git-commit textarea')!;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'Add chapter two');
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(200);
+  document.querySelector<HTMLButtonElement>('.git-commit button.primary')?.click();
+  await waitFor(() => g().log.length === 2 && !g().busy, 15000, 'commit').catch(() => {});
+  out.committed = { commits: g().log.map((c) => c.subject), files: g().repo?.files.length, ahead: g().repo?.ahead, boxCleared: box.value === '' };
+  await studio.git.push();
+  out.pushed = { ahead: g().repo?.ahead, toast: studio.state.toast?.text };
+  await studio.git.pull();
+  out.pulled = { behind: g().repo?.behind, toast: studio.state.toast?.text };
+  await studio.git.showCommit(g().log[0]);
+  await waitFor(() => !!g().view?.files, 10000, 'commit diff');
+  out.commitView = { title: g().view?.title, files: g().view?.files?.map((f) => `${f.status} ${f.path}`) };
+  studio.git.closeView();
+  return out;
+}
+
+/**
  * Several windows, one book each: a new window starts without a book, opens
  * its own, can't open one that's open elsewhere, and goes away cleanly.
  * (Needs scratchpad/book-in-src next to the self-test output.)
@@ -3467,6 +3514,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('activity')) result.activity = await activityChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
+    if (want('git')) result.git = await gitChecks();
     if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();

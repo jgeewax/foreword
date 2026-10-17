@@ -7,6 +7,7 @@ mod discover;
 mod error;
 mod export;
 mod files;
+mod git;
 mod history;
 mod logs;
 mod lsp;
@@ -570,6 +571,13 @@ pub fn run() {
             agent::agent_subscribe,
             agent::agent_stop,
             history::history_init,
+            git::git_status,
+            git::git_file,
+            git::git_log,
+            git::git_commit_files,
+            git::git_commit,
+            git::git_pull,
+            git::git_push,
             history::history_reveal,
             history::history_snapshot,
             history::history_list,

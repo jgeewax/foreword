@@ -58,6 +58,15 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M11 7h9M11 13h9M11 19h9" />
     </>
   ),
+  // Source control (VS Code's): branches joining.
+  branch: (
+    <>
+      <circle cx="7" cy="5.5" r="2" />
+      <circle cx="7" cy="18.5" r="2" />
+      <circle cx="17" cy="7.5" r="2" />
+      <path d="M7 7.5v9M17 9.5c0 4.5-10 3-10 7" />
+    </>
+  ),
   // Conversations with the assistant: a speech bubble with lines of text.
   chats: (
     <>

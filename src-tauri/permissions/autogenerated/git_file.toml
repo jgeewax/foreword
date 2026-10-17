@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-git-file"
+description = "Enables the git_file command without any pre-configured scope."
+commands.allow = ["git_file"]
+
+[[permission]]
+identifier = "deny-git-file"
+description = "Denies the git_file command without any pre-configured scope."
+commands.deny = ["git_file"]

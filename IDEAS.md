@@ -162,3 +162,9 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - "Export this chapter": a PDF of one chapter for an editor or reviewer. Needs the book to say how (a template that reads `sys.inputs.chapter` and includes only that one, keeping the preamble and numbering).
 - A "focus on this chapter" preview mode built on the same opt-in, for writers who find 500 pages of preview distracting.
 - Re-measure edit → preview on a 1,500-page book; compile time grows with the book even though the preview only draws what's in view.
+
+## Source Control
+
+- "Write the commit message": the assistant drafts one from what changed, the author edits it.
+- Branches: list, switch (only with nothing uncommitted) and create, in words ("a draft for the editor").
+- Conflicts after a pull that needs a merge: show both versions of the passage side by side and let the author pick, instead of Git's markers.

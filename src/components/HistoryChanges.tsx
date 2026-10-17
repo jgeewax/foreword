@@ -16,7 +16,8 @@ const KIND_TITLE: Record<string, string> = {
 /** Long passages (a whole new file) are cut here until "Show all". */
 const PASSAGE_LIMIT = 1600;
 
-function Passage({ hunk, path, latest }: { hunk: Hunk; path: string; latest: boolean }) {
+/** One changed passage, word by word; its line opens the file there (Source Control's dialog uses it too). */
+export function Passage({ hunk, path, latest, onOpen }: { hunk: Hunk; path: string; latest: boolean; onOpen?: () => void }) {
   const [full, setFull] = useState(false);
   let budget = full ? Infinity : PASSAGE_LIMIT;
   const pieces = hunk.pieces.map((p, i) => {
@@ -32,7 +33,7 @@ function Passage({ hunk, path, latest }: { hunk: Hunk; path: string; latest: boo
         className="change-line link"
         title={latest ? 'Open the file here' : 'Open the file (the line may have moved since)'}
         onClick={() => {
-          studio.history.closeChanges();
+          (onOpen ?? (() => studio.history.closeChanges()))();
           void studio.openAt(path, hunk.line);
         }}
       >
