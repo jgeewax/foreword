@@ -94,10 +94,13 @@ export function StatusBar() {
   const zoom = useStore(studio.store, (s) => s.zoom);
   const canAsk = agent === 'ready' && !running;
   const todos = useStore(studio.store, (s) => s.todos.length);
+  const previewTarget = useStore(studio.store, (s) => s.previewTarget);
 
   const compileTone: Tone = compile.status === 'ok' ? 'ok' : compile.status === 'compiling' ? 'busy' : compile.status === 'error' ? 'bad' : 'off';
   const compileLabel =
-    compile.status === 'ok'
+    compile.status === 'ok' && previewTarget === 'cover'
+      ? 'Cover'
+      : compile.status === 'ok'
       ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}${compile.words != null ? ` · ${compile.words.toLocaleString()} words` : ''}`
       : compile.status === 'compiling'
         ? 'Typesetting…'

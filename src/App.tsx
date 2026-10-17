@@ -6,6 +6,7 @@ import { StatusBar, Toast, Toolbar, Welcome } from './components/Chrome';
 import { EditorPane } from './components/EditorPane';
 import { Explorer } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
+import { CoverDialog } from './components/CoverDialog';
 import { HistoryDiff } from './components/HistoryDiff';
 import { NewBookDialog } from './components/NewBookDialog';
 import { PromptDialog } from './components/PromptDialog';
@@ -152,11 +153,13 @@ export function App() {
   }, [workspace]);
   const settingsOpen = useStore(studio.store, (s) => s.settingsOpen);
   const newBookOpen = useStore(studio.store, (s) => s.newBookOpen);
+  const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
       {settingsOpen && <SettingsDialog />}
       {newBookOpen && <NewBookDialog />}
+      {coverDialogOpen && <CoverDialog />}
       <PromptDialog />
       <HistoryDiff />
     </>

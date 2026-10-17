@@ -25,6 +25,7 @@ import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles } from '../templates';
 import { makefile } from '../templates/makefile';
+import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
 import { CodeRunner, initialCode, type CodeState } from '../code/runner';
 import { OUTPUTS_FILE } from '../code/cells';
@@ -143,6 +144,11 @@ export type StudioState = {
   todos: Todo[];
   /** Review comments (beside the text, in .typst-studio/review.json) and review mode (read-only editor). */
   review: { comments: ReviewComment[]; mode: boolean };
+  /** What the preview shows: the book, or its cover (cover/preview.typ, with guides). */
+  previewTarget: 'book' | 'cover';
+  /** The book's page count, last seen while previewing the book (for the cover's spine). */
+  bookPages: number | null;
+  coverDialogOpen: boolean;
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
   sidebar: 'files' | 'history' | 'code' | 'todos' | 'review';
 };
@@ -195,6 +201,9 @@ const initialState: StudioState = {
   code: initialCode,
   todos: [],
   review: { comments: [], mode: false },
+  previewTarget: 'book',
+  bookPages: null,
+  coverDialogOpen: false,
   sidebar: 'files',
 };
 
@@ -312,6 +321,7 @@ export class Studio {
           pages: s.pageCount || st.compile.pages,
           words: s.wordsCount?.words ?? st.compile.words,
         },
+        ...(st.previewTarget === 'book' && s.pageCount ? { bookPages: s.pageCount } : {}),
       }));
     });
     this.typst.on('scrollSource', (jump) => {
@@ -331,6 +341,7 @@ export class Studio {
       if (e.payload === 'new-book') return this.openNewBook();
       if (e.payload === 'new-chapter') return void this.newChapter();
       if (e.payload === 'new-file') return void this.newFile();
+      if (e.payload === 'design-cover') return this.openCoverDialog();
       if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
@@ -939,7 +950,16 @@ export class Studio {
       !!selection.trim() && { label: 'Copy', action: () => this.copy(selection) },
       'separator',
       { label: 'Show the Text Here', action: () => void click() },
-      { label: 'Export PDF', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+      ...(this.state.previewTarget === 'cover'
+        ? [
+            { label: 'Show the Book', action: () => void this.setPreviewTarget('book') },
+            { label: 'Update Cover from Book', action: () => void this.updateCoverFromBook() },
+            { label: 'Export Cover', action: () => void this.exportCover(), enabled: !this.state.exporting },
+          ]
+        : [
+            { label: this.hasCover() ? 'Show the Cover' : 'Design a Cover…', action: () => this.openCoverDialog() },
+            { label: 'Export PDF', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+          ]),
       { label: 'Restart Preview', action: () => void this.restartTypst() },
     ]);
   }
@@ -1202,6 +1222,97 @@ export class Studio {
     });
   }
 
+  // ---- cover --------------------------------------------------------------------------
+
+  hasCover() {
+    return (this.state.workspace?.files ?? []).includes(COVER_PREVIEW);
+  }
+
+  openCoverDialog() {
+    if (this.hasCover()) {
+      void this.setPreviewTarget('cover');
+      void this.openFile(COVER_DESIGN);
+      return;
+    }
+    this.store.set({ coverDialogOpen: true });
+    this.syncPreviewVisibility();
+  }
+
+  closeCoverDialog() {
+    this.store.set({ coverDialogOpen: false });
+    this.syncPreviewVisibility();
+  }
+
+  /** The book's page size, title and author (from its main file) and page count, for the cover. */
+  async bookMeasurements(): Promise<{ width: string | null; height: string | null; pages: number | null; title: string | null; author: string | null }> {
+    const ws = this.state.workspace;
+    const main = ws?.entry ? await this.currentText(ws.entry) : null;
+    const trim = main ? trimFromMain(main) : null;
+    return { width: trim?.width ?? null, height: trim?.height ?? null, pages: this.state.bookPages, ...(main ? namesFromMain(main) : { title: null, author: null }) };
+  }
+
+  /** Create cover/ from a style, then preview it. Never overwrites: throws if any of its files exist. */
+  async designCover(styleId: string, info: Omit<CoverInfo, 'width' | 'height' | 'pages'> & Partial<Pick<CoverInfo, 'width' | 'height' | 'pages'>>) {
+    const style = COVER_STYLES.find((s) => s.id === styleId) ?? COVER_STYLES[0];
+    const book = await this.bookMeasurements();
+    const files = coverFiles(style, { ...info, width: info.width ?? book.width ?? '6in', height: info.height ?? book.height ?? '9in', pages: info.pages ?? book.pages ?? 200 });
+    const taken = [];
+    for (const f of files) if (await ipc.fsHash(f.path)) taken.push(f.path);
+    if (taken.length) throw new Error(`${taken.join(', ')} already exist${taken.length === 1 ? 's' : ''}. Move or rename them first.`);
+    try {
+      await ipc.fsMkdir(COVER_DIR);
+    } catch (e) {
+      if (!/already exists/.test(errorMessage(e))) throw e;
+    }
+    for (const f of files) await ipc.fsWrite(f.path, f.text, null);
+    await this.refreshFiles();
+    this.closeCoverDialog();
+    await this.setPreviewTarget('cover');
+    await this.openFile(COVER_DESIGN);
+    this.toast('Cover created: edit cover/design.typ; the preview shows it with guides. Switch back with Book in the preview.');
+  }
+
+  /** Book ↔ cover in the preview (restarts the preview on the other file). */
+  async setPreviewTarget(target: 'book' | 'cover') {
+    if (target === this.state.previewTarget) return;
+    if (target === 'cover' && !this.hasCover()) return this.openCoverDialog();
+    this.store.set({ previewTarget: target });
+    await this.restartTypst();
+  }
+
+  /** Bring the cover's page size and page count (spine) in line with the book. */
+  async updateCoverFromBook() {
+    const book = await this.bookMeasurements();
+    if (!book.pages) return this.toast('Show the book in the preview once, so Typst Studio knows its page count.', 'error');
+    try {
+      await this.editFile(COVER_SPEC, (text) => updateSpec(text, book));
+      this.toast(`Cover updated: ${book.pages} pages${book.width ? `, ${book.width} × ${book.height}` : ''}.`);
+    } catch (e) {
+      this.toast(`Couldn't update the cover: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** Export the printable cover (no guides) to the export folder. */
+  async exportCover() {
+    const ws = this.state.workspace;
+    if (!ws || this.state.exporting) return;
+    if (!this.typst.running) return this.toast('Export needs the Typst preview running. Restart the preview and try again.', 'error');
+    this.store.set({ exporting: true });
+    try {
+      const failures = (await this.docs?.saveAll()) ?? [];
+      if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
+      const path = await this.typst.exportPdf(`${ws.root}/${COVER_PRINT}`);
+      const rel = path.startsWith(ws.root + '/') ? path.slice(ws.root.length + 1) : path;
+      this.toast(`Cover exported to ${rel}`);
+      void this.refreshFiles();
+      return rel;
+    } catch (e) {
+      this.toast(`Cover export failed: ${errorMessage(e)}`, 'error');
+    } finally {
+      this.store.set({ exporting: false });
+    }
+  }
+
   /** Open a file with the cursor on a line (1-based). */
   async openAt(path: string, line: number) {
     await this.openFile(path);
@@ -1226,7 +1337,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.composerDraft = '';
     this.code.reset();
-    this.store.set({ todos: [], review: { comments: [], mode: false } });
+    this.store.set({ todos: [], review: { comments: [], mode: false }, previewTarget: 'book', bookPages: null, compile: { status: 'idle' } });
     await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
@@ -1459,9 +1570,12 @@ export class Studio {
       return;
     }
     this.store.set({ preview: { status: 'starting' } });
+    // The cover is its own document: preview it instead of the book on request.
+    if (this.state.previewTarget === 'cover' && !ws.files.includes(COVER_PREVIEW)) this.store.set({ previewTarget: 'book' });
+    const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : ws.entry;
     try {
       const project = this.state.project.settings;
-      const { previewUrl } = await this.typst.start(ws.root, ws.entry, {
+      const { previewUrl } = await this.typst.start(ws.root, entry, {
         outputPath: outputPathPattern(project),
         fontPaths: absoluteFontPaths(project, ws.root),
       });
@@ -1487,7 +1601,7 @@ export class Studio {
     const ok = this.state.preview.status !== 'error';
     // The preview is a native view above the page; hide it while a dialog is open
     // so the dialog isn't drawn underneath it.
-    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.prompt;
+    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.prompt || this.state.coverDialogOpen;
     void ipc.previewSetVisible(this.previewVisible && ok && !dialog);
   }
 
@@ -2190,7 +2304,8 @@ export class Studio {
     try {
       const failures = (await this.docs?.saveAll()) ?? [];
       if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
-      const path = await this.typst.exportPdf();
+      // The book's main file, also while the preview shows the cover.
+      const path = await this.typst.exportPdf(ws.entry ? `${ws.root}/${ws.entry}` : undefined);
       const rel = path.startsWith(ws.root + '/') ? path.slice(ws.root.length + 1) : path;
       this.toast(`Exported ${rel}`);
       void this.refreshFiles();

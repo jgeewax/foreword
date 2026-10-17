@@ -735,6 +735,85 @@ async function journeyChecks() {
   return out;
 }
 
+/**
+ * Cover designer: a fresh novel, the dialog (prefilled from the book), a cover
+ * that matches the book, the Book/Cover switch, updating the spine after the
+ * book grows, refusing to overwrite, and both exports. Works next to the
+ * scratch book, then reopens it.
+ */
+async function coverChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const compiled = () => waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+  const spec = async () => {
+    const t = (await ipc.fsRead('cover/spec.typ')).text;
+    return Object.fromEntries([...t.matchAll(/^#let (trim-width|trim-height|pages|paper|spine-width) = (.*)$/gm)].map((m) => [m[1], m[2]]));
+  };
+
+  await studio.createBook('novel', { title: `Cover ${Date.now().toString(36)}`, author: 'Ada Example', size: { width: '5.5in', height: '8.5in' } }, parent);
+  await compiled();
+  await sleep(1000);
+  out.bookPages = studio.state.bookPages;
+
+  studio.openCoverDialog();
+  await sleep(600);
+  const field = (label: string) => document.querySelector<HTMLInputElement>(`[aria-label="Design cover"] input[aria-label="${label}"]`)?.value;
+  out.dialog = {
+    shown: !!document.querySelector('[aria-label="Design cover"]'),
+    styles: [...document.querySelectorAll('[aria-label="Cover style"] .template-name')].map((e) => e.textContent),
+    title: document.querySelector<HTMLInputElement>('[aria-label="Design cover"] input[autofocus], [aria-label="Design cover"] label input')?.value,
+    width: field('Width'),
+    height: field('Height'),
+    pages: field('Pages'),
+    note: [...document.querySelectorAll('[aria-label="Design cover"] .field-note')].map((e) => e.textContent).find((t) => t?.startsWith('Spine')),
+  };
+  out.snapshotDialog = await snap('cover-dialog');
+  studio.closeCoverDialog();
+
+  await studio.designCover('band', { title: 'The Quiet Harbour', author: 'Ada Example', paper: '0.0025in', spineWidth: null });
+  await compiled();
+  await sleep(1500);
+  out.created = {
+    files: studio.state.workspace?.files.filter((f) => f.startsWith('cover/')),
+    target: studio.state.previewTarget,
+    active: studio.state.active,
+    spec: await spec(),
+    switch: [...document.querySelectorAll('.preview-switch button')].map((b) => `${b.textContent}${b.classList.contains('active') ? '*' : ''}`),
+    pill: document.querySelector('.preview-pane .pill')?.textContent,
+    errors: studio.state.problems.errors,
+  };
+  out.snapshotPreview = await snap('cover-preview', 'preview');
+  out.snapshotMain = await snap('cover-main');
+  out.overwrite = await studio.designCover('classic', { title: 'X', author: 'Y', paper: '0.0025in', spineWidth: null }).then(
+    () => 'overwrote!',
+    (e) => errorMessage(e),
+  );
+
+  // The book grows; the cover follows on request.
+  await studio.setPreviewTarget('book');
+  await compiled();
+  const before = studio.state.bookPages ?? 0;
+  for (const name of ['The Long Night', 'Morning', 'Evening']) await studio.addChapter(name);
+  await studio.save();
+  await waitFor(() => (studio.state.bookPages ?? 0) > before, 30000, 'pages').catch(() => {});
+  out.grew = { before, after: studio.state.bookPages };
+  await studio.setPreviewTarget('cover');
+  await compiled();
+  await studio.updateCoverFromBook();
+  await sleep(500);
+  out.updated = await spec();
+
+  out.exportCover = await studio.exportCover();
+  // Book export while the cover is showing still exports the book.
+  await studio.exportPdf();
+  out.exports = { cover: !!(await ipc.fsHash('export/cover.pdf')), book: !!(await ipc.fsHash('export/main.pdf')) };
+  out.book = studio.state.workspace?.root;
+  await studio.setPreviewTarget('book');
+  await studio.openWorkspace(original);
+  return out;
+}
+
 /** Runnable code examples: run, outdated, and the assistant fix loop (a fresh programming book). */
 async function codeChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
@@ -1837,6 +1916,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('journey')) {
       log('journey');
       result.journey = await journeyChecks();
+    }
+    if (want('cover')) {
+      log('cover');
+      result.cover = await coverChecks();
     }
     if (want('menus')) {
       log('menus');

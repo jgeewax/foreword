@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900">
+  <!-- A placeholder for the front cover's picture: replace this file with your own (SVG, PNG or JPG; change the name in design.typ). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a9d8f8"/>
+      <stop offset="1" stop-color="#eaf6ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="900" fill="url(#sky)"/>
+  <circle cx="440" cy="590" r="64" fill="#ffd166"/>
+  <path d="M0 690 Q150 600 300 670 T600 640 V900 H0 Z" fill="#8fd18a"/>
+  <path d="M0 780 Q200 700 380 770 T600 750 V900 H0 Z" fill="#55a860"/>
+</svg>

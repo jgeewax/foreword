@@ -71,3 +71,11 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Address comments one at a time with Options mode (three versions each), for picky passages.
 - Export comments as a PDF with annotations, or import them from one (an editor's PDF markup → review comments).
 - Share a review: other people add comments through a shared link (needs a server, or comments in Git).
+
+## Covers
+- Printer presets: Mixam, IngramSpark and Lulu bleed, spine and barcode rules; pick the printer once and the cover and the print checks follow it.
+- A real barcode: generate the ISBN EAN-13 barcode in the box (a Typst package such as tiaoma), from an ISBN field.
+- More styles, and covers matching each book template's fonts and colours (one per template, chosen by default).
+- Ask the assistant for cover copy (back-cover blurb, tagline) in the book's voice, from the manuscript and style guide.
+- A front-only export (ebook cover, 1600×2560 PNG) from the same design.
+- Hardcover case wraps and dust jackets (different hinge and wrap allowances).

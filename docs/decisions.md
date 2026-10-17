@@ -599,6 +599,47 @@ pane top (off by 0 pt).
   They share localStorage with the author's app, and scratch folders showed up
   there.
 
+### Cover designer
+
+- **What a cover is here:** a print wrap (back, spine, front, with bleed all
+  round) as its own Typst document in the book's `cover/` folder.
+  - `spec.typ` holds the measurements: trim size, page count, paper
+    thickness or an exact spine width, and bleed. The wrap is
+    2 × trim + spine + 2 × bleed by trim + 2 × bleed.
+  - `design.typ` is the design, from one of three styles: Classic, Band, or
+    Picture (which comes with a placeholder `front.svg`).
+  - `cover.typ` is what's printed. `preview.typ` is the same with a guide layer
+    showing bleed, trim, spine folds, safe areas, the barcode box and the
+    spine width.
+- **Why separate files:** the author edits only `design.typ`. Typst Studio
+  rewrites only the `trim-width`, `trim-height` and `pages` lines of `spec.typ`
+  ("Update from book"), so a changed bleed or exact spine width survives.
+- **Spine:** pages × thickness per page, using Amazon KDP's published figures
+  for cream, white and colour paper. An exact width from the printer
+  overrides it, and the dialog says the printer's spine calculator is the one
+  to trust. Spine text appears only from 0.25in up, as printers advise.
+- **Preview:** a Book | Cover switch in the preview header restarts Tinymist on
+  `cover/preview.typ`. While the book is shown, its page count is remembered
+  (`bookPages`) for the spine. Export PDF always exports the book's main
+  file, even while the cover is showing. Export cover compiles
+  `cover/cover.typ` (no guides) to the export folder.
+- **Safety:** creating a cover refuses if any of its files exist, and never
+  overwrites them.
+- **Checks:** `check-templates` compiles every style with a 24-page spine
+  (too thin for text), a 500-page spine and an exact 20mm spine. It checks
+  that the PDF is one page of exactly the wrap size.
+- **Verified in the app** (self-test `cover`):
+  - The dialog prefills title, author, trim and pages from the book.
+  - The Band cover for a 5.5×8.5in novel exported at 811.44 × 630 pt, the
+    expected size.
+  - After three chapters were added, the spine followed (5 → 8 pages) on
+    "Update from book".
+  - Export PDF while the cover was showing still produced the 8-page book.
+- **Not done:** printer-specific templates (Mixam's or IngramSpark's own spine
+  and bleed rules) and PDF/X output. Typst 0.15 writes PDF/A and PDF/UA, not
+  PDF/X. Printers such as Mixam convert to PDF/X themselves; KDP accepts
+  standard PDFs.
+
 ### Helper processes, revised
 
 The child-process registry is now per app instance (`children-<pid>.json`).

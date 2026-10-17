@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Compile every book template in src/templates with the installed `typst`,
-// with a title that needs escaping, and every example in the Typst basics
-// guide (src/help/typst-basics.json). Fails on any error or warning.
+// with a title that needs escaping, every cover style in src/cover (thin and
+// thick spines, checking the wrap's size), and every example in the Typst
+// basics guide (src/help/typst-basics.json). Fails on any error or warning.
 // Usage: npm run check-templates [-- --png <dir>]  (also renders page images)
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -55,6 +56,39 @@ for (const id of readdirSync(root).filter((n) => statSync(join(root, n)).isDirec
     console.log(`FAIL ${id}\n${e.message}`);
   } finally {
     rmSync(work, { recursive: true, force: true });
+  }
+}
+
+// Cover styles: print and preview entries, a thin spine (no spine text), a thick one and an
+// exact width. The printed wrap must be 2 × trim + spine + 2 × bleed by trim + 2 × bleed.
+const coverRoot = new URL('../src/cover/', import.meta.url).pathname;
+for (const style of readdirSync(join(coverRoot, 'styles'))) {
+  for (const [pages, spine] of [[24, 'none'], [500, 'none'], [300, '20mm']]) {
+    const work = mkdtempSync(join(tmpdir(), 'typst-cover-'));
+    for (const f of ['spec.typ', 'guides.typ', 'cover.typ', 'preview.typ', 'front.svg']) cpSync(join(coverRoot, f), join(work, f));
+    cpSync(join(coverRoot, 'styles', style), join(work, 'design.typ'));
+    const vals = { ...raw, pages: String(pages), paper: '0.0025in', spine };
+    for (const f of readdirSync(work).filter((f) => f.endsWith('.typ'))) writeFileSync(join(work, f), readFileSync(join(work, f), 'utf8').replace(/\{\{(\w+)\}\}/g, (_, k) => vals[k] ?? str(values[k])));
+    const label = `cover ${style} (${pages} pages, spine ${spine})`;
+    try {
+      for (const entry of ['cover.typ', 'preview.typ']) {
+        const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', entry, 'out.pdf'], { cwd: work, encoding: 'utf8' });
+        const output = `${run.stdout}${run.stderr}`.trim();
+        if (run.status !== 0 || /warning/i.test(output)) throw new Error(`${entry}: ${output || `typst exited with ${run.status}`}`);
+      }
+      execFileSync('typst', ['compile', 'cover.typ', 'out.pdf'], { cwd: work });
+      const boxes = [...readFileSync(join(work, 'out.pdf'), 'latin1').matchAll(/\/MediaBox\s*\[([^\]]*)\]/g)].map((m) => m[1].trim().split(/\s+/).map(Number));
+      const spinePt = spine === 'none' ? pages * 0.0025 * 72 : (20 / 25.4) * 72;
+      const want = [2 * 5.5 * 72 + spinePt + 2 * 0.125 * 72, 8.5 * 72 + 2 * 0.125 * 72];
+      if (boxes.length !== 1 || Math.abs(boxes[0][2] - want[0]) > 0.05 || Math.abs(boxes[0][3] - want[1]) > 0.05)
+        throw new Error(`wrap is ${JSON.stringify(boxes)}, expected one page of ${want.map((n) => n.toFixed(2)).join(' × ')} pt`);
+      console.log(`ok   ${label}`);
+    } catch (e) {
+      failed++;
+      console.log(`FAIL ${label}\n${e.message}`);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
   }
 }
 

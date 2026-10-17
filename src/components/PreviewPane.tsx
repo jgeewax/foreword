@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { studio } from '../app/studio';
+import { COVER_PREVIEW } from '../cover';
 import { useStore } from '../lib/store';
 
 /**
@@ -9,6 +10,9 @@ import { useStore } from '../lib/store';
 export function PreviewPane() {
   const preview = useStore(studio.store, (s) => s.preview);
   const compile = useStore(studio.store, (s) => s.compile);
+  const target = useStore(studio.store, (s) => s.previewTarget);
+  const hasCover = useStore(studio.store, (s) => !!s.workspace?.files.includes(COVER_PREVIEW));
+  const exporting = useStore(studio.store, (s) => s.exporting);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -46,16 +50,38 @@ export function PreviewPane() {
         ? 'error in source (showing last good render)'
         : compile.status === 'compiling'
           ? 'compiling…'
-          : compile.pages
-            ? `${compile.pages} pages`
-            : preview.status;
+          : target === 'cover' && compile.status === 'ok'
+            ? 'cover, with guides'
+            : compile.pages
+              ? `${compile.pages} pages`
+              : preview.status;
 
   return (
     <section className="pane preview-pane">
       <header className="pane-header">
         <span className="pane-title">Preview</span>
+        {hasCover && (
+          <div className="kind-switch preview-switch" role="tablist" aria-label="Preview">
+            <button role="tab" aria-selected={target === 'book'} className={target === 'book' ? 'active' : ''} onClick={() => void studio.setPreviewTarget('book')}>
+              Book
+            </button>
+            <button role="tab" aria-selected={target === 'cover'} className={target === 'cover' ? 'active' : ''} onClick={() => void studio.setPreviewTarget('cover')}>
+              Cover
+            </button>
+          </div>
+        )}
         <span className={`pill ${compile.status === 'error' || preview.status === 'error' ? 'bad' : ''}`}>{status}</span>
         <span className="spacer" />
+        {target === 'cover' && (
+          <>
+            <button className="small" title="Match the cover to the book's page size and page count (the spine)" onClick={() => void studio.updateCoverFromBook()}>
+              Update from book
+            </button>
+            <button className="small" disabled={exporting} title="Export the printable cover (no guides) to the export folder" onClick={() => void studio.exportCover()}>
+              Export cover
+            </button>
+          </>
+        )}
         <button className="icon" title="Restart preview" onClick={() => void studio.restartTypst()}>
           ↻
         </button>

@@ -280,11 +280,14 @@ pub fn run() {
                 )?;
                 let new_file =
                     MenuItem::with_id(handle, "new-file", "New File…", true, Some("CmdOrCtrl+N"))?;
+                let cover =
+                    MenuItem::with_id(handle, "design-cover", "Design Cover…", true, None::<&str>)?;
                 file.prepend_items(&[
                     &new_book,
                     &new_chapter,
                     &new_file,
                     &PredefinedMenuItem::separator(handle)?,
+                    &cover,
                     &export,
                     &PredefinedMenuItem::separator(handle)?,
                 ])?;
@@ -317,6 +320,7 @@ pub fn run() {
                     "new-book",
                     "new-chapter",
                     "new-file",
+                    "design-cover",
                     "typst-guide",
                 ]
                 .contains(&id)

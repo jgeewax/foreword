@@ -121,9 +121,9 @@ export class TypstService extends Emitter<Events> {
     return this.executeCommand('tinymist.scrollPreview', [PREVIEW_TASK, { event: 'panelScrollTo', filepath: absPath, line, character }]);
   }
 
-  /** Export the entry point to PDF (to the configured output folder). Returns the written path. */
-  async exportPdf(): Promise<string> {
-    const res = await this.executeCommand('tinymist.exportPdf', [this.entryAbs]);
+  /** Export the entry point (or another file) to PDF, in the configured output folder. Returns the written path. */
+  async exportPdf(fileAbs = this.entryAbs): Promise<string> {
+    const res = await this.executeCommand('tinymist.exportPdf', [fileAbs]);
     if (!res?.path) throw new Error('Tinymist did not report an output file');
     return res.path as string;
   }

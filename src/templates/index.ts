@@ -163,7 +163,7 @@ export const TEMPLATES: BookTemplate[] = [
 
 export type BookInfo = { title: string; author: string; year: string; size?: { width: string; height: string } };
 
-const LENGTH = /^(\d{1,4}(\.\d{1,3})?)(in|mm|cm|pt)$/;
+const LENGTH = /^(\d{1,4}(\.\d{1,6})?)(in|mm|cm|pt)$/;
 
 /** A page dimension the author typed: a positive Typst length in in/mm/cm/pt, or null. */
 export function typstLength(value: string): string | null {
