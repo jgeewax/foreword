@@ -14,7 +14,7 @@ export function Toolbar({ onToggle, visible }: { onToggle: (pane: Pane) => void;
   const ws = useStore(studio.store, (s) => s.workspace);
   const exporting = useStore(studio.store, (s) => s.exporting);
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
-  const reviewing = useStore(studio.store, (s) => s.review.mode);
+  const toReview = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status !== 'resolved').length);
   return (
     <header className="toolbar">
       <strong className="brand">Typst Studio</strong>
@@ -27,8 +27,8 @@ export function Toolbar({ onToggle, visible }: { onToggle: (pane: Pane) => void;
       )}
       <span className="spacer" />
       {ws && (
-        <button className={reviewing ? 'on' : ''} title="Review mode: read-only editor; select text to comment (⌥⌘M)" onClick={() => studio.setReviewMode(!reviewing)}>
-          {reviewing ? 'Reviewing' : 'Review'}
+        <button title="Review comments: select text and press ⌥⌘M to add one" onClick={() => studio.showReview()}>
+          Review{toReview ? <span className="review-count">{toReview}</span> : null}
         </button>
       )}
       {ws && (

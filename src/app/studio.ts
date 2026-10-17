@@ -43,7 +43,7 @@ import { referencesTo, removeIncludes, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { asksTaskDone, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
-import { addressPrompt, locate, makeComment, nextCommentId, parseAddressed, parseReview, REVIEW_FILE, serializeReview, type ReviewComment } from './review';
+import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -211,8 +211,11 @@ export type StudioState = {
   code: CodeState;
   /** TODOs left in the book's files. */
   todos: Todo[];
-  /** Review comments (beside the text, in .typst-studio/review.json) and review mode (read-only editor). */
-  review: { comments: ReviewComment[]; mode: boolean };
+  /**
+   * Review comments (beside the text, in .typst-studio/review.json), and the one
+   * being written in the editor (a passage of the open file).
+   */
+  review: { comments: ReviewComment[]; draft: { path: string; start: number; end: number } | null; busy: string[] };
   /** What the preview shows: the book, or its cover (cover/preview.typ, with guides). */
   previewTarget: 'book' | 'cover';
   /** The book's page count, last seen while previewing the book (for the cover's spine). */
@@ -286,7 +289,7 @@ const initialState: StudioState = {
   history: initialHistory,
   code: initialCode,
   todos: [],
-  review: { comments: [], mode: false },
+  review: { comments: [], draft: null, busy: [] },
   previewTarget: 'book',
   bookPages: null,
   coverDialogOpen: false,
@@ -334,7 +337,7 @@ function writeJson(key: string, value: unknown) {
 
 export class Studio {
   readonly store = new Store<StudioState>(initialState);
-  readonly events = new Emitter<{ 'focus-composer': []; 'focus-editor': []; 'fill-composer': [text: string]; 'show-agent-pane': [] }>();
+  readonly events = new Emitter<{ 'focus-composer': []; 'focus-editor': []; 'fill-composer': [text: string]; 'show-agent-pane': []; 'show-explorer': [] }>();
   readonly perf = new PerfTracker();
   readonly typst = new TypstService();
   docs: Documents | null = null;
@@ -1228,7 +1231,8 @@ export class Studio {
 
   // ---- review comments -----------------------------------------------------------------
 
-  private reviewTurn: string[] | null = null;
+  /** The turn addressing comments: which, in which conversation, and the files and passages as they were. */
+  private reviewTurn: { sessionId: string | null; ids: string[]; before: Record<string, string>; at: Record<string, [number, number]> } | null = null;
 
   async loadReview() {
     const exists = (this.state.workspace?.files ?? []).includes(REVIEW_FILE);
@@ -1248,6 +1252,10 @@ export class Studio {
     }
   }
 
+  private updateComment(id: string, patch: (c: ReviewComment) => ReviewComment) {
+    return this.saveReview(this.state.review.comments.map((c) => (c.id === id ? patch(c) : c)));
+  }
+
   /** The current text of a file: its buffer if open, else from disk. */
   private async currentText(path: string): Promise<string | null> {
     const doc = this.docs?.get(path);
@@ -1255,41 +1263,40 @@ export class Studio {
     return ipc.fsRead(path).then((r) => r.text, () => null);
   }
 
-  /** Review mode: the editor is read-only, and selecting text offers a comment. */
-  setReviewMode(on: boolean) {
-    this.store.set((s) => ({ review: { ...s.review, mode: on } }));
-    this.editor?.updateOptions({ readOnly: on });
-    if (on) this.showSidebar('review');
+  /** The Review view in the sidebar (shown, if the sidebar was hidden). */
+  showReview() {
+    this.events.emit('show-explorer');
+    this.showSidebar('review');
   }
 
-  /** Comment on the editor's selection. */
+  /** Comment on the editor's selection: a box to write it in opens under the passage. */
   async addComment() {
     const path = this.state.active;
-    const editor = this.editor;
-    const model = editor?.getModel();
-    const range = editor?.getSelection();
+    const model = this.editor?.getModel();
+    const range = this.editor?.getSelection();
     if (!path || !model || !range || range.isEmpty()) return this.toast('Select the passage you want to comment on first.');
-    const quote = model.getValueInRange(range);
-    const text = await this.prompt({
-      title: 'Add a comment',
-      label: `On “${quote.replace(/\s+/g, ' ').slice(0, 80)}${quote.length > 80 ? '…' : ''}”`,
-      placeholder: 'What should change here?',
-      okLabel: 'Add comment',
-      multiline: true,
-      help: '⌘⏎ to add. Comments are kept beside the text (not in it) until you address them.',
-    });
-    if (!text?.trim()) return;
-    const full = model.getValue();
-    const comment = makeComment(nextCommentId(this.state.review.comments), path, full, model.getOffsetAt(range.getStartPosition()), model.getOffsetAt(range.getEndPosition()), text);
-    await this.saveReview([...this.state.review.comments, comment]);
-    editor!.focus();
+    this.store.set((s) => ({ review: { ...s.review, draft: { path, start: model.getOffsetAt(range.getStartPosition()), end: model.getOffsetAt(range.getEndPosition()) } } }));
   }
 
-  async editComment(id: string) {
-    const c = this.state.review.comments.find((x) => x.id === id);
-    if (!c) return;
-    const text = await this.prompt({ title: 'Edit comment', label: 'Comment', value: c.text, okLabel: 'Save', multiline: true });
-    if (text?.trim()) await this.saveReview(this.state.review.comments.map((x) => (x.id === id ? { ...x, text: text.trim() } : x)));
+  cancelComment() {
+    this.store.set((s) => ({ review: { ...s.review, draft: null } }));
+    this.editor?.focus();
+  }
+
+  /** Save the comment being written. */
+  async saveDraftComment(text: string) {
+    const draft = this.state.review.draft;
+    if (!draft || !text.trim()) return this.cancelComment();
+    const full = await this.currentText(draft.path);
+    if (full == null) return this.cancelComment();
+    const comment = makeComment(nextCommentId(this.state.review.comments), draft.path, full, draft.start, draft.end, text);
+    this.store.set((s) => ({ review: { ...s.review, draft: null } }));
+    await this.saveReview([...this.state.review.comments, comment]);
+    this.editor?.focus();
+  }
+
+  async editComment(id: string, text: string) {
+    if (text.trim()) await this.updateComment(id, (c) => ({ ...c, text: text.trim() }));
   }
 
   async deleteComment(id: string) {
@@ -1297,7 +1304,7 @@ export class Studio {
   }
 
   async setCommentStatus(id: string, status: ReviewComment['status']) {
-    await this.saveReview(this.state.review.comments.map((x) => (x.id === id ? { ...x, status, resolved: status === 'resolved' ? Date.now() : undefined } : x)));
+    await this.updateComment(id, (c) => ({ ...c, status, resolved: status === 'resolved' ? Date.now() : undefined }));
   }
 
   async clearResolved() {
@@ -1313,39 +1320,100 @@ export class Studio {
 
   async goToComment(c: ReviewComment) {
     const at = await this.locateComment(c);
-    await this.openAt(c.path, at?.line ?? c.line);
+    await this.openAt(c.path, at?.line ?? c.outcome?.change?.line ?? c.line);
     const model = this.editor?.getModel();
     if (at && model) this.editor!.setSelection(monaco.Range.fromPositions(model.getPositionAt(at.start), model.getPositionAt(at.end)));
   }
 
-  /** Send every open comment to the assistant in one message; resolve the ones it reports as addressed. */
-  async addressComments() {
-    const open = this.state.review.comments.filter((c) => c.status === 'open');
-    if (!open.length || this.state.agent.running) return;
+  /**
+   * Ask the assistant to fix comments (one, or every open one). It reports on
+   * each; a changed passage waits for the author to keep or undo it.
+   */
+  async addressComments(ids?: string[]) {
+    const open = this.state.review.comments.filter((c) => c.status === 'open' && (!ids || ids.includes(c.id)));
+    if (!open.length || this.state.agent.running || this.reviewTurn) return;
     const located = [];
-    for (const comment of open) located.push({ comment, line: (await this.locateComment(comment))?.line ?? null });
+    const before: Record<string, string> = {};
+    const at: Record<string, [number, number]> = {};
+    for (const comment of open) {
+      const where = await this.locateComment(comment);
+      located.push({ comment, line: where?.line ?? null });
+      if (before[comment.path] === undefined) before[comment.path] = (await this.currentText(comment.path)) ?? '';
+      if (where) at[comment.id] = [where.start, where.end];
+    }
     if (this.state.agent.mode !== 'write') await this.setMode('write');
     this.events.emit('show-agent-pane');
-    this.reviewTurn = open.map((c) => c.id);
-    if (!(await this.send(addressPrompt(located)))) this.reviewTurn = null;
+    this.reviewTurn = { sessionId: null, ids: open.map((c) => c.id), before, at };
+    this.store.set((s) => ({ review: { ...s.review, busy: open.map((c) => c.id) } }));
+    if (!(await this.send(addressPrompt(located)))) {
+      this.reviewTurn = null;
+      this.store.set((s) => ({ review: { ...s.review, busy: [] } }));
+      return;
+    }
+    if (this.reviewTurn) this.reviewTurn.sessionId = this.state.agent.sessionId;
   }
 
-  private async afterReviewTurn() {
-    const ids = this.reviewTurn;
+  /** The turn addressing comments has ended (shown, or in the background): record what it did with each. */
+  private async afterReviewTurn(sessionId = this.state.agent.sessionId) {
+    const turn = this.reviewTurn;
+    if (!turn || (turn.sessionId && turn.sessionId !== sessionId)) return;
     this.reviewTurn = null;
-    if (!ids) return;
-    const last = [...this.state.agent.items].reverse().find((i) => i.kind === 'assistant');
-    const addressed = last && last.kind === 'assistant' ? parseAddressed(last.text).filter((id) => ids.includes(id)) : [];
-    if (addressed.length) {
-      await this.saveReview(this.state.review.comments.map((c) => (addressed.includes(c.id) ? { ...c, status: 'resolved', resolved: Date.now() } : c)));
+    this.store.set((s) => ({ review: { ...s.review, busy: [] } }));
+    // Its last reply: on screen, or from OpenCode if the conversation isn't shown.
+    let reply = '';
+    if (sessionId === this.state.agent.sessionId) {
+      const last = [...this.state.agent.items].reverse().find((i) => i.kind === 'assistant');
+      reply = last?.kind === 'assistant' ? last.text : '';
+    } else if (sessionId && this.agent) {
+      const items = itemsFromContext(await this.agent.sessionContext(sessionId).catch(() => []));
+      const last = [...items].reverse().find((i) => i.kind === 'assistant');
+      reply = last?.kind === 'assistant' ? last.text : '';
     }
-    const left = ids.length - addressed.length;
-    this.pushItem({
-      kind: 'notice',
-      id: uid('n'),
-      tone: 'info',
-      text: `Review: ${addressed.length} of ${ids.length} comment${ids.length > 1 ? 's' : ''} addressed and marked resolved${left ? `; ${left} still open (see the Review tab)` : ''}.`,
-    });
+    const reports = parseReport(reply).filter((r) => turn.ids.includes(r.id));
+    const now = Date.now();
+    const after: Record<string, string> = {};
+    for (const path of Object.keys(turn.before)) after[path] = (await this.currentText(path)) ?? '';
+    await this.saveReview(
+      this.state.review.comments.map((c) => {
+        const r = reports.find((x) => x.id === c.id);
+        if (!r) return c;
+        if (r.kind === 'declined') return { ...c, outcome: { kind: 'declined', note: r.note, at: now } };
+        const span = turn.at[c.id];
+        const change = span && turn.before[c.path] !== undefined ? (passageChange(turn.before[c.path], after[c.path], span[0], span[1]) ?? undefined) : undefined;
+        return { ...c, status: 'addressed', outcome: { kind: 'changed', note: r.note, at: now, change } };
+      }),
+    );
+    const changed = reports.filter((r) => r.kind === 'changed').length;
+    const declined = reports.filter((r) => r.kind === 'declined').length;
+    const silent = turn.ids.length - reports.length;
+    const parts = [
+      changed ? `${changed} changed (check ${changed > 1 ? 'them' : 'it'} in the editor or the Review tab: keep or undo)` : '',
+      declined ? `${declined} declined (the reason is on the comment)` : '',
+      silent ? `${silent} not reported on, still open` : '',
+    ].filter(Boolean);
+    this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `Review: ${parts.join('; ')}.` });
+  }
+
+  /** Keep the assistant's change for a comment: it's resolved. */
+  async keepChange(id: string) {
+    await this.setCommentStatus(id, 'resolved');
+  }
+
+  /** Undo the assistant's change for a comment (if the passage is still as it left it), and reopen it. */
+  async undoCommentChange(id: string) {
+    const c = this.state.review.comments.find((x) => x.id === id);
+    const change = c?.outcome?.change;
+    if (!c || !change) return;
+    const text = await this.currentText(c.path);
+    const next = text == null ? null : undoChange(text, change);
+    if (next == null) return this.toast('That passage has changed since, so the change can’t be undone here. History has the earlier version.', 'error');
+    try {
+      await this.editFile(c.path, () => next);
+    } catch (e) {
+      return this.toast(`Couldn't undo it: ${errorMessage(e)}`, 'error');
+    }
+    await this.updateComment(id, (x) => ({ ...x, status: 'open', outcome: undefined }));
+    this.toast('Undone: the passage is back as it was, and the comment is open again.');
   }
 
   // ---- cover --------------------------------------------------------------------------
@@ -1678,7 +1746,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.composerDraft = '';
     this.code.reset();
-    this.store.set({ todos: [], review: { comments: [], mode: false }, previewTarget: 'book', bookPages: null, compile: { status: 'idle' } });
+    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', bookPages: null, compile: { status: 'idle' } });
     await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
@@ -2289,6 +2357,7 @@ export class Studio {
     this.setBackground(sessionId, { ...bg, running: false, unread: true, label: failed ? `Stopped: ${failed}` : 'Finished', failed });
     const title = this.taskTitle(sessionId);
     void this.history.afterAgent(this.turnMessages.get(sessionId) || title).then(() => this.refreshAiEdits());
+    if (this.reviewTurn?.sessionId === sessionId) void this.afterReviewTurn(sessionId);
     void this.loadTasks();
     this.toast(failed ? `“${title}” stopped: ${failed}` : `“${title}” is done.`, failed ? 'error' : 'info', [{ label: 'Show', run: () => void this.switchTask(sessionId) }]);
   }

@@ -351,6 +351,55 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Review, rethought
+
+- **What was wrong with the first version:**
+  - A read-only "review mode" that got in the way, when commenting already
+    worked without it.
+  - Comments visible only as faint highlights with a hover.
+  - A modal box to write in.
+  - "Address all" as a black box: one message, then comments marked resolved
+    on the assistant's word. You couldn't see what changed for each, or keep
+    one change and undo another.
+  - No way to fix one comment, or to hear why one wasn't done.
+- **Now** (Google Docs comments, plus a pull-request review):
+  - **No mode.** Select text in the editor (or the preview, through the
+    mapping), then use the Comment bubble beside the selection, ⌥⌘M or
+    right-click. A box opens under the passage: ⏎ adds, ⇧⏎ makes a new line,
+    Esc cancels. The editor is never read-only.
+  - **Cards in place.** Open comments, and changed ones waiting to be
+    checked, show as cards under their passage, in Monaco view zones sized to
+    the card. Each card has Fix with assistant, Resolve, Edit (inline) and
+    Delete.
+  - **The assistant reports on each comment** with one hidden line per
+    comment: `REVIEW c3: changed — what it did` or
+    `REVIEW c4: declined — why`. An older `ADDRESSED:` line still counts. Fix
+    works on one comment or on every open one.
+  - **The author decides.** Before the turn, the app records each file's text
+    and each passage's place. Afterwards a changed comment becomes "addressed":
+    the card shows the assistant's note and the passage's change word by word
+    (`passageChange`: the changed lines touching the passage, including lines
+    added right after it). **Keep** resolves it. **Undo change** puts the
+    passage back (only if it's still exactly as the assistant left it) and
+    reopens it. A declined comment stays open, with the reason.
+  - **The list** (the toolbar's Review button, with a count, and always in the
+    sidebar) groups To check, Open and Resolved.
+  - A review turn that ends in the background (another task shown) is handled
+    too, by fetching its last reply.
+- **Card placement:** Monaco didn't reliably move view zones when a file
+  reloaded from disk (a card stayed above the text the assistant had changed).
+  Each update now moves any card whose passage moved, keeping its node and
+  React state. A changed comment's card goes under the whole new text.
+- **Verified with a real model** (self-test `review`):
+  - comments added through the bubble (⏎) and ⌥⌘M (the Comment button);
+  - cards and highlights shown, the editor editable;
+  - comments following two lines added above them;
+  - Fix one from its card: changed with a note and its exact change, the
+    other untouched;
+  - Fix all;
+  - Undo restoring the passage and reopening it, and Keep resolving the other;
+  - each card's zone starting at the bottom of its passage.
+
 ### Review comments (first version)
 
 - **Storage:** comments live beside the text in `.typst-studio/review.json`, in

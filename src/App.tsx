@@ -52,6 +52,13 @@ function Workbench() {
       }),
     [],
   );
+  useEffect(
+    () =>
+      studio.events.on('show-explorer', () => {
+        if (explorer.current?.isCollapsed()) explorer.current.expand();
+      }),
+    [],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -1429,7 +1429,11 @@ async function menuChecks() {
   return out;
 }
 
-/** Review mode: comment on passages, they follow edits, the assistant addresses them all. */
+/**
+ * Review: comment from a selection (the bubble, and ⌥⌘M) in a box under the passage,
+ * cards in place, comments following edits; with the agent, fix one, then all, and
+ * keep one change and undo another.
+ */
 async function reviewChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
@@ -1442,64 +1446,104 @@ async function reviewChecks(withAgent: boolean) {
     editor.setSelection(monaco.Range.fromPositions(model.getPositionAt(at), model.getPositionAt(at + phrase.length)));
     editor.revealRangeInCenter(editor.getSelection()!);
   };
+  const write = async (text: string, submit: 'enter' | 'button') => {
+    const box = await waitFor(() => document.querySelector<HTMLTextAreaElement>('.comment-card.composer textarea'), 3000, 'composer').catch(() => null);
+    if (!box) return false;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, text);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(100);
+    if (submit === 'enter') box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    else document.querySelector<HTMLButtonElement>('.comment-card.composer .comment-actions button.primary')?.click();
+    await sleep(500);
+    return true;
+  };
 
-  studio.setReviewMode(true);
-  editor.setPosition({ lineNumber: 3, column: 1 });
-  editor.trigger('selftest', 'type', { text: 'xyz' });
-  await sleep(200);
-  out.readOnly = { unchanged: model.getValue() === original, readOnlyOption: editor.getOption(monaco.editor.EditorOption.readOnly) };
-
+  // The bubble by a selection.
   select('is singular');
-  await sleep(400);
+  await sleep(700);
   const widget = document.querySelector<HTMLButtonElement>('.comment-widget');
-  out.widget = { shown: !!widget && widget.getBoundingClientRect().width > 0 };
+  out.bubble = !!widget && widget.getBoundingClientRect().width > 0;
   widget?.click();
-  await waitFor(() => !!studio.state.prompt, 3000, 'prompt').catch(() => {});
-  await sleep(150);
-  out.multiline = !!document.querySelector('.prompt textarea');
-  studio.answerPrompt('Say in one sentence why being singular matters here.');
-  await sleep(500);
+  out.composerFocused = await waitFor(() => document.activeElement?.closest('.comment-card.composer'), 3000, 'focus').then(() => true, () => false);
+  out.snapshotComposer = await snap('review-composer');
+  out.firstSaved = await write('Say in one sentence why being singular matters here.', 'enter');
+  // ⌥⌘M (the command), and the Comment button.
   select('so there are at most two eigenvalues');
-  const p2 = studio.addComment();
-  await answerPrompt('Also state the general fact for an n by n matrix.');
-  await p2;
-  await sleep(600);
+  await studio.addComment();
+  out.secondSaved = await write('Also state the general fact for an n by n matrix.', 'button');
+  await sleep(400);
   out.comments = studio.state.review.comments.map((c) => `${c.id} ${c.path}:${c.line} “${c.quote}” → ${c.text}`);
-  out.file = (await ipc.fsRead('.typst-studio/review.json').then((r) => JSON.parse(r.text).comments.length, () => null));
+  out.cards = [...document.querySelectorAll('.comment-zone .comment-card')].map((e) => e.querySelector('.comment-text')?.textContent);
   out.highlights = document.querySelectorAll('.review-highlight').length;
-  studio.showSidebar('review');
+  // No mode: the editor stays editable.
+  out.editable = !editor.getOption(monaco.editor.EditorOption.readOnly);
+  studio.showReview();
   await sleep(500);
-  out.panel = [...document.querySelectorAll('.review-item .review-text')].map((e) => e.textContent);
+  out.panel = [...document.querySelectorAll('.review-group, .review-item .review-text')].map((e) => e.textContent);
   out.snapshot = await snap('review');
 
-  // Edits above move the passages; the comments follow.
-  studio.setReviewMode(false);
+  // Edits above move the passages; the comments (and their cards) follow.
   editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: 'A new opening line.\n\n' }]);
   await studio.save();
-  await sleep(400);
+  await sleep(600);
   out.afterEdit = await Promise.all(studio.state.review.comments.map(async (c) => (await studio.locateComment(c))?.line ?? null));
+  out.cardsAfterEdit = document.querySelectorAll('.comment-zone .comment-card').length;
 
   if (withAgent) {
     await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
     const policy = studio.state.settings.permissions;
     studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
-    studio.newSession();
-    await studio.addressComments();
-    await sleep(1000);
-    await waitFor(() => !studio.state.agent.running, 180000, 'review turn').catch(() => {});
-    await sleep(2500);
-    const reply = (studio.state.agent.items.filter((i) => i.kind === 'assistant').pop() as any)?.text ?? '';
-    out.addressed = {
-      statuses: studio.state.review.comments.map((c) => `${c.id}: ${c.status}`),
-      notice: (studio.state.agent.items.filter((i) => i.kind === 'notice').pop() as any)?.text,
-      replyEnd: reply.slice(-120),
-      shownWithoutMarker: !document.querySelector('.msg.assistant:last-of-type')?.textContent?.includes('ADDRESSED'),
-      changed: (await ipc.fsRead(file)).text !== original,
-    };
-    studio.updateSettings({ permissions: policy });
+    try {
+      const [c1, c2] = studio.state.review.comments;
+      const statuses = () => studio.state.review.comments.map((c) => ({ id: c.id, status: c.status, outcome: c.outcome && { kind: c.outcome.kind, note: c.outcome.note, change: c.outcome.change } }));
+      // Fix one: from its card.
+      studio.newSession();
+      [...document.querySelectorAll<HTMLButtonElement>('.comment-zone .comment-card button')].find((b) => b.textContent === 'Fix with assistant')?.click();
+      await waitFor(() => studio.state.agent.running, 10000, 'turn').catch(() => {});
+      await waitFor(() => !studio.state.agent.running && !studio.state.review.busy.length, 240000, 'review turn').catch(() => {});
+      await sleep(1500);
+      out.fixOne = { statuses: statuses(), notice: (studio.state.agent.items.filter((i) => i.kind === 'notice').pop() as { text?: string } | undefined)?.text };
+      // Each card sits right under its passage (a changed one under the whole new text).
+      await sleep(600);
+      out.placement = studio.state.review.comments.map((c) => {
+        const text = model.getValue();
+        const span = c.status === 'addressed' && c.outcome?.change ? c.outcome.change.after : c.quote;
+        const i = text.indexOf(span);
+        const endLine = i >= 0 ? model.getPositionAt(i + span.length).lineNumber : -1;
+        const card = [...document.querySelectorAll<HTMLElement>('.comment-zone')].find((z) => z.querySelector('.comment-text')?.textContent === c.text);
+        const top = card ? parseFloat(card.style.top) : NaN;
+        return { id: c.id, endLine, zoneTop: Math.round(top), lineBottom: endLine > 0 ? Math.round(editor.getBottomForLineNumber(endLine)) : null };
+      });
+      out.snapshotChanged = await snap('review-changed');
+      // Fix all (what's still open).
+      if (studio.state.review.comments.some((c) => c.status === 'open')) {
+        studio.newSession();
+        await studio.addressComments();
+        await waitFor(() => !studio.state.agent.running && !studio.state.review.busy.length, 240000, 'review turn 2').catch(() => {});
+        await sleep(1500);
+      }
+      out.fixAll = statuses();
+      // Undo one change, keep the other.
+      const changed = studio.state.review.comments.filter((c) => c.status === 'addressed' && c.outcome?.change);
+      if (changed[0]) {
+        const before = changed[0].outcome!.change!.before;
+        await studio.undoCommentChange(changed[0].id);
+        await sleep(500);
+        out.undo = { status: studio.state.review.comments.find((c) => c.id === changed[0].id)?.status, restored: (await ipc.fsRead(file)).text.includes(before) };
+      }
+      if (changed[1]) {
+        await studio.keepChange(changed[1].id);
+        out.keep = studio.state.review.comments.find((c) => c.id === changed[1].id)?.status;
+      }
+      void c1;
+      void c2;
+    } finally {
+      studio.updateSettings({ permissions: policy });
+    }
   }
   await ipc.fsWrite(file, original, await ipc.fsHash(file));
   await ipc.fsWrite('.typst-studio/review.json', '{"comments": []}\n', await ipc.fsHash('.typst-studio/review.json'));
+  await studio.loadReview();
   await sleep(500);
   studio.showSidebar('files');
   return out;
@@ -2214,13 +2258,12 @@ async function shotChecks() {
     const r = b.getBoundingClientRect();
     return `${b.getAttribute('aria-label')}: ${Math.round(r.width)}×${Math.round(r.height)}`;
   });
-  // Every view, with its full title: History in its own tab, a TODO typed (not saved), review mode on.
+  // Every view, with its full title: History in its own tab, a TODO typed (not saved).
   const placement = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'tab' });
   const editor = studio.editor!;
   const model = editor.getModel()!;
   editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// TODO: a note for the sidebar check\n' }]);
-  studio.setReviewMode(true);
   await sleep(1200);
   out.sidebarAll = [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label'));
   const views = ['files', 'history', 'code', 'todos', 'review'] as const;
@@ -2234,7 +2277,6 @@ async function shotChecks() {
   studio.showSidebar('review');
   await sleep(300);
   out.reviewShot = await snap('shot-review');
-  studio.setReviewMode(false);
   while (model.canUndo()) await model.undo();
   await sleep(300);
   out.restored = { dirty: !!studio.state.dirty[studio.state.active ?? ''] };

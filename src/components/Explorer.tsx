@@ -126,7 +126,8 @@ type View = 'files' | 'history' | 'code' | 'todos' | 'review';
 function useViews() {
   const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
   const todoCount = useStore(studio.store, (s) => s.todos.length);
-  const hasReview = useStore(studio.store, (s) => s.review.comments.length > 0 || s.review.mode);
+  // Review is always there: it's where comments are written about and checked.
+  const hasReview = true;
   const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
   return { hasCode, todoCount, hasReview, reviewOpen };
 }

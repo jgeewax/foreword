@@ -21,10 +21,12 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Vision models: let the assistant look at a raster figure (send the image) so it can describe it, write alt text, or suggest a better caption.
 
 ## Menus and commands
+
 - A command palette (⌘K or ⇧⌘P) listing every action with its shortcut. The context menus already define most of them.
 - "Copy as plain text" / "Copy as Markdown" for a selection in the preview or the chat.
 
 ## New books and papers
+
 - Import an existing manuscript (Word .docx, Markdown, LaTeX) with pandoc (`pandoc -t typst`), split into chapter files by top-level heading. Needs pandoc installed, or bundled.
 - ICML and ICLR paper templates, once their Typst Universe packages work with Typst 0.15 (lucky-icml 0.7.0 and clear-iclr 0.7.0 fail today). Re-check with `npm run check-templates -- --papers`.
 - Thesis templates: many universities have one on Typst Universe. Search by university name in the New Book dialog.
@@ -33,17 +35,20 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - "Install fonts" button: run the `brew install --cask …` command for the author, with a confirmation.
 
 ## Files
+
 - Drag and drop in the file tree to move files. This would use the same rename logic, references included.
 - Inline rename in the tree (Enter or double-click on a name), like Finder.
 - Drop images from Finder onto the editor: copy them into figures/ and insert a `#figure(image(...))`.
 - "Unused files": images and chapters that nothing includes.
 
 ## Permissions
+
 - Per-book permissions saved in `.typst-studio.json` (e.g. a shared book that's always read-only), overriding the app setting.
 - "Allow for this book" on a permission card. OpenCode supports saved permissions (`/api/permission/saved`); show and revoke them in Settings.
 - Show which rule decided a refusal ("Delete files: Never") in the failed tool's details.
 
 ## Code examples
+
 - Examples that build on each other (a "session": later examples see earlier variables), like notebook cells.
 - Show plots: an example that writes an image (matplotlib `savefig`) gets it placed as a figure under the code.
 - Run examples in a sandbox (macOS `sandbox-exec` profile or a container) for books from other people.
@@ -52,26 +57,33 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - More languages: TypeScript (deno/tsx), Go, Rust, C, Java (compile, then run).
 
 ## Selection and context
+
 - "Selected in preview" for images and figures: clicking a figure in the preview attaches its #figure call.
 - Attach a whole file or chapter to the chat by dragging it from the file tree onto the message box.
 
 ## TODOs
+
 - Show TODOs in the preview (a margin marker) in draft mode, hidden when exporting.
 - Assign a TODO to the assistant in the background (its own task session), and mark it done when that finishes.
 
 ## Tasks
-- Run several tasks at once in the background (OpenCode supports concurrent sessions), with a badge when one finishes or needs permission.
+
+- A task's live transcript in the background (not only its status), so switching back mid-reply never has to reload.
+- Answer a background task's question or permission straight from its notice, without switching.
+- Per-task History versions when tasks run side by side (today a version records the whole book when a turn ends, whichever task it was).
 - Hand a task its own History branch, so finishing it can be reviewed as one change ("Review task changes" diff) and undone as one.
 - Suggest a new task when the context meter goes red, or when a message drifts away from the task's goal.
 - Rename, archive and delete tasks; search them.
 
 ## History, what changed
+
 - Word counts in the version list itself (computed in the background and cached per version), so the list reads "+120 −30 words" without opening anything.
 - Compare any two versions (pick two in the list), e.g. "Draft 1" against "Draft 2".
 - A one-line gist of each version ("since noon → since early morning") under its label.
 - Changes in the rendered book: the preview with changed passages highlighted, for authors who think in pages rather than source.
 
 ## The assistant's marks
+
 - Accept the assistant's changes (clear their marks) per passage or per file, like reviewing a pull request; "Accept all" after reading.
 - Show the assistant's changes in the preview too (a violet margin bar on changed paragraphs).
 - Next/previous assistant change (keyboard), across files.
@@ -80,13 +92,17 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - A per-paragraph authorship view ("who wrote this": you or the assistant, from History), for authors who must disclose AI use.
 
 ## Review
+
 - Comments in the preview: a margin bubble next to the rendered passage. Click it to see and reply.
-- Reply threads on a comment, and the assistant's per-comment answer shown under it.
+- Reply threads on a comment: ask the assistant about one comment, or tell it "not like that", in the card.
+- Suggestions (tracked changes): the assistant's change waits beside the text, and only goes into the file when you press Keep.
+- Fix a comment as a background task, so you can keep reviewing while it works.
 - Address comments one at a time with Options mode (three versions each), for picky passages.
 - Export comments as a PDF with annotations, or import them from one (an editor's PDF markup → review comments).
 - Share a review: other people add comments through a shared link (needs a server, or comments in Git).
 
 ## Covers
+
 - Printer presets: Mixam, IngramSpark and Lulu bleed, spine and barcode rules; pick the printer once and the cover and the print checks follow it.
 - A real barcode: generate the ISBN EAN-13 barcode in the box (a Typst package such as tiaoma), from an ISBN field.
 - More styles, and covers matching each book template's fonts and colours (one per template, chosen by default).
@@ -95,10 +111,29 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Hardcover case wraps and dust jackets (different hinge and wrap allowances).
 
 ## Printing
+
 - Mixam quotes in the print dialog through its Offers API (price, production days, exact spine) once there's an approved API account; credentials in the Keychain.
 - A print proof: the interior and cover PDFs side by side in a spread view with trim and bleed marked, before uploading.
 - Check margins against the printer's quiet area (text frames within 0.25in of the trim, 0.5in of the binding) from the compiled layout.
 - Other printers through the same checks: Amazon KDP (no bleed unless images run off the page), IngramSpark, Lulu; each with its own page-count and cover rules.
 - Grayscale check for black-and-white printing (colour on an inside page costs more at most printers).
 - Blank-page padding as an option (add the blank pages a printer needs, as a print-only setting, instead of in the book).
+
+## Chat
+
+- Show the model's thinking in a side panel for the whole turn, for authors who want to follow along.
+- Retry with another model when the current one is busy (the progress line already says when it is).
+- Pin a queued message to send even if the turn fails.
+- Images in questions: the assistant asks "which layout?" with small previews of each option.
+
+## Settings and the config file
+
+- A JSON schema for settings.json, so editors complete and check it.
+- Per-book overrides of any setting (send key, marks) in .typst-studio.json, not only commands.
+- Sync settings across Macs (iCloud Drive folder as the config location).
+
+## Toolbar and layout
+
+- Custom layouts (writing: editor + preview; reviewing: preview large + comments), switched from the pane toggles.
+- A focus mode: only the editor, full width, typewriter scrolling.
 

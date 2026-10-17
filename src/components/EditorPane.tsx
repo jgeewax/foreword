@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { CommentCard, CommentComposer } from './CommentCard';
 import { studio } from '../app/studio';
 import { monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
@@ -26,6 +28,25 @@ function editHover(m: EditMark): monaco.IMarkdownString {
   const head = m.removal ? '**✦ The assistant removed text here**' : m.old ? '**✦ Changed by the assistant**' : '**✦ Added by the assistant**';
   const body = m.old ? `\n\n${m.removal ? 'Removed:' : 'Before:'}\n\n${quote(m.old)}` : '';
   return { value: `${head} · ${md(m.label.replace(/^Agent: /, ''))} · ${when(m.time)}${body}\n\n${link}`, isTrusted: { enabledCommands: ['studio.showVersionChanges'] } };
+}
+
+/** Reports its content's height (a comment card in a view zone sizes the zone with it). */
+function Measured({ onHeight, children }: { onHeight: (h: number) => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const report = () => onHeight(Math.ceil(el.getBoundingClientRect().height) + 10);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeight]);
+  return (
+    <div ref={ref} className="comment-zone-inner">
+      {children}
+    </div>
+  );
 }
 
 export function EditorPane() {
@@ -188,49 +209,110 @@ export function EditorPane() {
         lensChanged.fire(undefined as never);
       }
     });
-    // Review comments: highlight their passages, with the comment on hover.
+    // Review comments: their passages highlighted, and a card under each (open, or changed
+    // and waiting to be checked), in a view zone. The comment being written is one too.
     const commentMarks = editor.createDecorationsCollection();
-    const paintComments = () => {
+    // `line` is where we put it: Monaco's own tracking of zones isn't reliable when a file reloads from disk.
+    type Zone = { zoneId: string; root: Root; fit: (h: number) => void; zone: monaco.editor.IViewZone; line: number };
+    const zones = new Map<string, Zone>();
+    const clearZones = () => {
+      editor.changeViewZones((a) => {
+        for (const z of zones.values()) a.removeZone(z.zoneId);
+      });
+      for (const z of zones.values()) queueMicrotask(() => z.root.unmount());
+      zones.clear();
+    };
+    const syncComments = () => {
       const path = studio.state.active;
       const model = editor.getModel();
-      if (!path || !model) return commentMarks.clear();
-      const text = model.getValue();
-      commentMarks.set(
-        studio.state.review.comments
-          .filter((c) => c.path === path && c.status === 'open')
-          .flatMap((c) => {
+      const want = new Map<string, { line: number; node: ReactNode }>();
+      const marks: monaco.editor.IModelDeltaDecoration[] = [];
+      if (path && model) {
+        const text = model.getValue();
+        for (const c of studio.state.review.comments) {
+          if (c.path !== path || c.status === 'resolved') continue;
+          let range: monaco.Range | null = null;
+          // A changed passage: the card goes under the whole new text (to check it).
+          const after = c.status === 'addressed' ? c.outcome?.change?.after : undefined;
+          const i = after ? text.indexOf(after) : -1;
+          if (after && i >= 0) range = monaco.Range.fromPositions(model.getPositionAt(i), model.getPositionAt(i + after.length));
+          else {
             const at = locate(text, c);
-            if (!at) return [];
-            return [
-              {
-                range: monaco.Range.fromPositions(model.getPositionAt(at[0]), model.getPositionAt(at[1])),
-                options: { inlineClassName: 'review-highlight', hoverMessage: { value: `**Comment ${c.id}:** ${c.text}` }, linesDecorationsClassName: 'review-line' },
-              },
-            ];
-          }),
-      );
+            if (at) range = monaco.Range.fromPositions(model.getPositionAt(at[0]), model.getPositionAt(at[1]));
+          }
+          if (!range) continue;
+          marks.push({ range, options: { inlineClassName: c.status === 'addressed' ? 'review-highlight changed' : 'review-highlight', linesDecorationsClassName: 'review-line' } });
+          want.set(c.id, { line: range.endLineNumber, node: <CommentCard comment={c} /> });
+        }
+        const draft = studio.state.review.draft;
+        if (draft && draft.path === path) {
+          const range = monaco.Range.fromPositions(model.getPositionAt(draft.start), model.getPositionAt(draft.end));
+          marks.push({ range, options: { inlineClassName: 'review-highlight draft' } });
+          want.set('draft', { line: range.endLineNumber, node: <CommentComposer quote={model.getValueInRange(range)} /> });
+        }
+      }
+      commentMarks.set(marks);
+      editor.changeViewZones((a) => {
+        for (const [key, z] of zones) {
+          if (want.has(key)) continue;
+          a.removeZone(z.zoneId);
+          queueMicrotask(() => z.root.unmount());
+          zones.delete(key);
+        }
+        for (const [key, w] of want) {
+          const existing = zones.get(key);
+          if (existing) {
+            if (existing.line !== w.line) {
+              // Moved: the same node (and the card's state) at its new line.
+              a.removeZone(existing.zoneId);
+              existing.zone.afterLineNumber = w.line;
+              existing.zoneId = a.addZone(existing.zone);
+              existing.line = w.line;
+            }
+            existing.root.render(<Measured onHeight={existing.fit}>{w.node}</Measured>);
+            continue;
+          }
+          const domNode = document.createElement('div');
+          domNode.className = 'comment-zone';
+          const zone: monaco.editor.IViewZone = { afterLineNumber: w.line, heightInPx: 96, domNode };
+          const root = createRoot(domNode);
+          const entry: Zone = { zoneId: a.addZone(zone), root, fit: () => {}, zone, line: w.line };
+          // The zone takes the card's height.
+          entry.fit = (h: number) => {
+            if (Math.abs((zone.heightInPx ?? 0) - h) < 1) return;
+            zone.heightInPx = h;
+            editor.changeViewZones((b) => b.layoutZone(entry.zoneId));
+          };
+          const fit = entry.fit;
+          zones.set(key, entry);
+          root.render(<Measured onHeight={fit}>{w.node}</Measured>);
+        }
+      });
     };
     let lastReview = studio.state.review;
-    let paintTimer: number | undefined;
     const offReview = studio.store.subscribe(() => {
       if (studio.state.review === lastReview) return;
       lastReview = studio.state.review;
-      editor.updateOptions({ readOnly: lastReview.mode });
-      paintComments();
+      syncComments();
     });
-    editor.onDidChangeModel(() => paintComments());
+    editor.onDidChangeModel(() => {
+      clearZones();
+      syncComments();
+    });
+    let commentTimer: number | undefined;
     editor.onDidChangeModelContent(() => {
-      clearTimeout(paintTimer);
-      paintTimer = window.setTimeout(paintComments, 300);
+      clearTimeout(commentTimer);
+      commentTimer = window.setTimeout(syncComments, 400);
     });
-    // In review mode, a "Comment" button floats by the selection.
+    // A small "Comment" bubble by a selection (after a moment): ⌥⌘M and right-click work too.
     const commentButton = document.createElement('button');
     commentButton.className = 'comment-widget';
-    commentButton.textContent = '💬 Comment';
+    commentButton.textContent = 'Comment';
     commentButton.title = 'Comment on the selection (⌥⌘M)';
     commentButton.onmousedown = (e) => e.preventDefault();
     commentButton.onclick = () => void studio.addComment();
     let widgetAt: monaco.IPosition | null = null;
+    let widgetTimer: number | undefined;
     const commentWidget: monaco.editor.IContentWidget = {
       getId: () => 'studio.comment',
       getDomNode: () => commentButton,
@@ -238,8 +320,15 @@ export function EditorPane() {
     };
     editor.addContentWidget(commentWidget);
     editor.onDidChangeCursorSelection((e) => {
-      widgetAt = studio.state.review.mode && !e.selection.isEmpty() ? e.selection.getEndPosition() : null;
+      clearTimeout(widgetTimer);
+      widgetAt = null;
       editor.layoutContentWidget(commentWidget);
+      if (e.selection.isEmpty()) return;
+      widgetTimer = window.setTimeout(() => {
+        const sel = editor.getSelection();
+        widgetAt = sel && !sel.isEmpty() && !studio.state.review.draft ? sel.getEndPosition() : null;
+        editor.layoutContentWidget(commentWidget);
+      }, 450);
     });
     editor.addAction({
       id: 'studio.addComment',
@@ -262,6 +351,9 @@ export function EditorPane() {
       clearTimeout(aiTimer);
       showVersion.dispose();
       offReview();
+      clearTimeout(commentTimer);
+      clearTimeout(widgetTimer);
+      clearZones();
       editor.removeContentWidget(commentWidget);
       offLens();
       lenses.dispose();

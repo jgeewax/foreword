@@ -86,7 +86,7 @@
 
 - [x] basic tools for the common things so we dont have to approve shell commands (e.g., we should never have to approve an ls command. thats crazy)
 
-- [ ] review mode is ... iffy at best. we need to think this through more thoroughly
+- [x] review mode is ... iffy at best. we need to think this through more thoroughly
 
 - [x] export pdf doesnt tellme where to save it..
 
