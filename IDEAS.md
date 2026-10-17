@@ -156,3 +156,9 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Grey out menu-bar items that can't act (no book open, nothing to fix, assistant not running) by updating them from the page.
 - Assistant → Mode (Write, Plan, Options, Figures) as checkable items, in step with the composer's mode menu.
 - Help → Keyboard Shortcuts: one page listing every shortcut, chords (⌘K …) included, generated from the menus and key handlers.
+
+## Long books
+
+- "Export this chapter": a PDF of one chapter for an editor or reviewer. Needs the book to say how (a template that reads `sys.inputs.chapter` and includes only that one, keeping the preamble and numbering).
+- A "focus on this chapter" preview mode built on the same opt-in, for writers who find 500 pages of preview distracting.
+- Re-measure edit → preview on a 1,500-page book; compile time grows with the book even though the preview only draws what's in view.

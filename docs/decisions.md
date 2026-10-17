@@ -309,6 +309,26 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### Long books: no need for a one-chapter preview (yet)
+
+- **Question (from the author):** as books get long, will the preview need to
+  show one chapter at a time?
+- **Measured again (2026-10-17)** with the current app: the stress book (60
+  chapters, 491 pages, 137,534 words), self-test `typing`, WKWebView dev
+  build, Apple Silicon:
+  - edit → preview p50/p95: 113 / 120 ms isolated, 40 / 80 ms while typing
+    at 60 ms a key (the budget is 150 / 400 ms);
+  - edit → editor paint p95: 18 ms.
+- That's because Tinymist recompiles incrementally and the preview renders
+  only the pages in view (partial rendering), in its own webview, apart from
+  the editor. Page count barely matters to typing.
+- **So not for speed.** A chapter on its own also can't be compiled in
+  general: it relies on the main file's set and show rules, imports and
+  counters (chapter numbers, figure numbers, references to other chapters).
+- What a writer might still want is focus, or a PDF of one chapter for an
+  editor. Both are in IDEAS.md (a template-level opt-in like
+  `sys.inputs.chapter`, so the book decides what "one chapter" means).
+
 ### Typst drawn outside the editor (chat, comments, What changed)
 
 - **Formulas are drawn as they would print**, not shown as source:

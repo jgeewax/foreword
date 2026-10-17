@@ -136,7 +136,7 @@
 
 - [ ] add support for mutliple windows like vs.code?
 
-- [ ] if books get long, will we find the need for a single chapter preview at a time?
+- [x] if books get long, will we find the need for a single chapter preview at a time? (Answered in docs/decisions.md: not for speed. Measured 113/120 ms edit → preview on a 491-page book; ideas for focus and chapter PDFs in IDEAS.md.)
 
 - [x] why is the model trying to run sed so muhc? "Allow shell sed -n '205,242p' chapters/ch01_what_is_a_vector.typ?" thats crazy. why not tell the model to use tools we have that dont need approval?
 
