@@ -318,6 +318,34 @@ pane top (off by 0 pt).
   cycles modes, as in Claude Code.
 - Verified in-app with gemini-3.8-flash: it added a fletcher flowchart with a
   caption and label using the pinned version; 0 errors; it renders in the preview.
+- **Figures in one style:** asking for "consistency" in a prompt does little,
+  so the book gets one file that holds the look, and every figure uses it.
+  - **The file:** `figures/figure-style.typ` has:
+    - a palette: ink, accent, muted, soft;
+    - the line width and the label size;
+    - a wrapper per package that applies them: `figure-canvas` (CeTZ
+      `set-style`), `figure-diagram` (fletcher's node and edge strokes and
+      fills) and `figure-chart` (Lilaq's colour cycle).
+  - **How the assistant uses it:**
+    - It creates the file from a fixed starting point
+      (`src/services/agent/figure-style.typ`, in the instructions whole) the
+      first time it makes a figure.
+    - Chapters import it with `: *`. Listing names was tried: the model left
+      out `node` and the chapter failed to compile.
+    - Figures don't set colours, fonts or widths of their own.
+    - It looks at the existing figures first and matches their scale, arrows
+      and captions.
+  - Every session's instructions also say so, for figures made in Write mode.
+  - The style guide template gains a Figures section.
+  - `npm run check-templates` compiles the starting file with a figure from
+    each wrapper, and fails on any warning. Vitest checks it uses the pinned
+    versions and defines every name the instructions promise.
+  - Verified (self-test `figures`, deepseek-v4-flash):
+    - A flowchart: the model created the file and imported it. It used
+      `figure-diagram` and set no colours or widths of its own.
+    - Then a CeTZ parallelogram: it reused the file unchanged and used
+      `figure-canvas` and the palette (accent only on u + v).
+    - No compile errors.
 
 ### Book history (TODO #8)
 

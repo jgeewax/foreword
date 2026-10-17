@@ -19,7 +19,7 @@ describe('styleGuideTemplate', () => {
   it('has a section for each part of a style guide, named for the book', () => {
     const t = styleGuideTemplate('Linear Algebra Notes');
     expect(t.startsWith('# Writing style: Linear Algebra Notes')).toBe(true);
-    for (const h of ['Audience', 'Voice and tone', 'Point of view and tense', 'Sentences and paragraphs', 'Words and spelling', 'Formatting in Typst', 'Do', "Don't", 'Examples']) {
+    for (const h of ['Audience', 'Voice and tone', 'Point of view and tense', 'Sentences and paragraphs', 'Words and spelling', 'Formatting in Typst', 'Figures', 'Do', "Don't", 'Examples']) {
       expect(t).toContain(`## ${h}\n`);
     }
   });
@@ -32,5 +32,6 @@ describe('draftStyleGuidePrompt', () => {
     expect(p).toMatch(/Ask me up to three short questions/);
     expect(p).toContain('WRITING_STYLE.md');
     expect(p).toMatch(/Don't change any chapter files/);
+    expect(p).toContain('Formatting in Typst; Figures; Do;');
   });
 });

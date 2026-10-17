@@ -118,7 +118,7 @@
 
 - [x] cmd + p for file browser ?
 
-- [ ] update prompt to try to encourage consistent style ? specifically for figures? in this case, cetz diagrams i suppose?
+- [x] update prompt to try to encourage consistent style ? specifically for figures? in this case, cetz diagrams i suppose?
 
 - [ ] im confused where change istory is stored? is this living in a git repository? can i work backwards ? see deltas? that seems like a good idea, no?
 

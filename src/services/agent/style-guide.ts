@@ -26,6 +26,7 @@ export const STYLE_SECTIONS = [
   'Sentences and paragraphs',
   'Words and spelling',
   'Formatting in Typst',
+  'Figures',
   'Do',
   "Don't",
   'Examples',
@@ -43,6 +44,10 @@ const DEFAULT_HINTS: Record<StyleSection, string> = {
 - Emphasis with \`_..._\`, never bold in running text.
 - Every displayed equation gets a label: \`$ ... $ <eq-name>\`.
 - Cite with \`@key\`; every figure has a caption.`,
+  Figures: `How figures look and read, e.g.:
+- Diagrams in CeTZ, drawn with the wrappers in figures/figure-style.typ (one palette, one line width).
+- The accent colour only for what the figure is about.
+- Captions: one sentence, ending with a full stop; the text refers to each figure before it appears.`,
   Do: 'Things you always want.',
   "Don't": 'Things to avoid, e.g. clichés, filler phrases, exclamation marks.',
   Examples: "A short passage that sounds right, and optionally one that doesn't (and why).",
@@ -71,9 +76,9 @@ export function draftStyleGuidePrompt(): string {
   return `Help me write a style guide for this book, saved as ${STYLE_GUIDE_FILE} in the project root.
 
 1. Read the manuscript first: the main file and several chapters, enough to get a real sense of how the book is written.
-2. Describe what you see in a few bullet points: audience, voice and tone, point of view and tense, sentence style, terminology and spelling, and how Typst markup is used (headings, emphasis, equations, labels, citations, figures).
+2. Describe what you see in a few bullet points: audience, voice and tone, point of view and tense, sentence style, terminology and spelling, how Typst markup is used (headings, emphasis, equations, labels, citations), and how the figures look (kind, colours, captions).
 3. Ask me up to three short questions about anything the text alone can't tell you (for example who the reader is, or what I want to avoid). Wait for my answers.
-4. Then write ${STYLE_GUIDE_FILE} with these sections: Audience; Voice and tone; Point of view and tense; Sentences and paragraphs; Words and spelling; Formatting in Typst; Do; Don't; Examples. Keep the rules short and concrete, and include a short example passage taken from or modelled on the book.
+4. Then write ${STYLE_GUIDE_FILE} with these sections: ${STYLE_SECTIONS.join('; ')}. Keep the rules short and concrete, and include a short example passage taken from or modelled on the book.
 
 Don't change any chapter files.`;
 }

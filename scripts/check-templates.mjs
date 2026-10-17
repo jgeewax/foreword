@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Compile every book template in src/templates with the installed `typst`,
 // with a title that needs escaping, every cover style in src/cover (thin and
-// thick spines, checking the wrap's size), and every example in the Typst
-// basics guide (src/help/typst-basics.json). Fails on any error or warning.
+// thick spines, checking the wrap's size), Figures mode's figure style file,
+// and every example in the Typst basics guide (src/help/typst-basics.json).
+// Fails on any error or warning.
 // Usage: npm run check-templates [-- --png <dir>]  (also renders page images)
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -90,6 +91,38 @@ for (const style of readdirSync(join(coverRoot, 'styles'))) {
       rmSync(work, { recursive: true, force: true });
     }
   }
+}
+
+// The figure style file Figures mode gives the assistant, with a figure from each wrapper,
+// imported the way the instructions say (FIGURE_STYLE_IMPORT in figures-mode.ts).
+{
+  const agentDir = new URL('../src/services/agent/', import.meta.url).pathname;
+  const mode = readFileSync(join(agentDir, 'figures-mode.ts'), 'utf8');
+  const file = /FIGURE_STYLE_FILE = '([^']+)'/.exec(mode)[1];
+  const importLine = /FIGURE_STYLE_IMPORT = `(.*)`;/.exec(mode)[1].replace('${FIGURE_STYLE_FILE}', file);
+  const work = mkdtempSync(join(tmpdir(), 'typst-figure-style-'));
+  mkdirSync(join(work, 'figures'));
+  cpSync(join(agentDir, 'figure-style.typ'), join(work, file));
+  writeFileSync(
+    join(work, 'main.typ'),
+    `${importLine}
+#figure(figure-canvas({
+  import cetz.draw: *
+  line((0, 0), (2, 1), mark: (end: ">"), stroke: palette.accent)
+  content((2, 1), [$bold(v)$], anchor: "south-west")
+}), caption: [A vector.]) <fig-v>
+#figure(figure-diagram(node((0, 0), [Draft]), edge("-|>"), node((1, 0), [Revise])), caption: [Steps.]) <fig-d>
+#figure(figure-chart(xlabel: [x], lq.plot((1, 2, 3), (1, 4, 9))), caption: [Squares.]) <fig-c>
+`,
+  );
+  const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', 'main.typ', 'out.pdf'], { cwd: work, encoding: 'utf8' });
+  const output = `${run.stdout}${run.stderr}`.trim();
+  if (run.status !== 0 || /warning/i.test(output)) {
+    failed++;
+    console.log(`FAIL figure style\n${output}`);
+  } else console.log('ok   figure style (CeTZ, fletcher, Lilaq)');
+  if (pngDir) execFileSync('typst', ['compile', '--format', 'png', '--ppi', '80', 'main.typ', join(pngDir, 'figure-style-{0p}.png')], { cwd: work });
+  rmSync(work, { recursive: true, force: true });
 }
 
 // Guide examples: each compiled on its own, with the files they refer to.

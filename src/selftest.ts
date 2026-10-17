@@ -1843,22 +1843,49 @@ async function figuresChecks() {
   await sleep(500);
   out.mode = studio.state.agent.mode;
   const before = (await ipc.fsRead(file)).text;
+  const styleFile = 'figures/figure-style.typ';
+  const styleBefore = await ipc.fsHash(styleFile).catch(() => null);
   const reply = await askAgent(
     `In ${file}, right after the paragraph that ends "stated otherwise.", add a small flowchart figure showing: vectors → linear combinations → span. Give it a caption and a label.`,
   );
   await sleep(2500);
   const after = (await ipc.fsRead(file)).text;
+  // What the figure itself sets, outside the shared style (colours, widths, fonts).
+  const ownStyle = (text: string) => [...text.matchAll(/rgb\(|luma\(|stroke: *\d|font: *"|text\(size:/g)].length;
+  const style = await ipc.fsRead(styleFile).then((f) => f.text).catch(() => null);
   out.result = {
     reply: reply.slice(0, 300),
     changed: after !== before,
-    usesFletcher: after.includes('@preview/fletcher:0.5.8'),
-    hasFigure: /#figure\(/.test(after.slice(before.length > 0 ? 0 : 0)),
+    styleFileCreated: !styleBefore && !!style,
+    styleFileUsesFletcher: !!style?.includes('@preview/fletcher:0.5.8'),
+    importsStyle: after.includes(styleFile),
+    usesWrapper: /figure-diagram\(/.test(after),
+    ownStyleInChapter: ownStyle(after) - ownStyle(before),
     hasCaption: /caption:/.test(after),
     hasLabel: /<fig-[\w-]+>/.test(after),
     errors: studio.state.problems.errors,
     compile: studio.state.compile,
-    tools: studio.state.agent.items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}`),
+    tools: studio.state.agent.items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} ${(i as any).summary} → ${(i as any).status}`),
+    permissions: studio.state.agent.items.filter((i) => i.kind === 'permission').map((i) => `${(i as any).action}: ${(i as any).resources?.join(' ')} (${(i as any).state})`),
   };
+  // A second figure, of another kind, in the same style: the file is reused, not rewritten.
+  const styleHash = await ipc.fsHash(styleFile).catch(() => null);
+  const reply2 = await askAgent(`In ${file}, after the flowchart, add a CeTZ drawing of two vectors u and v from the origin and their sum u + v (parallelogram rule). Caption and label it.`);
+  await sleep(2500);
+  const after2 = (await ipc.fsRead(file)).text;
+  out.second = {
+    reply: reply2.slice(0, 200),
+    usesCanvasWrapper: /figure-canvas\(/.test(after2),
+    styleFileUnchanged: styleHash !== null && (await ipc.fsHash(styleFile).catch(() => null)) === styleHash,
+    ownStyleInChapter: ownStyle(after2) - ownStyle(before),
+    usesPalette: /palette\.\w+/.test(after2),
+    errors: studio.state.problems.errors,
+    diagnostics: [...((studio as any).diagnostics as Map<string, { severity: number; message: string; range: { start: { line: number } } }[]>).entries()].flatMap(([f, ds]) =>
+      ds.filter((d) => d.severity === 1).map((d) => `${f}:${d.range.start.line + 1}: ${d.message}`),
+    ),
+    canvas: after2.slice(after2.indexOf('figure-canvas('), after2.indexOf('figure-canvas(') + 1500),
+  };
+  out.styleFile = style?.split('\n').length;
   await studio.openFile(file);
   const line = after.split('\n').findIndex((l) => l.includes('#figure') || l.includes('diagram(')) + 1;
   if (line > 0) {
@@ -1869,6 +1896,7 @@ async function figuresChecks() {
   out.snapshotPreview = await snap('figure-preview', 'preview');
   out.snapshotMain = await snap('figure-main');
   await ipc.fsWrite(file, before, await ipc.fsHash(file));
+  if (!styleBefore) await ipc.fsTrash(styleFile).catch(() => {});
   await studio.setMode('write');
   studio.updateSettings({ permissions: policy });
   return out;
