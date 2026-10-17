@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest';
+import { diff, mapLines, splitLines, type Run } from './diff';
+
+/** Longest common subsequence length, the slow way. */
+function lcs(a: string[], b: string[]) {
+  const t = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) t[i][j] = a[i] === b[j] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1]);
+  return t[0][0];
+}
+
+/** The runs must walk both sequences in order and only call equal things equal. */
+function check(a: string[], b: string[], runs: Run[]) {
+  let i = 0;
+  let j = 0;
+  let same = 0;
+  for (const r of runs) {
+    expect([r.a, r.b]).toEqual([i, j]);
+    if (r.type === 'equal') {
+      for (let k = 0; k < r.n; k++) expect(a[i + k]).toBe(b[j + k]);
+      i += r.n;
+      j += r.n;
+      same += r.n;
+    } else if (r.type === 'delete') i += r.n;
+    else j += r.n;
+  }
+  expect([i, j]).toEqual([a.length, b.length]);
+  return same;
+}
+
+describe('diff', () => {
+  it('finds a shortest edit script', () => {
+    let seed = 7;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    for (let t = 0; t < 400; t++) {
+      const a = Array.from({ length: rand(14) }, () => 'abcd'[rand(4)]);
+      const b = Array.from({ length: rand(14) }, () => 'abcd'[rand(4)]);
+      expect(check(a, b, diff(a, b)), `${a.join('')} → ${b.join('')}`).toBe(lcs(a, b));
+    }
+  });
+
+  it('handles empty sides and identical input', () => {
+    expect(diff([], ['x'])).toEqual([{ type: 'insert', a: 0, b: 0, n: 1 }]);
+    expect(diff(['x', 'y'], [])).toEqual([{ type: 'delete', a: 0, b: 0, n: 2 }]);
+    expect(diff(['x'], ['x'])).toEqual([{ type: 'equal', a: 0, b: 0, n: 1 }]);
+    expect(diff([], [])).toEqual([]);
+  });
+
+  it('maps unchanged lines onto the new text', () => {
+    const before = splitLines('a\nb\nc\nd\n');
+    const after = splitLines('new\na\nb\nC!\nd');
+    expect([...mapLines(before, after)]).toEqual([1, 2, -1, 4]);
+  });
+
+  it('is quick on a chapter with scattered edits', () => {
+    const before = Array.from({ length: 3000 }, (_, i) => `Paragraph ${i} of the chapter, with some words.`);
+    const after = before.map((l, i) => (i % 97 === 0 ? `${l} Edited.` : l));
+    const t = performance.now();
+    const runs = diff(before, after);
+    expect(performance.now() - t).toBeLessThan(500);
+    expect(check(before, after, runs)).toBe(3000 - 31);
+  });
+});

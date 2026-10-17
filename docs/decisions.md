@@ -640,6 +640,33 @@ pane top (off by 0 pt).
   PDF/X. Printers such as Mixam convert to PDF/X themselves; KDP accepts
   standard PDFs.
 
+### History: what changed from one version to the next
+
+- **The problem:** versions showed line counts ("+1 −1"), and the diff opened
+  one file at a time in Monaco's side-by-side editor. In prose a paragraph is
+  one line, so "+1 −1" can mean one word or a rewritten paragraph.
+- **What changed** opens one window per version. It covers every changed
+  file, with the changed paragraphs shown as text: deleted words struck
+  through, added words highlighted, a line of context around each change, and
+  word counts per file and in total.
+  - **◀ Older / Newer ▶** (⌥← / ⌥→) step through versions one at a time.
+  - **Compare with now** shows everything since a version.
+  - The side-by-side diff, Restore file, Undo these changes and Restore this
+    version remain available from the same window.
+- **Diff:** a Myers diff (`src/lib/diff.ts`), checked against a brute-force LCS
+  on random inputs. It runs on lines first, then on words only inside changed
+  passages, so a 3,000-paragraph chapter stays fast. Passages over 6,000 words
+  are shown as replaced rather than diffed word by word. Changes separated
+  only by a space or a punctuation mark are grouped into one phrase:
+  "~~was quiet~~ lay still", not alternating word fragments. Changes up to two
+  lines apart share one passage.
+- **Verified in the app** (self-test `changes`):
+  - The second edit showed "with ~~her~~ the collar *of her coat* turned up"
+    (+4 −1 words).
+  - Older went to the named version (no files), then to the first edit
+    ("~~noon~~ early morning").
+  - Compare with now showed both changes (+6 −2).
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and

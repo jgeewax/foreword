@@ -65,6 +65,12 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Suggest a new task when the context meter goes red, or when a message drifts away from the task's goal.
 - Rename, archive and delete tasks; search them.
 
+## History, what changed
+- Word counts in the version list itself (computed in the background and cached per version), so the list reads "+120 −30 words" without opening anything.
+- Compare any two versions (pick two in the list), e.g. "Draft 1" against "Draft 2".
+- A one-line gist of each version ("since noon → since early morning") under its label.
+- Changes in the rendered book: the preview with changed passages highlighted, for authors who think in pages rather than source.
+
 ## Review
 - Comments in the preview: a margin bubble next to the rendered passage. Click it to see and reply.
 - Reply threads on a comment, and the assistant's per-comment answer shown under it.

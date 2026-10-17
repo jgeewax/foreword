@@ -7,6 +7,7 @@ import { EditorPane } from './components/EditorPane';
 import { Explorer } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { CoverDialog } from './components/CoverDialog';
+import { HistoryChanges } from './components/HistoryChanges';
 import { HistoryDiff } from './components/HistoryDiff';
 import { NewBookDialog } from './components/NewBookDialog';
 import { PrintDialog } from './components/PrintDialog';
@@ -164,6 +165,7 @@ export function App() {
       {coverDialogOpen && <CoverDialog />}
       {printOpen && <PrintDialog />}
       <PromptDialog />
+      <HistoryChanges />
       <HistoryDiff />
     </>
   );

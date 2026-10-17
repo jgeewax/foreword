@@ -402,7 +402,12 @@ async function historyChecks(withAgent: boolean) {
   await waitFor(() => hs().open?.changes != null, 10000, 'changes').catch(() => {});
   await sleep(200);
   out.panel = { rows: document.querySelectorAll('.history-row').length, files: [...document.querySelectorAll('.history-file .history-path')].map((e) => e.textContent) };
+  // A file opens "what changed"; Side by side opens Monaco's diff over it.
   (document.querySelector('.history-file') as HTMLElement | null)?.click();
+  await waitFor(() => hs().changes?.files, 10000, 'what changed').catch(() => {});
+  await sleep(200);
+  out.whatChanged = { files: hs().changes?.files?.map((f) => f.path), added: document.querySelector('.change-body ins')?.textContent };
+  [...document.querySelectorAll<HTMLButtonElement>('.change-file button')].find((b) => b.textContent === 'Side by side')?.click();
   await waitFor(() => !!hs().diff, 10000, 'diff').catch(() => {});
   await sleep(1200);
   out.diff = {
@@ -419,6 +424,7 @@ async function historyChecks(withAgent: boolean) {
     out.snapshotDiff = errorMessage(e);
   }
   h.closeDiff();
+  h.closeChanges();
   await sleep(200);
 
   // Restore the version before the edit: the file (and its open buffer) go back.
@@ -731,6 +737,78 @@ async function journeyChecks() {
   };
   out.snapshotPreview = await snap('journey-preview', 'preview');
   out.book = studio.state.workspace?.root;
+  await studio.openWorkspace(original);
+  return out;
+}
+
+/**
+ * History, what changed: two edits to a fresh novel and a named version, then
+ * the word-by-word view, stepping between versions, and comparing with now.
+ * Works next to the scratch book, then reopens it.
+ */
+async function changesChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const hs = () => studio.state.history;
+  await studio.createBook('novel', { title: `Changes ${Date.now().toString(36)}`, author: 'Ada Example' }, parent);
+  // History starts in the background for the new book: its first version is the sign.
+  await waitFor(() => studio.state.workspace?.root !== original && hs().status === 'ready' && hs().versions.length > 0, 30000, 'history');
+  const file = 'chapters/01-chapter-one.typ';
+  const edit = async (from: string, to: string, label: string) => {
+    const { text, hash } = await ipc.fsRead(file);
+    await ipc.fsWrite(file, text.replace(from, to), hash);
+    await sleep(300);
+    await studio.history.checkpoint('save', label);
+  };
+  await edit('The storm had been building since noon', 'The storm had been building since early morning', 'First edit');
+  await studio.history.saveNamed('Draft 1');
+  await edit('with her collar turned up', 'with the collar of her coat turned up', 'Second edit');
+  const versions = hs().versions;
+  out.versions = versions.slice(0, 4).map((v) => `${v.kind}: ${v.label}`);
+  if (versions.length < 4) {
+    out.error = `expected 4 versions: ${JSON.stringify({ status: hs().status, error: hs().error, root: studio.state.workspace?.root })}`;
+    await studio.openWorkspace(original);
+    return out;
+  }
+
+  studio.showSidebar('history');
+  await studio.history.showChanges(versions[0]);
+  await waitFor(() => hs().changes?.files, 15000, 'changes');
+  const view = (v = hs().changes!) => ({
+    title: v.version.label,
+    mode: v.mode,
+    files: v.files?.map((f) => ({
+      path: f.path,
+      added: f.diff?.added,
+      removed: f.diff?.removed,
+      changes: f.diff?.hunks.map((h) => `line ${h.line}: ${h.pieces.filter((p) => p.kind !== 'same').map((p) => `${p.kind === 'add' ? '+' : '-'}[${p.text}]`).join(' ')}`),
+    })),
+  });
+  out.latest = view();
+  await sleep(300);
+  out.snapshotLatest = await snap('changes-latest');
+  out.dom = {
+    ins: [...document.querySelectorAll('.change-body ins')].map((e) => e.textContent),
+    del: [...document.querySelectorAll('.change-body del')].map((e) => e.textContent),
+    newer: (document.querySelector('.history-changes .modal-header button:last-of-type') as HTMLButtonElement | null)?.textContent,
+  };
+  // Older: the named version (no files), then the first edit.
+  await studio.history.stepChanges(1);
+  await waitFor(() => hs().changes?.files, 15000, 'older');
+  out.older = view();
+  await studio.history.stepChanges(1);
+  await waitFor(() => hs().changes?.files, 15000, 'older 2');
+  out.older2 = view();
+  const firstEdit = hs().changes!.version;
+  studio.history.closeChanges();
+  // Everything since the version before the first edit.
+  const start = hs().versions.find((v) => v.id === firstEdit.parent)!;
+  await studio.history.compareWithNow(start);
+  await waitFor(() => hs().changes?.files, 15000, 'since');
+  out.since = view();
+  out.snapshotSince = await snap('changes-since');
+  studio.history.closeChanges();
   await studio.openWorkspace(original);
   return out;
 }
@@ -1985,6 +2063,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('journey')) {
       log('journey');
       result.journey = await journeyChecks();
+    }
+    if (want('changes')) {
+      log('changes');
+      result.changes = await changesChecks();
     }
     if (want('cover')) {
       log('cover');

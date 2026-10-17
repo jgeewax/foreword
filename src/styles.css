@@ -360,6 +360,23 @@ button.indicator:hover { background: var(--bg-3); }
 .modal.history-diff { width: calc(100% - 64px); height: calc(100% - 64px); max-height: none; }
 .history-diff .modal-header h1 { font-family: "SF Mono", Menlo, monospace; font-size: 13px; }
 .history-diff-editor { flex: 1; min-height: 0; }
+.modal.history-changes { width: min(980px, calc(100% - 64px)); height: calc(100% - 64px); max-height: none; }
+.history-changes .modal-header { gap: 10px; }
+.changes-title { flex: 1; min-width: 0; }
+.changes-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changes-body { flex: 1; min-height: 0; overflow: auto; }
+.change-file { margin-bottom: 18px; }
+.change-file > header { display: flex; align-items: center; gap: 8px; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; position: sticky; top: -1px; background: var(--bg); z-index: 1; }
+.change-file > header .history-path { flex: 0 1 auto; font-size: 12px; color: var(--fg); }
+.change-passage { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.change-passage:last-child { border-bottom: none; }
+.change-line { flex: none; align-self: flex-start; width: 58px; text-align: right; font-size: 11px; padding-top: 4px; }
+.change-text { flex: 1; min-width: 0; font-family: "Iowan Old Style", "Palatino", Georgia, serif; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.change-context { color: var(--muted); }
+.change-body ins, .history-changes .legend ins { background: var(--add); color: var(--good); text-decoration: none; border-radius: 2px; }
+.change-body del, .history-changes .legend del { background: var(--del); color: var(--bad); text-decoration: line-through; border-radius: 2px; }
+.history-changes .legend { font-size: 12px; }
+.history-changes .legend ins, .history-changes .legend del { padding: 0 4px; }
 
 .modal.prompt { width: min(440px, calc(100% - 32px)); }
 .prompt .modal-body { padding-top: 12px; }

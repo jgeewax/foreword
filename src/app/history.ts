@@ -7,12 +7,36 @@
 import { ask } from '@tauri-apps/plugin-dialog';
 import type { Documents } from '../editor/documents';
 import { errorMessage, ipc, type FileChange, type Version } from '../lib/ipc';
+import { proseDiff, type ProseDiff } from './prose-diff';
 
 export type HistoryDiff = {
   path: string;
   version: Version;
   before: string | null;
   after: string | null;
+  error?: string;
+};
+
+/** One file in the "what changed" view. */
+export type ChangedFile = {
+  path: string;
+  status: FileChange['status'];
+  diff: ProseDiff | null;
+  /** Not shown as text (binary, not UTF-8, …). */
+  note?: string;
+};
+
+/** What changed: one version against the one before it, or a version against now. */
+export type ChangesView = {
+  /** The version shown (stepping goes from here). */
+  version: Version;
+  /** 'version': its parent → it. 'now': it → the current book. */
+  mode: 'version' | 'now';
+  /** The version the comparison ends at (the version itself, or the current state). */
+  to: string;
+  files: ChangedFile[] | null;
+  /** Files over the display limit. */
+  more: number;
   error?: string;
 };
 
@@ -23,10 +47,14 @@ export type HistoryState = {
   /** The expanded version and its changed files (null while loading). */
   open: { id: string; changes: FileChange[] | null } | null;
   diff: HistoryDiff | null;
+  changes: ChangesView | null;
   busy: boolean;
 };
 
-export const initialHistory: HistoryState = { status: 'off', versions: [], open: null, diff: null, busy: false };
+export const initialHistory: HistoryState = { status: 'off', versions: [], open: null, diff: null, changes: null, busy: false };
+
+/** Files shown in one "what changed" view (the rest are counted). */
+const CHANGES_LIMIT = 40;
 
 export type HistoryHost = {
   get(): HistoryState;
@@ -179,6 +207,61 @@ export class History {
     this.host.set({ diff: null });
   }
 
+  /** What `version` changed (from the version before it), file by file, word by word. */
+  async showChanges(version: Version) {
+    await this.loadChanges({ version, mode: 'version', to: version.id, files: null, more: 0 }, version.parent, version.id);
+  }
+
+  /** Everything that changed since `version`, up to the book as it is now. */
+  async compareWithNow(version: Version) {
+    this.host.set({ changes: { version, mode: 'now', to: '', files: null, more: 0 } });
+    let head: string | null;
+    try {
+      head = await this.checkpoint();
+    } catch (e) {
+      this.host.set({ changes: { version, mode: 'now', to: '', files: [], more: 0, error: errorMessage(e) } });
+      return;
+    }
+    if (!head) return;
+    await this.loadChanges({ version, mode: 'now', to: head, files: null, more: 0 }, version.id, head);
+  }
+
+  /** In the "what changed" view: the next older (+1) or newer (−1) version. */
+  async stepChanges(direction: 1 | -1) {
+    const current = this.state.changes;
+    if (!current || current.mode !== 'version') return;
+    const i = this.state.versions.findIndex((v) => v.id === current.version.id);
+    const next = i < 0 ? undefined : this.state.versions[i + direction];
+    if (next) await this.showChanges(next);
+  }
+
+  closeChanges() {
+    this.host.set({ changes: null });
+  }
+
+  private async loadChanges(view: ChangesView, from: string | null, to: string) {
+    this.host.set({ changes: view });
+    const still = () => this.state.changes?.version.id === view.version.id && this.state.changes.mode === view.mode;
+    try {
+      const all = from === to ? [] : await ipc.historyChanges(from, to);
+      const shown = all.slice(0, CHANGES_LIMIT);
+      const files = await Promise.all(
+        shown.map(async (c): Promise<ChangedFile> => {
+          if (c.added === null) return { path: c.path, status: c.status, diff: null, note: 'not a text file' };
+          try {
+            const [before, after] = await Promise.all([from ? ipc.historyFile(from, c.path) : Promise.resolve(null), ipc.historyFile(to, c.path)]);
+            return { path: c.path, status: c.status, diff: proseDiff(before, after) };
+          } catch (e) {
+            return { path: c.path, status: c.status, diff: null, note: errorMessage(e) };
+          }
+        }),
+      );
+      if (still()) this.host.set({ changes: { ...view, files, more: all.length - shown.length } });
+    } catch (e) {
+      if (still()) this.host.set({ changes: { ...view, files: [], error: errorMessage(e) } });
+    }
+  }
+
   /** Put one file back as it was in `version`. */
   async restoreFile(version: Version, path: string) {
     await this.run(async () => {
@@ -251,7 +334,7 @@ export class History {
     try {
       const report = await fn();
       this.host.report(describeRestore(report, words), report.skipped.length ? 'error' : 'info');
-      this.host.set({ diff: null, open: null });
+      this.host.set({ diff: null, open: null, changes: null });
     } catch (e) {
       this.host.report(`History: ${errorMessage(e)}`, 'error');
     } finally {

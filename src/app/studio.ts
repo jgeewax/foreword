@@ -1754,7 +1754,7 @@ export class Studio {
     const ok = this.state.preview.status !== 'error';
     // The preview is a native view above the page; hide it while a dialog is open
     // so the dialog isn't drawn underneath it.
-    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.prompt || this.state.coverDialogOpen || this.state.print.open;
+    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.history.changes || !!this.state.prompt || this.state.coverDialogOpen || this.state.print.open;
     void ipc.previewSetVisible(this.previewVisible && ok && !dialog);
   }
 

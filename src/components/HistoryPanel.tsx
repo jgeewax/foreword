@@ -26,7 +26,7 @@ const timeLabel = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hou
 function Stats({ v }: { v: Version }) {
   if (!v.files) return <span>no changes</span>;
   return (
-    <span>
+    <span title="Files changed, and lines added and removed (a paragraph is one line)">
       {v.files} file{v.files > 1 ? 's' : ''} <span className="add-n">+{v.added}</span> <span className="del-n">−{v.deleted}</span>
     </span>
   );
@@ -45,7 +45,9 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
         aria-label={`${kind.title}: ${v.label}`}
         onClick={() => void studio.history.toggle(v.id)}
         onContextMenu={onContextMenu(() => [
-          { label: open ? 'Hide Changes' : 'Show Changes', action: () => void studio.history.toggle(v.id) },
+          { label: 'What Changed', action: () => void studio.history.showChanges(v) },
+          !latest && { label: 'Compare with Now', action: () => void studio.history.compareWithNow(v) },
+          { label: open ? 'Hide Files' : 'Show Files', action: () => void studio.history.toggle(v.id) },
           'separator',
           v.kind === 'agent' && !!v.parent && { label: 'Undo These Changes…', enabled: !busy, action: () => void studio.history.undoVersion(v) },
           !latest && { label: 'Restore This Version…', enabled: !busy, action: () => void studio.history.restoreVersion(v) },
@@ -65,7 +67,7 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
         <div className="history-detail">
           {open.changes === null && <div className="muted">Loading…</div>}
           {open.changes?.map((c) => (
-            <div key={c.path} className="history-file" role="button" tabIndex={0} title="Show what changed" onClick={() => void studio.history.showDiff(v, c.path)}>
+            <div key={c.path} className="history-file" role="button" tabIndex={0} title="Show what changed" onClick={() => void studio.history.showChanges(v)}>
               <span className={`status-${c.status}`}>{c.status === 'A' ? 'new' : c.status === 'D' ? 'deleted' : ''}</span>
               <span className="history-path">{c.path}</span>
               {c.added !== null && (
@@ -76,6 +78,14 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
             </div>
           ))}
           <div className="history-buttons">
+            <button className="primary" onClick={() => void studio.history.showChanges(v)}>
+              What changed
+            </button>
+            {!latest && (
+              <button title="Everything that changed from this version until now" onClick={() => void studio.history.compareWithNow(v)}>
+                Compare with now
+              </button>
+            )}
             {v.kind === 'agent' && v.parent && (
               <button disabled={busy} title="Put back what these files looked like before the agent changed them" onClick={() => void studio.history.undoVersion(v)}>
                 Undo these changes
