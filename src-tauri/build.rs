@@ -17,6 +17,8 @@ fn main() {
             "fs_hash",
             "fs_write",
             "project_create",
+            "reveal_in_finder",
+            "clipboard_write",
             "typst_start",
             "typst_send",
             "typst_stop",

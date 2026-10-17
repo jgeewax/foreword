@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { studio } from '../app/studio';
 import { monaco } from '../editor/monaco';
+import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -26,15 +27,42 @@ export function EditorPane() {
       unicodeHighlight: { ambiguousCharacters: false },
       padding: { top: 8 },
       fixedOverflowWidgets: true,
+      // Our own native menu instead of Monaco's HTML one (see onContextMenu below).
+      contextmenu: false,
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void studio.save());
     editor.addAction({
       id: 'studio.askAgent',
       label: 'Ask Agent About Selection',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
-      contextMenuGroupId: 'navigation',
-      contextMenuOrder: 0,
       run: () => void studio.attachSelection(),
+    });
+    editor.onContextMenu((e) => {
+      e.event.preventDefault();
+      e.event.stopPropagation();
+      const pos = e.target.position;
+      const sel = editor.getSelection();
+      // Right-clicking outside the selection moves the cursor there, as in other editors.
+      if (pos && sel && !sel.containsPosition(pos)) editor.setPosition(pos);
+      editor.focus();
+      const hasSelection = !editor.getSelection()?.isEmpty();
+      const error = pos ? studio.errorAt(pos.lineNumber, pos.column) : null;
+      void showContextMenu([
+        error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
+        'separator',
+        { label: hasSelection ? 'Ask the Assistant About This' : 'Ask the Assistant Here', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
+        hasSelection && { label: 'Get Three Versions…', action: () => void studio.optionsForSelection() },
+        hasSelection && { label: 'Explain This', action: () => void studio.explainSelection() },
+        'separator',
+        'cut',
+        'copy',
+        'paste',
+        'separator',
+        'selectAll',
+        'separator',
+        { label: 'Show in Preview', action: () => void studio.syncPreviewToCursor() },
+        { label: 'Typst Basics', action: () => studio.openGuide() },
+      ]);
     });
     editor.onKeyDown((e) => {
       const ts = e.browserEvent.timeStamp;
@@ -60,6 +88,19 @@ export function EditorPane() {
             aria-selected={t === active}
             className={`tab${t === active ? ' active' : ''}`}
             title={t}
+            onContextMenu={onContextMenu(() => {
+              const i = tabs.indexOf(t);
+              return [
+                { label: 'Close', accelerator: 'CmdOrCtrl+W', action: () => void studio.closeTab(t) },
+                { label: 'Close Others', enabled: tabs.length > 1, action: () => void studio.closeTabs(tabs.filter((x) => x !== t)) },
+                { label: 'Close Tabs to the Right', enabled: i < tabs.length - 1, action: () => void studio.closeTabs(tabs.slice(i + 1)) },
+                { label: 'Close All', action: () => void studio.closeTabs([...tabs]) },
+                'separator',
+                { label: 'Reveal in Finder', action: () => void studio.reveal(t) },
+                { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(t), 'Path copied') },
+                { label: 'Copy Relative Path', action: () => studio.copy(t, 'Path copied') },
+              ];
+            })}
             onMouseDown={(e) => {
               if (e.button === 1) void studio.closeTab(t);
               else studio.activate(t);

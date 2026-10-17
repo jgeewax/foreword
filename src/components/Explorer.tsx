@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { studio } from '../app/studio';
+import { onContextMenu, type MenuEntry } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { HistoryPanel } from './HistoryPanel';
@@ -36,6 +37,15 @@ function FileTree() {
           style={{ paddingLeft: 8 + depth * 12 }}
           title={n.path}
           onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
+          onContextMenu={onContextMenu((): MenuEntry[] => [
+            !n.dir && { label: 'Open', action: () => void studio.openFile(n.path) },
+            n.dir && { label: expanded.has(n.path) ? 'Collapse' : 'Expand', action: () => toggle(n.path) },
+            !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
+            'separator',
+            { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
+            { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(n.path), 'Path copied') },
+            { label: 'Copy Relative Path', action: () => studio.copy(n.path, 'Path copied') },
+          ])}
         >
           <span className="twisty">{n.dir ? (expanded.has(n.path) ? '▾' : '▸') : ''}</span>
           <span className={n.dir ? 'dir' : 'file'}>{n.name}</span>
@@ -46,7 +56,17 @@ function FileTree() {
       </div>
     ));
 
-  return <div className="tree">{render(tree, 0)}</div>;
+  return (
+    <div
+      className="tree"
+      onContextMenu={onContextMenu(() => [
+        { label: 'Refresh', action: () => void studio.refreshFiles() },
+        { label: 'Reveal Book Folder in Finder', action: () => void studio.reveal('') },
+      ])}
+    >
+      {render(tree, 0)}
+    </div>
+  );
 }
 
 const RefreshButton = () => (

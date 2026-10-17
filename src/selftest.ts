@@ -5,6 +5,7 @@ import { studio } from './app/studio';
 import { monaco } from './editor/monaco';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
+import { menuRecorder, type MenuEntry } from './lib/context-menu';
 import { parseOptions } from './services/agent/options-mode';
 import { TEMPLATES } from './templates';
 
@@ -658,6 +659,72 @@ async function snap(name: string, target: 'main' | 'preview' = 'main') {
   }
 }
 
+/**
+ * Right-click menus in every pane. Native popups are modal, so the menus are
+ * recorded (not shown) and their actions run directly.
+ */
+async function menuChecks() {
+  const out: Record<string, unknown> = {};
+  let last: Exclude<MenuEntry, null | false | undefined>[] = [];
+  menuRecorder.record = (entries) => (last = entries);
+  const labels = () => last.map((e) => (typeof e === 'string' ? `[${e}]` : `${e.label}${e.enabled === false ? ' (disabled)' : ''}`));
+  const right = async (el: Element | null, x?: number, y?: number) => {
+    last = [];
+    if (!el) return ['(no element)'];
+    const r = el.getBoundingClientRect();
+    const cx = x ?? r.left + Math.min(20, r.width / 2);
+    const cy = y ?? r.top + r.height / 2;
+    (document.elementFromPoint(cx, cy) ?? el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 2 }));
+    await sleep(250);
+    return labels();
+  };
+  const action = (label: string) => last.find((e): e is Extract<MenuEntry, { label: string }> => typeof e === 'object' && !!e && e.label === label)?.action;
+
+  await studio.openFile('chapters/ch1-vectors.typ');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+  editor.setSelection(new monaco.Range(line, 1, line, 9));
+  editor.revealLineInCenter(line);
+  await sleep(300);
+  const p = editor.getScrolledVisiblePosition({ lineNumber: line, column: 4 })!;
+  const host = editor.getDomNode()!.getBoundingClientRect();
+  out.editor = await right(editor.getDomNode()!.querySelector('.view-lines'), host.left + p.left, host.top + p.top + 5);
+  out.monacoMenuShown = !!document.querySelector('.monaco-menu-container, .context-view .monaco-menu');
+  action('Get Three Versions…')?.();
+  await sleep(500);
+  out.threeVersions = { mode: studio.state.agent.mode, attachments: studio.state.agent.attachments.map((a) => a.label) };
+  await studio.setMode('write');
+  studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
+
+  out.tab = await right(document.querySelector('.tab.active'));
+  out.explorerFile = await right([...document.querySelectorAll('.tree-row')].find((e) => e.textContent?.includes('ch1-vectors.typ')) ?? null);
+  out.explorerBackground = await right(document.querySelector('.tree'), undefined, document.querySelector('.tree')!.getBoundingClientRect().bottom - 10);
+  out.composer = await right(document.querySelector('.composer textarea'));
+  studio.showSidebar('history');
+  await sleep(300);
+  out.historyRow = await right(document.querySelector('.history-row'));
+  studio.showSidebar('files');
+
+  // Preview: the preview webview reports the right-click; "Show the Text Here" jumps to the source.
+  last = [];
+  editor.setPosition({ lineNumber: 1, column: 1 });
+  const before = { active: studio.state.active, line: editor.getPosition()?.lineNumber };
+  const pv = document.querySelector('.preview-body')!.getBoundingClientRect();
+  await ipc.previewEval(
+    `(() => { const texts = [...document.querySelectorAll('.typst-text')].filter((t) => { const r = t.getBoundingClientRect(); return r.top > innerHeight * 0.3 && r.bottom < innerHeight * 0.9 && r.width > 20; }); const t = texts[Math.floor(texts.length / 2)]; const r = t ? t.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 }; const x = r.left + r.width / 2, y = r.top + r.height / 2; (document.elementFromPoint(x, y) || document.body).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 })); })()`,
+  );
+  await waitFor(() => last.length > 0, 5000, 'preview menu').catch(() => {});
+  out.preview = labels();
+  action('Show the Text Here')?.();
+  await sleep(1500);
+  out.previewJump = { before, after: { active: studio.state.active, line: editor.getPosition()?.lineNumber } };
+  out.previewBodyWidth = pv.width;
+
+  menuRecorder.record = undefined;
+  return out;
+}
+
 /** Status bar colours: ready, then with a Typst error (typed, then undone). */
 async function statusbarChecks() {
   const out: Record<string, unknown> = {};
@@ -1127,6 +1194,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (want('menus')) {
+      log('menus');
+      result.menus = await menuChecks();
+    }
     if (want('statusbar')) {
       log('statusbar');
       result.statusbar = await statusbarChecks();

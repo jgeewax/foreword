@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
+import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
@@ -83,7 +84,24 @@ function OptionsReply({ item }: { item: AssistantItem }) {
   );
 }
 
+const selectedText = () => String(window.getSelection() ?? '').trim();
+
+/** Right-click on a chat item: copy the selection, the message, or a tool's details. */
+const itemMenu = (text: string, what: string) =>
+  onContextMenu(() => [
+    !!selectedText() && { label: 'Copy', action: () => studio.copy(selectedText()) },
+    { label: `Copy ${what}`, action: () => studio.copy(text) },
+  ]);
+
 function Item({ item }: { item: ChatItem }) {
+  return (
+    <div className="item-wrap" onContextMenu={item.kind === 'user' || item.kind === 'assistant' ? itemMenu(item.text, 'Message') : item.kind === 'tool' ? itemMenu(`${item.name} ${item.summary}\n${item.detail}`, 'Details') : undefined}>
+      <ItemBody item={item} />
+    </div>
+  );
+}
+
+function ItemBody({ item }: { item: ChatItem }) {
   switch (item.kind) {
     case 'user':
       return (

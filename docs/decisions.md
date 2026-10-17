@@ -241,6 +241,35 @@ bottom). It now adds the main webview's native safe-area inset, re-read on
 resize (full screen removes the title bar). Verified natively: preview top =
 pane top (off by 0 pt).
 
+### Context menus
+
+- Native macOS menus through Tauri's menu API (`core:menu:default` allows
+  `popup`), not HTML imitations:
+  - **Editor:** Fix This Error (when on one), Ask the Assistant, Get Three
+    Versions, Explain This, Cut/Copy/Paste/Select All, Show in Preview, Typst
+    Basics.
+  - **Tabs:** Close, Close Others, Close Tabs to the Right, Close All, Reveal
+    in Finder, Copy Path, Copy Relative Path.
+  - **Files:** Open, Use as Main File, Reveal in Finder, Copy Path (the empty
+    area: Refresh, Reveal Book Folder).
+  - **History rows:** Show Changes, Undo These Changes, Restore This Version.
+  - **Chat items:** Copy, Copy Message.
+  - **Text fields:** the usual editing commands.
+  - **Preview:** Copy, Show the Text Here, Export PDF, Restart Preview.
+- WebKit's own menu is suppressed everywhere. Its "Reload" would wipe the app
+  state or break the preview. Option-right-click keeps it in dev builds.
+- Monaco's HTML menu is off (`contextmenu: false`). Its Cut/Copy/Paste are the
+  predefined native items, which go through WebKit's editing commands and so
+  reach Monaco's hidden textarea.
+- The preview is another webview: an init script swallows its `contextmenu`
+  event and reports it over IPC, and the main webview shows the menu. "Show the
+  Text Here" clicks the nearest `.typst-text` element. `elementFromPoint` can
+  hit a canvas layer that Tinymist ignores.
+- Menu "Copy" actions use a small NSPasteboard command (`clipboard_write`).
+  They run outside a DOM gesture, where WebKit can refuse `navigator.clipboard`.
+- Native popups are modal, so the self-test records each pane's menu instead of
+  showing it, then runs actions directly.
+
 ### Figures mode
 
 - Figures are made as code the author can see in the preview and keep

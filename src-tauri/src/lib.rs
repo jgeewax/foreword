@@ -1,5 +1,6 @@
 mod agent;
 mod children;
+mod clipboard;
 mod discover;
 mod error;
 mod history;
@@ -361,6 +362,8 @@ pub fn run() {
             workspace::fs_hash,
             workspace::fs_write,
             workspace::project_create,
+            workspace::reveal_in_finder,
+            clipboard::clipboard_write,
             lsp::typst_start,
             lsp::typst_send,
             lsp::typst_stop,

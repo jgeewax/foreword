@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import { studio } from './app/studio';
 import { typstReady } from './editor/monaco';
+import { installDefaultContextMenu } from './lib/context-menu';
 import { ipc } from './lib/ipc';
 import { runSelftest } from './selftest';
 import './styles.css';
@@ -14,6 +15,7 @@ window.addEventListener('unhandledrejection', (e) => {
   void ipc.uiLog(`unhandled rejection: ${e.reason?.stack ?? e.reason}`);
 });
 const boot = (step: string) => void ipc.uiLog(`[boot +${Math.round(performance.now())}ms] ${step}`);
+installDefaultContextMenu();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

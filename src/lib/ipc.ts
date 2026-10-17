@@ -48,6 +48,8 @@ export const ipc = {
   /** New book: create `parent/name` with these files (never into an existing folder). Returns its path. */
   projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
     invoke<string>('project_create', { parent, name, files }),
+  clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
+  revealInFinder: (path: string) => invoke<void>('reveal_in_finder', { path }),
   fsWrite: (path: string, text: string, expectedHash: string | null) =>
     invoke<string>('fs_write', { path, text, expectedHash }),
 

@@ -25,6 +25,7 @@ import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, TEMPLATES, templateFiles } from '../templates';
 import { snippetInsertion } from '../help/guide';
+import { copyText, showContextMenu } from '../lib/context-menu';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
@@ -256,8 +257,9 @@ export class Studio {
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
     });
-    void listen<{ tag?: string }>('preview:report', (e) => {
+    void listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
+      if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
     });
     void listen<number[]>('perf:preview-paint', (e) => {
       this.perf.previewPainted(e.payload);
@@ -397,9 +399,10 @@ export class Studio {
   }
 
   /** Ask the assistant to explain and fix the next error, with its line attached. */
-  async fixProblem() {
-    const problem = await this.nextProblem();
+  async fixProblem(problem?: { path: string; d: LspDiagnostic }) {
+    problem ??= (await this.nextProblem()) ?? undefined;
     if (!problem || !this.editor) return;
+    if (this.state.active !== problem.path) await this.openFile(problem.path);
     const model = this.editor.getModel()!;
     const { start, end } = problem.d.range;
     this.editor.setSelection(new monaco.Range(start.line + 1, 1, end.line + 1, model.getLineMaxColumn(end.line + 1)));
@@ -408,6 +411,94 @@ export class Studio {
     this.events.emit('show-agent-pane');
     this.closeGuide();
     await this.send(`Typst reports an error here: “${problem.d.message}”. Explain in a sentence or two, in plain words, what's wrong, then fix it.`);
+  }
+
+  /** The Typst error under a position in the active file (1-based), if any. */
+  errorAt(line: number, column: number) {
+    const path = this.state.active;
+    const d = path
+      ? (this.diagnostics.get(path) ?? []).find((x) => {
+          if (x.severity !== 1) return false;
+          const { start, end } = x.range;
+          const after = line - 1 > start.line || (line - 1 === start.line && column - 1 >= start.character);
+          const before = line - 1 < end.line || (line - 1 === end.line && column - 1 <= end.character);
+          return after && before;
+        })
+      : undefined;
+    return path && d ? { path, d } : null;
+  }
+
+  // ---- selection actions (context menus) -------------------------------------------
+
+  /** Options mode on the current selection: attach it and wait for the author's request. */
+  async optionsForSelection() {
+    await this.setMode('options');
+    this.setAgent({ attachments: [] });
+    await this.attachSelection();
+    this.events.emit('show-agent-pane');
+  }
+
+  /** Ask for a plain-words explanation of the selection (no changes). */
+  async explainSelection() {
+    this.setAgent({ attachments: [] });
+    await this.attachSelection({ focus: false });
+    this.events.emit('show-agent-pane');
+    await this.send("Explain this passage in plain words, including what any Typst markup in it does. Don't change anything.");
+  }
+
+  async closeTabs(paths: string[]) {
+    for (const p of paths) await this.closeTab(p);
+  }
+
+  /** Make a .typ file the book's main file (saved in .typst-studio.json). */
+  async setEntryPoint(path: string) {
+    const errors = await this.updateProjectSettings({ entryPoint: path });
+    if (errors.length) this.toast(errors.join(' '), 'error');
+    else this.toast(`${path} is now the main file`);
+  }
+
+  absolutePath(path: string) {
+    return `${this.state.workspace?.root ?? ''}/${path}`.replace(/\/$/, '');
+  }
+
+  async reveal(path: string) {
+    try {
+      await ipc.revealInFinder(path);
+    } catch (e) {
+      this.toast(`Couldn't show it in Finder: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  copy(text: string, what = 'Copied') {
+    copyText(text).then(
+      () => this.toast(what),
+      (e) => this.toast(`Couldn't copy: ${errorMessage(e)}`, 'error'),
+    );
+  }
+
+  /** Right-click in the preview (reported by the preview webview). */
+  private async previewContextMenu(x: number, y: number, selection: string) {
+    // Tinymist handles clicks on its text elements; the topmost element at the point
+    // can be a canvas layer, so find the text under (or nearest to) the point.
+    const click = () =>
+      ipc.previewEval(`(() => {
+        const x = ${x}, y = ${y};
+        let best = null, bestD = Infinity;
+        for (const t of document.querySelectorAll('.typst-text')) {
+          const r = t.getBoundingClientRect();
+          const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
+          const d = dx * dx + dy * dy;
+          if (d < bestD) { best = t; bestD = d; }
+        }
+        if (best) best.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+      })()`);
+    await showContextMenu([
+      !!selection.trim() && { label: 'Copy', action: () => this.copy(selection) },
+      'separator',
+      { label: 'Show the Text Here', action: () => void click() },
+      { label: 'Export PDF', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+      { label: 'Restart Preview', action: () => void this.restartTypst() },
+    ]);
   }
 
   // ---- new book from a template ------------------------------------------------------

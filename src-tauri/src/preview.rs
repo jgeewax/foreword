@@ -80,6 +80,20 @@ const JUMP_SCRIPT: &str = r#"
 })();
 "#;
 
+/// Right-click in the preview: suppress WebKit's menu (its Reload would break
+/// the preview) and let the app show its own, at the same spot. Option-click
+/// keeps WebKit's menu for debugging.
+const CONTEXT_MENU_SCRIPT: &str = r#"
+window.addEventListener('contextmenu', (e) => {
+  if (e.altKey) return;
+  e.preventDefault();
+  const selection = String(window.getSelection() || '').slice(0, 4000);
+  try {
+    window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'contextmenu', x: e.clientX, y: e.clientY, selection } });
+  } catch (_) {}
+}, true);
+"#;
+
 /// Reports each preview DOM update (as painted) back to the app for the
 /// keystroke → preview latency HUD. Runs on every page load in the preview.
 const PERF_SCRIPT: &str = r#"
@@ -156,6 +170,7 @@ pub async fn preview_open(app: AppHandle, url: String, bounds: Bounds) -> CmdRes
         .initialization_script(WEBKIT_FIX_SCRIPT)
         .initialization_script(JUMP_SCRIPT)
         .initialization_script(PERF_SCRIPT)
+        .initialization_script(CONTEXT_MENU_SCRIPT)
         .focused(false)
         .on_navigation(is_local_preview);
     window.add_child(

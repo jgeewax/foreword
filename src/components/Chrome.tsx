@@ -55,7 +55,7 @@ type Tone = 'ok' | 'busy' | 'warn' | 'bad' | 'off';
 function Indicator({ tone, icon, label, title, onClick }: { tone: Tone; icon: string; label: string; title: string; onClick?: () => void }) {
   const body = (
     <>
-      <span className={`dot ${tone}`} aria-hidden />
+      <span className={`sdot ${tone}`} aria-hidden />
       <span className="indicator-icon" aria-hidden>
         {icon}
       </span>

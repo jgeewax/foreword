@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { studio } from '../app/studio';
 import type { Version } from '../lib/ipc';
+import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
 const KIND: Record<string, { icon: string; title: string }> = {
@@ -37,7 +38,19 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
   const kind = KIND[v.kind] ?? { icon: '•', title: v.kind };
   return (
     <div className={`history-item kind-${v.kind}${open ? ' open' : ''}`}>
-      <div className="history-row" role="button" tabIndex={0} aria-label={`${kind.title}: ${v.label}`} onClick={() => void studio.history.toggle(v.id)}>
+      <div
+        className="history-row"
+        role="button"
+        tabIndex={0}
+        aria-label={`${kind.title}: ${v.label}`}
+        onClick={() => void studio.history.toggle(v.id)}
+        onContextMenu={onContextMenu(() => [
+          { label: open ? 'Hide Changes' : 'Show Changes', action: () => void studio.history.toggle(v.id) },
+          'separator',
+          v.kind === 'agent' && !!v.parent && { label: 'Undo These Changes…', enabled: !busy, action: () => void studio.history.undoVersion(v) },
+          !latest && { label: 'Restore This Version…', enabled: !busy, action: () => void studio.history.restoreVersion(v) },
+        ])}
+      >
         <span className="history-icon">{kind.icon}</span>
         <span className="history-main">
           <span className="history-label" title={v.label}>

@@ -273,6 +273,28 @@ pub async fn fs_write(
     )
 }
 
+/// Show a workspace file or folder in Finder.
+#[tauri::command]
+pub async fn reveal_in_finder(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+    let root = state.root()?;
+    let target = if path.is_empty() || path == "." {
+        root
+    } else {
+        resolve(&root, &path)?
+    };
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg("-R")
+        .arg(&target)
+        .status()?;
+    if !status.success() {
+        return Err(CmdError::Io(format!(
+            "couldn't reveal {}",
+            target.display()
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 pub struct NewFile {
     path: String,

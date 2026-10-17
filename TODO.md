@@ -32,7 +32,7 @@
 
 - [x] modes for image / figure generation and editing versus text?
 
-- [ ] right clicking doesnt open context menus appropriately. we need to add that
+- [x] right clicking doesnt open context menus appropriately. we need to add that
 
 - [ ] work through a typical journey for users: create a new book, from a template maybe, maybe not. templates should be nvoels, non fiction books, let you customize sizes, childrens books, research paper (include popular conference templates), etc. for books with chapters we need a quick way to add chpaters.
 
