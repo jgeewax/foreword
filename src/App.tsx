@@ -7,6 +7,7 @@ import { EditorPane } from './components/EditorPane';
 import { Explorer } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { HistoryDiff } from './components/HistoryDiff';
+import { NewBookDialog } from './components/NewBookDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
 import { zoomActionForKey } from './lib/zoom';
@@ -97,6 +98,12 @@ export function App() {
         void studio.exportPdf();
         return;
       }
+      if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        e.stopPropagation();
+        studio.openNewBook();
+        return;
+      }
       if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key === ',') {
         e.preventDefault();
         e.stopPropagation();
@@ -123,10 +130,12 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [workspace]);
   const settingsOpen = useStore(studio.store, (s) => s.settingsOpen);
+  const newBookOpen = useStore(studio.store, (s) => s.newBookOpen);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
       {settingsOpen && <SettingsDialog />}
+      {newBookOpen && <NewBookDialog />}
       <HistoryDiff />
     </>
   );

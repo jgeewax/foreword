@@ -19,8 +19,41 @@ ${cut ? text.slice(0, STYLE_GUIDE_MAX_CHARS) + '\n…(the rest of the guide was 
 </style-guide>`;
 }
 
-/** Starting point for a guide; each section explains what to write. */
-export function styleGuideTemplate(projectName: string): string {
+export const STYLE_SECTIONS = [
+  'Audience',
+  'Voice and tone',
+  'Point of view and tense',
+  'Sentences and paragraphs',
+  'Words and spelling',
+  'Formatting in Typst',
+  'Do',
+  "Don't",
+  'Examples',
+] as const;
+export type StyleSection = (typeof STYLE_SECTIONS)[number];
+
+const DEFAULT_HINTS: Record<StyleSection, string> = {
+  Audience: 'Who reads this book, and what do they already know?',
+  'Voice and tone': 'e.g. warm and direct; dry humour is fine; never condescending.',
+  'Point of view and tense': 'e.g. second person ("you"), present tense; first person plural in proofs.',
+  'Sentences and paragraphs': 'e.g. prefer short sentences; one idea per paragraph; no rhetorical questions.',
+  'Words and spelling': 'Preferred terms, words to avoid, British or American spelling, capitalisation.',
+  'Formatting in Typst': `How the book uses Typst markup, e.g.:
+- Chapter headings: \`= Title <ch-label>\`; sections \`==\`, no deeper than \`===\`.
+- Emphasis with \`_..._\`, never bold in running text.
+- Every displayed equation gets a label: \`$ ... $ <eq-name>\`.
+- Cite with \`@key\`; every figure has a caption.`,
+  Do: 'Things you always want.',
+  "Don't": 'Things to avoid, e.g. clichés, filler phrases, exclamation marks.',
+  Examples: "A short passage that sounds right, and optionally one that doesn't (and why).",
+};
+
+/**
+ * Starting point for a guide; each section explains what to write. `hints`
+ * replaces a section's prompt (book templates use this for their genre).
+ */
+export function styleGuideTemplate(projectName: string, hints: Partial<Record<StyleSection, string>> = {}): string {
+  const sections = STYLE_SECTIONS.map((h) => `## ${h}\n<!-- ${hints[h] ?? DEFAULT_HINTS[h]} -->`);
   return `# Writing style: ${projectName}
 
 <!--
@@ -29,36 +62,7 @@ prompts under each heading with your own notes. Short, concrete rules work
 best, especially with an example. Delete sections you don't need.
 -->
 
-## Audience
-<!-- Who reads this book, and what do they already know? -->
-
-## Voice and tone
-<!-- e.g. warm and direct; dry humour is fine; never condescending. -->
-
-## Point of view and tense
-<!-- e.g. second person ("you"), present tense; first person plural in proofs. -->
-
-## Sentences and paragraphs
-<!-- e.g. prefer short sentences; one idea per paragraph; no rhetorical questions. -->
-
-## Words and spelling
-<!-- Preferred terms, words to avoid, British or American spelling, capitalisation. -->
-
-## Formatting in Typst
-<!-- How the book uses Typst markup, e.g.:
-- Chapter headings: \`= Title <ch-label>\`; sections \`==\`, no deeper than \`===\`.
-- Emphasis with \`_..._\`, never bold in running text.
-- Every displayed equation gets a label: \`$ ... $ <eq-name>\`.
-- Cite with \`@key\`; every figure has a caption. -->
-
-## Do
-<!-- Things you always want. -->
-
-## Don't
-<!-- Things to avoid, e.g. clichés, filler phrases, exclamation marks. -->
-
-## Examples
-<!-- A short passage that sounds right, and optionally one that doesn't (and why). -->
+${sections.join('\n\n')}
 `;
 }
 

@@ -23,6 +23,7 @@ import {
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
+import { bookFolderName, TEMPLATES, templateFiles } from '../templates';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
@@ -95,6 +96,7 @@ export type StudioState = {
   zoom: number;
   settings: AppSettings;
   settingsOpen: boolean;
+  newBookOpen: boolean;
   /** `.typst-studio.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
   exporting: boolean;
@@ -137,6 +139,7 @@ const initialState: StudioState = {
   zoom: 1,
   settings: loadSettings(),
   settingsOpen: false,
+  newBookOpen: false,
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false },
@@ -147,6 +150,8 @@ const initialState: StudioState = {
 const LAST_WORKSPACE = 'studio.lastWorkspace';
 const MODEL_KEY = 'studio.model';
 const ZOOM_KEY = 'studio.zoom';
+export const NEW_BOOK_PARENT = 'studio.newBookParent';
+export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
 let seq = 0;
 const uid = (p: string) => `${p}${++seq}`;
@@ -238,6 +243,7 @@ export class Studio {
     void listen<string>('menu', (e) => {
       if (e.payload === 'settings') return this.openSettings();
       if (e.payload === 'export-pdf') return void this.exportPdf();
+      if (e.payload === 'new-book') return this.openNewBook();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
     });
@@ -316,6 +322,32 @@ export class Studio {
     for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
     const active = saved?.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
     if (active) await this.openFile(active);
+  }
+
+  // ---- new book from a template ------------------------------------------------------
+
+  openNewBook() {
+    this.store.set({ newBookOpen: true });
+    this.syncPreviewVisibility();
+  }
+
+  closeNewBook() {
+    this.store.set({ newBookOpen: false });
+    this.syncPreviewVisibility();
+  }
+
+  /** Create `parent/<title>` from a template and open it. Throws (for the dialog) if that fails. */
+  async createBook(templateId: string, info: { title: string; author: string }, parent: string) {
+    const template = TEMPLATES.find((t) => t.id === templateId);
+    if (!template) throw new Error(`Unknown template ${templateId}`);
+    const files = templateFiles(template, { ...info, year: String(new Date().getFullYear()) });
+    const root = await ipc.projectCreate(parent, bookFolderName(info.title), files);
+    localStorage.setItem(NEW_BOOK_PARENT, parent);
+    if (info.author.trim()) localStorage.setItem(AUTHOR_KEY, info.author.trim());
+    this.closeNewBook();
+    await this.openWorkspace(root);
+    await this.openFile(template.firstFile).catch(() => {});
+    this.toast(`Created “${root.split('/').pop()}” from the ${template.name} template`);
   }
 
   showSidebar(view: StudioState['sidebar']) {
@@ -588,7 +620,8 @@ export class Studio {
     const ok = this.state.preview.status !== 'error';
     // The preview is a native view above the page; hide it while a dialog is open
     // so the dialog isn't drawn underneath it.
-    void ipc.previewSetVisible(this.previewVisible && ok && !this.state.settingsOpen && !this.state.history.diff);
+    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff;
+    void ipc.previewSetVisible(this.previewVisible && ok && !dialog);
   }
 
   private async showPreview() {

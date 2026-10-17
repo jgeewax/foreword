@@ -277,6 +277,35 @@ pane top (off by 0 pt).
 - No pruning yet: history grows with the book (text compresses well). Moving
   the book folder starts a new history (the key is its path).
 
+### Book templates (TODO #12)
+
+- Five templates in `src/templates/<id>/`: novel, non-fiction, textbook,
+  children's picture book, blank. Each is an ordinary Typst project: `main.typ`,
+  a `style.typ` with the look and a few helpers, and chapters that explain
+  themselves in comments. The helpers are `#scene-break`, `#epigraph`,
+  `#pull-quote`, `#note`, `#definition`, `#example`, `#exercises` and
+  `#story-page`.
+- The title, author and year are only ever substituted inside Typst string
+  literals (`#let title = "{{title}}"`), escaped by `typstString`, so any title
+  is safe. Chapters `#import "../style.typ": *` because included files don't
+  see the importer's scope.
+- Fonts are bundled with Typst (Libertinus Serif, New Computer Modern), except
+  the picture book, which uses Avenir Next. That ships with macOS, and there's a
+  bundled fallback.
+- `npm run check-templates` compiles every template with the installed `typst`
+  (0.15.1), using a title that needs escaping. It fails on any error *or
+  warning*; a deliberate bad font proved the warning check works.
+- Typography lessons:
+  - `pagebreak(to: "odd")` adds blank pages that still get headers, so chapters
+    simply start on a new page.
+  - A heading show rule must return a `block` with `first-line-indent: 0pt`.
+    Otherwise the title is indented and so is the first paragraph after it.
+- Creating a book uses `project_create`. It makes `parent/<title>` (refusing an
+  existing folder), writes the files with `create_new`, and removes that new
+  folder again if anything fails. The book also gets `.typst-studio.json`
+  (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
+  `WRITING_STYLE.md` starter with genre-specific prompts.
+
 ### Helper processes, revised
 
 The child-process registry is now per app instance (`children-<pid>.json`).

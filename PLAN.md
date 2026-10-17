@@ -38,8 +38,9 @@ prototypes/live-preview/      throwaway spike that de-risked live preview (kept 
 | Typecheck / unit tests / build | `npm run typecheck` · `npm test` · `npm run build` |
 | Rust tests / lint / format | `cd src-tauri && cargo test && cargo clippy --all-targets && cargo fmt --check` |
 | Stress book | `npm run stress-book` → `fixtures/stress-book/` |
+| Book templates compile | `npm run check-templates` (all of `src/templates/*` with the installed `typst`; errors and warnings fail) |
 | In-app self-test | `TYPST_STUDIO_WORKSPACE=… TYPST_STUDIO_SELFTEST=/tmp/out.json [TYPST_STUDIO_SELFTEST_AGENT=1] npm run app` |
-| Self-test options | `TYPST_STUDIO_SELFTEST_EDITS=1` lets the agent edit (scratch copies only) · `TYPST_STUDIO_SELFTEST_ONLY=preview,geometry,zoom,settings,models,typing,agent,markdown,project,style,history,options,plan,edits` runs only those groups |
+| Self-test options | `TYPST_STUDIO_SELFTEST_EDITS=1` lets the agent edit (scratch copies only) · `TYPST_STUDIO_SELFTEST_ONLY=preview,geometry,zoom,settings,models,typing,agent,markdown,project,style,templates,history,options,plan,edits` runs only those groups |
 
 ## Phases
 

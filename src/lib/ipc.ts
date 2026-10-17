@@ -45,6 +45,9 @@ export const ipc = {
   workspaceList: () => invoke<string[]>('workspace_list'),
   fsRead: (path: string) => invoke<FileContent>('fs_read', { path }),
   fsHash: (path: string) => invoke<string | null>('fs_hash', { path }),
+  /** New book: create `parent/name` with these files (never into an existing folder). Returns its path. */
+  projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
+    invoke<string>('project_create', { parent, name, files }),
   fsWrite: (path: string, text: string, expectedHash: string | null) =>
     invoke<string>('fs_write', { path, text, expectedHash }),
 

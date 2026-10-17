@@ -273,6 +273,77 @@ pub async fn fs_write(
     )
 }
 
+#[derive(Deserialize)]
+pub struct NewFile {
+    path: String,
+    text: String,
+}
+
+/// New book from a template: create `parent/name` and write `files` into it.
+/// Only ever writes inside a folder it has just created (refuses an existing
+/// one, never overwrites); on failure that new folder is removed again.
+pub fn create_project(parent: &Path, name: &str, files: &[NewFile]) -> CmdResult<PathBuf> {
+    if !parent.is_absolute() || !parent.is_dir() {
+        return Err(CmdError::Invalid(format!(
+            "not a folder: {}",
+            parent.display()
+        )));
+    }
+    let valid_name = !name.trim().is_empty()
+        && name.len() <= 255
+        && !name.starts_with('.')
+        && !name.contains(['/', '\0', ':']);
+    if !valid_name {
+        return Err(CmdError::Invalid(format!(
+            "not a usable folder name: {name:?}"
+        )));
+    }
+    let root = parent.canonicalize()?.join(name);
+    fs::create_dir(&root).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => {
+            CmdError::Conflict(format!("{name} already exists in that folder"))
+        }
+        _ => e.into(),
+    })?;
+    let written = (|| -> CmdResult<()> {
+        for f in files {
+            let rel = Path::new(&f.path);
+            if f.path.is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_))) {
+                return Err(CmdError::Invalid(format!(
+                    "bad template path: {:?}",
+                    f.path
+                )));
+            }
+            let path = root.join(rel);
+            if let Some(dir) = path.parent() {
+                fs::create_dir_all(dir)?;
+            }
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)?
+                .write_all(f.text.as_bytes())?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = written {
+        let _ = fs::remove_dir_all(&root);
+        return Err(e);
+    }
+    Ok(root)
+}
+
+#[tauri::command]
+pub async fn project_create(
+    parent: String,
+    name: String,
+    files: Vec<NewFile>,
+) -> CmdResult<String> {
+    Ok(create_project(Path::new(&parent), &name, &files)?
+        .to_string_lossy()
+        .into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +355,52 @@ mod tests {
         ));
         fs::create_dir_all(&dir).unwrap();
         dir.canonicalize().unwrap()
+    }
+
+    fn file(path: &str, text: &str) -> NewFile {
+        NewFile {
+            path: path.into(),
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn create_project_writes_files_into_a_new_folder_only() {
+        let parent = temp_root();
+        let root = create_project(
+            &parent,
+            "My Novel",
+            &[
+                file("main.typ", "= Hi"),
+                file("chapters/01.typ", "x"),
+                file(".typst-studio.json", "{}"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(root, parent.join("My Novel"));
+        assert_eq!(
+            fs::read_to_string(root.join("chapters/01.typ")).unwrap(),
+            "x"
+        );
+        assert!(root.join(".typst-studio.json").exists());
+        // Never into an existing folder.
+        let again = create_project(&parent, "My Novel", &[file("main.typ", "other")]);
+        assert!(matches!(again, Err(CmdError::Conflict(_))));
+        assert_eq!(fs::read_to_string(root.join("main.typ")).unwrap(), "= Hi");
+    }
+
+    #[test]
+    fn create_project_rejects_escapes_and_cleans_up() {
+        let parent = temp_root();
+        for bad in ["../evil.typ", "/etc/x", "a/../../b"] {
+            let r = create_project(&parent, "Book", &[file("ok.typ", ""), file(bad, "x")]);
+            assert!(matches!(r, Err(CmdError::Invalid(_))), "{bad}");
+            assert!(!parent.join("Book").exists(), "{bad} left a folder behind");
+        }
+        assert!(!parent.join("evil.typ").exists());
+        for name in ["", ".hidden", "a/b", "  "] {
+            assert!(create_project(&parent, name, &[]).is_err(), "{name:?}");
+        }
     }
 
     #[test]

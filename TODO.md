@@ -22,4 +22,4 @@
 
 - [ ] better onboarding (help people get going, lots of writers wont be familiar wiht typst)
 
-- [ ] book templates (childrens book, novel, text book, non-fiction book, etc)
+- [x] book templates (childrens book, novel, text book, non-fiction book, etc)

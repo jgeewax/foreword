@@ -260,7 +260,19 @@ pub fn run() {
                     true,
                     Some("CmdOrCtrl+Shift+E"),
                 )?;
-                file.prepend_items(&[&export, &PredefinedMenuItem::separator(handle)?])?;
+                let new_book = MenuItem::with_id(
+                    handle,
+                    "new-book",
+                    "New Book…",
+                    true,
+                    Some("CmdOrCtrl+Shift+N"),
+                )?;
+                file.prepend_items(&[
+                    &new_book,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &export,
+                    &PredefinedMenuItem::separator(handle)?,
+                ])?;
             }
             if let Some(view) = items
                 .iter()
@@ -273,7 +285,7 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
-            if id.starts_with("zoom-") || id == "settings" || id == "export-pdf" {
+            if id.starts_with("zoom-") || ["settings", "export-pdf", "new-book"].contains(&id) {
                 let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
             }
         })
@@ -336,6 +348,7 @@ pub fn run() {
             workspace::fs_read,
             workspace::fs_hash,
             workspace::fs_write,
+            workspace::project_create,
             lsp::typst_start,
             lsp::typst_send,
             lsp::typst_stop,

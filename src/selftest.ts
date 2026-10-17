@@ -6,6 +6,7 @@ import { monaco } from './editor/monaco';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { parseOptions } from './services/agent/options-mode';
+import { TEMPLATES } from './templates';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const log = (step: string) => void ipc.uiLog(`[selftest +${Math.round(performance.now())}ms] ${step}`);
@@ -480,6 +481,59 @@ async function historyChecks(withAgent: boolean) {
   return out;
 }
 
+/**
+ * Book templates (TODO #12): create a book from each template next to the
+ * scratch workspace, open it, and check it compiles and previews. Then reopen
+ * the original workspace.
+ */
+async function templateChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const stamp = Date.now().toString(36);
+  studio.openNewBook();
+  await sleep(500);
+  out.dialog = { open: !!document.querySelector('.new-book'), cards: document.querySelectorAll('.template-card').length };
+  try {
+    out.snapshotDialog = await ipc.previewSnapshot('new-book', 'main');
+  } catch (e) {
+    out.snapshotDialog = errorMessage(e);
+  }
+  studio.closeNewBook();
+  const books: Record<string, unknown> = {};
+  for (const t of TEMPLATES) {
+    const title = `Selftest ${t.id} ${stamp} "quoted"`;
+    try {
+      await studio.createBook(t.id, { title, author: 'Ada Example' }, parent);
+      await waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 60000, `${t.id} compile`).catch(() => {});
+      await sleep(1500);
+      books[t.id] = {
+        root: studio.state.workspace?.root,
+        active: studio.state.active,
+        firstFileOpen: studio.state.active === t.firstFile,
+        compile: studio.state.compile,
+        problems: studio.state.problems,
+        styleGuide: studio.state.styleGuide.exists,
+        history: { status: studio.state.history.status, versions: studio.state.history.versions.map((v) => v.label) },
+        snapshot: await ipc.previewSnapshot(`template-${t.id}`, 'preview').catch(errorMessage),
+      };
+    } catch (e) {
+      books[t.id] = { error: errorMessage(e) };
+    }
+  }
+  out.books = books;
+  // The same title again: refused, nothing overwritten.
+  try {
+    await studio.createBook('blank', { title: `Selftest blank ${stamp} "quoted"`, author: 'x' }, parent);
+    out.duplicate = 'created (unexpected)';
+  } catch (e) {
+    out.duplicate = errorMessage(e);
+  }
+  studio.closeNewBook();
+  await studio.openWorkspace(original);
+  return out;
+}
+
 /** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
@@ -872,6 +926,10 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('style')) {
         log('style guide');
         result.styleGuide = await styleGuideChecks();
+      }
+      if (want('templates')) {
+        log('templates');
+        result.templates = await templateChecks();
       }
       if (want('history')) {
         log('history');

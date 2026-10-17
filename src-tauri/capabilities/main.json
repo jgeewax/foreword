@@ -24,6 +24,7 @@
     "allow-fs-read",
     "allow-fs-hash",
     "allow-fs-write",
+    "allow-project-create",
     "allow-typst-start",
     "allow-typst-send",
     "allow-typst-stop",

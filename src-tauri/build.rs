@@ -16,6 +16,7 @@ fn main() {
             "fs_read",
             "fs_hash",
             "fs_write",
+            "project_create",
             "typst_start",
             "typst_send",
             "typst_stop",

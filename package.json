@@ -10,7 +10,8 @@
     "test": "vitest run",
     "tauri": "tauri",
     "app": "tauri dev",
-    "stress-book": "node scripts/gen-stress-book.mjs"
+    "stress-book": "node scripts/gen-stress-book.mjs",
+    "check-templates": "node scripts/check-templates.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

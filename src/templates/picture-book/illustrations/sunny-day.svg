@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420">
+  <!-- Placeholder illustration: replace with your own artwork. -->
+  <rect width="600" height="420" fill="#cfe9fb"/>
+  <circle cx="470" cy="95" r="52" fill="#ffd34d"/>
+  <g stroke="#ffd34d" stroke-width="8" stroke-linecap="round">
+    <line x1="470" y1="18" x2="470" y2="2"/><line x1="547" y1="95" x2="566" y2="95"/>
+    <line x1="525" y1="40" x2="538" y2="27"/><line x1="415" y1="40" x2="402" y2="27"/>
+    <line x1="525" y1="150" x2="538" y2="163"/>
+  </g>
+  <ellipse cx="160" cy="430" rx="300" ry="190" fill="#7cc66a"/>
+  <ellipse cx="480" cy="460" rx="280" ry="170" fill="#5aae4f"/>
+  <g transform="translate(150 232)">
+    <path d="M 0 22 Q 30 26 62 22 L 62 30 Q 30 34 0 30 Z" fill="#c98a5a"/>
+    <circle cx="38" cy="8" r="20" fill="#e8a06a" stroke="#b5703f" stroke-width="3"/>
+    <path d="M 38 8 m -10 0 a 10 10 0 1 1 10 10" fill="none" stroke="#b5703f" stroke-width="3"/>
+    <line x1="4" y1="22" x2="-4" y2="4" stroke="#c98a5a" stroke-width="3"/>
+    <circle cx="-4" cy="3" r="3" fill="#333"/>
+  </g>
+</svg>

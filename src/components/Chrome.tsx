@@ -120,7 +120,10 @@ export function Welcome() {
         ) : (
           <>
             <div className="welcome-actions">
-              <button className="primary" onClick={() => void studio.chooseWorkspace()}>
+              <button className="primary" onClick={() => studio.openNewBook()}>
+                New Book… <kbd>⇧⌘N</kbd>
+              </button>
+              <button onClick={() => void studio.chooseWorkspace()}>
                 Open Folder… <kbd>⌘O</kbd>
               </button>
               {launch?.sampleBook && <button onClick={() => void studio.openWorkspace(launch.sampleBook!)}>Open sample book</button>}

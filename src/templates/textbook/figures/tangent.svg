@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 260" width="400" height="260">
+  <!-- Placeholder figure: replace with your own diagram (SVG, PNG or JPG). -->
+  <rect width="400" height="260" fill="white"/>
+  <line x1="30" y1="230" x2="380" y2="230" stroke="#444" stroke-width="1.5"/>
+  <line x1="40" y1="240" x2="40" y2="20" stroke="#444" stroke-width="1.5"/>
+  <path d="M 40 220 C 140 215, 230 170, 370 40" fill="none" stroke="#1f5fa8" stroke-width="3"/>
+  <line x1="60" y1="230" x2="360" y2="50" stroke="#b35c00" stroke-width="2" stroke-dasharray="7 5"/>
+  <line x1="40" y1="236" x2="380" y2="96" stroke="#2e7d4f" stroke-width="2"/>
+  <circle cx="190" cy="174" r="5" fill="#2e7d4f"/>
+  <circle cx="300" cy="94" r="5" fill="#b35c00"/>
+</svg>
