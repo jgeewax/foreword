@@ -1893,6 +1893,53 @@ async function thinkingChecks() {
   };
 }
 
+/** Messages during a turn (real model): queued for after it, sent now into it, and taken back. */
+async function queueChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  await studio.setMode('plan');
+  studio.newSession();
+  const users = () => studio.state.agent.items.filter((i) => i.kind === 'user').map((i) => (i.kind === 'user' ? i.text : ''));
+  const busy = () => waitFor(() => studio.state.agent.running && studio.state.agent.activity && studio.state.agent.activity.phase !== 'sending', 30000, 'busy');
+  const idle = (ms = 180000) => waitFor(() => !studio.state.agent.running && !studio.state.agent.queued.length, ms, 'idle').catch(() => {});
+  const out: Record<string, unknown> = {};
+
+  // 1. Queued: waits for the turn, then runs as its own.
+  void studio.send('Read each chapter file in chapters/ and list the first sentence of each. Do not change anything.');
+  await busy();
+  await studio.send('After that, tell me in one sentence how many chapters there are.');
+  await sleep(300);
+  out.queuedWhileRunning = studio.state.agent.queued.map((q) => ({ id: q.id.slice(0, 4), delivery: q.delivery, sending: q.sending }));
+  out.snapshotQueued = await snap('queue-queued');
+  await idle();
+  await sleep(1500);
+  out.afterQueue = { users: users(), replies: studio.state.agent.items.filter((i) => i.kind === 'assistant').length };
+
+  // 2. Send now: joins the running turn.
+  void studio.send('Read main.typ and the second chapter, then summarise the second chapter in two sentences.');
+  await busy();
+  const runningBefore = studio.state.agent.items.length;
+  await studio.send('Also say which file you read first.', { delivery: 'steer' });
+  await waitFor(() => !studio.state.agent.queued.length, 90000, 'steered').catch(() => {});
+  const deliveredWhileRunning = studio.state.agent.running;
+  await idle();
+  const items = studio.state.agent.items;
+  const steerAt = items.findIndex((i) => i.kind === 'user' && i.text.startsWith('Also say'));
+  out.steer = { deliveredWhileRunning, steerAt, after: steerAt - runningBefore, repliesAfter: items.slice(steerAt + 1).filter((i) => i.kind === 'assistant').length };
+
+  // 3. Taken back: never sent.
+  void studio.send('List the files in this book.');
+  await busy();
+  await studio.send('Never mind this one.');
+  await waitFor(() => studio.state.agent.queued.some((q) => !q.sending), 10000, 'queued').catch(() => {});
+  await studio.unqueue(studio.state.agent.queued[0]?.id ?? '');
+  out.unqueued = studio.state.agent.queued.length;
+  await idle();
+  await sleep(1500);
+  out.neverSent = !users().includes('Never mind this one.');
+  await studio.setMode('write');
+  return out;
+}
+
 /** One real turn: which OpenCode event types arrive, with one sample of each (for the chat's progress display). */
 async function eventProbe() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
@@ -2488,6 +2535,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('tabs')) result.tabs = await tabChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();
+    if (launch.selftestAgent && want('queue')) result.queue = await queueChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

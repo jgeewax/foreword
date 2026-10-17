@@ -29,7 +29,12 @@ describe('composerKeyAction', () => {
     expect(composerKeyAction(enter({ composing: true }), 'enter')).toBeNull();
     expect(composerKeyAction({ ...enter(), keyCode: 229 }, 'enter')).toBeNull();
     expect(composerKeyAction({ ...enter(), key: 'a' }, 'enter')).toBeNull();
-    expect(composerKeyAction(enter({ alt: true }), 'enter')).toBeNull();
+  });
+
+  it('Option+Enter sends now (to a running turn), in either mode', () => {
+    expect(composerKeyAction(enter({ alt: true }), 'enter')).toBe('send-now');
+    expect(composerKeyAction(enter({ alt: true }), 'mod-enter')).toBe('send-now');
+    expect(composerKeyAction(enter({ alt: true, shift: true }), 'enter')).toBeNull();
   });
 });
 

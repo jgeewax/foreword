@@ -27,6 +27,8 @@ export function mapOpenCodeEvent(raw: any): AgentEvent | null {
       return { type: 'session-renamed', sessionId, title: str(d.title) };
     case 'session.step.started':
       return { type: 'step-started', sessionId };
+    case 'session.inbox.delivered':
+      return { type: 'inbox-delivered', sessionId, inboxId: str(d.inboxID) };
     case 'session.step.ended':
       return { type: 'step-finished', sessionId, finish: str(d.finish) };
     case 'session.reasoning.delta':

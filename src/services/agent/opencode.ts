@@ -5,7 +5,7 @@ import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
 import { mapOpenCodeEvent } from './opencode-events';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
-import type { AgentAdapter, AgentEvent, ModelInfo, ModelRef, PermissionDecision } from './types';
+import type { AgentAdapter, AgentEvent, Delivery, ModelInfo, ModelRef, PermissionDecision } from './types';
 
 // Permission rules: see permissions.ts (what the assistant may do).
 export { NO_COMPILE_RULES, READ_ONLY_RULES, sessionRules } from './permissions';
@@ -110,9 +110,18 @@ export class OpenCodeAdapter implements AgentAdapter {
     await call('POST', `/api/session/${sessionId}/model`, { model: { providerID: model.providerID, id: model.id } });
   }
 
-  async send(sessionId: string, message: string, context: Parameters<AgentAdapter['send']>[2]) {
+  async send(sessionId: string, message: string, context: Parameters<AgentAdapter['send']>[2], delivery?: Delivery) {
     const text = [message, ...context.map((c) => formatSelectionContext(c.selection, c.stale))].join('\n\n');
-    await call('POST', `/api/session/${sessionId}/prompt`, { text });
+    const res = await call('POST', `/api/session/${sessionId}/prompt`, delivery ? { text, delivery } : { text });
+    return (res.data?.id as string | undefined) ?? null;
+  }
+
+  async steer(sessionId: string, inboxId: string) {
+    await call('PATCH', `/api/session/${sessionId}/inbox/${inboxId}`, { delivery: 'steer' });
+  }
+
+  async unqueue(sessionId: string, inboxId: string) {
+    await call('DELETE', `/api/session/${sessionId}/inbox/${inboxId}`);
   }
 
   /** This book's conversations, newest first. */

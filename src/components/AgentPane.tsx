@@ -414,15 +414,17 @@ function Composer() {
     [],
   );
 
-  const send = async () => {
+  const send = async (delivery: 'queue' | 'steer' = 'queue') => {
     const message = text;
+    if (!message.trim()) return;
     // Cleared at once (it feels instant); put back if it couldn't be sent.
     setText('');
-    if (!(await studio.send(message))) setText(message);
+    if (!(await studio.send(message, { delivery }))) setText(message);
   };
 
   return (
     <div className="composer">
+      <QueuedMessages />
       <PlanActions />
       {(attachments.length > 0 || liveShown) && (
         <div className="chips">
@@ -445,9 +447,10 @@ function Composer() {
         placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey) === 'send') {
+          const action = composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey);
+          if (action) {
             e.preventDefault();
-            void send();
+            void send(action === 'send-now' ? 'steer' : 'queue');
           } else if (e.key === 'Escape') {
             e.preventDefault();
             studio.events.emit('focus-editor');
@@ -463,7 +466,21 @@ function Composer() {
         <PermissionsMenu />
         <span className="spacer" />
         {running ? (
-          <button onClick={() => void studio.cancel()}>Stop</button>
+          <>
+            <button title="Stop the assistant now" onClick={() => void studio.cancel()}>
+              Stop
+            </button>
+            {text.trim() && (
+              <>
+                <button title="The assistant reads it at its next step (⌥⏎)" onClick={() => void send('steer')}>
+                  Send now
+                </button>
+                <button className="primary" title="Sent when the assistant finishes" onClick={() => void send('queue')}>
+                  Queue
+                </button>
+              </>
+            )}
+          </>
         ) : (
           <button className="primary" disabled={!ready || !text.trim()} onClick={() => void send()}>
             Send
@@ -471,8 +488,43 @@ function Composer() {
         )}
       </div>
       <div className="composer-hint" title="Change in Settings (⌘,)">
-        Selected text goes with your message · ⌘I keeps it attached · {sendHint(sendKey)}
+        {running
+          ? `While it works: ${sendHint(sendKey).split(' · ')[0].replace('send', 'queue')} · ⌥⏎ send now`
+          : `Selected text goes with your message · ⌘I keeps it attached · ${sendHint(sendKey)}`}
       </div>
+    </div>
+  );
+}
+
+/** Messages sent while the assistant works: waiting for it, or for its next step. */
+function QueuedMessages() {
+  const queued = useStore(studio.store, (s) => s.agent.queued);
+  if (!queued.length) return null;
+  return (
+    <div className="queued" aria-label="Queued messages">
+      {queued.map((q) => (
+        <div key={q.id} className={`queued-item ${q.delivery}`}>
+          <span className="queued-state">{q.sending ? 'Sending…' : q.delivery === 'steer' ? 'Next step' : 'Queued'}</span>
+          <span className="queued-text" title={q.text}>
+            {q.text}
+          </span>
+          {!q.sending && q.delivery === 'queue' && (
+            <button className="small" title="The assistant reads it at its next step, without waiting for the end" onClick={() => void studio.steerQueued(q.id)}>
+              Send now
+            </button>
+          )}
+          {!q.sending && (
+            <>
+              <button className="small" title="Take it back to change it" onClick={() => void studio.unqueue(q.id, { edit: true })}>
+                Edit
+              </button>
+              <button className="icon" aria-label="Don't send" title="Don't send" onClick={() => void studio.unqueue(q.id)}>
+                ✕
+              </button>
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

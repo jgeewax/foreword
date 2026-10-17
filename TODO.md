@@ -76,7 +76,7 @@
 
 - [ ] easily see which tasks are in progress and group by those so i can easily switch around and see whats going on
 
-- [ ] allow chat interruptions, queueing by default, push to interrupt if needed
+- [x] allow chat interruptions, queueing by default, push to interrupt if needed
 
 - [ ] question answering like in claude code (prompt for multiple choice or free text, give access to those tools)
 

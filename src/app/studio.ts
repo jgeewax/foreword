@@ -53,10 +53,13 @@ import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleG
 import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions } from '../services/agent/permissions';
-import type { AgentAdapter, AgentEvent, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import type { AgentAdapter, AgentEvent, Delivery, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
 
 export type ToastAction = { label: string; run: () => void };
+
+/** A message sent while the assistant works: `id` is OpenCode's inbox id once it has one. */
+export type QueuedMessage = { id: string; text: string; attachments: string[]; delivery: Delivery; sending: boolean };
 
 /** A running turn's progress: sending, thinking, using a tool, writing, or waiting to retry a busy model. */
 export type Activity = {
@@ -155,6 +158,8 @@ export type StudioState = {
     compacting: boolean;
     /** What the running turn is doing right now (the chat's live progress line). */
     activity: Activity | null;
+    /** Messages sent during a turn, waiting for it (queue) or for its next step (steer). */
+    queued: QueuedMessage[];
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error'; actions?: ToastAction[] } | null;
@@ -234,6 +239,7 @@ const initialState: StudioState = {
     contextTokens: null,
     compacting: false,
     activity: null,
+    queued: [],
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
@@ -2141,7 +2147,7 @@ export class Studio {
 
   newSession() {
     if (this.state.agent.running) return;
-    this.setAgent({ sessionId: null, title: null, items: [], contextTokens: null });
+    this.setAgent({ sessionId: null, title: null, items: [], contextTokens: null, queued: [] });
     this.setAiReads([]);
   }
 
@@ -2182,7 +2188,7 @@ export class Studio {
       const messages = await this.agent.sessionContext(sessionId);
       const task = this.state.agent.tasks.find((t) => t.sessionId === sessionId);
       const root = this.state.workspace?.root ?? '';
-      this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages, root), contextTokens: contextTokens(messages), attachments: [] });
+      this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages, root), contextTokens: contextTokens(messages), attachments: [], queued: [] });
       this.setAiReads(readsFromContext(messages, root));
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
@@ -2321,10 +2327,12 @@ export class Studio {
     this.setAgent((a) => ({ attachments: a.attachments.filter((x) => x.id !== id) }));
   }
 
-  async send(text: string): Promise<boolean> {
+  async send(text: string, { delivery = 'queue' as Delivery } = {}): Promise<boolean> {
     const { agent, docs } = this;
     const state = this.state.agent;
-    if (!agent || state.status !== 'ready' || state.running || !text.trim()) return false;
+    if (!agent || state.status !== 'ready' || !text.trim()) return false;
+    // While a turn runs, the message waits for it (or, "send now", joins it at its next step).
+    if (state.running) return this.queueMessage(text, delivery);
     // Options replace a passage: use the editor's cursor when nothing is selected or attached.
     if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
     const attachments = this.outgoingAttachments();
@@ -2376,6 +2384,81 @@ export class Studio {
     } catch (e) {
       return unsend(`Message not sent: ${errorMessage(e)}`);
     }
+  }
+
+  // ---- messages sent while the assistant works ---------------------------------------
+
+  /** Inbox ids OpenCode delivered before we knew them (the reply to our request can come after the event). */
+  private deliveredEarly = new Set<string>();
+
+  private async queueMessage(text: string, delivery: Delivery): Promise<boolean> {
+    const { agent, docs } = this;
+    const sessionId = this.state.agent.sessionId;
+    if (!agent || !sessionId) return false;
+    const attachments = this.outgoingAttachments();
+    const tempId = uid('q');
+    this.setAgent((a) => ({ attachments: [], queued: [...a.queued, { id: tempId, text, attachments: attachments.map((x) => x.label), delivery, sending: true }] }));
+    const failures = (await docs?.saveAll()) ?? [];
+    const context = attachments.map((x) => ({
+      selection: x.selection,
+      stale: docs?.get(x.selection.relativePath)?.model.getVersionId() !== x.selection.documentVersion,
+    }));
+    try {
+      if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
+      const inboxId = (await agent.send(sessionId, text, context, delivery)) ?? tempId;
+      this.setAgent((a) => ({ queued: a.queued.map((q) => (q.id === tempId ? { ...q, id: inboxId, sending: false } : q)) }));
+      if (this.deliveredEarly.delete(inboxId)) this.queuedDelivered(inboxId);
+      return true;
+    } catch (e) {
+      this.setAgent((a) => ({ attachments, queued: a.queued.filter((q) => q.id !== tempId) }));
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Message not sent: ${errorMessage(e)}` });
+      return false;
+    }
+  }
+
+  /** OpenCode handed a message to the conversation: a queued one joins the transcript there. */
+  private queuedDelivered(inboxId: string) {
+    const q = this.state.agent.queued.find((m) => m.id === inboxId);
+    if (!q) {
+      // Ours, sent normally (already shown), or a queued one whose request hasn't returned yet.
+      this.deliveredEarly.add(inboxId);
+      if (this.deliveredEarly.size > 50) this.deliveredEarly.delete(this.deliveredEarly.values().next().value!);
+      return;
+    }
+    this.turnMessage = q.text;
+    this.setAgent((a) => ({
+      queued: a.queued.filter((m) => m.id !== inboxId),
+      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments }],
+    }));
+  }
+
+  /** "Send now": the running turn reads the message at its next step instead of after it. */
+  async steerQueued(id: string) {
+    const sessionId = this.state.agent.sessionId;
+    if (!this.agent || !sessionId) return;
+    this.setAgent((a) => ({ queued: a.queued.map((q) => (q.id === id ? { ...q, delivery: 'steer' } : q)) }));
+    try {
+      await this.agent.steer(sessionId, id);
+    } catch (e) {
+      // Already delivered (the turn ended meanwhile) is fine.
+      if (this.state.agent.queued.some((q) => q.id === id)) this.toast(`Couldn't send it now: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** Take a queued message back (to edit it, with `edit`). */
+  async unqueue(id: string, { edit = false } = {}) {
+    const sessionId = this.state.agent.sessionId;
+    const q = this.state.agent.queued.find((m) => m.id === id);
+    if (!this.agent || !sessionId || !q) return;
+    try {
+      await this.agent.unqueue(sessionId, id);
+    } catch (e) {
+      // It may have been delivered meanwhile: then it's in the conversation.
+      if (this.state.agent.queued.some((m) => m.id === id)) this.toast(`Couldn't take it back: ${errorMessage(e)}`, 'error');
+      return;
+    }
+    this.setAgent((a) => ({ queued: a.queued.filter((m) => m.id !== id) }));
+    if (edit) this.events.emit('fill-composer', q.text);
   }
 
   async cancel() {
@@ -2506,7 +2589,8 @@ export class Studio {
     if (e.sessionId !== this.state.agent.sessionId) return;
     switch (e.type) {
       case 'turn-started':
-        this.setAgent({ running: true });
+        // Also when a queued message starts the next turn by itself.
+        this.setAgent((a) => ({ running: true, activity: a.activity ?? { phase: 'thinking', since: Date.now() } }));
         break;
       case 'turn-finished':
         this.setAgent({ running: false });
@@ -2519,6 +2603,9 @@ export class Studio {
         break;
       case 'step-started':
         this.setActivity({ phase: 'thinking' });
+        break;
+      case 'inbox-delivered':
+        this.queuedDelivered(e.inboxId);
         break;
       case 'step-finished':
         void this.checkTurnEnded(1500);

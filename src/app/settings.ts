@@ -64,8 +64,10 @@ type KeyLike = { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: bool
  * is a new line. ⌘Enter mode: ⌘Enter sends, Enter is a new line. ⌘Enter always
  * sends. Enter that confirms an input-method composition never sends.
  */
-export function composerKeyAction(e: KeyLike, sendKey: SendKey): 'send' | null {
+export function composerKeyAction(e: KeyLike, sendKey: SendKey): 'send' | 'send-now' | null {
   if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return null;
+  // ⌥⏎ while the assistant works: hand the message to it now, not after.
+  if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey) return 'send-now';
   const mod = e.metaKey || e.ctrlKey;
   if (mod && !e.shiftKey && !e.altKey) return 'send';
   if (sendKey === 'enter' && !mod && !e.shiftKey && !e.altKey) return 'send';

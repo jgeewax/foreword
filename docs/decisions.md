@@ -798,6 +798,27 @@ pane top (off by 0 pt).
   the reasoning parts' times).
 - `prefers-reduced-motion` stops the spinner and the sweep.
 
+### Messages while the assistant works: queue, send now, take back
+
+- **OpenCode 2 does this natively.** Each conversation has an inbox, and
+  `POST /api/session/{id}/prompt` takes `delivery`: `queue` delivers after the
+  current turn, `steer` at its next step. `PATCH …/inbox/{id}` changes the
+  delivery, `DELETE` takes it back, and `session.inbox.delivered` reports
+  delivery. All read from the server's OpenAPI file.
+- **In the app:**
+  - While it works, the composer stays usable. ⏎ (or the Queue button) queues;
+    ⌥⏎ or Send now steers. Stop still interrupts the turn.
+  - Queued messages wait above the composer (Queued / Next step) with Send now,
+    Edit (takes it back into the composer) and ✕.
+  - On delivery each one moves into the conversation where it arrived. A
+    queued one starts its own turn, which gets the progress line too.
+- The delivery event can arrive before the reply to our request, so early
+  inbox ids are remembered.
+- **Verified with a real model** (self-test `queue`):
+  - A queued message waited, then ran and was answered.
+  - A steered one was delivered mid-turn and answered in it.
+  - A taken-back one never reached the conversation.
+
 ### Feeling fast
 
 - **Instant response:** Send clears the composer and shows the message at

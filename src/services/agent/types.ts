@@ -17,12 +17,17 @@ export type PermissionDecision = 'once' | 'always' | 'reject';
 
 export type FilePatch = { file: string; patch: string };
 
+/** How a message sent during a turn reaches it (OpenCode's inbox). */
+export type Delivery = 'queue' | 'steer';
+
 export type AgentEvent =
   | { type: 'connection'; status: 'open' | 'lost' }
   | { type: 'session-renamed'; sessionId: string; title: string }
   | { type: 'turn-started'; sessionId: string }
   | { type: 'turn-finished'; sessionId: string; outcome: 'succeeded' | 'failed' | 'interrupted' | 'stopped'; error?: string }
   | { type: 'step-started'; sessionId: string }
+  /** A message (ours, queued or not) reached the conversation. */
+  | { type: 'inbox-delivered'; sessionId: string; inboxId: string }
   | { type: 'step-finished'; sessionId: string; finish: string }
   | { type: 'reasoning-delta'; sessionId: string; messageId: string; ordinal: number; delta: string }
   | { type: 'reasoning-ended'; sessionId: string; messageId: string; ordinal: number; text: string }
@@ -67,7 +72,14 @@ export interface AgentAdapter {
   /** Summarize the conversation so far to free up the context window. */
   compact(sessionId: string): Promise<void>;
   /** Resolves when the backend has accepted the message (not when the turn ends). */
-  send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[]): Promise<void>;
+  /**
+   * Send a message. While a turn runs, `queue` delivers it when the turn ends and
+   * `steer` hands it to the running turn at its next step. Returns its inbox id.
+   */
+  send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[], delivery?: Delivery): Promise<string | null>;
+  /** A queued message: send it to the running turn now, or take it back. */
+  steer(sessionId: string, inboxId: string): Promise<void>;
+  unqueue(sessionId: string, inboxId: string): Promise<void>;
   cancel(sessionId: string): Promise<void>;
   replyPermission(sessionId: string, requestId: string, decision: PermissionDecision): Promise<void>;
   isRunning(sessionId: string): Promise<boolean>;
