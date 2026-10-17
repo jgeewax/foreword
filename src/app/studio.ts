@@ -15,6 +15,7 @@ import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
+import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import type { AgentAdapter, AgentEvent, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
@@ -57,6 +58,7 @@ export type StudioState = {
     connection: 'open' | 'lost' | 'unknown';
     models: ModelInfo[];
     model: ModelRef | null;
+    recentModels: ModelRef[];
     sessionId: string | null;
     title: string | null;
     running: boolean;
@@ -90,6 +92,7 @@ const initialState: StudioState = {
     connection: 'unknown',
     models: [],
     model: null,
+    recentModels: readJson<ModelRef[]>('studio.recentModels') ?? [],
     sessionId: null,
     title: null,
     running: false,
@@ -596,7 +599,9 @@ export class Studio {
     try {
       if (sessionId && this.agent) await this.agent.switchModel(sessionId, model);
       writeJson(MODEL_KEY, model);
-      this.setAgent({ model });
+      const recentModels = pushRecent(this.state.agent.recentModels, model);
+      writeJson('studio.recentModels', recentModels);
+      this.setAgent({ model: { providerID: model.providerID, id: model.id }, recentModels });
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Model not changed: ${errorMessage(e)}` });
     }

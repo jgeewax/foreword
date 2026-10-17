@@ -139,6 +139,55 @@ async function previewChecks(chapter: string, editor: monaco.editor.IStandaloneC
   return { states, snapshots, clickToSource };
 }
 
+/** Searchable model picker (TODO #3). Restores the user's model choice afterwards. */
+async function modelPickerChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.agent.models.length > 20, 30000, 'model list').catch(() => {});
+  const saved = { model: localStorage.getItem('studio.model'), recent: localStorage.getItem('studio.recentModels'), state: studio.state.agent.model, recentState: studio.state.agent.recentModels };
+  const trigger = document.querySelector<HTMLButtonElement>('.model-trigger')!;
+  trigger.click();
+  await sleep(400);
+  const input = document.querySelector<HTMLInputElement>('.model-search');
+  out.opened = !!input;
+  out.searchFocused = document.activeElement === input;
+  out.sections = [...document.querySelectorAll('.model-section')].map((e) => e.textContent);
+  out.optionCount = document.querySelectorAll('.model-option').length;
+  out.disabledCount = document.querySelectorAll('.model-option.disabled').length;
+  try {
+    out.snapshotOpen = await ipc.previewSnapshot('model-picker', 'main');
+  } catch (e) {
+    out.snapshotOpen = errorMessage(e);
+  }
+  // Search, then keyboard-select the second match.
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'glm');
+  input!.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(200);
+  out.glmMatches = [...document.querySelectorAll('.model-option')].map((e) => e.querySelector('.model-option-name')?.textContent);
+  const key = (k: string) => input!.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  key('ArrowDown');
+  await sleep(100);
+  out.highlighted = document.querySelector('.model-option.highlighted .model-option-name')?.textContent;
+  key('Enter');
+  await sleep(800);
+  out.closedAfterSelect = !document.querySelector('.model-popover');
+  out.selected = studio.state.agent.model;
+  out.recentFirst = studio.state.agent.recentModels[0];
+  out.triggerLabel = document.querySelector('.model-trigger-name')?.textContent;
+  // Escape closes without changing anything.
+  trigger.click();
+  await sleep(300);
+  document.querySelector('.model-search')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await sleep(200);
+  out.escapeCloses = !document.querySelector('.model-popover');
+  // Restore the user's choice.
+  if (saved.model === null) localStorage.removeItem('studio.model');
+  else localStorage.setItem('studio.model', saved.model);
+  if (saved.recent === null) localStorage.removeItem('studio.recentModels');
+  else localStorage.setItem('studio.recentModels', saved.recent);
+  studio.store.set((s) => ({ agent: { ...s.agent, model: saved.state, recentModels: saved.recentState } }));
+  return out;
+}
+
 /** Settings dialog hides the native preview; the composer honours the send-key setting (TODO #2). */
 async function settingsChecks() {
   const out: Record<string, unknown> = {};
@@ -291,6 +340,8 @@ export async function runSelftest(launch: LaunchOptions) {
     result.zoomChecks = await zoomChecks();
     log('settings checks');
     result.settingsChecks = await settingsChecks();
+    log('model picker checks');
+    result.modelPickerChecks = await modelPickerChecks();
 
     editor.setPosition({ lineNumber: line, column: 1 });
     editor.revealLineInCenter(line);

@@ -2,42 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
 import { useStore } from '../lib/store';
-import type { ModelInfo } from '../services/agent/types';
+import { ModelPicker } from './ModelPicker';
 
-const modelKey = (m: { providerID: string; id: string }) => `${m.providerID}/${m.id}`;
-
-function ModelPicker() {
-  const models = useStore(studio.store, (s) => s.agent.models);
-  const model = useStore(studio.store, (s) => s.agent.model);
-  const running = useStore(studio.store, (s) => s.agent.running);
-  const groups = new Map<string, ModelInfo[]>();
-  for (const m of models) groups.set(m.providerName, [...(groups.get(m.providerName) ?? []), m]);
-  return (
-    <select
-      className="model-picker"
-      aria-label="Model"
-      value={model ? modelKey(model) : ''}
-      disabled={running || !models.length}
-      onFocus={() => void studio.loadModels()}
-      onChange={(e) => {
-        const m = models.find((x) => modelKey(x) === e.target.value);
-        if (m) void studio.selectModel(m);
-      }}
-    >
-      {!models.length && <option value="">Loading models…</option>}
-      {[...groups].map(([provider, ms]) => (
-        <optgroup key={provider} label={provider}>
-          {ms.map((m) => (
-            <option key={modelKey(m)} value={modelKey(m)} disabled={!m.supportsTools}>
-              {m.name}
-              {m.supportsTools ? '' : ' — no tool support'}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
-  );
-}
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -187,7 +153,6 @@ export function AgentPane() {
     <section className="pane agent-pane">
       <header className="pane-header">
         <ModelPicker />
-        <span className="spacer" />
         <button className="icon" title="New session" disabled={agent.running} onClick={() => studio.newSession()}>
           ＋
         </button>

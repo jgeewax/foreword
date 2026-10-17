@@ -86,6 +86,7 @@ export class OpenCodeAdapter implements AgentAdapter {
         name: m.name ?? m.id,
         providerName: providerNames.get(m.providerID) ?? m.providerID,
         supportsTools: m.capabilities?.tools !== false,
+        contextWindow: typeof m.limit?.context === 'number' ? m.limit.context : undefined,
       }))
       .sort((a: ModelInfo, b: ModelInfo) => a.providerName.localeCompare(b.providerName) || a.name.localeCompare(b.name));
   }

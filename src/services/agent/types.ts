@@ -8,6 +8,8 @@ export type ModelInfo = ModelRef & {
   name: string;
   providerName: string;
   supportsTools: boolean;
+  /** Context window in tokens, when the provider reports it. */
+  contextWindow?: number;
 };
 
 export type PermissionDecision = 'once' | 'always' | 'reject';

@@ -4,7 +4,7 @@
 
 - [x] setting for whether its enter or command+enter in the ai chatbox. default o just enter (shift enter for new line)
 
-- [ ] the model selector is just a stock select dropdown. with a long list of models it gets crazy long. lets make a proper ui for selecting
+- [x] the model selector is just a stock select dropdown. with a long list of models it gets crazy long. lets make a proper ui for selecting
 
 - [x] Are we customizing the system prompt for this? we need ot be sure that we're not asking the models to write code via opencode. it needs to know its writing .typ files for a book
 
