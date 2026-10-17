@@ -156,4 +156,4 @@
 
 - [ ] when i type im seeing lots of click indicators on the preview like i clicked 4x times. none of them are on the part that im typing in
 
-- [ ] update system prompt to encourage one sentence per line.
+- [x] update system prompt to encourage one sentence per line.

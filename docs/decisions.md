@@ -274,6 +274,22 @@ bottom). It now adds the main webview's native safe-area inset, re-read on
 resize (full screen removes the title bar). Verified natively: preview top =
 pane top (off by 0 pt).
 
+### One sentence per line
+
+- Every session's instructions ask for one sentence per line in .typ files
+  (a blank line between paragraphs) in whatever the assistant writes or
+  rewrites. Typst joins a paragraph's lines, so the book looks the same, and
+  edits, What changed, comments and the assistant's marks then work sentence
+  by sentence. Paragraphs it isn't changing aren't rewrapped.
+- The first wording ("write one sentence per line") lost to "follow the
+  project's conventions": the model matched the chapter's wrapped paragraphs.
+  Saying it applies "even where the file's existing paragraphs are wrapped
+  differently" fixed it.
+- The style guide template's Formatting section suggests it too.
+- Verified (self-test `sentences`, deepseek-v4-flash): three runs, each a
+  three- or four-sentence paragraph with one sentence per line. The weaker
+  wording gave one long line.
+
 ### Context menus
 
 - Native macOS menus through Tauri's menu API (`core:menu:default` allows

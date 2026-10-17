@@ -2399,6 +2399,33 @@ async function quickOpenChecks() {
   return out;
 }
 
+/** One sentence per line in what the assistant writes (real model; the chapter is put back). */
+async function sentencesChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: { ...policy, edit: 'allow' } });
+  studio.newSession();
+  if (studio.state.launch?.selftestOnly?.includes('sentences-probe')) {
+    out.quoted = (await askAgent('Without changing any file: quote, word for word, what your instructions say about line breaks or sentences per line in .typ files. If nothing, say "nothing".')).slice(0, 600);
+    studio.newSession();
+  }
+  const before = (await ipc.fsRead(file)).text;
+  out.reply = (await askAgent(`At the end of ${file}, add a paragraph of three or four sentences on why the dot product of perpendicular vectors is zero.`)).slice(0, 200);
+  await sleep(1500);
+  const after = (await ipc.fsRead(file)).text;
+  // The new lines: what follows the old text's last line.
+  const added = after.startsWith(before.trimEnd()) ? after.slice(before.trimEnd().length) : after;
+  const lines = added.split('\n').filter((l) => l.trim() && !l.trim().startsWith('$') && !l.trim().startsWith('#') && !l.trim().startsWith('='));
+  out.lines = lines;
+  // Sentences per line: ". X" inside a line means two sentences on it.
+  out.linesWithTwoSentences = lines.filter((l) => /[.!?] +[A-Z]/.test(l.replace(/\$[^$]*\$/g, 'M'))).length;
+  await ipc.fsWrite(file, before, await ipc.fsHash(file));
+  studio.updateSettings({ permissions: policy });
+  return out;
+}
+
 /**
  * The menu bar: every item the app adds has a handler on the page (and every
  * handler an item), and a few commands do what they say. Items are run through
@@ -3129,6 +3156,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
+    if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

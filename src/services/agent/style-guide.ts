@@ -40,6 +40,7 @@ const DEFAULT_HINTS: Record<StyleSection, string> = {
   'Sentences and paragraphs': 'e.g. prefer short sentences; one idea per paragraph; no rhetorical questions.',
   'Words and spelling': 'Preferred terms, words to avoid, British or American spelling, capitalisation.',
   'Formatting in Typst': `How the book uses Typst markup, e.g.:
+- One sentence per line; a blank line between paragraphs.
 - Chapter headings: \`= Title <ch-label>\`; sections \`==\`, no deeper than \`===\`.
 - Emphasis with \`_..._\`, never bold in running text.
 - Every displayed equation gets a label: \`$ ... $ <eq-name>\`.

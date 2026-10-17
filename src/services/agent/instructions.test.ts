@@ -28,6 +28,12 @@ describe('buildInstructions', () => {
     expect(text).toMatch(/one to three plain sentences/);
   });
 
+  it('asks for one sentence per line, only in what it writes', () => {
+    expect(text).toMatch(/One sentence per line/);
+    expect(text).toMatch(/even where the file's existing paragraphs are wrapped differently/);
+    expect(text).toMatch(/Don't rewrap paragraphs you aren't otherwise changing/);
+  });
+
   it('says the preview is live and forbids compiling or offering to compile', () => {
     expect(text).toContain('## The preview is live');
     expect(text).toMatch(/Never compile, build, render, or export/);
