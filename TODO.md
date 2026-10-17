@@ -101,3 +101,31 @@
 - [x] save all settings in the config file?
 
 - [x] similar keyboard shortcuts for tab management as vs code (cmd+k w for closing all, etc)
+
+- [ ] the new task button is too far away and too small... how can we make it more prominent to start a new convo?
+
+- [ ] icons still feel weird and awkward. (look at top right as well as close icon for settings page at 67% zoom to see how weird things look)
+
+- [x] when looking at what changed, the zindexs are wrong. preview shows up ONTOP of the what changed modal
+
+- [ ] cmd k , w should kill all tabs, but it doesnt.
+
+- [ ] can we make comments be grouped by file?
+
+- [ ] the icons in the file view to expand directories is TINY at 67%, far tinier than they should be... use vs.code icons for comparison...
+
+- [ ] the "selected" blue box with dashes doesnt look very pretty. can we make this more elegant and useful and less odd?
+
+- [ ] cmd + p for file browser ?
+
+- [ ] update prompt to try to encourage consistent style ? specifically for figures? in this case, cetz diagrams i suppose?
+
+- [ ] im confused where change istory is stored? is this living in a git repository? can i work backwards ? see deltas? that seems like a good idea, no?
+
+- [ ] the menu system seems crowded and silly. we need to rethink and revamp the menus.
+
+- [ ] after asking a question, i have no way to resolve teh task and mark it as done... is there a way to do this im missing? if not we need to make sure thats doable?
+
+- [ ] slash commands int he ai chatbxo to change modes, etc
+
+- [ ] ability to resume. if i click stop, change models, i want to resuem and start again... i need to be able to resume (if the box is empty and we aborted the request)

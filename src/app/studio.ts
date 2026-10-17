@@ -223,6 +223,8 @@ export type StudioState = {
   coverDialogOpen: boolean;
   /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
   names: BookNames;
+  /** ⌘P: go to a file by name. */
+  quickOpen: boolean;
   /** The settings file: where it is, and why it can't be used (if so). */
   configFile: { path: string; error: string | null } | null;
   /** Bumped when the assistant's marks change (the editor repaints them). */
@@ -297,6 +299,7 @@ const initialState: StudioState = {
   aiMarks: 0,
   names: NO_NAMES,
   configFile: null,
+  quickOpen: false,
   sidebar: 'files',
 };
 
@@ -347,7 +350,7 @@ export class Studio {
     get: () => this.state.history,
     set: (patch) => {
       this.store.set((s) => ({ history: { ...s.history, ...patch } }));
-      if ('diff' in patch) this.syncPreviewVisibility(); // the diff dialog must not be drawn under the preview
+
     },
     docs: () => this.docs,
     agentRunning: () => this.state.agent.running,
@@ -413,6 +416,14 @@ export class Studio {
   private jumpWaiters = new Set<() => void>();
 
   constructor() {
+    // Whenever a dialog opens or closes (any of them), the preview hides or shows.
+    let dialog = false;
+    this.store.subscribe(() => {
+      if (this.dialogOpen() !== dialog) {
+        dialog = !dialog;
+        this.syncPreviewVisibility();
+      }
+    });
     this.typst.on('diagnostics', (uri, list) => this.onDiagnostics(uri, list));
     this.typst.on('compile', (s) => {
       const status = s.status === 'compiling' ? 'compiling' : s.status === 'compileSuccess' ? 'ok' : 'error';
@@ -2092,13 +2103,16 @@ export class Studio {
     this.syncPreviewVisibility();
   }
 
+  /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
+  private dialogOpen() {
+    const s = this.state;
+    return s.settingsOpen || s.newBookOpen || !!s.history.diff || !!s.history.changes || !!s.prompt || s.coverDialogOpen || s.print.open || s.quickOpen;
+  }
+
   private syncPreviewVisibility() {
     if (!this.previewOpened) return;
     const ok = this.state.preview.status !== 'error';
-    // The preview is a native view above the page; hide it while a dialog is open
-    // so the dialog isn't drawn underneath it.
-    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.history.changes || !!this.state.prompt || this.state.coverDialogOpen || this.state.print.open;
-    void ipc.previewSetVisible(this.previewVisible && ok && !dialog);
+    void ipc.previewSetVisible(this.previewVisible && ok && !this.dialogOpen());
   }
 
   private async showPreview() {

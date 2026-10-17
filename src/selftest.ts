@@ -970,6 +970,8 @@ async function changesChecks() {
   });
   out.latest = view();
   await sleep(300);
+  const hidden = async () => (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+  out.previewHiddenWhileOpen = await hidden();
   out.snapshotLatest = await snap('changes-latest');
   out.dom = {
     ins: [...document.querySelectorAll('.change-body ins')].map((e) => e.textContent),
@@ -992,6 +994,8 @@ async function changesChecks() {
   out.since = view();
   out.snapshotSince = await snap('changes-since');
   studio.history.closeChanges();
+  await sleep(400);
+  out.previewShownAfterClose = !(await hidden());
   await studio.openWorkspace(original);
   return out;
 }
