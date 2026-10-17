@@ -7,6 +7,7 @@ import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
+import { PermissionsMenu } from './Permissions';
 import { TypstGuide } from './TypstGuide';
 
 function Patch({ text }: { text: string }) {
@@ -313,6 +314,7 @@ function Composer() {
       <div className="composer-controls">
         <ModeMenu />
         <ModelPicker placement="up" />
+        <PermissionsMenu />
         <span className="spacer" />
         {running ? (
           <button onClick={() => void studio.cancel()}>Stop</button>
@@ -326,20 +328,6 @@ function Composer() {
         ⌘I attach selection · {sendHint(sendKey)}
       </div>
     </div>
-  );
-}
-
-function EditPolicyToggle() {
-  const policy = useStore(studio.store, (s) => s.settings.agentEdits);
-  const allow = policy === 'allow';
-  return (
-    <button
-      className={`chip-toggle${allow ? ' on' : ''}`}
-      title={allow ? 'The agent edits files without asking. Click to ask first.' : 'The agent asks before editing files. Click to allow edits without asking.'}
-      onClick={() => studio.updateSettings({ agentEdits: allow ? 'ask' : 'allow' })}
-    >
-      {allow ? 'Edits: automatic' : 'Edits: ask first'}
-    </button>
   );
 }
 
@@ -441,22 +429,20 @@ export function AgentPane() {
             ＋
           </button>
         </header>
-        <div className="agent-status">
-          {agent.status === 'starting' && 'Starting OpenCode…'}
-          {agent.status === 'error' && <span className="bad">OpenCode: {agent.error}</span>}
-          {agent.status === 'ready' && (
-            <>
-              <span className={agent.connection === 'lost' ? 'bad' : ''}>{agent.connection === 'lost' ? 'Event stream reconnecting…' : 'Ready'}</span>
-              <span className="spacer" />
-              <EditPolicyToggle />
-            </>
-          )}
-          {agent.status === 'error' && (
-            <button className="link" onClick={() => void studio.startAgent()}>
-              Retry
-            </button>
-          )}
-        </div>
+        {(agent.status !== 'ready' || agent.connection === 'lost') && (
+          <div className="agent-status">
+            {agent.status === 'starting' && 'Starting the assistant (OpenCode)…'}
+            {agent.status === 'off' && 'The assistant is off.'}
+            {agent.status === 'error' && <span className="bad">OpenCode: {agent.error}</span>}
+            {agent.status === 'ready' && agent.connection === 'lost' && <span className="bad">Reconnecting to the assistant…</span>}
+            <span className="spacer" />
+            {agent.status === 'error' && (
+              <button className="link" onClick={() => void studio.startAgent()}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
         <StyleGuideBar />
         <div
           className="transcript"

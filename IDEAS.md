@@ -37,3 +37,8 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Inline rename in the tree (Enter or double-click on a name), like Finder.
 - Drop images from Finder onto the editor: copy them into figures/ and insert a `#figure(image(...))`.
 - "Unused files": images and chapters that nothing includes.
+
+## Permissions
+- Per-book permissions saved in `.typst-studio.json` (e.g. a shared book that's always read-only), overriding the app setting.
+- "Allow for this book" on a permission card. OpenCode supports saved permissions (`/api/permission/saved`); show and revoke them in Settings.
+- Show which rule decided a refusal ("Delete files: Never") in the failed tool's details.

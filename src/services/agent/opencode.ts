@@ -4,66 +4,11 @@
 import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
 import { mapOpenCodeEvent } from './opencode-events';
+import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
 import type { AgentAdapter, AgentEvent, ModelInfo, ModelRef, PermissionDecision } from './types';
 
-/**
- * Session permission rules. OpenCode's built-in agents allow everything
- * (`* → allow`); the spec forbids that, so edits, shell, web and anything
- * unknown ask first. Rules are last-match-wins (verified: reads ran without a
- * prompt, an edit raised permission.asked). Subagents ("task") are denied
- * because they run under their agent's own allow-all rules.
- *
- * The preview compiles live, so Typst build commands are denied outright
- * (TODO: never compile). The shell tool's permission action is `shell` and its
- * resource is the full command line (verified: `typst compile …` is refused
- * with "Permission denied: shell", no prompt, no output written).
- */
-export const NO_COMPILE_RULES = [
-  { action: 'shell', resource: 'typst *', effect: 'deny' },
-  { action: 'shell', resource: '*typst compile*', effect: 'deny' },
-  { action: 'shell', resource: '*typst c *', effect: 'deny' },
-  { action: 'shell', resource: '*typst watch*', effect: 'deny' },
-  { action: 'shell', resource: '*typst w *', effect: 'deny' },
-  { action: 'shell', resource: '*tinymist*', effect: 'deny' },
-] as const;
-
-/**
- * Auto-edit (setting "allow edits without asking"). The edit tool and the
- * write tool (new files) both use the `edit` action (verified); .env files
- * still ask.
- */
-export const ALLOW_EDIT_RULES = [
-  { action: 'edit', resource: '*', effect: 'allow' },
-  { action: 'edit', resource: '*.env', effect: 'ask' },
-  { action: 'edit', resource: '*.env.*', effect: 'ask' },
-] as const;
-
-export type PermissionRule = { action: string; resource: string; effect: 'allow' | 'ask' | 'deny' };
-
-/** Plan and Options modes: no file changes and no commands, whatever the edit setting. */
-export const READ_ONLY_RULES = [
-  { action: 'edit', resource: '*', effect: 'deny' },
-  { action: 'shell', resource: '*', effect: 'deny' },
-] as const;
-
-/** Rules for a session. Build-command denials always come last (last match wins). */
-export function sessionPermissions({ allowEdits, readOnly = false }: { allowEdits: boolean; readOnly?: boolean }): PermissionRule[] {
-  const base = SESSION_PERMISSIONS.slice(0, SESSION_PERMISSIONS.length - NO_COMPILE_RULES.length);
-  return [...base, ...(allowEdits ? ALLOW_EDIT_RULES : []), ...(readOnly ? READ_ONLY_RULES : []), ...NO_COMPILE_RULES];
-}
-
-export const SESSION_PERMISSIONS = [
-  { action: '*', resource: '*', effect: 'ask' },
-  { action: 'read', resource: '*', effect: 'allow' },
-  { action: 'glob', resource: '*', effect: 'allow' },
-  { action: 'grep', resource: '*', effect: 'allow' },
-  { action: 'list', resource: '*', effect: 'allow' },
-  { action: 'read', resource: '*.env', effect: 'ask' },
-  { action: 'read', resource: '*.env.*', effect: 'ask' },
-  { action: 'external_directory', resource: '*', effect: 'ask' },
-  { action: 'task', resource: '*', effect: 'deny' },
-  ...NO_COMPILE_RULES,
-] as const;
+// Permission rules: see permissions.ts (what the assistant may do).
+export { NO_COMPILE_RULES, READ_ONLY_RULES, sessionRules } from './permissions';
 
 export class AgentApiError extends Error {
   constructor(
@@ -121,19 +66,22 @@ export class OpenCodeAdapter implements AgentAdapter {
     return d ? { providerID: d.providerID, id: d.id } : null;
   }
 
-  async createSession(model: ModelRef | null, { allowEdits = false, readOnly = false, agent = 'build' as 'build' | 'plan' } = {}): Promise<string> {
+  async createSession(
+    model: ModelRef | null,
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan' } = {},
+  ): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? { providerID: model.providerID, id: model.id } : null,
       agent: agent === 'build' ? null : agent,
-      permissions: sessionPermissions({ allowEdits, readOnly }),
+      permissions: sessionRules(permissions, readOnly),
     });
     return res.data.id;
   }
 
-  /** Update a live session's rules: edit policy and read-only modes (verified to apply mid-session). */
-  async setEditPolicy(sessionId: string, allowEdits: boolean, readOnly = false) {
-    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionPermissions({ allowEdits, readOnly }) });
+  /** Update a live session's rules (verified to apply mid-session). */
+  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false) {
+    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly) });
   }
 
   /** OpenCode's built-in agents: `build` (default) or `plan`. */

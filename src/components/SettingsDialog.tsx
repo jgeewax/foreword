@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PROJECT_FILE } from '../app/project-settings';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
+import { PermissionsEditor } from './Permissions';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -180,27 +181,8 @@ export function SettingsDialog() {
               />
             </div>
           </Section>
-          <Section title="Agent">
-            <div className="settings-field">
-              <div className="settings-label">When the agent wants to change a file</div>
-              <Radio
-                name="agentEdits"
-                value="ask"
-                current={settings.agentEdits}
-                onChange={(v) => studio.updateSettings({ agentEdits: v })}
-                label="Ask me each time"
-                detail="you see the proposed change first"
-              />
-              <Radio
-                name="agentEdits"
-                value="allow"
-                current={settings.agentEdits}
-                onChange={(v) => studio.updateSettings({ agentEdits: v })}
-                label="Edit without asking"
-                detail="changes appear in the editor and preview directly"
-              />
-              <p className="settings-help">Applies to the current conversation right away. .env files always ask, and the agent can never run build commands.</p>
-            </div>
+          <Section title="Assistant permissions">
+            <PermissionsEditor />
           </Section>
         </div>
       </div>

@@ -37,6 +37,7 @@ import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
+import { describePermissions } from '../services/agent/permissions';
 import type { AgentAdapter, AgentEvent, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
 
@@ -1261,7 +1262,7 @@ export class Studio {
     const config = modeConfig(mode);
     try {
       await this.agent.switchAgent(sessionId, config.agent);
-      await this.agent.setEditPolicy(sessionId, this.state.settings.agentEdits === 'allow', config.readOnly);
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly);
       if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
@@ -1345,7 +1346,7 @@ export class Studio {
       if (!sessionId) {
         const config = modeConfig(this.state.agent.mode);
         sessionId = await agent.createSession(this.state.agent.model, {
-          allowEdits: this.state.settings.agentEdits === 'allow',
+          permissions: this.state.settings.permissions,
           readOnly: config.readOnly,
           agent: config.agent,
         });
@@ -1592,23 +1593,19 @@ export class Studio {
     const settings = { ...before, ...patch };
     saveSettings(settings);
     this.store.set({ settings });
-    if (settings.agentEdits !== before.agentEdits) void this.applyEditPolicy(settings.agentEdits === 'allow');
+    if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) void this.applyPermissions();
   }
 
-  /** Apply the edit setting to the current session, and say so in the chat. */
-  private async applyEditPolicy(allowEdits: boolean) {
+  /** Apply the permission settings to the current conversation, and say so in the chat. */
+  private async applyPermissions() {
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
+    const permissions = this.state.settings.permissions;
     try {
-      await this.agent.setEditPolicy(sessionId, allowEdits, modeConfig(this.state.agent.mode).readOnly);
-      this.pushItem({
-        kind: 'notice',
-        id: uid('n'),
-        tone: 'info',
-        text: allowEdits ? 'The agent can now edit files without asking.' : 'The agent will ask before editing files.',
-      });
+      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly);
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: describePermissions(permissions) });
     } catch (e) {
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change edit permissions for this session: ${errorMessage(e)}` });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change permissions for this conversation: ${errorMessage(e)}` });
     }
   }
 

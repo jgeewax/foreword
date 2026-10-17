@@ -7,6 +7,7 @@ import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { menuRecorder, type MenuEntry } from './lib/context-menu';
 import { parseOptions } from './services/agent/options-mode';
+import { PRESETS } from './services/agent/permissions';
 import { TEMPLATES } from './templates';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -452,8 +453,8 @@ async function historyChecks(withAgent: boolean) {
 
   if (withAgent) {
     await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-    const policy = studio.state.settings.agentEdits;
-    studio.updateSettings({ agentEdits: 'allow' });
+    const policy = studio.state.settings.permissions;
+    studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
     await studio.setMode('write');
     studio.newSession();
     const textBefore = await disk();
@@ -475,7 +476,7 @@ async function historyChecks(withAgent: boolean) {
       await sleep(500);
       out.undoAgent = { disk: (await disk()) === textBefore, buffer: model.getValue() === textBefore, latest: hs().versions[0]?.label, toast: lastToast() };
     }
-    studio.updateSettings({ agentEdits: policy });
+    studio.updateSettings({ permissions: policy });
   }
   h.confirm = savedConfirm;
   studio.showSidebar('files');
@@ -596,8 +597,8 @@ async function onboardingChecks() {
   }
 
   // A Typst error: the status bar jumps to it, and the assistant fixes it.
-  const policy = studio.state.settings.agentEdits;
-  studio.updateSettings({ agentEdits: 'allow' });
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
   await studio.setMode('write');
   editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
   editor.trigger('selftest', 'type', { text: ' See #undefined-thing here.' });
@@ -631,7 +632,7 @@ async function onboardingChecks() {
       lineAfter: model.getLineContent(line),
     };
   }
-  studio.updateSettings({ agentEdits: policy });
+  studio.updateSettings({ permissions: policy });
 
   // Welcome screen and the guide as a dialog there.
   const root = studio.state.workspace!.root;
@@ -847,14 +848,14 @@ async function paperChecks(withAgent: boolean) {
       };
       if (withAgent && id === 'ieee') {
         await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-        const policy = studio.state.settings.agentEdits;
-        studio.updateSettings({ agentEdits: 'allow' });
+        const policy = studio.state.settings.permissions;
+        studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
         await askAgent(composer);
         await sleep(2500);
         const main = (await ipc.fsRead('main.typ')).text;
         (papers[id] as any).afterAgent = { hasTitle: main.includes(`Sparse Attention ${id}`), hasAuthor: main.includes('Ada Example'), errors: studio.state.problems.errors, compile: studio.state.compile.status };
         (papers[id] as any).snapshotAfter = await snap('paper-ieee-after', 'preview');
-        studio.updateSettings({ agentEdits: policy });
+        studio.updateSettings({ permissions: policy });
       }
     } catch (e) {
       papers[id] = { error: errorMessage(e) };
@@ -960,8 +961,8 @@ async function figuresChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch1-vectors.typ';
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  const policy = studio.state.settings.agentEdits;
-  studio.updateSettings({ agentEdits: 'allow' });
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
   studio.newSession();
   await studio.setMode('write');
   document.querySelector<HTMLButtonElement>('.mode-trigger')?.click();
@@ -999,7 +1000,7 @@ async function figuresChecks() {
   out.snapshotMain = await snap('figure-main');
   await ipc.fsWrite(file, before, await ipc.fsHash(file));
   await studio.setMode('write');
-  studio.updateSettings({ agentEdits: policy });
+  studio.updateSettings({ permissions: policy });
   return out;
 }
 
@@ -1028,9 +1029,9 @@ async function layoutChecks() {
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
-  const savedPolicy = studio.state.settings.agentEdits;
+  const savedPolicy = studio.state.settings.permissions;
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  studio.updateSettings({ agentEdits: 'allow' });
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
   studio.newSession();
   await studio.setMode('plan');
   const hashBefore = await ipc.fsHash(file);
@@ -1077,7 +1078,7 @@ async function planModeChecks() {
     mentionsTrace: /trace/i.test(after),
     addedLines: after.split('\n').length,
   };
-  studio.updateSettings({ agentEdits: savedPolicy });
+  studio.updateSettings({ permissions: savedPolicy });
   return out;
 }
 
@@ -1087,12 +1088,19 @@ async function planModeChecks() {
  */
 async function editPolicyChecks() {
   const out: Record<string, unknown> = {};
-  const savedPolicy = studio.state.settings.agentEdits;
+  const savedPolicy = studio.state.settings.permissions;
   const file = 'chapters/ch1-vectors.typ';
   const heading = async () => (await ipc.fsRead(file)).text.split('\n')[0];
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  studio.updateSettings({ agentEdits: 'ask' });
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'ask' } });
   studio.newSession();
+  // Start from a known heading (earlier runs may have changed it).
+  {
+    const text = (await ipc.fsRead(file)).text.split('\n');
+    text[0] = '= Vectors <ch-vectors>';
+    await ipc.fsWrite(file, text.join('\n'), await ipc.fsHash(file));
+    await sleep(500);
+  }
   out.headingBefore = await heading();
 
   const turn = async (text: string) => {
@@ -1114,10 +1122,13 @@ async function editPolicyChecks() {
   (out.askMode as any).headingAfterReject = await heading();
 
   // 2. Switch to automatic mid-conversation: the next edit lands without a prompt.
-  studio.updateSettings({ agentEdits: 'allow' });
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
   await sleep(800);
   out.switchNotice = studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as any).text).pop();
-  const autoItems = await turn(`Now do it: in ${file}, change the first line's heading text "Vectors" to "Vectors (auto test)". Use your edit tool. Change nothing else.`);
+  const autoItems = await turn(`Now do it: in ${file}, change the first line's heading text "Vectors" to "Vectors (auto test)". Use your edit tool, not a shell command. Change nothing else.`);
+  // A model that reaches for the shell instead still has to ask: refuse, and note it.
+  for (const i of autoItems) if (i.kind === 'permission' && i.state === 'pending') await studio.replyPermission(i.id, 'reject');
+  await waitFor(() => !studio.state.agent.running, 60000, 'auto turn end').catch(() => {});
   await sleep(1500);
   out.allowMode = {
     permissionCards: autoItems.filter((i) => i.kind === 'permission').length,
@@ -1129,7 +1140,32 @@ async function editPolicyChecks() {
   await sleep(500);
   (out.allowMode as any).editorFirstLine = studio.editor?.getModel()?.getLineContent(1);
 
-  studio.updateSettings({ agentEdits: savedPolicy });
+  // 3. Fine-grained: deleting set to Never refuses rm (even though other commands only ask).
+  studio.updateSettings({ permissions: { ...PRESETS.ask.permissions, edit: 'allow', delete: 'deny' } });
+  await sleep(500);
+  document.querySelector<HTMLButtonElement>('.perm-trigger')?.click();
+  await sleep(300);
+  out.popover = {
+    rows: [...document.querySelectorAll('.perm-row .perm-label')].map((e) => e.textContent),
+    trigger: document.querySelector('.perm-trigger')?.textContent,
+    snapshot: await snap('permissions'),
+  };
+  document.querySelector<HTMLButtonElement>('.perm-trigger')?.click();
+  await ipc.fsWrite('delete-me.typ', '// scratch file for the permissions self-test\n', await ipc.fsHash('delete-me.typ'));
+  await waitFor(() => !studio.state.agent.running, 60000, 'idle').catch(() => {});
+  studio.newSession();
+  const delItems = await turn('Delete the file delete-me.typ in the project root with the shell command `rm delete-me.typ`. Do not use any other method.');
+  const pending = delItems.find((i) => i.kind === 'permission' && i.state === 'pending');
+  if (pending) await studio.replyPermission(pending.id, 'reject');
+  await waitFor(() => !studio.state.agent.running, 60000, 'delete turn').catch(() => {});
+  out.deleteNever = {
+    stillThere: (await ipc.fsHash('delete-me.typ')) !== null,
+    tools: delItems.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} ${(i as any).summary} → ${(i as any).status}: ${String((i as any).detail).slice(0, 80)}`),
+    askedInstead: !!pending,
+    notice: studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as any).text).slice(-3),
+  };
+
+  studio.updateSettings({ permissions: savedPolicy });
   return out;
 }
 

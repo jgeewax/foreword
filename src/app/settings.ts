@@ -1,9 +1,8 @@
 // App preferences (per machine, not per project). Project settings live in
 // .typst-studio.json instead.
+import { DEFAULT_PERMISSIONS, PRESETS, sanitizePermissions, type AgentPermissions } from '../services/agent/permissions';
 
 export type SendKey = 'enter' | 'mod-enter';
-
-export type EditPolicy = 'ask' | 'allow';
 
 /** Where History lives in the left pane: its own tab, or a section below the files. */
 export type HistoryPlacement = 'tab' | 'below';
@@ -11,14 +10,14 @@ export type HistoryPlacement = 'tab' | 'below';
 export type AppSettings = {
   /** Which key sends a chat message. */
   sendKey: SendKey;
-  /** Whether the agent may change files without asking each time. */
-  agentEdits: EditPolicy;
+  /** What the assistant may do (see permissions.ts). */
+  permissions: AgentPermissions;
   historyPlacement: HistoryPlacement;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   sendKey: 'enter',
-  agentEdits: 'ask',
+  permissions: DEFAULT_PERMISSIONS,
   historyPlacement: 'tab',
 };
 
@@ -42,7 +41,10 @@ export function saveSettings(settings: AppSettings) {
 function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const out: Partial<AppSettings> = {};
   if (raw.sendKey === 'enter' || raw.sendKey === 'mod-enter') out.sendKey = raw.sendKey;
-  if (raw.agentEdits === 'ask' || raw.agentEdits === 'allow') out.agentEdits = raw.agentEdits;
+  const permissions = sanitizePermissions(raw.permissions);
+  if (permissions) out.permissions = permissions;
+  // Before fine-grained permissions there was one switch: edit without asking, or ask.
+  else if (raw.agentEdits === 'allow') out.permissions = PRESETS.edit.permissions;
   if (raw.historyPlacement === 'tab' || raw.historyPlacement === 'below') out.historyPlacement = raw.historyPlacement;
   return out;
 }

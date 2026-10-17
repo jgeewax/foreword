@@ -351,6 +351,37 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Assistant permissions
+
+- **Action names, checked against the server's own built-in agents** (OpenCode
+  2.0.20): `read`, `glob`, `grep`, `edit` (also creating files), `shell`
+  (resource = the whole command line), `external_directory`, `webfetch`,
+  `websearch`, `subagent`, `question`.
+- **Fixed a bug:** our rules denied `task`, a name that doesn't exist; the
+  subagent action is `subagent`. Both are denied now.
+- **Six controls** (Ask / Allow / Never): edit and create files; rename or
+  move (`mv`, `git mv`); delete (`rm`, `rmdir`, `unlink`, `trash`, `git rm`,
+  `shred`); files outside the book; other commands; the web.
+- **Presets:** "Ask first" (the default), "Edit freely" (the old "edit
+  without asking", migrated) and "Read-only".
+- **Rule order** (last match wins): everything asks, then the specific rules,
+  then Plan/Options read-only rules, then the build-command denials last.
+  - Rename and delete are shell commands in OpenCode, so they're matched at the
+    start of a command and after separators (`cd x && rm y`, `;rm`, `| xargs
+    rm`). False positives like `echo "don't rm"` only ask or deny; nothing is
+    wrongly allowed.
+- **OpenCode's `question` tool is denied.** Typst Studio doesn't render it,
+  so the agent asks in its reply.
+- **The control moved to the composer**, next to the mode and the model, and
+  opens upward. Settings shows the same editor. Changes apply to the current
+  conversation, and the chat notes what changed.
+- **Verified in-app with gemini-3.8-flash:**
+  - Ask first: an edit shows a card with the diff, and rejecting it leaves the
+    file alone.
+  - Edit allowed: the edit lands with no prompt.
+  - Delete set to Never: `rm delete-me.typ` → "Permission denied: shell", and
+    the file is still there.
+
 ### Files: create, rename, duplicate, trash
 
 - **Where:** in the file tree's right-click menu (New File, New Folder, New

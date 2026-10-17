@@ -38,9 +38,9 @@
 
 - [x] how do we create/rename/etc files?
 
-- [ ] permissions picker thing should be at the bottom
+- [x] permissions picker thing should be at the bottom
 
-- [ ] permissions picker needs ot be more than just ask or allow all edits. lets give some stuff in between. can delete files? can rename files? can edit files? can read all files? can read other files on the machine outside this workspace? much fancier ui options
+- [x] permissions picker needs ot be more than just ask or allow all edits. lets give some stuff in between. can delete files? can rename files? can edit files? can read all files? can read other files on the machine outside this workspace? much fancier ui options
 
 - [ ] often in technical books we need ability to run code to verify output. e.g., if we're writing a book that uses python code, we need a way to have code snippets and make them runnable, test the output, etc. we need this system to be really good at that
 

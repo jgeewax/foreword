@@ -1,3 +1,4 @@
+import type { AgentPermissions } from './permissions';
 // Provider-neutral agent interface (SPEC §4). The UI depends only on this;
 // OpenCodeAdapter is the first implementation.
 import type { SourceSelection } from '../../editor/selection';
@@ -45,9 +46,9 @@ export interface AgentAdapter {
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;
-  createSession(model: ModelRef | null, opts?: { allowEdits?: boolean; readOnly?: boolean; agent?: 'build' | 'plan' }): Promise<string>;
-  /** Whether the agent may edit files without asking, or not at all (`readOnly`); applies to a running session. */
-  setEditPolicy(sessionId: string, allowEdits: boolean, readOnly?: boolean): Promise<void>;
+  createSession(model: ModelRef | null, opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan' }): Promise<string>;
+  /** What the agent may do (`readOnly` forces no changes: Plan and Options); applies to a running session. */
+  setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean): Promise<void>;
   switchAgent(sessionId: string, agent: 'build' | 'plan'): Promise<void>;
   /** Add (or replace) a named instruction block in the session's system context. */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;

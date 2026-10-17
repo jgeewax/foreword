@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { PRESETS } from '../services/agent/permissions';
 import { composerKeyAction, loadSettings, saveSettings } from './settings';
 
 const enter = (mods: Partial<{ shift: boolean; meta: boolean; ctrl: boolean; alt: boolean; composing: boolean }> = {}) => ({
@@ -44,15 +45,20 @@ describe('settings storage', () => {
 
   it('defaults to Enter and asking before edits, and round-trips', () => {
     expect(loadSettings().sendKey).toBe('enter');
-    expect(loadSettings().agentEdits).toBe('ask');
+    expect(loadSettings().permissions.edit).toBe('ask');
     saveSettings({ ...loadSettings(), sendKey: 'mod-enter', historyPlacement: 'below' });
     expect(loadSettings().sendKey).toBe('mod-enter');
     expect(loadSettings().historyPlacement).toBe('below');
   });
 
+  it('turns the old "edit without asking" switch into the Edit freely preset', () => {
+    store.set('studio.settings', '{"agentEdits":"allow"}');
+    expect(loadSettings().permissions).toEqual(PRESETS.edit.permissions);
+  });
+
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', agentEdits: 'ask', historyPlacement: 'tab' });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab' });
     store.set('studio.settings', 'not json');
     expect(loadSettings().sendKey).toBe('enter');
   });
