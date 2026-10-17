@@ -1278,6 +1278,15 @@ export class Studio {
     return ipc.fsRead(path).then((r) => r.text, () => null);
   }
 
+  /** ⌘P: go to a file. */
+  openQuickOpen() {
+    if (this.state.workspace) this.store.set({ quickOpen: true });
+  }
+
+  closeQuickOpen() {
+    this.store.set({ quickOpen: false });
+  }
+
   /** The Review view in the sidebar (shown, if the sidebar was hidden). */
   showReview() {
     this.events.emit('show-explorer');

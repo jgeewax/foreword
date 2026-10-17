@@ -11,6 +11,7 @@ import { HistoryChanges } from './components/HistoryChanges';
 import { HistoryDiff } from './components/HistoryDiff';
 import { NewBookDialog } from './components/NewBookDialog';
 import { PrintDialog } from './components/PrintDialog';
+import { QuickOpen } from './components/QuickOpen';
 import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
@@ -155,6 +156,12 @@ export function App() {
           return;
         }
       }
+      if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyP' && studio.state.workspace) {
+        e.preventDefault();
+        e.stopPropagation();
+        studio.openQuickOpen();
+        return;
+      }
       if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'e') {
         e.preventDefault();
         e.stopPropagation();
@@ -214,6 +221,7 @@ export function App() {
   const newBookOpen = useStore(studio.store, (s) => s.newBookOpen);
   const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
   const printOpen = useStore(studio.store, (s) => s.print.open);
+  const quickOpen = useStore(studio.store, (s) => s.quickOpen);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
@@ -221,6 +229,7 @@ export function App() {
       {newBookOpen && <NewBookDialog />}
       {coverDialogOpen && <CoverDialog />}
       {printOpen && <PrintDialog />}
+      {quickOpen && <QuickOpen />}
       <PromptDialog />
       <HistoryChanges />
       <HistoryDiff />

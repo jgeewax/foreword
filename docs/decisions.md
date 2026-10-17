@@ -872,6 +872,29 @@ pane top (off by 0 pt).
 - Verified (self-test `slash`): the list, ⏎ picking Plan, /model, /permissions,
   an unknown command, /help and /new.
 
+### Go to file (⌘P)
+
+- ⌘P opens a box near the top, as in VS Code. It works from anywhere, the
+  editor included, once a book is open.
+- **Matching is fuzzy:** the letters you type, in order (`src/lib/fuzzy.ts`).
+  - Matches at word starts (after `/`, space, `-`, `_`, `.`, or a lower→upper
+    or letter→digit change) score higher, and so do runs of letters.
+  - The query appearing whole in the text scores more, more still at a word
+    start, and that's what is highlighted.
+  - Matches in the file name beat matches in folder names, and shorter paths
+    beat longer ones.
+- A chapter matches by its heading as well as its file name ("eigenval" →
+  *Eigenvalues*, `chapters/ch2-eigenvalues.typ`). The row shows the heading
+  first and the path after.
+- With nothing typed, it lists the open tabs (most recent first), then the
+  other files, with the one you're in last.
+- ↑↓ choose, ⏎ opens (a PDF opens in the viewer, like a click in Files), Esc
+  or a click outside closes. The preview is hidden while it's open, as for
+  every dialog, since it's a native view drawn above the page.
+- Verified (self-test `quickopen`): ⌘P from the editor, ranking, a match by
+  heading, no matches, ⏎ opening a file, ↓, Esc, and the preview hidden then
+  shown again.
+
 ### Resume after Stop (or a failure)
 
 - When a turn is stopped or fails, the conversation is marked `stopped`. With

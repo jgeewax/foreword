@@ -2293,6 +2293,58 @@ async function slashChecks() {
   return out;
 }
 
+/** ⌘P: the go-to-file window, by file name and by chapter heading. The open tabs are put back after. */
+async function quickOpenChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { tabs: [...studio.state.tabs], active: studio.state.active };
+  const key = (target: EventTarget, init: KeyboardEventInit) => target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+  const typeIn = async (input: HTMLInputElement, value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+  };
+  const rows = () => [...document.querySelectorAll('.quick-open-row')].map((r) => r.querySelector('.quick-open-path')?.textContent || r.querySelector('.quick-open-main')?.textContent);
+  // From the editor, as you'd press it while writing.
+  studio.editor?.focus();
+  key(document.activeElement ?? document.body, { key: 'p', code: 'KeyP', metaKey: true });
+  await sleep(300);
+  const input = document.querySelector<HTMLInputElement>('.quick-open input');
+  out.opened = !!input && document.activeElement === input;
+  const hidden = async () => (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+  out.previewHidden = await hidden();
+  out.emptyQueryRows = rows().length;
+  if (!input) return out;
+  await typeIn(input, 'eig');
+  out.eig = rows().slice(0, 2);
+  out.highlighted = document.querySelector('.quick-open-row.active b')?.textContent;
+  out.snapshot = await snap('quick-open');
+  // A chapter by its heading: "vectors" is in ch1's name, "eigen" in ch2's heading ("Eigenvalues").
+  await typeIn(input, 'eigenval');
+  out.byHeading = document.querySelector('.quick-open-row.active .quick-open-main')?.textContent;
+  await typeIn(input, 'zzzq');
+  out.none = document.querySelector('.quick-open-empty')?.textContent;
+  await typeIn(input, 'refs');
+  key(input, { key: 'Enter' });
+  await sleep(400);
+  out.openedFile = studio.state.active;
+  out.closedAfterOpen = !studio.state.quickOpen && !document.querySelector('.quick-open');
+  // Esc closes without going anywhere; ↓ moves the highlight.
+  studio.openQuickOpen();
+  await sleep(200);
+  const again = document.querySelector<HTMLInputElement>('.quick-open input')!;
+  key(again, { key: 'ArrowDown' });
+  await sleep(100);
+  out.arrowDown = [...document.querySelectorAll('.quick-open-row')].findIndex((r) => r.classList.contains('active'));
+  key(again, { key: 'Escape' });
+  await sleep(200);
+  out.escClosed = !studio.state.quickOpen;
+  out.stayed = studio.state.active;
+  out.previewBack = !(await hidden());
+  for (const t of [...studio.state.tabs]) if (!saved.tabs.includes(t)) await studio.closeTab(t);
+  if (saved.active) await studio.openFile(saved.active);
+  return out;
+}
+
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
 async function tabChecks() {
   const out: Record<string, unknown> = {};
@@ -2891,6 +2943,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('slash')) result.slash = await slashChecks();
+    if (want('quickopen')) result.quickopen = await quickOpenChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

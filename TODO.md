@@ -116,7 +116,7 @@
 
 - [ ] the "selected" blue box with dashes doesnt look very pretty. can we make this more elegant and useful and less odd?
 
-- [ ] cmd + p for file browser ?
+- [x] cmd + p for file browser ?
 
 - [ ] update prompt to try to encourage consistent style ? specifically for figures? in this case, cetz diagrams i suppose?
 
