@@ -29,6 +29,7 @@ function Radio<T extends string>({ name, value, current, onChange, label, detail
 function ProjectSection() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const project = useStore(studio.store, (s) => s.project);
+  const code = useStore(studio.store, (s) => s.code);
   const [errors, setErrors] = useState<string[]>([]);
   const [outputDir, setOutputDir] = useState(project.settings.outputDir ?? '');
   useEffect(() => setOutputDir(project.settings.outputDir ?? ''), [project.settings.outputDir]);
@@ -121,6 +122,15 @@ function ProjectSection() {
           {e}
         </p>
       ))}
+      {code.trusted && (
+        <div className="settings-field">
+          <div className="settings-label">Code examples</div>
+          <div className="settings-list-row">
+            <span>Typst Studio may run this book’s code examples.</span>
+            <button onClick={() => studio.code.revokeTrust()}>Stop allowing</button>
+          </div>
+        </div>
+      )}
     </Section>
   );
 }

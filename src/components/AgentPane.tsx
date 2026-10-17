@@ -163,7 +163,16 @@ function ItemBody({ item }: { item: ChatItem }) {
       );
     }
     case 'notice':
-      return <div className={`notice ${item.tone}`}>{item.text}</div>;
+      return (
+        <div className={`notice ${item.tone}`}>
+          {item.text}
+          {item.action && (
+            <div className="notice-action">
+              <button onClick={() => void studio.send(item.action!.prompt)}>{item.action.label}</button>
+            </div>
+          )}
+        </div>
+      );
   }
 }
 

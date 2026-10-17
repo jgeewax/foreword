@@ -4,6 +4,8 @@
 // settings, a .gitignore and a starter WRITING_STYLE.md for the genre.
 import { serializeProjectSettings, PROJECT_FILE } from '../app/project-settings';
 import { STYLE_GUIDE_FILE, styleGuideTemplate, type StyleSection } from '../services/agent/style-guide';
+import { HELPER_FILE, OUTPUTS_FILE } from '../code/cells';
+import codeHelper from '../code/code.typ?raw';
 
 const RAW = import.meta.glob('./*/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -31,6 +33,8 @@ export type BookTemplate = {
   /** The file to open first. */
   firstFile: string;
   styleHints: Partial<Record<StyleSection, string>>;
+  /** Comes with runnable code examples (code.typ and an outputs file). */
+  code?: boolean;
 };
 
 export const TEMPLATES: BookTemplate[] = [
@@ -91,6 +95,29 @@ export const TEMPLATES: BookTemplate[] = [
 - Displayed equations \`$ ... $ <eq-name>\`, referred to as @eq-name.
 - Figures with a caption and a \`<fig-name>\` label.
 - End each chapter with \`#exercises[...]\`.`,
+    },
+  },
+  {
+    id: 'programming',
+    name: 'Programming book',
+    description: 'A technical book whose code examples run, show their real output, and can check it.',
+    details: 'New Computer Modern · runnable Python examples',
+    sizes: [
+      { label: '7 × 10 in', width: '7in', height: '10in' },
+      { label: '7.5 × 9.25 in', width: '7.5in', height: '9.25in' },
+      { label: 'US Letter (8.5 × 11 in)', width: '8.5in', height: '11in' },
+      { label: 'A4 (210 × 297 mm)', width: '210mm', height: '297mm' },
+    ],
+    defaultSize: 1,
+    firstFile: 'chapters/01-first-steps.typ',
+    code: true,
+    styleHints: {
+      Audience: 'Who is learning, and what do they already know? e.g. people new to Python who can use a terminal.',
+      'Voice and tone': 'e.g. practical and encouraging; show, then explain; one new idea per example.',
+      'Point of view and tense': 'e.g. "we" while working through examples, "you" in exercises; present tense.',
+      'Formatting in Typst': `- Code examples as \`#run("name", \`\`\`python … \`\`\`)\`, each with its own name; add \`expect:\` when the output is fixed.
+- Short inline code in backticks: \`print()\`.
+- Sections \`==\`; end chapters with \`#exercises[...]\`.`,
     },
   },
   {
@@ -182,6 +209,12 @@ export function templateFiles(template: BookTemplate, info: BookInfo): { path: s
     .sort((a, b) => a.path.localeCompare(b.path));
   return [
     ...files,
+    ...(template.code
+      ? [
+          { path: HELPER_FILE, text: codeHelper },
+          { path: OUTPUTS_FILE, text: '{}\n' },
+        ]
+      : []),
     { path: PROJECT_FILE, text: serializeProjectSettings({}, { entryPoint: 'main.typ', outputDir: 'export' }) },
     { path: '.gitignore', text: '# Exported PDFs\nexport/\n' },
     { path: STYLE_GUIDE_FILE, text: styleGuideTemplate(info.title.trim() || 'Untitled', template.styleHints) },

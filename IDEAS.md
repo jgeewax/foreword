@@ -42,3 +42,11 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Per-book permissions saved in `.typst-studio.json` (e.g. a shared book that's always read-only), overriding the app setting.
 - "Allow for this book" on a permission card. OpenCode supports saved permissions (`/api/permission/saved`); show and revoke them in Settings.
 - Show which rule decided a refusal ("Delete files: Never") in the failed tool's details.
+
+## Code examples
+- Examples that build on each other (a "session": later examples see earlier variables), like notebook cells.
+- Show plots: an example that writes an image (matplotlib `savefig`) gets it placed as a figure under the code.
+- Run examples in a sandbox (macOS `sandbox-exec` profile or a container) for books from other people.
+- Pinned environments: a requirements.txt / package.json next to the book, set up in a per-book virtualenv.
+- Test the whole book in CI: a small CLI that runs every example and fails on mismatches (same rules as code.typ).
+- More languages: TypeScript (deno/tsx), Go, Rust, C, Java (compile, then run).

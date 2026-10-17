@@ -351,6 +351,44 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Runnable code examples (technical books)
+
+- **Markup:** `#run("name", ```python …```, expect: "…")`, from a `code.typ`
+  helper that sits in the book. The book shows the code and the real output
+  stored in `code-output/outputs.json`, which is committed with the book, so
+  `typst compile` works without the app. The helper reads one JSON file
+  (always present) with `.at(name, default: none)`, because `read()` of a
+  missing per-example file would be a compile error.
+- **Out-of-date detection in Typst itself.** Each stored output keeps the code
+  that produced it, and the helper compares it with `src.text` (trimmed). Editing an example shows
+  "out of date" in the live preview at once, and expect mismatches show ✗,
+  with no hashing in Typst. The app parses examples with the same text rules
+  as Typst's raw blocks: fence newlines dropped, common indentation removed,
+  blank lines kept. This was cross-checked with `typst eval` on indented,
+  four-backtick and escaped cases.
+- **Running** (`code.rs`):
+  - the interpreter matching the language tag (python3, node, bash/zsh, ruby,
+    Rscript, julia, perl, lua), found like the other tools;
+  - a temp file, the book as working directory, stdin closed;
+  - 256 KB cap per stream and a 30 s timeout that kills the whole process
+    group, so child processes don't linger.
+  - Only for books the author trusts: asked once per book, remembered on this
+    Mac, revocable in Settings.
+- **App:**
+  - ▶ Run lenses above each example, with its status.
+  - A Code tab: run one, run what's stale, run all.
+  - A check before Export PDF: run them first / export anyway / cancel.
+  - Agent instructions: write examples, never run them, never edit
+    outputs.json.
+- **The loop:** after an assistant turn in a trusted book, changed examples
+  are re-run. Failures come back as a chat notice whose button asks the
+  assistant to fix them. Verified with gemini-3.8-flash: a planted bug in
+  `fib` came back as "expected …, got …"; the button got it fixed; the re-run
+  said "all fine". Tinymist picks up the rewritten outputs.json, and the
+  preview shows the real output.
+- **New template, "Programming book"**: textbook look, code styling and
+  sample Python examples.
+
 ### Assistant permissions
 
 - **Action names, checked against the server's own built-in agents** (OpenCode

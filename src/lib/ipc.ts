@@ -48,6 +48,13 @@ export const ipc = {
   /** New book: create `parent/name` with these files (never into an existing folder). Returns its path. */
   projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
     invoke<string>('project_create', { parent, name, files }),
+  /** Run one code example in the book folder (only for trusted books). */
+  codeRun: (lang: string, code: string, timeoutMs?: number) =>
+    invoke<{ stdout: string; stderr: string; exit: number | null; timedOut: boolean; truncated: boolean; durationMs: number; interpreter: string }>('code_run', {
+      lang,
+      code,
+      timeoutMs: timeoutMs ?? null,
+    }),
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
   /** New project from a Typst Universe template package (downloaded from packages.typst.org). */
   projectCreateFromPackage: (parent: string, name: string, pkg: { name: string; version: string }, extra: { path: string; text: string }[]) =>

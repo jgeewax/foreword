@@ -25,6 +25,9 @@ import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles } from '../templates';
 import { snippetInsertion } from '../help/guide';
+import { CodeRunner, initialCode, type CodeState } from '../code/runner';
+import { OUTPUTS_FILE } from '../code/cells';
+import { message } from '@tauri-apps/plugin-dialog';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
 import { referencesTo, removeIncludes, updateReferences } from './references';
@@ -53,7 +56,7 @@ export type ChatItem =
       patches: FilePatch[];
       state: 'pending' | 'sending' | 'once' | 'always' | 'reject';
     }
-  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error' };
+  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt: string } };
 
 export type Attachment = { id: string; label: string; selection: SourceSelection };
 
@@ -117,8 +120,10 @@ export type StudioState = {
   /** WRITING_STYLE.md: whether it exists, and whether the user dismissed the setup prompt. */
   styleGuide: { exists: boolean; chars: number; dismissed: boolean };
   history: HistoryState;
-  /** Left pane: the file tree or the book's history. */
-  sidebar: 'files' | 'history';
+  /** Runnable code examples in the book. */
+  code: CodeState;
+  /** Left pane: the file tree, the book's history, or its code examples. */
+  sidebar: 'files' | 'history' | 'code';
 };
 
 const initialState: StudioState = {
@@ -161,6 +166,7 @@ const initialState: StudioState = {
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false },
   history: initialHistory,
+  code: initialCode,
   sidebar: 'files',
 };
 
@@ -211,6 +217,25 @@ export class Studio {
    * (collapsing the pane, opening a book) and can be filled before it mounts.
    */
   composerDraft = '';
+  readonly code = new CodeRunner({
+    get: () => this.state.code,
+    set: (patch) => this.store.set((s) => ({ code: { ...s.code, ...patch } })),
+    root: () => this.state.workspace?.root ?? null,
+    files: () => this.state.workspace?.files ?? [],
+    docs: () => this.docs,
+    editFile: async (path, transform) => {
+      if (!(this.state.workspace?.files ?? []).includes(path) && !this.docs?.get(path)) {
+        await ipc.fsWrite(path, transform(''), await ipc.fsHash(path));
+        return true;
+      }
+      return this.editFile(path, transform);
+    },
+    confirm: (m, t, ok) => this.confirmAction(m, t, ok),
+    toast: (text, tone) => this.toast(text, tone),
+    notice: (text, tone, action) => this.pushItem({ kind: 'notice', id: uid('n'), tone, text, action }),
+    refreshFiles: () => this.refreshFiles(),
+  });
+  private codeScanTimer: number | undefined;
   /** The message of the agent turn in progress (names its history version). */
   private turnMessage = '';
 
@@ -331,7 +356,16 @@ export class Studio {
       this.store.set({ recent });
     }
     this.docs = new Documents(info.root, this.typst, {
-      onEdit: () => this.perf.edit(() => this.publishPerf()),
+      onEdit: (p) => {
+        this.perf.edit(() => this.publishPerf());
+        if (p.endsWith('.typ')) {
+          clearTimeout(this.codeScanTimer);
+          this.codeScanTimer = window.setTimeout(() => {
+            const doc = this.docs?.get(p);
+            if (doc) this.code.updateFile(p, doc.model.getValue());
+          }, 400);
+        }
+      },
       onDirtyChange: (p, dirty) => this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } })),
       onConflict: (p, message) =>
         this.store.set((s) => {
@@ -346,6 +380,7 @@ export class Studio {
     await this.loadProjectSettings();
     await this.loadStyleGuide();
     void this.history.start(this.historyExcludes());
+    void this.code.scan();
     void this.startTypst();
     void this.startAgent();
 
@@ -874,6 +909,14 @@ export class Studio {
     this.toast(`Created “${created.root.split('/').pop()}” from the ${paper.name} template (${paper.package.name} ${paper.package.version})`);
   }
 
+  /** Open a file with the cursor on a line (1-based). */
+  async openAt(path: string, line: number) {
+    await this.openFile(path);
+    this.editor?.setPosition({ lineNumber: line, column: 1 });
+    this.editor?.revealLineInCenter(line);
+    this.editor?.focus();
+  }
+
   showSidebar(view: StudioState['sidebar']) {
     this.store.set({ sidebar: view });
     if (view === 'history') void this.history.refresh().catch(() => {});
@@ -889,6 +932,7 @@ export class Studio {
   private async closeWorkspace() {
     if (!this.state.workspace) return;
     this.composerDraft = '';
+    this.code.reset();
     await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
@@ -931,7 +975,7 @@ export class Studio {
       const batch = [...this.pendingDisk];
       this.pendingDisk.clear();
       void this.docs?.diskChanged(batch);
-      void this.refreshFiles();
+      void this.refreshFiles().then(() => this.code.scan());
       this.history.scheduleSave();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
       if (batch.includes(STYLE_GUIDE_FILE)) void this.loadStyleGuide({ updateSession: true });
@@ -1187,7 +1231,10 @@ export class Studio {
     const wasRunning = this.state.agent.running;
     this.store.set((s) => ({ agent: { ...s.agent, ...(typeof patch === 'function' ? patch(s.agent) : patch) } }));
     // What the agent changed in this turn becomes one history version.
-    if (wasRunning && !this.state.agent.running) void this.history.afterAgent(this.turnMessage);
+    if (wasRunning && !this.state.agent.running) {
+      void this.history.afterAgent(this.turnMessage);
+      void this.code.afterAgentTurn();
+    }
   }
 
   async startAgent() {
@@ -1393,6 +1440,7 @@ export class Studio {
       projectName: ws.name,
       entry: ws.entry,
       typFiles: ws.files.filter((f) => f.endsWith('.typ')),
+      codeExamples: ws.files.includes(OUTPUTS_FILE) || this.state.code.cells.length > 0,
     });
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
@@ -1672,6 +1720,16 @@ export class Studio {
     if (!this.typst.running) {
       this.toast('Export needs the Typst preview running. Restart the preview and try again.', 'error');
       return;
+    }
+    // Code examples that aren't up to date would print "not run" / "out of date" notes in the PDF.
+    const stale = this.code.problems();
+    if (stale.length) {
+      const answer = await message(
+        `${stale.length} code example${stale.length > 1 ? 's are' : ' is'} not up to date, so the PDF would show that:\n\n${stale.slice(0, 8).join('\n')}${stale.length > 8 ? '\n…' : ''}`,
+        { title: 'Code examples', kind: 'warning', buttons: { yes: 'Run them, then export', no: 'Export anyway', cancel: 'Cancel' } },
+      );
+      if (answer === 'Cancel') return;
+      if (answer === 'Yes' || answer === 'Run them, then export') await this.code.runAll({ onlyStale: true });
     }
     this.store.set({ exporting: true });
     try {

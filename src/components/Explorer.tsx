@@ -4,6 +4,7 @@ import { studio } from '../app/studio';
 import { onContextMenu, type MenuEntry } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
+import { CodePanel } from './CodePanel';
 import { HistoryPanel } from './HistoryPanel';
 
 function FileTree() {
@@ -74,6 +75,7 @@ function FileTree() {
         { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
         { label: 'New File…', accelerator: 'CmdOrCtrl+N', action: () => void studio.newFile('') },
         { label: 'New Folder…', action: () => void studio.newFolder('') },
+        !studio.state.code.setUp && { label: 'Set Up Runnable Code…', action: () => void studio.code.setUp().then(() => studio.showSidebar('code')) },
         'separator',
         { label: 'Refresh', action: () => void studio.refreshFiles() },
         { label: 'Reveal Book Folder in Finder', action: () => void studio.reveal('') },
@@ -115,18 +117,36 @@ function PlacementButton({ to }: { to: 'tab' | 'below' }) {
 /** Files and History stacked, with a draggable divider. */
 function Stacked() {
   const ws = useStore(studio.store, (s) => s.workspace);
+  const view = useStore(studio.store, (s) => s.sidebar);
+  const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
+  const showCode = hasCode && view === 'code';
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-sidebar', storage: localStorage });
   return (
     <Group className="sidebar-stack" orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
       <Panel id="files" minSize="60px">
         <div className="sidebar-section">
           <header className="pane-header">
-            <span className="pane-title">{ws?.name ?? 'Files'}</span>
+            {hasCode ? (
+              <div className="sidebar-tabs" role="tablist">
+                <button role="tab" aria-selected={!showCode} className={!showCode ? 'active' : ''} onClick={() => studio.showSidebar('files')}>
+                  {ws?.name ?? 'Files'}
+                </button>
+                <button role="tab" aria-selected={showCode} className={showCode ? 'active' : ''} onClick={() => studio.showSidebar('code')}>
+                  Code
+                </button>
+              </div>
+            ) : (
+              <span className="pane-title">{ws?.name ?? 'Files'}</span>
+            )}
             <span className="spacer" />
-            <NewChapterButton />
-            <RefreshButton />
+            {!showCode && (
+              <>
+                <NewChapterButton />
+                <RefreshButton />
+              </>
+            )}
           </header>
-          <FileTree />
+          {showCode ? <CodePanel /> : <FileTree />}
         </div>
       </Panel>
       <Separator className="separator separator-h" />
@@ -148,6 +168,7 @@ export function Explorer() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const view = useStore(studio.store, (s) => s.sidebar);
   const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
+  const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
   if (placement === 'below') {
     return (
       <section className="pane explorer">
@@ -165,17 +186,22 @@ export function Explorer() {
           <button role="tab" aria-selected={view === 'history'} className={view === 'history' ? 'active' : ''} title="Saved versions of the book" onClick={() => studio.showSidebar('history')}>
             History
           </button>
+          {hasCode && (
+            <button role="tab" aria-selected={view === 'code'} className={view === 'code' ? 'active' : ''} title="Runnable code examples" onClick={() => studio.showSidebar('code')}>
+              Code
+            </button>
+          )}
         </div>
         {view === 'files' ? (
           <>
             <NewChapterButton />
             <RefreshButton />
           </>
-        ) : (
+        ) : view === 'history' ? (
           <PlacementButton to="below" />
-        )}
+        ) : null}
       </header>
-      {view === 'files' ? <FileTree /> : <HistoryPanel />}
+      {view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : <CodePanel />}
     </section>
   );
 }

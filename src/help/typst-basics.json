@@ -104,6 +104,18 @@
       ]
     },
     {
+      "title": "Code that runs (technical books)",
+      "items": [
+        {
+          "title": "Runnable examples",
+          "text": "Show code together with its real output. Run it with ▶ Run above the example; expect: checks the output. The file needs #import \"/code.typ\": run at the top (right-click the file list and choose Set Up Runnable Code to add code.typ).",
+          "code": "#run(\"greeting\", ```python\nprint(\"Hello\")\n```, expect: \"Hello\")",
+          "insert": true,
+          "compile": false
+        }
+      ]
+    },
+    {
       "title": "When something goes wrong",
       "items": [
         {

@@ -32,6 +32,7 @@
     "allow-fs-copy",
     "allow-fs-trash",
     "allow-clipboard-write",
+    "allow-code-run",
     "allow-typst-start",
     "allow-typst-send",
     "allow-typst-stop",

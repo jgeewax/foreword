@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { studio } from '../app/studio';
 import { monaco } from '../editor/monaco';
+import { cellStatus } from '../code/cells';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
@@ -64,6 +65,37 @@ export function EditorPane() {
         { label: 'Typst Basics', action: () => studio.openGuide() },
       ]);
     });
+    // ▶ Run above each code example, with its status.
+    const runCommand = monaco.editor.registerCommand('studio.runCodeExample', (_accessor, name: string) => void studio.code.run([name]));
+    const lensChanged = new monaco.Emitter<monaco.languages.CodeLensProvider>();
+    const lenses = monaco.languages.registerCodeLensProvider('typst', {
+      onDidChange: lensChanged.event,
+      provideCodeLenses: (model) => {
+        const path = studio.state.active;
+        if (!path || model !== editor.getModel() || !model.getValue().includes('#run(')) return { lenses: [], dispose() {} };
+        const { cells, outputs, running } = studio.state.code;
+        return {
+          lenses: cells
+            .filter((c) => c.path === path)
+            .flatMap((c) => {
+              const range = new monaco.Range(c.line, 1, c.line, 1);
+              const status = running.includes(c.name) ? 'running…' : { 'not-run': 'not run yet', ok: '✓ ok', outdated: '⚠ out of date', failed: '✗ failed', mismatch: '✗ wrong output' }[cellStatus(c, outputs[c.name])];
+              return [
+                { range, command: { id: 'studio.runCodeExample', title: `▶ Run ${c.name}`, arguments: [c.name] } },
+                { range, command: { id: '', title: status } },
+              ];
+            }),
+          dispose() {},
+        };
+      },
+    });
+    let lastCode = studio.state.code;
+    const offLens = studio.store.subscribe(() => {
+      if (studio.state.code !== lastCode) {
+        lastCode = studio.state.code;
+        lensChanged.fire(undefined as never);
+      }
+    });
     editor.onKeyDown((e) => {
       const ts = e.browserEvent.timeStamp;
       studio.perf.keyDown(ts > 1e12 ? ts : performance.timeOrigin + ts);
@@ -73,6 +105,9 @@ export function EditorPane() {
     const off = studio.events.on('focus-editor', () => editor.focus());
     return () => {
       off();
+      offLens();
+      lenses.dispose();
+      runCommand.dispose();
       studio.editor = null;
       editor.dispose();
     };

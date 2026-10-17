@@ -1,6 +1,7 @@
 mod agent;
 mod children;
 mod clipboard;
+mod code;
 mod discover;
 mod error;
 mod files;
@@ -390,6 +391,7 @@ pub fn run() {
             files::fs_copy,
             files::fs_trash,
             clipboard::clipboard_write,
+            code::code_run,
             lsp::typst_start,
             lsp::typst_send,
             lsp::typst_stop,

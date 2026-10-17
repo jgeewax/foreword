@@ -29,6 +29,14 @@ let failed = 0;
 for (const id of readdirSync(root).filter((n) => statSync(join(root, n)).isDirectory())) {
   const work = mkdtempSync(join(tmpdir(), `typst-template-${id}-`));
   cpSync(join(root, id), work, { recursive: true });
+  // Templates with runnable code get the helper and an (empty) outputs file, as in the app.
+  const chapters = join(work, 'chapters');
+  const sources = readFileSync(join(work, 'main.typ'), 'utf8') + (statSync(chapters, { throwIfNoEntry: false })?.isDirectory() ? readdirSync(chapters).map((f) => readFileSync(join(chapters, f), 'utf8')).join('') : '');
+  if (/"\/code\.typ"/.test(sources)) {
+    cpSync(new URL('../src/code/code.typ', import.meta.url).pathname, join(work, 'code.typ'));
+    mkdirSync(join(work, 'code-output'), { recursive: true });
+    writeFileSync(join(work, 'code-output/outputs.json'), '{}\n');
+  }
   fill(work);
   try {
     const args = ['compile', '--diagnostic-format', 'short', 'main.typ', 'out.pdf'];

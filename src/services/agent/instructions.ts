@@ -8,6 +8,8 @@ export type InstructionContext = {
   entry: string | null;
   /** Typst files in the project (paths relative to the root). */
   typFiles: string[];
+  /** The book has runnable code examples (code.typ). */
+  codeExamples?: boolean;
 };
 
 export const INSTRUCTIONS_KEY = 'typst-studio';
@@ -46,5 +48,13 @@ You are the writing assistant inside Typst Studio, an editor for books and long-
 ## Typst reminders
 - Markup: \`= Heading\`, \`*strong*\`, \`_emphasis_\`, \`$math$\`, \`<label>\` and \`@label\`, \`#include "file.typ"\`, \`#figure(...)\`, citations with \`@key\` against the bibliography (.bib).
 - This project uses Typst 0.15 (for example \`chevron.l\`/\`chevron.r\`, not \`angle.l\`/\`angle.r\`).
-`;
+${ctx.codeExamples ? CODE_SECTION : ''}`;
 }
+
+const CODE_SECTION = `
+## Runnable code examples
+- This book has code examples that Typst Studio runs: \`#run("name", \`\`\`python … \`\`\`)\` (helper: code.typ; import it with \`#import "/code.typ": run\`). The book shows the code and its real output, stored in code-output/outputs.json.
+- Give every example its own name. When the output is deterministic, add \`expect: "…"\` with the exact output, so the example becomes a test.
+- Don't run the examples yourself, and never edit code-output/outputs.json. After your turn, Typst Studio runs the examples you changed and tells you if any fail.
+- Keep examples short, self-contained and runnable as they are: no input() or network calls unless the chapter is about them.
+`;

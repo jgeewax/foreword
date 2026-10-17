@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-code-run"
+description = "Enables the code_run command without any pre-configured scope."
+commands.allow = ["code_run"]
+
+[[permission]]
+identifier = "deny-code-run"
+description = "Denies the code_run command without any pre-configured scope."
+commands.deny = ["code_run"]

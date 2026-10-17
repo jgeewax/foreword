@@ -729,6 +729,88 @@ async function journeyChecks() {
   return out;
 }
 
+/** Runnable code examples: run, outdated, and the assistant fix loop (a fresh programming book). */
+async function codeChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  await studio.createBook('programming', { title: `Code ${Date.now().toString(36)}`, author: 'Test' }, parent);
+  await waitFor(() => studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+  await waitFor(() => studio.state.code.cells.length > 0, 10000, 'cells').catch(() => {});
+  const statuses = () => Object.fromEntries(studio.state.code.cells.map((c) => [c.name, studio.code.status(c)]));
+  out.start = { cells: studio.state.code.cells.map((c) => `${c.name} (${c.lang}) ${c.path}:${c.line}`), setUp: studio.state.code.setUp, trusted: studio.state.code.trusted, statuses: statuses() };
+  const savedConfirm = studio.confirmAction;
+  studio.confirmAction = async () => true;
+
+  await studio.code.runAll();
+  await sleep(2500);
+  const outputs = JSON.parse((await ipc.fsRead('code-output/outputs.json')).text);
+  out.runAll = {
+    statuses: statuses(),
+    stored: Object.fromEntries(Object.entries(outputs).map(([k, v]: [string, any]) => [k, v.stdout.trim()])),
+    trusted: studio.state.code.trusted,
+    compile: studio.state.compile.status,
+  };
+  studio.showSidebar('code');
+  await studio.openFile('chapters/01-first-steps.typ');
+  {
+    const m = studio.editor!.getModel()!;
+    const l = m.getLinesContent().findIndex((x) => x.includes('for n in range')) + 1;
+    studio.editor!.setPosition({ lineNumber: l, column: 5 });
+    await studio.syncPreviewToCursor().catch(() => {});
+  }
+  await sleep(1500);
+  out.snapshotPanel = await snap('code-panel');
+  out.snapshotPreview = await snap('code-preview', 'preview');
+  out.lenses = [...document.querySelectorAll('.codelens-decoration a, .codelens-decoration span')].map((e) => e.textContent).filter(Boolean).slice(0, 6);
+
+  // Editing an example marks it out of date (in the app and in the book).
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => l.includes('print("Hello, reader!")')) + 1;
+  editor.executeEdits('selftest', [{ range: new monaco.Range(line, 1, line, model.getLineMaxColumn(line)), text: 'print("Hello, world!")' }]);
+  await sleep(900);
+  out.afterEdit = { hello: statuses().hello };
+  await studio.code.run(['hello']);
+  await sleep(500);
+  out.afterRerun = { hello: statuses().hello, problems: studio.code.problems() };
+  editor.trigger('selftest', 'undo', null);
+  await studio.save();
+  await studio.code.run(['hello']);
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    const policy = studio.state.settings.permissions;
+    studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
+    studio.newSession();
+    // Plant a bug, then let the assistant work: the changed examples are re-run after its turn.
+    await studio.openFile('chapters/02-functions.typ');
+    const m2 = studio.editor!.getModel()!;
+    const bugLine = m2.getLinesContent().findIndex((l) => l.includes('return n if n < 2')) + 1;
+    studio.editor!.executeEdits('selftest', [{ range: new monaco.Range(bugLine, 1, bugLine, m2.getLineMaxColumn(bugLine)), text: '    return n if n < 2 else fib(n - 1) + fib(n - 3)' }]);
+    await studio.save();
+    await askAgent('In chapters/01-first-steps.typ, add one more example called "sum" at the end of the Loops section that prints the sum of the numbers 1 to 100, with expect: "5050".');
+    await waitFor(() => studio.state.code.running.length === 0 && studio.state.agent.items.some((i) => i.kind === 'notice' && /code example/.test((i as any).text)), 60000, 'auto-run').catch(() => {});
+    const notice = [...studio.state.agent.items].reverse().find((i) => i.kind === 'notice' && /code example/.test((i as any).text)) as any;
+    out.agentTurn = { statuses: statuses(), notice: notice?.text, action: notice?.action?.label };
+    out.snapshotNotice = await snap('code-notice');
+    if (notice?.action) {
+      await askAgent(notice.action.prompt);
+      await waitFor(() => studio.state.code.running.length === 0, 60000, 'rerun').catch(() => {});
+      await sleep(3000);
+      const last = [...studio.state.agent.items].reverse().find((i) => i.kind === 'notice') as any;
+      out.fixTurn = { statuses: statuses(), notice: last?.text, fibLine: (await ipc.fsRead('chapters/02-functions.typ')).text.split('\n').find((l) => l.includes('return n if')) };
+    }
+    studio.updateSettings({ permissions: policy });
+  }
+  studio.code.revokeTrust();
+  studio.confirmAction = savedConfirm;
+  out.book = studio.state.workspace?.root;
+  studio.showSidebar('files');
+  await studio.openWorkspace(original);
+  return out;
+}
+
 /** Answer the next text prompt (New File, Rename…) as the author would. */
 async function answerPrompt(value: string) {
   await waitFor(() => !!studio.state.prompt, 5000, 'prompt');
@@ -1444,6 +1526,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (launch.selftestEdits && want('code')) {
+      log('code');
+      result.code = await codeChecks(launch.selftestAgent);
+    }
     if (launch.selftestEdits && want('files')) {
       log('files');
       result.files = await fileChecks();

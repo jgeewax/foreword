@@ -24,6 +24,7 @@ fn main() {
             "fs_copy",
             "fs_trash",
             "clipboard_write",
+            "code_run",
             "typst_start",
             "typst_send",
             "typst_stop",
