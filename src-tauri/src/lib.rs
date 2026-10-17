@@ -3,6 +3,7 @@ mod children;
 mod clipboard;
 mod discover;
 mod error;
+mod files;
 mod history;
 mod logs;
 mod lsp;
@@ -276,9 +277,12 @@ pub fn run() {
                     true,
                     Some("CmdOrCtrl+Alt+N"),
                 )?;
+                let new_file =
+                    MenuItem::with_id(handle, "new-file", "New File…", true, Some("CmdOrCtrl+N"))?;
                 file.prepend_items(&[
                     &new_book,
                     &new_chapter,
+                    &new_file,
                     &PredefinedMenuItem::separator(handle)?,
                     &export,
                     &PredefinedMenuItem::separator(handle)?,
@@ -311,6 +315,7 @@ pub fn run() {
                     "export-pdf",
                     "new-book",
                     "new-chapter",
+                    "new-file",
                     "typst-guide",
                 ]
                 .contains(&id)
@@ -380,6 +385,10 @@ pub fn run() {
             workspace::project_create,
             packages::project_create_from_package,
             workspace::reveal_in_finder,
+            files::fs_mkdir,
+            files::fs_rename,
+            files::fs_copy,
+            files::fs_trash,
             clipboard::clipboard_write,
             lsp::typst_start,
             lsp::typst_send,

@@ -31,3 +31,9 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Venue page limits: warn when the paper goes over (e.g. "NeurIPS: 9 pages of content").
 - Reorder chapters by dragging in the file tree, which rewrites the `#include` order and optionally renumbers the files.
 - "Install fonts" button: run the `brew install --cask …` command for the author, with a confirmation.
+
+## Files
+- Drag and drop in the file tree to move files. This would use the same rename logic, references included.
+- Inline rename in the tree (Enter or double-click on a name), like Finder.
+- Drop images from Finder onto the editor: copy them into figures/ and insert a `#figure(image(...))`.
+- "Unused files": images and chapters that nothing includes.

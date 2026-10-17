@@ -37,16 +37,26 @@ function FileTree() {
           style={{ paddingLeft: 8 + depth * 12 }}
           title={n.path}
           onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
-          onContextMenu={onContextMenu((): MenuEntry[] => [
-            !n.dir && { label: 'Open', action: () => void studio.openFile(n.path) },
-            (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
-            n.dir && { label: expanded.has(n.path) ? 'Collapse' : 'Expand', action: () => toggle(n.path) },
-            !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
-            'separator',
-            { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
-            { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(n.path), 'Path copied') },
-            { label: 'Copy Relative Path', action: () => studio.copy(n.path, 'Path copied') },
-          ])}
+          onContextMenu={onContextMenu((): MenuEntry[] => {
+            const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
+            return [
+              !n.dir && { label: 'Open', action: () => void studio.openFile(n.path) },
+              n.dir && { label: expanded.has(n.path) ? 'Collapse' : 'Expand', action: () => toggle(n.path) },
+              'separator',
+              { label: 'New File…', action: () => void studio.newFile(folder) },
+              { label: 'New Folder…', action: () => void studio.newFolder(folder) },
+              (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+              'separator',
+              { label: 'Rename…', action: () => void studio.renamePath(n.path) },
+              !n.dir && { label: 'Duplicate', action: () => void studio.duplicate(n.path) },
+              !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
+              { label: 'Move to Trash…', action: () => void studio.trashPath(n.path) },
+              'separator',
+              { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
+              { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(n.path), 'Path copied') },
+              { label: 'Copy Relative Path', action: () => studio.copy(n.path, 'Path copied') },
+            ];
+          })}
         >
           <span className="twisty">{n.dir ? (expanded.has(n.path) ? '▾' : '▸') : ''}</span>
           <span className={n.dir ? 'dir' : 'file'}>{n.name}</span>
@@ -62,6 +72,8 @@ function FileTree() {
       className="tree"
       onContextMenu={onContextMenu(() => [
         { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+        { label: 'New File…', accelerator: 'CmdOrCtrl+N', action: () => void studio.newFile('') },
+        { label: 'New Folder…', action: () => void studio.newFolder('') },
         'separator',
         { label: 'Refresh', action: () => void studio.refreshFiles() },
         { label: 'Reveal Book Folder in Finder', action: () => void studio.reveal('') },

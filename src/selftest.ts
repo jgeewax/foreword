@@ -728,6 +728,92 @@ async function journeyChecks() {
   return out;
 }
 
+/** Answer the next text prompt (New File, Rename…) as the author would. */
+async function answerPrompt(value: string) {
+  await waitFor(() => !!studio.state.prompt, 5000, 'prompt');
+  studio.answerPrompt(value);
+}
+
+/** Create, rename (file, folder, main file), duplicate and trash, on a fresh novel. */
+async function fileChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  await studio.createBook('novel', { title: `Files ${Date.now().toString(36)}`, author: 'Test' }, parent);
+  await waitFor(() => studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+  const savedConfirm = studio.confirmAction;
+  studio.confirmAction = async () => true;
+  const includes = async (main = 'main.typ') => (await ipc.fsRead(main)).text.split('\n').filter((l) => l.startsWith('#include'));
+  const settled = async () => {
+    await sleep(1200);
+    await waitFor(() => studio.state.compile.status !== 'compiling', 20000, 'compile').catch(() => {});
+  };
+
+  let p: Promise<unknown> = studio.newFile('');
+  await answerPrompt('notes/ideas.md');
+  await p;
+  out.newFile = { exists: studio.state.workspace!.files.includes('notes/ideas.md'), active: studio.state.active };
+
+  await studio.openFile('chapters/01-chapter-one.typ');
+  p = studio.renamePath('chapters/01-chapter-one.typ');
+  await answerPrompt('01-the-lighthouse.typ');
+  await p;
+  await settled();
+  out.renameFile = { includes: await includes(), active: studio.state.active, tabs: studio.state.tabs, errors: studio.state.problems.errors, toast: studio.state.toast?.text };
+
+  p = studio.renamePath('chapters');
+  await answerPrompt('parts');
+  await p;
+  await settled();
+  out.renameFolder = {
+    includes: await includes(),
+    files: studio.state.workspace!.files.filter((f) => f.startsWith('parts/') || f.startsWith('chapters/')),
+    tabs: studio.state.tabs,
+    errors: studio.state.problems.errors,
+    compile: studio.state.compile.status,
+  };
+
+  // Unsaved edits block a rename.
+  await studio.openFile('parts/02-chapter-two.typ');
+  studio.editor!.trigger('selftest', 'type', { text: 'x' });
+  p = studio.renamePath('parts/02-chapter-two.typ');
+  await answerPrompt('02-other.typ');
+  await p;
+  out.renameDirty = { stillThere: studio.state.workspace!.files.includes('parts/02-chapter-two.typ'), toast: studio.state.toast?.text };
+  studio.editor!.trigger('selftest', 'undo', null);
+  await sleep(200);
+
+  await studio.duplicate('parts/02-chapter-two.typ');
+  out.duplicate = { files: studio.state.workspace!.files.filter((f) => f.startsWith('parts/')), active: studio.state.active };
+
+  await studio.trashPath('parts/02-chapter-two.typ');
+  await settled();
+  out.trash = {
+    gone: !studio.state.workspace!.files.includes('parts/02-chapter-two.typ'),
+    includes: await includes(),
+    errors: studio.state.problems.errors,
+    compile: studio.state.compile.status,
+    toast: studio.state.toast?.text,
+  };
+
+  p = studio.renamePath('main.typ');
+  await answerPrompt('book.typ');
+  await p;
+  await sleep(3000);
+  await waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 30000, 'restart').catch(() => {});
+  out.renameMain = {
+    entry: studio.state.workspace?.entry,
+    settings: (await ipc.fsRead('.typst-studio.json')).text.trim(),
+    compile: studio.state.compile,
+    errors: studio.state.problems.errors,
+  };
+  out.snapshot = await snap('files-after');
+  out.book = studio.state.workspace?.root;
+  studio.confirmAction = savedConfirm;
+  await studio.openWorkspace(original);
+  return out;
+}
+
 /** Research papers from Typst Universe templates (downloads packages; agent fills in the title). */
 async function paperChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
@@ -1322,6 +1408,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (launch.selftestEdits && want('files')) {
+      log('files');
+      result.files = await fileChecks();
+    }
     if (launch.selftestEdits && want('papers')) {
       log('papers');
       result.papers = await paperChecks(launch.selftestAgent);

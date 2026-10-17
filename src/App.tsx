@@ -107,6 +107,12 @@ export function App() {
         void studio.exportPdf();
         return;
       }
+      if (e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey && e.key.toLowerCase() === 'n' && studio.state.workspace) {
+        e.preventDefault();
+        e.stopPropagation();
+        void studio.newFile();
+        return;
+      }
       if (e.metaKey && e.altKey && !e.shiftKey && !e.ctrlKey && e.code === 'KeyN') {
         e.preventDefault();
         e.stopPropagation();

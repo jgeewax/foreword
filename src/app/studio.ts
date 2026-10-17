@@ -27,6 +27,7 @@ import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLA
 import { snippetInsertion } from '../help/guide';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
+import { referencesTo, removeIncludes, updateReferences } from './references';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -266,6 +267,7 @@ export class Studio {
       if (e.payload === 'export-pdf') return void this.exportPdf();
       if (e.payload === 'new-book') return this.openNewBook();
       if (e.payload === 'new-chapter') return void this.newChapter();
+      if (e.payload === 'new-file') return void this.newFile();
       if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
@@ -379,6 +381,211 @@ export class Studio {
     this.syncPreviewVisibility();
     resolve?.(value);
   }
+
+  // ---- files: new, rename, duplicate, trash ---------------------------------------------
+
+  /** The folder new files go in by default: the active file's folder. */
+  private defaultFolder() {
+    const a = this.state.active;
+    return a?.includes('/') ? a.slice(0, a.lastIndexOf('/')) : '';
+  }
+
+  private static validName(name: string): string | null {
+    const n = name.trim().replace(/^\/+|\/+$/g, '');
+    if (!n || n.split('/').some((p) => !p || p === '.' || p === '..' || p.startsWith('.'))) return null;
+    return n;
+  }
+
+  /** Apply a text transform to a file: in its buffer if open (saved unless it had unsaved edits), else on disk. */
+  private async editFile(path: string, transform: (text: string) => string): Promise<boolean> {
+    const doc = this.docs?.get(path);
+    if (doc && this.docs) {
+      const before = doc.model.getValue();
+      const after = transform(before);
+      if (after === before) return false;
+      const wasDirty = this.docs.isDirty(doc);
+      const edit = minimalEdit(before, after);
+      if (edit) {
+        const start = doc.model.getPositionAt(edit.start);
+        const end = doc.model.getPositionAt(edit.end);
+        doc.model.pushEditOperations([], [{ range: monaco.Range.fromPositions(start, end), text: edit.text }], () => null);
+      }
+      if (!wasDirty) await this.docs.save(path);
+      return true;
+    }
+    const { text, hash } = await ipc.fsRead(path);
+    const after = transform(text);
+    if (after === text) return false;
+    await ipc.fsWrite(path, after, hash);
+    return true;
+  }
+
+  private typFiles() {
+    return (this.state.workspace?.files ?? []).filter((f) => f.endsWith('.typ'));
+  }
+
+  async newFile(folder = this.defaultFolder()) {
+    const answer = await this.prompt({
+      title: 'New file',
+      label: 'Name',
+      value: folder ? `${folder}/` : '',
+      placeholder: 'e.g. notes.typ or chapters/epilogue.typ',
+      okLabel: 'Create',
+      help: 'Folders in the name are created as needed.',
+    });
+    const path = answer && Studio.validName(answer);
+    if (answer && !path) return this.toast(`“${answer}” isn't a usable file name`, 'error');
+    if (!path) return;
+    try {
+      if (path.includes('/')) await ipc.fsMkdir(path.slice(0, path.lastIndexOf('/'))).catch(() => {});
+      await ipc.fsWrite(path, '', null);
+      await this.refreshFiles();
+      await this.openFile(path);
+    } catch (e) {
+      this.toast(`Couldn't create ${path}: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  async newFolder(folder = this.defaultFolder()) {
+    const answer = await this.prompt({ title: 'New folder', label: 'Name', value: folder ? `${folder}/` : '', placeholder: 'e.g. figures', okLabel: 'Create' });
+    const path = answer && Studio.validName(answer);
+    if (answer && !path) return this.toast(`“${answer}” isn't a usable folder name`, 'error');
+    if (!path) return;
+    try {
+      await ipc.fsMkdir(path);
+      await this.refreshFiles();
+      this.toast(`Created ${path}/ (it shows in the file list once it has a file in it)`);
+    } catch (e) {
+      this.toast(`Couldn't create ${path}: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** Open tabs inside `path` (a file or a folder). */
+  private tabsUnder(path: string) {
+    return this.state.tabs.filter((t) => t === path || t.startsWith(`${path}/`));
+  }
+
+  /**
+   * Rename a file or folder (in place), then point every reference in the
+   * book's .typ files at the new name, and move open tabs along. Refuses while
+   * an affected file has unsaved edits.
+   */
+  async renamePath(path: string) {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    const name = path.split('/').pop()!;
+    const dir = path.slice(0, path.length - name.length).replace(/\/$/, '');
+    const answer = await this.prompt({ title: `Rename ${name}`, label: 'New name', value: name, okLabel: 'Rename', help: 'References to it in the book (#include, images…) are updated too.' });
+    if (!answer || answer.trim() === name) return;
+    const newName = answer.trim();
+    if (newName.includes('/') || !Studio.validName(newName)) return this.toast(`“${newName}” isn't a usable name`, 'error');
+    const to = dir ? `${dir}/${newName}` : newName;
+    const open = this.tabsUnder(path);
+    const dirty = open.filter((t) => this.state.dirty[t]);
+    if (dirty.length) return this.toast(`Save or close ${dirty.join(', ')} first: it has unsaved changes.`, 'error');
+    const active = this.state.active;
+    for (const t of open) await this.closeTab(t);
+    try {
+      await ipc.fsRename(path, to);
+    } catch (e) {
+      for (const t of open) await this.openFile(t, { activate: false }).catch(() => {});
+      return this.toast(`Couldn't rename: ${errorMessage(e)}`, 'error');
+    }
+    // References: every .typ file, at its new location if it moved too.
+    let updated = 0;
+    const files: string[] = [];
+    const moved = (f: string) => (f === path || f.startsWith(`${path}/`) ? to + f.slice(path.length) : f);
+    for (const was of this.typFiles()) {
+      const now = moved(was);
+      try {
+        let count = 0;
+        const changed = await this.editFile(now, (text) => {
+          const r = updateReferences(text, now, path, to, was);
+          count = r.count;
+          return r.text;
+        });
+        if (changed) {
+          updated += count;
+          files.push(now);
+        }
+      } catch (e) {
+        this.toast(`Renamed, but couldn't update references in ${now}: ${errorMessage(e)}`, 'error');
+      }
+    }
+    // The file list must know the new name before the main file can point at it.
+    await this.refreshFiles();
+    if (ws.entry && (ws.entry === path || ws.entry.startsWith(`${path}/`))) await this.setEntryPoint(moved(ws.entry));
+    for (const t of open) await this.openFile(moved(t), { activate: false }).catch(() => {});
+    if (active && open.includes(active)) await this.openFile(moved(active)).catch(() => {});
+    this.toast(`Renamed to ${newName}${updated ? `; updated ${updated} reference${updated > 1 ? 's' : ''} in ${files.join(', ')}` : ''}`);
+  }
+
+  async duplicate(path: string) {
+    const name = path.split('/').pop()!;
+    const dot = name.lastIndexOf('.');
+    const [stem, ext] = dot > 0 ? [path.slice(0, path.length - name.length + dot), name.slice(dot)] : [path, ''];
+    const files = new Set(this.state.workspace?.files ?? []);
+    let copy = `${stem} copy${ext}`;
+    for (let i = 2; files.has(copy); i++) copy = `${stem} copy ${i}${ext}`;
+    try {
+      if (this.state.dirty[path]) await this.save(path);
+      await ipc.fsCopy(path, copy);
+      await this.refreshFiles();
+      await this.openFile(copy);
+    } catch (e) {
+      this.toast(`Couldn't duplicate ${path}: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /**
+   * Move a file or folder to the Trash, after confirming. Whole-line
+   * #include lines for it are removed too (otherwise the book stops
+   * compiling); other references are named in the confirmation.
+   */
+  async trashPath(path: string) {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    const refs: { file: string; include: boolean }[] = [];
+    for (const f of this.typFiles()) {
+      if (f === path || f.startsWith(`${path}/`)) continue;
+      const doc = this.docs?.get(f);
+      const text = doc ? doc.model.getValue() : await ipc.fsRead(f).then((r) => r.text, () => '');
+      for (const ref of referencesTo(text, f, path)) refs.push({ file: f, include: ref.wholeInclude });
+    }
+    const includeFiles = [...new Set(refs.filter((r) => r.include).map((r) => r.file))];
+    const otherFiles = [...new Set(refs.filter((r) => !r.include).map((r) => r.file))];
+    const dirty = this.tabsUnder(path).filter((t) => this.state.dirty[t]);
+    const lines = [
+      `Move “${path}” to the Trash? You can put it back from the Trash in Finder, and History keeps a copy.`,
+      includeFiles.length ? `Its #include line in ${includeFiles.join(', ')} will be removed too.` : '',
+      otherFiles.length ? `${otherFiles.join(', ')} also refer${otherFiles.length === 1 ? 's' : ''} to it, and won't compile until you change that.` : '',
+      dirty.length ? `Unsaved changes in ${dirty.join(', ')} will be lost.` : '',
+    ].filter(Boolean);
+    if (!(await this.confirmAction(lines.join('\n\n'), 'Move to Trash', 'Move to Trash'))) return;
+    for (const t of this.tabsUnder(path)) {
+      this.store.set((st) => ({ dirty: { ...st.dirty, [t]: false } }));
+      await this.closeTab(t);
+    }
+    try {
+      await ipc.fsTrash(path);
+    } catch (e) {
+      return this.toast(`Couldn't move it to the Trash: ${errorMessage(e)}`, 'error');
+    }
+    let removed = 0;
+    for (const f of includeFiles) {
+      await this.editFile(f, (text) => {
+        const r = removeIncludes(text, f, path);
+        removed += r.count;
+        return r.text;
+      }).catch((e) => this.toast(`Couldn't update ${f}: ${errorMessage(e)}`, 'error'));
+    }
+    await this.refreshFiles();
+    this.toast(`Moved ${path} to the Trash${removed ? ` and removed its #include from ${includeFiles.join(', ')}` : ''}`);
+  }
+
+  /** A yes/no question (native dialog; the self-test overrides it). */
+  confirmAction: (message: string, title: string, okLabel: string) => Promise<boolean> = (message, title, okLabel) =>
+    ask(message, { title, kind: 'warning', okLabel, cancelLabel: 'Cancel' });
 
   // ---- chapters -----------------------------------------------------------------------
 

@@ -351,6 +351,37 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Files: create, rename, duplicate, trash
+
+- **Where:** in the file tree's right-click menu (New File, New Folder, New
+  Chapter, Rename, Duplicate, Use as Main File, Move to Trash) and in File →
+  New File (⌘N). Names go through the in-app text dialog.
+- **Rust commands** (`files.rs`): mkdir, rename, copy, trash.
+  - Every path goes through `workspace::resolve`, so it stays inside the book.
+  - Nothing is ever overwritten.
+  - Deleting means NSFileManager `trashItemAtURL`, i.e. the macOS Trash, never
+    `remove_file`.
+- **Renames keep the book compiling.** Every `.typ` file's path arguments are
+  rewritten to the new location: `#include`, `#import`, `image`,
+  `bibliography`, `read`/`json`/`csv`/…, relative or root-absolute (`/x`).
+  Packages are skipped. This includes relative paths inside files that moved
+  with a renamed folder.
+  - Open buffers are edited in place (undoable) and saved unless they were
+    dirty; closed files are written with the expected hash.
+  - Renaming the main file updates `.typst-studio.json` and restarts the
+    preview. The file list is refreshed first, or validation rejects the new
+    name.
+  - Open tabs move with the file. A rename is refused while an affected file
+    has unsaved edits.
+- **Move to Trash** confirms first, naming the references. Whole-line
+  `#include` lines for the item are removed; other references are only named.
+- Verified in-app on a fresh novel: rename a chapter, the chapters folder and
+  main.typ; duplicate; trash. Includes, tabs and the setting all follow, with
+  0 errors throughout.
+- The self-test's trash step puts real files in the Trash. Terminals can't
+  open `~/.Trash` without Full Disk Access, so they can't be cleaned up from
+  here.
+
 ### New-book journey: sizes, chapters, research papers
 
 - **Page sizes.** Each template offers trim sizes plus Custom. The size is a
