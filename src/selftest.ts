@@ -257,6 +257,36 @@ async function styleGuideChecks() {
   return out;
 }
 
+/** Agent replies render as Markdown (headings, lists, emphasis, code, math kept verbatim). */
+async function markdownChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.newSession();
+  const reply = await askAgent(
+    'Without reading or changing any files, reply using Markdown: a "###" heading "Checklist", a numbered list of two items where the first has a **bold** word, ' +
+      'one bulleted item containing the inline code `#set page()`, a sentence with the Typst math $a_i + b_i$, and a fenced ```typst code block with `= Intro`.',
+  );
+  await sleep(300);
+  const msg = [...document.querySelectorAll('.msg.assistant')].pop();
+  const out: Record<string, unknown> = {
+    replyStart: reply.slice(0, 400),
+    rawMarkersVisible: /(^|\n)#{1,6} |\*\*/.test(msg?.textContent ?? ''),
+    heading: !!msg?.querySelector('h3,h4,h5,h6'),
+    orderedItems: msg?.querySelectorAll('ol > li').length ?? 0,
+    bulletItems: msg?.querySelectorAll('ul > li').length ?? 0,
+    strong: !!msg?.querySelector('strong'),
+    inlineCode: [...(msg?.querySelectorAll('code:not(.md-math)') ?? [])].map((c) => c.textContent),
+    math: [...(msg?.querySelectorAll('code.md-math') ?? [])].map((c) => c.textContent),
+    codeBlock: msg?.querySelector('pre.md-code')?.textContent ?? null,
+    noScriptOrLinks: !msg?.querySelector('script,a,iframe,img'),
+  };
+  try {
+    out.snapshot = await ipc.previewSnapshot('markdown', 'main');
+  } catch (e) {
+    out.snapshot = errorMessage(e);
+  }
+  return out;
+}
+
 /** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
@@ -517,6 +547,8 @@ const summary = (s: LatencyStats) => ({
 
 export async function runSelftest(launch: LaunchOptions) {
   const result: Record<string, any> = { startedAt: new Date().toISOString(), msSinceNavigationAtInit: Math.round(performance.now()) };
+  const only = launch.selftestOnly?.split(',').map((x) => x.trim());
+  const want = (group: string) => !only || only.includes(group);
   try {
     log('start');
     const ws = await waitFor(() => studio.state.workspace, 30000, 'workspace');
@@ -538,102 +570,124 @@ export async function runSelftest(launch: LaunchOptions) {
     const diskBefore = await ipc.fsHash(chapter);
     const line = model.getLinesContent().findIndex((l) => /^[A-Za-z]/.test(l)) + 1;
     await sleep(1500);
-    log('preview checks');
-    result.previewChecks = await previewChecks(chapter, editor);
+    if (want('preview')) {
+      log('preview checks');
+      result.previewChecks = await previewChecks(chapter, editor);
+    }
 
-    log('geometry');
-    const body = document.querySelector('.preview-body')!.getBoundingClientRect();
-    result.geometry = {
-      main: await ipc.nativeGeometry('main').catch(errorMessage),
-      preview: await ipc.nativeGeometry('preview').catch(errorMessage),
-      frames: await ipc.webviewFrames(),
-      previewBodyCss: { x: body.left, y: body.top, width: body.width, height: body.height },
-      cssViewport: { width: innerWidth, height: innerHeight },
-      zoom: studio.state.zoom,
-      inset: studio.viewportInset,
-    };
-    {
-      // Native check, independent of Tauri's coordinates: AppKit frames are bottom-up.
-      const g = result.geometry;
-      const win = (g.main as any)?.windowFrame?.[1];
-      const pf = (g.preview as any)?.webviewFrame;
-      if (win && pf) {
-        const previewTop = win - (pf[1] + pf[3]);
-        const bodyTop = studio.viewportInset.top + body.top * studio.state.zoom;
-        result.geometry.previewTopVsPane = { previewTopPt: previewTop, paneBodyTopPt: bodyTop, offBy: previewTop - bodyTop };
+    if (want('geometry')) {
+      log('geometry');
+      const body = document.querySelector('.preview-body')!.getBoundingClientRect();
+      result.geometry = {
+        main: await ipc.nativeGeometry('main').catch(errorMessage),
+        preview: await ipc.nativeGeometry('preview').catch(errorMessage),
+        frames: await ipc.webviewFrames(),
+        previewBodyCss: { x: body.left, y: body.top, width: body.width, height: body.height },
+        cssViewport: { width: innerWidth, height: innerHeight },
+        zoom: studio.state.zoom,
+        inset: studio.viewportInset,
+      };
+      {
+        // Native check, independent of Tauri's coordinates: AppKit frames are bottom-up.
+        const g = result.geometry;
+        const win = (g.main as any)?.windowFrame?.[1];
+        const pf = (g.preview as any)?.webviewFrame;
+        if (win && pf) {
+          const previewTop = win - (pf[1] + pf[3]);
+          const bodyTop = studio.viewportInset.top + body.top * studio.state.zoom;
+          result.geometry.previewTopVsPane = { previewTopPt: previewTop, paneBodyTopPt: bodyTop, offBy: previewTop - bodyTop };
+        }
       }
     }
-    log('zoom checks');
-    result.zoomChecks = await zoomChecks();
-    log('settings checks');
-    result.settingsChecks = await settingsChecks();
-    log('model picker checks');
-    result.modelPickerChecks = await modelPickerChecks();
-
-    editor.setPosition({ lineNumber: line, column: 1 });
-    editor.revealLineInCenter(line);
-    editor.focus();
-    await sleep(2000);
-
-    // Isolated keystrokes through Monaco's typing pipeline.
-    log(`typing into ${chapter}:${line}`);
-    studio.perf.editToPreview.clear();
-    const editorPaint = new LatencyStats();
-    let missedPaints = 0;
-    for (let i = 0; i < 20; i++) {
-      const t = clock();
-      editor.trigger('selftest', 'type', { text: 'x' });
-      if (await nextPaint()) editorPaint.add(clock() - t);
-      else missedPaints++;
-      await sleep(500);
+    if (want('zoom')) {
+      log('zoom checks');
+      result.zoomChecks = await zoomChecks();
     }
-    result.missedPaints = missedPaints;
-    const isolated = { editorPaint: summary(editorPaint), editToPreview: summary(studio.perf.editToPreview) };
-
-    // Burst at ~100 wpm; the compiled word count proves the unsaved text reached Tinymist.
-    log('burst');
-    await sleep(800);
-    const wordsBefore = studio.state.compile.words ?? null;
-    studio.perf.editToPreview.clear();
-    const burstPaint = new LatencyStats();
-    for (const ch of ' selftest words reach the live preview ') {
-      const t = clock();
-      editor.trigger('selftest', 'type', { text: ch });
-      afterNextPaint(() => burstPaint.add(clock() - t));
-      await sleep(60);
+    if (want('settings')) {
+      log('settings checks');
+      result.settingsChecks = await settingsChecks();
     }
-    await sleep(2000);
-    const wordsAfter = studio.state.compile.words ?? null;
-    const burst = { editorPaint: summary(burstPaint), editToPreview: summary(studio.perf.editToPreview), wordsBefore, wordsAfter };
+    if (want('models')) {
+      log('model picker checks');
+      result.modelPickerChecks = await modelPickerChecks();
+    }
 
-    // Undo everything: the buffer returns to its saved state; nothing was written.
-    log('undo');
-    for (let i = 0; i < 500 && model.canUndo(); i++) await model.undo();
-    await sleep(800);
-    result.typing = {
-      chapter,
-      isolated,
-      burst,
-      restored: model.getValue() === original,
-      dirtyAfterUndo: !!studio.state.dirty[chapter],
-      diskUntouched: (await ipc.fsHash(chapter)) === diskBefore,
-    };
+    if (want('typing')) {
+      editor.setPosition({ lineNumber: line, column: 1 });
+      editor.revealLineInCenter(line);
+      editor.focus();
+      await sleep(2000);
 
-    if (launch.selftestAgent) {
+      // Isolated keystrokes through Monaco's typing pipeline.
+      log(`typing into ${chapter}:${line}`);
+      studio.perf.editToPreview.clear();
+      const editorPaint = new LatencyStats();
+      let missedPaints = 0;
+      for (let i = 0; i < 20; i++) {
+        const t = clock();
+        editor.trigger('selftest', 'type', { text: 'x' });
+        if (await nextPaint()) editorPaint.add(clock() - t);
+        else missedPaints++;
+        await sleep(500);
+      }
+      result.missedPaints = missedPaints;
+      const isolated = { editorPaint: summary(editorPaint), editToPreview: summary(studio.perf.editToPreview) };
+
+      // Burst at ~100 wpm; the compiled word count proves the unsaved text reached Tinymist.
+      log('burst');
+      await sleep(800);
+      const wordsBefore = studio.state.compile.words ?? null;
+      studio.perf.editToPreview.clear();
+      const burstPaint = new LatencyStats();
+      for (const ch of ' selftest words reach the live preview ') {
+        const t = clock();
+        editor.trigger('selftest', 'type', { text: ch });
+        afterNextPaint(() => burstPaint.add(clock() - t));
+        await sleep(60);
+      }
+      await sleep(2000);
+      const wordsAfter = studio.state.compile.words ?? null;
+      const burst = { editorPaint: summary(burstPaint), editToPreview: summary(studio.perf.editToPreview), wordsBefore, wordsAfter };
+
+      // Undo everything: the buffer returns to its saved state; nothing was written.
+      log('undo');
+      for (let i = 0; i < 500 && model.canUndo(); i++) await model.undo();
+      await sleep(800);
+      result.typing = {
+        chapter,
+        isolated,
+        burst,
+        restored: model.getValue() === original,
+        dirtyAfterUndo: !!studio.state.dirty[chapter],
+        diskUntouched: (await ipc.fsHash(chapter)) === diskBefore,
+      };
+    }
+
+    if (launch.selftestAgent && want('agent')) {
       log('agent');
       result.agent = await agentTurn(chapter, line);
     }
-    if (launch.selftestEdits) {
+    if (launch.selftestAgent && want('markdown')) {
+      log('markdown');
+      result.markdown = await markdownChecks();
+    }
+    if (launch.selftestEdits && want('project')) {
       log('project settings');
       result.projectSettings = await projectSettingsChecks();
     }
     if (launch.selftestEdits && launch.selftestAgent) {
-      log('style guide');
-      result.styleGuide = await styleGuideChecks();
-      log('plan mode');
-      result.planMode = await planModeChecks();
-      log('edit policy');
-      result.editPolicy = await editPolicyChecks();
+      if (want('style')) {
+        log('style guide');
+        result.styleGuide = await styleGuideChecks();
+      }
+      if (want('plan')) {
+        log('plan mode');
+        result.planMode = await planModeChecks();
+      }
+      if (want('edits')) {
+        log('edit policy');
+        result.editPolicy = await editPolicyChecks();
+      }
     }
     result.perfHud = studio.state.perf;
     result.ok = true;

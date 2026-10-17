@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
 import { useStore } from '../lib/store';
+import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
-
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -36,7 +36,11 @@ function Item({ item }: { item: ChatItem }) {
         </div>
       );
     case 'assistant':
-      return <div className={`msg assistant${item.done ? '' : ' streaming'}`}>{item.text}</div>;
+      return (
+        <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
+          <Markdown text={item.text} />
+        </div>
+      );
     case 'tool':
       return (
         <details className={`tool ${item.status}`}>

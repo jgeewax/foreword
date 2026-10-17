@@ -24,6 +24,8 @@ export type LaunchOptions = {
   selftestOut: string | null;
   selftestAgent: boolean;
   selftestEdits: boolean;
+  /** Comma-separated self-test groups to run (all when null). */
+  selftestOnly: string | null;
 };
 export type Bounds = { x: number; y: number; width: number; height: number };
 export type AgentInfo = { baseUrl: string; bin: string };
