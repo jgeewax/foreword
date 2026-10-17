@@ -12,7 +12,21 @@ import type { AgentAdapter, AgentEvent, ModelInfo, ModelRef, PermissionDecision 
  * unknown ask first. Rules are last-match-wins (verified: reads ran without a
  * prompt, an edit raised permission.asked). Subagents ("task") are denied
  * because they run under their agent's own allow-all rules.
+ *
+ * The preview compiles live, so Typst build commands are denied outright
+ * (TODO: never compile). The shell tool's permission action is `shell` and its
+ * resource is the full command line (verified: `typst compile …` is refused
+ * with "Permission denied: shell", no prompt, no output written).
  */
+export const NO_COMPILE_RULES = [
+  { action: 'shell', resource: 'typst *', effect: 'deny' },
+  { action: 'shell', resource: '*typst compile*', effect: 'deny' },
+  { action: 'shell', resource: '*typst c *', effect: 'deny' },
+  { action: 'shell', resource: '*typst watch*', effect: 'deny' },
+  { action: 'shell', resource: '*typst w *', effect: 'deny' },
+  { action: 'shell', resource: '*tinymist*', effect: 'deny' },
+] as const;
+
 export const SESSION_PERMISSIONS = [
   { action: '*', resource: '*', effect: 'ask' },
   { action: 'read', resource: '*', effect: 'allow' },
@@ -23,6 +37,7 @@ export const SESSION_PERMISSIONS = [
   { action: 'read', resource: '*.env.*', effect: 'ask' },
   { action: 'external_directory', resource: '*', effect: 'ask' },
   { action: 'task', resource: '*', effect: 'deny' },
+  ...NO_COMPILE_RULES,
 ] as const;
 
 export class AgentApiError extends Error {

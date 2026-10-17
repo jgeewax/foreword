@@ -28,6 +28,12 @@ describe('buildInstructions', () => {
     expect(text).toMatch(/one to three plain sentences/);
   });
 
+  it('says the preview is live and forbids compiling or offering to compile', () => {
+    expect(text).toContain('## The preview is live');
+    expect(text).toMatch(/Never compile, build, render, or export/);
+    expect(text).toMatch(/never offer to do so/);
+  });
+
   it('caps long file lists', () => {
     const many = Array.from({ length: 100 }, (_, i) => `chapters/ch${i}.typ`);
     const long = buildInstructions({ ...ctx, typFiles: many });

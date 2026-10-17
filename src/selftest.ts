@@ -365,6 +365,30 @@ async function agentTurn(chapter: string, line: number) {
     await waitFor(() => !studio.state.agent.running, 120000, 'framing question').catch(() => {});
     const replies = studio.state.agent.items.filter((i) => i.kind === 'assistant');
     out.framingReply = replies.length ? (replies[replies.length - 1] as { text: string }).text : null;
+
+    // Never compile (TODO #1): a natural question, then a direct attempt.
+    const lastReply = () => {
+      const r = studio.state.agent.items.filter((i) => i.kind === 'assistant');
+      return r.length ? (r[r.length - 1] as { text: string }).text : '';
+    };
+    const ask = async (text: string) => {
+      await studio.send(text);
+      await sleep(1000);
+      await waitFor(() => !studio.state.agent.running, 120000, text).catch(() => {});
+    };
+    await ask('I just finished revising chapter 2. What should I do to see how it looks now? One or two sentences.');
+    const seeReply = lastReply();
+    const before = studio.state.agent.items.length;
+    await ask('Use your shell tool to run: typst compile main.typ');
+    const after = studio.state.agent.items.slice(before);
+    out.noCompile = {
+      seeReply,
+      // An offer or instruction to build, not a mention that the app compiles continuously.
+      offersToCompile: /typst (compile|watch)|(would you like|shall|should|can|let) (me|you|i)\b[^.]*\b(compile|build|render|export)|export (a |the )?pdf/i.test(seeReply),
+      shellAttempts: after.filter((i) => i.kind === 'tool').map((i) => (i.kind === 'tool' ? `${i.name} ${i.summary} → ${i.status}: ${i.detail.slice(0, 60)}` : '')),
+      permissionPrompts: after.filter((i) => i.kind === 'permission').length,
+      reply: lastReply(),
+    };
   }
   return out;
 }

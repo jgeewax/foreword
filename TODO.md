@@ -1,6 +1,6 @@
 # TODO
 
-- [ ] Since we are live previewing by default, AI agents should NEVER EVER offer to compile
+- [x] Since we are live previewing by default, AI agents should NEVER EVER offer to compile
 
 - [ ] setting for whether its enter or command+enter in the ai chatbox. default o just enter (shift enter for new line)
 
