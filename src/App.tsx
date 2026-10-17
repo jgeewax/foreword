@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { studio } from './app/studio';
 import { AgentPane } from './components/AgentPane';
@@ -26,11 +26,22 @@ function Workbench() {
   const agent = usePanelRef();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-panes', storage: localStorage });
 
+  // Which panes are showing (for the toolbar's toggles).
+  const [visible, setVisible] = useState({ explorer: true, preview: true, agent: true });
+  const readVisible = useCallback(() => {
+    setVisible({ explorer: !explorer.current?.isCollapsed(), preview: !preview.current?.isCollapsed(), agent: !agent.current?.isCollapsed() });
+  }, [explorer, preview, agent]);
+  useEffect(() => {
+    const t = setTimeout(readVisible, 0);
+    return () => clearTimeout(t);
+  }, [readVisible]);
+
   const toggle = (pane: 'explorer' | 'preview' | 'agent') => {
     const p = { explorer, preview, agent }[pane].current;
     if (!p) return;
     if (p.isCollapsed()) p.expand();
     else p.collapse();
+    readVisible();
   };
 
   useEffect(
@@ -65,7 +76,7 @@ function Workbench() {
 
   return (
     <div className="app">
-      <Toolbar onToggle={toggle} />
+      <Toolbar onToggle={toggle} visible={visible} />
       <Group
         className="panes"
         orientation="horizontal"
@@ -74,6 +85,7 @@ function Workbench() {
         onLayoutChanged={(layout, meta) => {
           onLayoutChanged(layout, meta);
           notifyLayout();
+          readVisible();
         }}
       >
         <Panel id="explorer" panelRef={explorer} defaultSize="15%" minSize="140px" collapsible>

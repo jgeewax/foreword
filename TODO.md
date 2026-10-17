@@ -67,3 +67,37 @@
 - [x] i want to be able to see what edits were made on a file by the ai
 
 - [x] in history, i want to understand the delta from one version/commit to the next
+
+- [ ] add thinking animations, something to the user know things are happening in the ai chatbox
+
+- [ ] less engineery tool calls (read/grep => Reading Chapter 4 (lines 1-200) / Searching for "xyz")
+
+- [ ] i cant switch tasks and have multiple tasks going at the same time... thats aproblem. i need to be able to multi-task
+
+- [ ] easily see which tasks are in progress and group by those so i can easily switch around and see whats going on
+
+- [ ] allow chat interruptions, queueing by default, push to interrupt if needed
+
+- [ ] question answering like in claude code (prompt for multiple choice or free text, give access to those tools)
+
+- [ ] much more animation when things are in progress. it needs to feel extra fast.
+
+- [ ] a full settings UI, available from menu as well as teh teeny tiny gear icon, make it larger, not narrow panel.
+
+- [ ] basic tools for the common things so we dont have to approve shell commands (e.g., we should never have to approve an ls command. thats crazy)
+
+- [ ] review mode is ... iffy at best. we need to think this through more thoroughly
+
+- [ ] export pdf doesnt tellme where to save it..
+
+- [ ] the review tab is crushed, i can barely see the title
+
+- [ ] ability to open main.pdf to see the preview
+
+- [x] the preview panels selector icons are TINY (got way too small. lets fix teh size of that ? make them always at least a certain size?)
+
+- [ ] indicate which CLIs we can run by default? like python, etc? maybe in a config file like how claude code does it ?
+
+- [ ] save all settings in the config file?
+
+- [ ] similar keyboard shortcuts for tab management as vs code (cmd+k w for closing all, etc)

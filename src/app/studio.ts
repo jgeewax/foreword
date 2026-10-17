@@ -2672,6 +2672,8 @@ export class Studio {
     this.zoomFactor = factor;
     const applied = await ipc.setUiZoom(factor);
     this.zoomFactor = applied;
+    // CSS can keep some controls a usable size when zoomed out (see .chrome-icon).
+    document.documentElement.style.setProperty('--ui-zoom', String(applied));
     this.store.set({ zoom: applied });
     if (persist) writeJson(ZOOM_KEY, applied);
     monaco.editor.remeasureFonts();

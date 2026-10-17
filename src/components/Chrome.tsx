@@ -1,4 +1,5 @@
 import { studio, type Stat } from '../app/studio';
+import { Icon } from './icons';
 import type { ToolInfo } from '../lib/ipc';
 import { baseName, dirName, tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
@@ -7,16 +8,15 @@ import { TypstGuide } from './TypstGuide';
 const ms = (v: number | null) => (v == null ? '–' : `${Math.round(v)}`);
 const stat = (s: Stat) => (s.n ? `${ms(s.p50)}/${ms(s.p95)} ms` : '–');
 
-export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' | 'agent') => void }) {
+type Pane = 'explorer' | 'preview' | 'agent';
+
+export function Toolbar({ onToggle, visible }: { onToggle: (pane: Pane) => void; visible: Record<Pane, boolean> }) {
   const ws = useStore(studio.store, (s) => s.workspace);
   const exporting = useStore(studio.store, (s) => s.exporting);
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
   const reviewing = useStore(studio.store, (s) => s.review.mode);
   return (
     <header className="toolbar">
-      <button className="icon" title="Toggle explorer (⌘B)" onClick={() => onToggle('explorer')}>
-        ☰
-      </button>
       <strong className="brand">Typst Studio</strong>
       {ws && (
         <>
@@ -39,17 +39,31 @@ export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' 
       <button title="Open folder (⌘O)" onClick={() => void studio.chooseWorkspace()}>
         Open…
       </button>
-      <button className="icon" title="Toggle preview" onClick={() => onToggle('preview')}>
-        ◧
+      <div className="pane-toggles" role="group" aria-label="Panes">
+        {(
+          [
+            ['explorer', 'panelLeft', 'Files and History (⌘B)'],
+            ['preview', 'page', 'Preview'],
+            ['agent', 'panelRight', 'Assistant'],
+          ] as const
+        ).map(([pane, icon, label]) => (
+          <button
+            key={pane}
+            className={`chrome-icon${visible[pane] ? ' on' : ''}`}
+            title={`${visible[pane] ? 'Hide' : 'Show'} ${label}`}
+            aria-label={`${label}`}
+            aria-pressed={visible[pane]}
+            onClick={() => onToggle(pane)}
+          >
+            <Icon name={icon} />
+          </button>
+        ))}
+      </div>
+      <button className={`chrome-icon${guideOpen ? ' on' : ''}`} title="Typst basics: how to write in Typst" aria-label="Typst basics" onClick={() => (guideOpen ? studio.closeGuide() : studio.openGuide())}>
+        <Icon name="help" />
       </button>
-      <button className="icon" title="Toggle agent" onClick={() => onToggle('agent')}>
-        ✦
-      </button>
-      <button className={`icon${guideOpen ? ' on' : ''}`} title="Typst basics: how to write in Typst" aria-label="Typst basics" onClick={() => (guideOpen ? studio.closeGuide() : studio.openGuide())}>
-        ?
-      </button>
-      <button className="icon" title="Settings (⌘,)" aria-label="Settings" onClick={() => studio.openSettings()}>
-        ⚙
+      <button className="chrome-icon" title="Settings (⌘,)" aria-label="Settings" onClick={() => studio.openSettings()}>
+        <Icon name="settings" />
       </button>
     </header>
   );

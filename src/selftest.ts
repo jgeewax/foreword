@@ -1791,6 +1791,33 @@ async function figuresChecks() {
 }
 
 /** History below the files (layout option). Restores the author's setting. */
+/** The window as it is: for checking layout by eye (optionally a sidebar tab, e.g. SELFTEST_ONLY=shot). */
+async function shotChecks() {
+  await waitFor(() => studio.editor, 15000, 'editor').catch(() => {});
+  await sleep(1500);
+  const out: Record<string, unknown> = { main: await snap('shot-main') };
+  const toolbar = document.querySelector('.toolbar');
+  out.toolbarButtons = [...(toolbar?.querySelectorAll('button') ?? [])].map((b) => {
+    const r = b.getBoundingClientRect();
+    return `${b.getAttribute('aria-label') ?? b.title ?? b.textContent}: ${Math.round(r.width)}×${Math.round(r.height)}`;
+  });
+  // The pane toggles hide and show their pane, and say so.
+  const toggle = document.querySelector<HTMLButtonElement>('.pane-toggles button[aria-label="Preview"]');
+  const pressed = () => toggle?.getAttribute('aria-pressed');
+  const before = pressed();
+  toggle?.click();
+  await sleep(400);
+  const hidden = { pressed: pressed(), preview: !!document.querySelector('.preview-pane') };
+  toggle?.click();
+  await sleep(400);
+  out.toggle = { before, hidden, shownAgain: pressed() };
+  out.explorerTabs = [...document.querySelectorAll('.explorer .pane-header button, .explorer .pane-header [role="tab"]')].map((b) => {
+    const r = b.getBoundingClientRect();
+    return `${b.textContent}: ${Math.round(r.width)}×${Math.round(r.height)}`;
+  });
+  return out;
+}
+
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'below' });
@@ -2246,6 +2273,7 @@ export async function runSelftest(launch: LaunchOptions) {
       log('journey');
       result.journey = await journeyChecks();
     }
+    if (want('shot')) result.shot = await shotChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);
