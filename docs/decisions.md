@@ -749,6 +749,11 @@ pane top (off by 0 pt).
 - The message says where the PDF went (the folder shortened in the middle when
   long) and has **Open** and **Show in Finder**. `open_pdf` and `reveal_pdf`
   only act on existing `.pdf` files.
+- **Open Exported PDF** (⌥⌘E; File menu, the preview's header and its menu)
+  opens the book's latest PDF in the PDF viewer. It looks where the book was
+  last exported, then in the export folder, then next to the main file. With
+  none, it offers Export PDF…. PDFs in the file tree open in the viewer too,
+  not as text.
 - Remembered locations are kept per book in local storage
   (`studio.exportTargets`), never from self-tests. Self-tests answer the dialog
   themselves (`studio.pickExportPath`).

@@ -284,6 +284,13 @@ pub fn run() {
                     MenuItem::with_id(handle, "new-file", "New File…", true, Some("CmdOrCtrl+N"))?;
                 let cover =
                     MenuItem::with_id(handle, "design-cover", "Design Cover…", true, None::<&str>)?;
+                let open_pdf = MenuItem::with_id(
+                    handle,
+                    "open-pdf",
+                    "Open Exported PDF",
+                    true,
+                    Some("CmdOrCtrl+Alt+E"),
+                )?;
                 let print = MenuItem::with_id(
                     handle,
                     "print-mixam",
@@ -298,6 +305,7 @@ pub fn run() {
                     &PredefinedMenuItem::separator(handle)?,
                     &cover,
                     &export,
+                    &open_pdf,
                     &print,
                     &PredefinedMenuItem::separator(handle)?,
                 ])?;
@@ -332,6 +340,7 @@ pub fn run() {
                     "new-file",
                     "design-cover",
                     "print-mixam",
+                    "open-pdf",
                     "typst-guide",
                 ]
                 .contains(&id)

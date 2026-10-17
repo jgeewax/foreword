@@ -1826,6 +1826,18 @@ async function exportChecks() {
     ipc.openPdf('main.typ').then(() => 'opened!', (e) => errorMessage(e)),
   ]);
   studio.pickExportPath = pick;
+
+  // Opening PDFs: the one just exported, then (without it) the build next to the book; from the tree too.
+  const opened = (globalThis as { __openedPdfs?: string[] }).__openedPdfs!;
+  opened.length = 0;
+  await studio.openExportedPdf();
+  const exported = studio.lastExport;
+  studio.lastExport = null;
+  await studio.openExportedPdf();
+  const inBook = studio.state.workspace?.files.find((f) => f.endsWith('.pdf'));
+  if (inBook) await studio.openFile(inBook);
+  out.opened = { exported, sequence: [...opened], inBook, tabs: studio.state.tabs.filter((t) => t.endsWith('.pdf')) };
+  studio.lastExport = exported;
   return out;
 }
 
@@ -2208,6 +2220,13 @@ export async function runSelftest(launch: LaunchOptions) {
   // The Save dialog can't be clicked from here: exports are saved next to the results file.
   const outDir = (launch.selftestOut ?? '/tmp/x').slice(0, (launch.selftestOut ?? '/tmp/x').lastIndexOf('/'));
   studio.pickExportPath = async (defaultPath) => `${outDir}/selftest-export-${defaultPath.slice(defaultPath.lastIndexOf('/') + 1)}`;
+  // Nor should it open Preview windows: PDFs that would be opened are logged instead.
+  const openedPdfs: string[] = [];
+  studio.pdfViewer = async (path) => {
+    if (!path.startsWith('/') && !(await ipc.fsHash(path))) throw new Error(`${path} doesn't exist`);
+    openedPdfs.push(path);
+  };
+  (globalThis as { __openedPdfs?: string[] }).__openedPdfs = openedPdfs;
   const only = launch.selftestOnly?.split(',').map((x) => x.trim());
   const want = (group: string) => !only || only.includes(group);
   try {

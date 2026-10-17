@@ -44,7 +44,7 @@ function FileTree() {
           onContextMenu={onContextMenu((): MenuEntry[] => {
             const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
             return [
-              !n.dir && { label: 'Open', action: () => void studio.openFile(n.path) },
+              !n.dir && { label: /\.pdf$/i.test(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
               n.dir && { label: expanded.has(n.path) ? 'Collapse' : 'Expand', action: () => toggle(n.path) },
               'separator',
               { label: 'New File…', action: () => void studio.newFile(folder) },

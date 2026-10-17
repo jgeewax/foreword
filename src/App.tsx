@@ -128,6 +128,12 @@ export function App() {
         void studio.newFile();
         return;
       }
+      if (e.metaKey && e.altKey && !e.shiftKey && !e.ctrlKey && e.code === 'KeyE' && studio.state.workspace) {
+        e.preventDefault();
+        e.stopPropagation();
+        void studio.openExportedPdf();
+        return;
+      }
       if (e.metaKey && e.altKey && !e.shiftKey && !e.ctrlKey && e.code === 'KeyN') {
         e.preventDefault();
         e.stopPropagation();

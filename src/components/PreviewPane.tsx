@@ -82,6 +82,11 @@ export function PreviewPane() {
             </button>
           </>
         )}
+        {target === 'book' && (
+          <button className="small" title="Open the book’s exported PDF in Preview (⌥⌘E)" onClick={() => void studio.openExportedPdf()}>
+            Open PDF
+          </button>
+        )}
         <button className="icon" title="Restart preview" onClick={() => void studio.restartTypst()}>
           ↻
         </button>

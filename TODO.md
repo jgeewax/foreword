@@ -92,7 +92,7 @@
 
 - [x] the review tab is crushed, i can barely see the title
 
-- [ ] ability to open main.pdf to see the preview
+- [x] ability to open main.pdf to see the preview
 
 - [x] the preview panels selector icons are TINY (got way too small. lets fix teh size of that ? make them always at least a certain size?)
 

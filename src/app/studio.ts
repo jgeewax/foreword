@@ -378,6 +378,7 @@ export class Studio {
       if (e.payload === 'new-file') return void this.newFile();
       if (e.payload === 'design-cover') return this.openCoverDialog();
       if (e.payload === 'print-mixam') return this.openPrint();
+      if (e.payload === 'open-pdf') return void this.openExportedPdf();
       if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
@@ -1007,6 +1008,7 @@ export class Studio {
         : [
             { label: this.hasCover() ? 'Show the Cover' : 'Design a Cover…', action: () => this.openCoverDialog() },
             { label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+            { label: 'Open Exported PDF', accelerator: 'CmdOrCtrl+Alt+E', action: () => void this.openExportedPdf() },
             { label: 'Print with Mixam…', action: () => this.openPrint() },
           ]),
       { label: 'Restart Preview', action: () => void this.restartTypst() },
@@ -1665,6 +1667,8 @@ export class Studio {
 
   async openFile(path: string, { activate = true } = {}) {
     if (!this.docs) return;
+    // PDFs (an exported book, say) open in the PDF viewer, not as text.
+    if (/\.pdf$/i.test(path)) return this.openPdf(path);
     try {
       await this.docs.open(path);
     } catch (e) {
@@ -2645,10 +2649,39 @@ export class Studio {
     writeJson(EXPORT_TARGETS_KEY, { ...this.exportTargets(), [root]: path });
   }
 
+  /**
+   * The book's latest PDF, in the PDF viewer: where it was last exported to,
+   * else the export folder, else next to the main file.
+   */
+  async openExportedPdf() {
+    const ws = this.state.workspace;
+    if (!ws?.entry) return;
+    const stem = ws.entry.replace(/\.typ$/, '');
+    const name = `${stem.slice(stem.lastIndexOf('/') + 1)}.pdf`;
+    const outputDir = this.state.project.settings.outputDir?.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
+    const candidates = [
+      this.lastExport ?? this.exportTargets()[ws.root],
+      outputDir ? `${outputDir}/${name}` : null,
+      `${stem}.pdf`,
+    ].filter((p): p is string => !!p);
+    for (const path of candidates) {
+      try {
+        await this.pdfViewer(path);
+        return;
+      } catch {
+        // Not there: the next place.
+      }
+    }
+    this.toast('There’s no PDF of this book yet.', 'info', [{ label: 'Export PDF…', run: () => void this.exportPdf() }]);
+  }
+
+  /** Opens a PDF in the viewer; fails if it doesn't exist (replaced in self-tests, which mustn't open windows). */
+  pdfViewer: (path: string) => Promise<void> = (path) => ipc.openPdf(path);
+
   /** Open a PDF (book-relative or absolute) in Preview (or the author's PDF viewer). */
   async openPdf(path: string) {
     try {
-      await ipc.openPdf(path);
+      await this.pdfViewer(path);
     } catch (e) {
       this.toast(`Couldn't open ${path}: ${errorMessage(e)}`, 'error');
     }
