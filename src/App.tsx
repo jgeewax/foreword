@@ -88,7 +88,7 @@ function Workbench() {
           readVisible();
         }}
       >
-        <Panel id="explorer" panelRef={explorer} defaultSize="15%" minSize="140px" collapsible>
+        <Panel id="explorer" panelRef={explorer} defaultSize="17%" minSize="180px" collapsible>
           <Explorer />
         </Panel>
         <Separator className="separator" />

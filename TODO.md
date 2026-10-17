@@ -90,7 +90,7 @@
 
 - [ ] export pdf doesnt tellme where to save it..
 
-- [ ] the review tab is crushed, i can barely see the title
+- [x] the review tab is crushed, i can barely see the title
 
 - [ ] ability to open main.pdf to see the preview
 

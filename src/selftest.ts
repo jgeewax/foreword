@@ -1583,7 +1583,8 @@ async function todoChecks(withAgent: boolean) {
   studio.showSidebar('todos');
   studio.newSession();
   await sleep(400);
-  out.tab = [...document.querySelectorAll('.sidebar-tabs button')].map((b) => b.textContent);
+  out.tab = [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label'));
+  out.title = document.querySelector('.explorer-main .pane-title')?.textContent;
   out.panel = [...document.querySelectorAll('.todo-row .todo-text')].map((e) => e.textContent);
   out.suggestions = [...document.querySelectorAll('.suggestion.todo')].map((e) => e.textContent);
   out.snapshot = await snap('todos');
@@ -1811,10 +1812,36 @@ async function shotChecks() {
   toggle?.click();
   await sleep(400);
   out.toggle = { before, hidden, shownAgain: pressed() };
-  out.explorerTabs = [...document.querySelectorAll('.explorer .pane-header button, .explorer .pane-header [role="tab"]')].map((b) => {
+  out.sidebar = [...document.querySelectorAll('.activity-bar button')].map((b) => {
     const r = b.getBoundingClientRect();
-    return `${b.textContent}: ${Math.round(r.width)}×${Math.round(r.height)}`;
+    return `${b.getAttribute('aria-label')}: ${Math.round(r.width)}×${Math.round(r.height)}`;
   });
+  // Every view, with its full title: History in its own tab, a TODO typed (not saved), review mode on.
+  const placement = studio.state.settings.historyPlacement;
+  studio.updateSettings({ historyPlacement: 'tab' });
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// TODO: a note for the sidebar check\n' }]);
+  studio.setReviewMode(true);
+  await sleep(1200);
+  out.sidebarAll = [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label'));
+  const views = ['files', 'history', 'code', 'todos', 'review'] as const;
+  const saved = studio.state.sidebar;
+  out.titles = {} as Record<string, string | null | undefined>;
+  for (const v of views) {
+    studio.showSidebar(v);
+    await sleep(150);
+    (out.titles as Record<string, unknown>)[v] = document.querySelector('.explorer-main .pane-title')?.textContent;
+  }
+  studio.showSidebar('review');
+  await sleep(300);
+  out.reviewShot = await snap('shot-review');
+  studio.setReviewMode(false);
+  while (model.canUndo()) await model.undo();
+  await sleep(300);
+  out.restored = { dirty: !!studio.state.dirty[studio.state.active ?? ''] };
+  studio.updateSettings({ historyPlacement: placement });
+  studio.showSidebar(saved);
   return out;
 }
 

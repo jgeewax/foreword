@@ -126,7 +126,14 @@ button.indicator:hover { background: var(--bg-3); }
 .empty-hint { color: var(--muted); padding: 16px; text-align: center; }
 
 /* explorer */
-.explorer { background: var(--bg-2); }
+.explorer { background: var(--bg-2); flex-direction: row !important; }
+.explorer-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+/* The sidebar's views as icons down its left edge. */
+.activity-bar { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 3px; border-right: 1px solid var(--border); background: var(--bg-2); }
+.activity-bar .chrome-icon { position: relative; width: calc(32px * var(--chrome-scale)); height: calc(32px * var(--chrome-scale)); }
+.activity-bar .chrome-icon.on { color: var(--fg); background: var(--bg-3); }
+.activity-bar .chrome-icon.on::before { content: ""; position: absolute; left: calc(-4px * var(--chrome-scale)); top: 20%; bottom: 20%; width: 2px; border-radius: 1px; background: var(--accent); }
+.activity-badge { position: absolute; right: 0; bottom: 0; min-width: calc(14px * var(--chrome-scale)); height: calc(14px * var(--chrome-scale)); padding: 0 3px; border-radius: 7px; background: var(--accent); color: var(--accent-fg); font-size: calc(9.5px * var(--chrome-scale)); font-weight: 700; line-height: calc(14px * var(--chrome-scale)); text-align: center; }
 .tree { overflow: auto; flex: 1; padding: 4px 0; }
 .tree-row { display: flex; align-items: center; gap: 4px; height: 22px; padding-right: 8px; white-space: nowrap; }
 .tree-row:hover { background: var(--bg-3); }
@@ -436,9 +443,6 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .field-row .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; padding: 5px 8px; background: var(--bg-2); border-radius: 6px; }
 
 /* sidebar tabs + history */
-.sidebar-tabs { display: flex; gap: 2px; min-width: 0; flex: 1; }
-.sidebar-tabs button { border: none; background: transparent; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-tabs button.active { color: var(--fg); background: var(--bg-3); }
 .history { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 .history-actions { padding: 8px 8px 4px; }
 .history-name { display: flex; gap: 4px; }

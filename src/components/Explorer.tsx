@@ -8,6 +8,7 @@ import { CodePanel } from './CodePanel';
 import { TodoPanel } from './TodoPanel';
 import { ReviewPanel } from './ReviewPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { Icon, type IconName } from './icons';
 
 function FileTree() {
   const ws = useStore(studio.store, (s) => s.workspace);
@@ -119,55 +120,91 @@ function PlacementButton({ to }: { to: 'tab' | 'below' }) {
   );
 }
 
-/** Files and History stacked, with a draggable divider. */
-function Stacked() {
-  const ws = useStore(studio.store, (s) => s.workspace);
-  const view = useStore(studio.store, (s) => s.sidebar);
+type View = 'files' | 'history' | 'code' | 'todos' | 'review';
+
+/** What the sidebar can show right now (Code, To do and Review only when they have something). */
+function useViews() {
   const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
   const todoCount = useStore(studio.store, (s) => s.todos.length);
-  const showCode = hasCode && view === 'code';
-  const showTodos = todoCount > 0 && view === 'todos';
   const hasReview = useStore(studio.store, (s) => s.review.comments.length > 0 || s.review.mode);
-  const showReview = hasReview && view === 'review';
+  const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
+  return { hasCode, todoCount, hasReview, reviewOpen };
+}
+
+/** The sidebar's views as a column of icons on its left edge, each with room for its own title. */
+function ActivityBar({ current, below }: { current: View; below: boolean }) {
+  const { hasCode, todoCount, hasReview, reviewOpen } = useViews();
+  const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
+    { id: 'files', icon: 'folder', label: 'Files' },
+    ...(below ? [] : [{ id: 'history' as const, icon: 'clock' as const, label: 'History: saved versions of the book' }]),
+    ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples' }] : []),
+    ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'checklist' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
+    ...(hasReview ? [{ id: 'review' as const, icon: 'comment' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
+  ];
+  return (
+    <nav className="activity-bar" role="tablist" aria-label="Sidebar" aria-orientation="vertical">
+      {items.map((it) => (
+        <button
+          key={it.id}
+          role="tab"
+          aria-selected={current === it.id}
+          aria-label={it.label}
+          title={it.label}
+          className={`chrome-icon activity${current === it.id ? ' on' : ''}`}
+          onClick={() => studio.showSidebar(it.id)}
+        >
+          <Icon name={it.icon} />
+          {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** A view's header: its full title and its actions. */
+function ViewHeader({ view, below }: { view: View; below: boolean }) {
+  const ws = useStore(studio.store, (s) => s.workspace);
+  const { todoCount, reviewOpen } = useViews();
+  const title =
+    view === 'files'
+      ? (ws?.name ?? 'Files')
+      : view === 'history'
+        ? 'History'
+        : view === 'code'
+          ? 'Code examples'
+          : view === 'todos'
+            ? `To do · ${todoCount}`
+            : `Review · ${reviewOpen} open`;
+  return (
+    <header className="pane-header">
+      <span className="pane-title" title={title}>
+        {title}
+      </span>
+      <span className="spacer" />
+      {view === 'files' && (
+        <>
+          <NewChapterButton />
+          <RefreshButton />
+        </>
+      )}
+      {view === 'history' && !below && <PlacementButton to="below" />}
+    </header>
+  );
+}
+
+function ViewBody({ view }: { view: View }) {
+  return view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : view === 'code' ? <CodePanel /> : view === 'todos' ? <TodoPanel /> : <ReviewPanel />;
+}
+
+/** The current view on top and History below, with a draggable divider. */
+function Stacked({ view }: { view: View }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-sidebar', storage: localStorage });
   return (
     <Group className="sidebar-stack" orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
       <Panel id="files" minSize="60px">
         <div className="sidebar-section">
-          <header className="pane-header">
-            {hasCode || todoCount > 0 || hasReview ? (
-              <div className="sidebar-tabs" role="tablist">
-                <button role="tab" aria-selected={!showCode && !showTodos && !showReview} className={!showCode && !showTodos && !showReview ? 'active' : ''} onClick={() => studio.showSidebar('files')}>
-                  {ws?.name ?? 'Files'}
-                </button>
-                {hasCode && (
-                  <button role="tab" aria-selected={showCode} className={showCode ? 'active' : ''} onClick={() => studio.showSidebar('code')}>
-                    Code
-                  </button>
-                )}
-                {todoCount > 0 && (
-                  <button role="tab" aria-selected={showTodos} className={showTodos ? 'active' : ''} onClick={() => studio.showSidebar('todos')}>
-                    To do {todoCount}
-                  </button>
-                )}
-                {hasReview && (
-                  <button role="tab" aria-selected={showReview} className={showReview ? 'active' : ''} onClick={() => studio.showSidebar('review')}>
-                    Review
-                  </button>
-                )}
-              </div>
-            ) : (
-              <span className="pane-title">{ws?.name ?? 'Files'}</span>
-            )}
-            <span className="spacer" />
-            {!showCode && !showTodos && !showReview && (
-              <>
-                <NewChapterButton />
-                <RefreshButton />
-              </>
-            )}
-          </header>
-          {showCode ? <CodePanel /> : showTodos ? <TodoPanel /> : showReview ? <ReviewPanel /> : <FileTree />}
+          <ViewHeader view={view} below />
+          <ViewBody view={view} />
         </div>
       </Panel>
       <Separator className="separator separator-h" />
@@ -186,56 +223,26 @@ function Stacked() {
 }
 
 export function Explorer() {
-  const ws = useStore(studio.store, (s) => s.workspace);
-  const view = useStore(studio.store, (s) => s.sidebar);
+  const sidebar = useStore(studio.store, (s) => s.sidebar);
   const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
-  const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
-  const todoCount = useStore(studio.store, (s) => s.todos.length);
-  const hasReview = useStore(studio.store, (s) => s.review.comments.length > 0 || s.review.mode);
-  const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
-  if (placement === 'below') {
-    return (
-      <section className="pane explorer">
-        <Stacked />
-      </section>
-    );
-  }
+  const { hasCode, todoCount, hasReview } = useViews();
+  const below = placement === 'below';
+  // A view with nothing in it (or History, when it's shown below) falls back to the files.
+  const available = sidebar === 'files' || (sidebar === 'history' && !below) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+  const view: View = available ? sidebar : 'files';
   return (
     <section className="pane explorer">
-      <header className="pane-header">
-        <div className="sidebar-tabs" role="tablist">
-          <button role="tab" aria-selected={view === 'files'} className={view === 'files' ? 'active' : ''} title="Files" onClick={() => studio.showSidebar('files')}>
-            {ws?.name ?? 'Files'}
-          </button>
-          <button role="tab" aria-selected={view === 'history'} className={view === 'history' ? 'active' : ''} title="Saved versions of the book" onClick={() => studio.showSidebar('history')}>
-            History
-          </button>
-          {hasCode && (
-            <button role="tab" aria-selected={view === 'code'} className={view === 'code' ? 'active' : ''} title="Runnable code examples" onClick={() => studio.showSidebar('code')}>
-              Code
-            </button>
-          )}
-          {todoCount > 0 && (
-            <button role="tab" aria-selected={view === 'todos'} className={view === 'todos' ? 'active' : ''} title="TODOs left in the book" onClick={() => studio.showSidebar('todos')}>
-              To do {todoCount}
-            </button>
-          )}
-          {hasReview && (
-            <button role="tab" aria-selected={view === 'review'} className={view === 'review' ? 'active' : ''} title="Review comments" onClick={() => studio.showSidebar('review')}>
-              Review {reviewOpen || ''}
-            </button>
-          )}
-        </div>
-        {view === 'files' ? (
+      <ActivityBar current={view} below={below} />
+      <div className="explorer-main">
+        {below ? (
+          <Stacked view={view} />
+        ) : (
           <>
-            <NewChapterButton />
-            <RefreshButton />
+            <ViewHeader view={view} below={false} />
+            <ViewBody view={view} />
           </>
-        ) : view === 'history' ? (
-          <PlacementButton to="below" />
-        ) : null}
-      </header>
-      {view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : view === 'code' ? <CodePanel /> : view === 'todos' ? <TodoPanel /> : <ReviewPanel />}
+        )}
+      </div>
     </section>
   );
 }
