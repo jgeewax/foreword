@@ -3,6 +3,7 @@
 // ends its reply with a marker line; Typst Studio hides the marker and asks the
 // author to confirm. Finished tasks are remembered per book on this Mac.
 
+import { readLabel, readOf, type AiRead } from './ai-marks';
 import type { ChatItem } from './studio';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
@@ -59,13 +60,28 @@ type ContextMessage = {
 
 const toolSummary = (input: Record<string, unknown> = {}) => String(input.path ?? input.filePath ?? input.command ?? input.pattern ?? input.url ?? input.query ?? '');
 
+/** The lines the assistant read in a saved conversation (as far as it still holds them: compaction drops older reads). */
+export function readsFromContext(messages: ContextMessage[], root: string): AiRead[] {
+  const reads: AiRead[] = [];
+  for (const m of messages) {
+    if (m.type === 'compaction' && Array.isArray(m.recent)) reads.push(...readsFromContext(m.recent as ContextMessage[], root));
+    if (m.type !== 'assistant') continue;
+    for (const part of m.content ?? []) {
+      if (part.type !== 'tool' || part.state?.status === 'error' || part.state?.status === 'failed') continue;
+      const r = readOf(root, part.name ?? '', part.state?.input, part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '');
+      if (r) reads.push(r);
+    }
+  }
+  return reads;
+}
+
 /** Chat items for a saved conversation (from GET /api/session/{id}/context). */
-export function itemsFromContext(messages: ContextMessage[]): ChatItem[] {
+export function itemsFromContext(messages: ContextMessage[], root = ''): ChatItem[] {
   const items: ChatItem[] = [];
   for (const m of messages) {
     if (m.type === 'compaction') {
       if (m.summary?.trim()) items.push({ kind: 'assistant', id: m.id, text: `**Summary of the conversation so far**\n\n${m.summary}`, done: true });
-      if (Array.isArray(m.recent)) items.push(...itemsFromContext(m.recent as ContextMessage[]));
+      if (Array.isArray(m.recent)) items.push(...itemsFromContext(m.recent as ContextMessage[], root));
     } else if (m.type === 'user') {
       const { text, attachments } = splitUserText(m.text ?? '');
       items.push({ kind: 'user', id: m.id, text, attachments });
@@ -75,11 +91,14 @@ export function itemsFromContext(messages: ContextMessage[]): ChatItem[] {
           items.push({ kind: 'assistant', id: `${m.id}:${i}`, text: part.text, done: true });
         } else if (part.type === 'tool') {
           const status = part.state?.status;
+          const output = part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '';
+          const read = root ? readOf(root, part.name ?? '', part.state?.input, output) : null;
           items.push({
             kind: 'tool',
             id: part.id ?? `${m.id}:${i}`,
             name: part.name ?? 'tool',
-            summary: toolSummary(part.state?.input),
+            summary: read ? readLabel(read) : toolSummary(part.state?.input),
+            ...(read ? { read: { path: read.path, from: read.start, to: read.start + read.lines.length - 1 } } : {}),
             status: status === 'error' || status === 'failed' ? 'failed' : 'done',
             detail: (part.state?.error ?? part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '').slice(0, 4000),
           });

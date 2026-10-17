@@ -75,6 +75,8 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Accept the assistant's changes (clear their marks) per passage or per file, like reviewing a pull request; "Accept all" after reading.
 - Show the assistant's changes in the preview too (a violet margin bar on changed paragraphs).
 - Next/previous assistant change (keyboard), across files.
+- Reads by other tools too: grep matches (the lines it found) and globbed files, as lighter marks.
+- A "what the assistant knows" panel: files and ranges in the current conversation, with what's stale (changed since it was read).
 - A per-paragraph authorship view ("who wrote this": you or the assistant, from History), for authors who must disclose AI use.
 
 ## Review

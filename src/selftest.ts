@@ -742,6 +742,87 @@ async function journeyChecks() {
 }
 
 /**
+ * The assistant's reads in the editor: a read tool call (through the same
+ * event path as a real one), its marks and the chat row's lines, marks
+ * following the text, a new conversation clearing them, and (with the agent)
+ * a real read whose conversation is switched away from and back to. Works
+ * next to the scratch book, then reopens it.
+ */
+async function aiReadChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  await studio.createBook('novel', { title: `Reads ${Date.now().toString(36)}`, author: 'Ada Example' }, parent);
+  await waitFor(() => studio.state.workspace?.root !== original, 30000, 'book');
+  const file = 'chapters/01-chapter-one.typ';
+  // The editor is remounted for the new book.
+  await waitFor(() => studio.editor, 15000, 'editor');
+  await studio.openFile(file);
+  await waitFor(() => studio.editor?.getModel(), 15000, 'model');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  // Marks are painted on the file in view.
+  const reads = async () => {
+    if (studio.state.active !== file) await studio.openFile(file);
+    await sleep(400);
+    return (studio.editor?.getModel()?.getAllDecorations() ?? [])
+      .filter((d) => d.options.linesDecorationsClassName === 'ai-read-line')
+      .map((d) => `${d.range.startLineNumber}-${d.range.endLineNumber}`);
+  };
+  const lines = model.getValue().split('\n');
+  const numbered = (from: number, to: number) => lines.slice(from - 1, to).map((l, i) => `${from + i}: ${l}`).join('\n');
+
+  // A read of lines 8–13, as OpenCode reports it.
+  const emit = (e: Record<string, unknown>) => (studio as unknown as { onAgentEvent(e: unknown): void }).onAgentEvent({ sessionId: studio.state.agent.sessionId, ...e });
+  emit({ type: 'tool-started', callId: 'selftest-read', name: 'read' });
+  emit({ type: 'tool-called', callId: 'selftest-read', input: { path: file, offset: 8, limit: 6 } });
+  emit({ type: 'tool-succeeded', callId: 'selftest-read', output: `Read file ${file}, lines 8-13\n${numbered(8, 13)}` });
+  await sleep(400);
+  const item = studio.state.agent.items.find((i) => i.id === 'selftest-read');
+  out.chatRow = item?.kind === 'tool' ? { summary: item.summary, read: item.read } : null;
+  out.marks = await reads();
+  out.snapshot = await snap('aireads-marks');
+
+  // Lines added above: the read moves with its text.
+  editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// one\n// two\n' }]);
+  out.afterInsert = await reads();
+  editor.trigger('selftest', 'undo', null);
+  await sleep(400);
+
+  // The chat row opens the file with those lines selected.
+  await studio.openFile('main.typ');
+  (document.querySelector('.tool button.tool-summary') as HTMLButtonElement | null)?.click();
+  await sleep(600);
+  const sel = studio.editor?.getSelection();
+  out.clicked = { active: studio.state.active, selection: sel && `${sel.startLineNumber}-${sel.endLineNumber}` };
+
+  studio.newSession();
+  await sleep(300);
+  out.afterNewConversation = await reads();
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    await studio.setMode('plan');
+    studio.newSession();
+    const reply = await askAgent(`Read ${file} and tell me, in one sentence, what the chapter's heading is. Don't change anything.`);
+    await studio.setMode('write');
+    await sleep(500);
+    const session = studio.state.agent.sessionId;
+    const rows = studio.state.agent.items.filter((i) => i.kind === 'tool' && i.read).map((i) => (i.kind === 'tool' ? i.summary : ''));
+    out.agent = { reply: reply.slice(0, 160), rows, marks: await reads() };
+    out.snapshotAgent = await snap('aireads-agent');
+    // Away to a new conversation and back: the reads come back from the transcript.
+    studio.newSession();
+    await sleep(300);
+    const away = await reads();
+    if (session) await studio.switchTask(session);
+    out.switchedBack = { away, back: await reads(), rows: studio.state.agent.items.filter((i) => i.kind === 'tool' && i.read).length };
+  }
+  await studio.openWorkspace(original);
+  return out;
+}
+
+/**
  * The assistant's changes in the editor: a fresh novel, a change recorded as
  * an agent version (as after a turn), the marks and their hover, marks
  * following the text and leaving lines the author rewrote, the context menu,
@@ -756,7 +837,10 @@ async function aiEditChecks(withAgent: boolean) {
   await studio.createBook('novel', { title: `Marks ${Date.now().toString(36)}`, author: 'Ada Example' }, parent);
   await waitFor(() => studio.state.workspace?.root !== original && hs().status === 'ready' && hs().versions.length > 0, 30000, 'history');
   const file = 'chapters/01-chapter-one.typ';
+  // The editor is remounted for the new book.
+  await waitFor(() => studio.editor, 15000, 'editor');
   await studio.openFile(file);
+  await waitFor(() => studio.editor?.getModel(), 15000, 'model');
   const editor = studio.editor!;
   const model = editor.getModel()!;
   const marks = () =>
@@ -2161,6 +2245,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('journey')) {
       log('journey');
       result.journey = await journeyChecks();
+    }
+    if (want('aireads')) {
+      log('aireads');
+      result.aireads = await aiReadChecks(launch.selftestAgent);
     }
     if (want('aiedits')) {
       log('aiedits');

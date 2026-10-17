@@ -122,6 +122,28 @@ export function parseRead(path: string, output: string, time = Date.now()): AiRe
   return start > 0 && lines.length ? { path, start, lines, time } : null;
 }
 
+/** A path from a tool call as a book-relative path (null if it's outside the book). */
+export function bookPath(root: string, path: unknown): string | null {
+  if (typeof path !== 'string' || !path.trim()) return null;
+  let p = path.trim();
+  if (p.startsWith('/')) {
+    if (!p.startsWith(`${root}/`)) return null;
+    p = p.slice(root.length + 1);
+  }
+  p = p.replace(/^(\.\/)+/, '');
+  return p.split('/').some((s) => s === '..' || s === '') ? null : p;
+}
+
+/** A read tool call's lines, for the chat ("lines 3–40") and the editor. */
+export function readOf(root: string, tool: string, input: unknown, output: string, time = Date.now()): AiRead | null {
+  if (tool !== 'read' || !input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  const path = bookPath(root, o.path ?? o.filePath);
+  return path ? parseRead(path, output, time) : null;
+}
+
+export const readLabel = (r: AiRead) => `${r.path} · ${r.lines.length === 1 ? `line ${r.start}` : `lines ${r.start}–${r.start + r.lines.length - 1}`}`;
+
 export type ReadMark = { from: number; to: number; time: number };
 
 /**

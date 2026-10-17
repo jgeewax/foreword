@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asksTaskDone, contextTokens, itemsFromContext, splitUserText, TASK_INSTRUCTIONS, TASK_MARKER, withoutMarker } from './tasks';
+import { asksTaskDone, contextTokens, itemsFromContext, readsFromContext, splitUserText, TASK_INSTRUCTIONS, TASK_MARKER, withoutMarker } from './tasks';
 
 describe('the task-done marker', () => {
   it('is recognised at the end of a reply, even bolded, and hidden for display', () => {
@@ -49,6 +49,14 @@ describe('restoring a conversation', () => {
       ['assistant', 'Done.'],
     ]);
     expect((itemsFromContext(context)[0] as any).attachments).toEqual(['chapters/ch1.typ:6']);
+  });
+
+  it('knows which lines each read covered', () => {
+    const items = itemsFromContext(context, '/books/b');
+    expect(items[1]).toMatchObject({ summary: 'chapters/ch1.typ · line 1', read: { path: 'chapters/ch1.typ', from: 1, to: 1 } });
+    expect(readsFromContext(context, '/books/b')).toEqual([{ path: 'chapters/ch1.typ', start: 1, lines: ['= Vectors'], time: expect.any(Number) }]);
+    // Reads kept through a compaction count; summarized ones are gone.
+    expect(readsFromContext([{ id: 'c', type: 'compaction', summary: 'x', recent: context }], '/books/b')).toHaveLength(1);
   });
 
   it('reads the context size from the latest call', () => {

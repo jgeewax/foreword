@@ -700,6 +700,41 @@ pane top (off by 0 pt).
     history listed its two versions.
   - A real turn (change "the colour of slate") marked line 11 when it ended.
 
+### The lines the assistant read, marked in the editor
+
+- **Source:** the `read` tool's result. OpenCode 2 starts it with "Read file
+  x, lines 1-35" and then numbered lines ("12: text"). Other versions wrap the
+  numbered lines in `<content>`. These were checked against OpenCode's own
+  message store. The numbered lines are the exact range and text read,
+  including when the output was truncated, so they are parsed rather than
+  `offset` and `limit`. A run of lines only counts while the numbers follow
+  on, so a book line that itself starts "3: " can't confuse it. Tool paths
+  (relative or absolute) become book paths; reads outside the book are
+  ignored.
+- **Scope:** the current conversation. A new conversation starts with none.
+  Switching to an earlier one rebuilds its reads from the transcript, as do
+  compactions. A compaction drops older reads, matching what the
+  conversation still has in context.
+- **Placing reads on today's text:** the read block is diffed against a
+  window around where it was read (±300 lines, or the read's length), not the
+  whole file. Then the mark spans from the first to the last read line still
+  in the file, ignoring blank lines. Overlapping reads merge. The diff now
+  keeps only the active band per step (memory O(D²) instead of O(D·(N+M))),
+  so a 35-line read in a 4,000-line file stays fast.
+- **What it shows:**
+  - a thin blue gutter bar beside the violet "changed" bar, with a tooltip,
+    and a faint scroll-bar mark; no text hover, since whole-file reads would
+    put it on every line;
+  - the chat's read rows say "path · lines 8–13", and clicking one opens the
+    file with those lines selected;
+  - Settings can turn it off.
+- **Verified in the app** (self-test `aireads`):
+  - A read of lines 8–13 through the event path was marked 8–13, and moved to
+    10–15 when two lines were added above.
+  - Its chat row selected 8–13, and a new conversation cleared the marks.
+  - A real Plan-mode read was marked 1–15 (what the model chose to read),
+    gone after switching away, and back from the transcript on return.
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and

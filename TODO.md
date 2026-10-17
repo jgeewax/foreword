@@ -62,7 +62,7 @@
 
 - [x] cover designer: can we make a cover.typ and give people templates to make that work? aligning w the book templates? maybe this depends on the printer also? not sure if this is a good idea?
 
-- [ ] I want to be able to see what lines were read on a file by the ai
+- [x] I want to be able to see what lines were read on a file by the ai
 
 - [x] i want to be able to see what edits were made on a file by the ai
 

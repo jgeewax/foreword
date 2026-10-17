@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiEdit, editMarks, parseRead, readMarks } from './ai-marks';
+import { aiEdit, bookPath, editMarks, parseRead, readLabel, readMarks, readOf } from './ai-marks';
 
 const V = (id: string, time: number) => ({ id, label: `Agent: ${id}`, time });
 const before = ['= One', '', 'The storm came.', 'Mara waited.', '', 'The end.'].join('\n');
@@ -56,6 +56,18 @@ describe('reads', () => {
     });
     expect(parseRead('x', '<path>/b/x</path>\n<type>file</type>\n<content>\n440: a\n441: \n442: b\n</content>')?.lines).toEqual(['a', '', 'b']);
     expect(parseRead('x.png', 'Image read successfully')).toBeNull();
+  });
+
+  it('takes book paths from tool input, relative or absolute', () => {
+    expect(bookPath('/b', 'chapters/x.typ')).toBe('chapters/x.typ');
+    expect(bookPath('/b', './x.typ')).toBe('x.typ');
+    expect(bookPath('/b', '/b/chapters/x.typ')).toBe('chapters/x.typ');
+    expect(bookPath('/b', '/other/x.typ')).toBeNull();
+    expect(bookPath('/b', '../x.typ')).toBeNull();
+    expect(bookPath('/b', 42)).toBeNull();
+    const r = readOf('/b', 'read', { filePath: '/b/ch.typ', offset: 3 }, 'Read file ch.typ, lines 3-5\n3: a\n4: b\n5: c')!;
+    expect(readLabel(r)).toBe('ch.typ · lines 3–5');
+    expect(readOf('/b', 'grep', { path: 'ch.typ' }, '3: a')).toBeNull();
   });
 
   it('places reads on the current text and merges overlaps', () => {

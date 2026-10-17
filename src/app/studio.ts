@@ -22,7 +22,7 @@ import {
 } from './project-settings';
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
-import { aiEdit, type AiEdit } from './ai-marks';
+import { aiEdit, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
@@ -37,7 +37,7 @@ import { chapterImports, chapterText, includePath, nextChapterPath, withInclude 
 import { referencesTo, removeIncludes, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
-import { asksTaskDone, contextTokens, itemsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
+import { asksTaskDone, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
 import { addressPrompt, locate, makeComment, nextCommentId, parseAddressed, parseReview, REVIEW_FILE, serializeReview, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
@@ -55,7 +55,16 @@ import { TypstService } from '../services/typst';
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
   | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
-  | { kind: 'tool'; id: string; name: string; summary: string; status: 'running' | 'done' | 'failed'; detail: string }
+  | {
+      kind: 'tool';
+      id: string;
+      name: string;
+      summary: string;
+      status: 'running' | 'done' | 'failed';
+      detail: string;
+      /** A read: the lines it read (1-based, inclusive). */
+      read?: { path: string; from: number; to: number };
+    }
   | {
       kind: 'permission';
       id: string;
@@ -308,6 +317,8 @@ export class Studio {
   private unsubscribeAgent: (() => void) | null = null;
   /** Errors already shown for the current turn (OpenCode reports a failure more than once). */
   private turnErrors = new Set<string>();
+  /** Tool calls in flight: name and input, for when their result arrives. */
+  private toolCalls = new Map<string, { name: string; input?: unknown }>();
   private styleGuideText: string | null = null;
   /** Options mode: the passage the current turn's options replace. */
   private optionsTurn: { target: OptionTarget | null } | null = null;
@@ -449,6 +460,7 @@ export class Studio {
     await this.loadProjectSettings();
     await this.loadStyleGuide();
     this.aiEdits.clear();
+    this.aiReads = [];
     void this.history.start(this.historyExcludes()).then(() => this.refreshAiEdits());
     void this.code.scan();
     void this.scanTodos();
@@ -1334,6 +1346,33 @@ export class Studio {
     return this.aiEdits.get(path) ?? [];
   }
 
+  /** What the assistant has read in the current conversation. */
+  private aiReads: AiRead[] = [];
+
+  aiReadsFor(path: string): AiRead[] {
+    return this.aiReads.filter((r) => r.path === path);
+  }
+
+  private addAiRead(read: AiRead) {
+    this.setAiReads([...this.aiReads, read]);
+  }
+
+  private setAiReads(reads: AiRead[]) {
+    this.aiReads = reads;
+    this.store.set((s) => ({ aiMarks: s.aiMarks + 1 }));
+  }
+
+  /** From the chat: open the file with the lines the assistant read selected. */
+  async showRead(read: { path: string; from: number; to: number }) {
+    await this.openAt(read.path, read.from);
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!editor || !model || this.state.active !== read.path) return;
+    const to = Math.min(read.to, model.getLineCount());
+    editor.setSelection(new monaco.Range(read.from, 1, to, model.getLineMaxColumn(to)));
+    editor.revealRangeInCenterIfOutsideViewport(new monaco.Range(read.from, 1, to, 1));
+  }
+
   /** The assistant's changes to a file, from History's agent versions (the most recent ones). */
   async loadAiEdits(path: string) {
     if (this.state.history.status !== 'ready') return;
@@ -1962,6 +2001,7 @@ export class Studio {
   newSession() {
     if (this.state.agent.running) return;
     this.setAgent({ sessionId: null, title: null, items: [], contextTokens: null });
+    this.setAiReads([]);
   }
 
   // ---- tasks (conversations) ----------------------------------------------------------
@@ -2000,7 +2040,9 @@ export class Studio {
     try {
       const messages = await this.agent.sessionContext(sessionId);
       const task = this.state.agent.tasks.find((t) => t.sessionId === sessionId);
-      this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages), contextTokens: contextTokens(messages), attachments: [] });
+      const root = this.state.workspace?.root ?? '';
+      this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages, root), contextTokens: contextTokens(messages), attachments: [] });
+      this.setAiReads(readsFromContext(messages, root));
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
       await this.agent.switchAgent(sessionId, config.agent).catch(() => {});
@@ -2053,7 +2095,10 @@ export class Studio {
       await new Promise((r) => setTimeout(r, 500));
       await waitIdle(this.agent, sessionId);
       const messages = await this.agent.sessionContext(sessionId);
-      this.setAgent({ items: itemsFromContext(messages), contextTokens: contextTokens(messages) });
+      const root = this.state.workspace?.root ?? '';
+      this.setAgent({ items: itemsFromContext(messages, root), contextTokens: contextTokens(messages) });
+      // Reads summarized away are no longer in the conversation.
+      this.setAiReads(readsFromContext(messages, root));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Compacted: the conversation so far was summarized to free up the context window.' });
     } catch (e) {
       this.toast(`Couldn't compact: ${errorMessage(e)}`, 'error');
@@ -2362,14 +2407,30 @@ export class Studio {
         break;
       }
       case 'tool-started':
+        this.toolCalls.set(e.callId, { name: e.name });
         this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '' });
         break;
       case 'tool-called':
+        this.toolCalls.set(e.callId, { name: this.toolCalls.get(e.callId)?.name ?? '', input: e.input });
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, summary: summarizeToolInput(e.input) } : it));
         break;
-      case 'tool-succeeded':
-        this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, status: 'done', detail: e.output.slice(0, 4000) } : it));
+      case 'tool-succeeded': {
+        const call = this.toolCalls.get(e.callId);
+        this.toolCalls.delete(e.callId);
+        const read = call && this.state.workspace ? readOf(this.state.workspace.root, call.name, call.input, e.output) : null;
+        if (read) this.addAiRead(read);
+        this.updateItem(e.callId, (it) =>
+          it.kind === 'tool'
+            ? {
+                ...it,
+                status: 'done',
+                detail: e.output.slice(0, 4000),
+                ...(read ? { summary: readLabel(read), read: { path: read.path, from: read.start, to: read.start + read.lines.length - 1 } } : {}),
+              }
+            : it,
+        );
         break;
+      }
       case 'tool-failed':
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, status: 'failed', detail: e.error } : it));
         break;

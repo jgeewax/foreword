@@ -192,6 +192,7 @@ button.indicator:hover { background: var(--bg-3); }
 .tool summary::-webkit-details-marker { display: none; }
 .tool-name { font-weight: 600; color: var(--fg); }
 .tool-summary { font-family: "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .tool.failed .tool-status { color: var(--bad); }
 .tool-detail, .patch { font: 11px/1.4 "SF Mono", Menlo, monospace; background: var(--bg-2); border: 1px solid var(--border); border-radius: 5px; padding: 6px; margin: 4px 0 0; max-height: 220px; overflow: auto; white-space: pre-wrap; }
 .patch div.add { background: var(--add); }

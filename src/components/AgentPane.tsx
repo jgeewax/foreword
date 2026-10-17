@@ -136,7 +136,21 @@ function ItemBody({ item }: { item: ChatItem }) {
           <summary>
             <span className="tool-status">{item.status === 'running' ? '◌' : item.status === 'done' ? '✓' : '✕'}</span>
             <span className="tool-name">{item.name}</span>
-            <span className="tool-summary">{item.summary}</span>
+            {item.read ? (
+              <button
+                className="tool-summary link"
+                title="Open the file with these lines selected"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void studio.showRead(item.read!);
+                }}
+              >
+                {item.summary}
+              </button>
+            ) : (
+              <span className="tool-summary">{item.summary}</span>
+            )}
           </summary>
           {item.detail && <pre className="tool-detail">{item.detail}</pre>}
         </details>

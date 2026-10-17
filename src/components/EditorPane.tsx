@@ -3,7 +3,7 @@ import { studio } from '../app/studio';
 import { monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
-import { editMarks, type EditMark } from '../app/ai-marks';
+import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
@@ -95,7 +95,7 @@ export function EditorPane() {
         { label: 'Typst Basics', action: () => studio.openGuide() },
       ]);
     });
-    // The assistant's marks: lines it changed (and, later, read), in the gutter.
+    // The assistant's marks: lines it changed and lines it read, in the gutter.
     const showVersion = monaco.editor.registerCommand('studio.showVersionChanges', (_accessor, id: string) => void studio.showVersionChanges(id));
     const aiMarks = editor.createDecorationsCollection();
     const paintAi = () => {
@@ -114,6 +114,19 @@ export function EditorPane() {
               linesDecorationsTooltip: m.removal ? 'The assistant removed text here (hover the line number)' : 'Changed by the assistant (hover the line number)',
               lineNumberHoverMessage: editHover(m),
               overviewRuler: { color: '#a371f7', position: monaco.editor.OverviewRulerLane.Left },
+            },
+          });
+        }
+      }
+      if (studio.state.settings.markAiReads) {
+        for (const r of readMarks(studio.aiReadsFor(path), model.getValue())) {
+          decorations.push({
+            range: new monaco.Range(r.from, 1, r.to, 1),
+            options: {
+              isWholeLine: true,
+              linesDecorationsClassName: 'ai-read-line',
+              linesDecorationsTooltip: `The assistant read these lines in this conversation (lines ${r.from}–${r.to} now)`,
+              overviewRuler: { color: 'rgba(88, 166, 255, 0.35)', position: monaco.editor.OverviewRulerLane.Center },
             },
           });
         }
