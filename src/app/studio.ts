@@ -23,8 +23,9 @@ import {
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { History, initialHistory, type HistoryState } from './history';
-import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles } from '../templates';
+import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
+import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
 import { CodeRunner, initialCode, type CodeState } from '../code/runner';
@@ -149,6 +150,14 @@ export type StudioState = {
   /** The book's page count, last seen while previewing the book (for the cover's spine). */
   bookPages: number | null;
   coverDialogOpen: boolean;
+  /** Print with Mixam: the print files and the checks on them. */
+  print: {
+    open: boolean;
+    status: 'idle' | 'working' | 'done';
+    checks: Check[];
+    files: { interior?: string; cover?: string };
+    facts?: PrintFacts;
+  };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
   sidebar: 'files' | 'history' | 'code' | 'todos' | 'review';
 };
@@ -204,6 +213,7 @@ const initialState: StudioState = {
   previewTarget: 'book',
   bookPages: null,
   coverDialogOpen: false,
+  print: { open: false, status: 'idle', checks: [], files: {} },
   sidebar: 'files',
 };
 
@@ -342,6 +352,7 @@ export class Studio {
       if (e.payload === 'new-chapter') return void this.newChapter();
       if (e.payload === 'new-file') return void this.newFile();
       if (e.payload === 'design-cover') return this.openCoverDialog();
+      if (e.payload === 'print-mixam') return this.openPrint();
       if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
@@ -507,6 +518,16 @@ export class Studio {
     if (after === text) return false;
     await ipc.fsWrite(path, after, hash);
     return true;
+  }
+
+  /**
+   * editFile through an open document, so Tinymist has the new text at once (a
+   * disk write only reaches it through its file watcher, a moment later: too
+   * late for an export straight after).
+   */
+  private async editForExport(path: string, transform: (text: string) => string): Promise<boolean> {
+    await this.docs?.open(path);
+    return this.editFile(path, transform);
   }
 
   private typFiles() {
@@ -959,6 +980,7 @@ export class Studio {
         : [
             { label: this.hasCover() ? 'Show the Cover' : 'Design a Cover…', action: () => this.openCoverDialog() },
             { label: 'Export PDF', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+            { label: 'Print with Mixam…', action: () => this.openPrint() },
           ]),
       { label: 'Restart Preview', action: () => void this.restartTypst() },
     ]);
@@ -1281,15 +1303,146 @@ export class Studio {
   }
 
   /** Bring the cover's page size and page count (spine) in line with the book. */
-  async updateCoverFromBook() {
+  async updateCoverFromBook(pages?: number) {
     const book = await this.bookMeasurements();
+    if (pages) book.pages = pages;
     if (!book.pages) return this.toast('Show the book in the preview once, so Typst Studio knows its page count.', 'error');
     try {
-      await this.editFile(COVER_SPEC, (text) => updateSpec(text, book));
+      await this.editForExport(COVER_SPEC, (text) => updateSpec(text, book));
       this.toast(`Cover updated: ${book.pages} pages${book.width ? `, ${book.width} × ${book.height}` : ''}.`);
     } catch (e) {
       this.toast(`Couldn't update the cover: ${errorMessage(e)}`, 'error');
     }
+  }
+
+  // ---- printing ------------------------------------------------------------------------
+
+  openPrint() {
+    if (!this.state.workspace?.entry) return this.toast('Open a book first.', 'error');
+    this.store.set((s) => ({ print: { ...s.print, open: true } }));
+    this.syncPreviewVisibility();
+    void this.preparePrint();
+  }
+
+  closePrint() {
+    this.store.set((s) => ({ print: { ...s.print, open: false } }));
+    this.syncPreviewVisibility();
+  }
+
+  /**
+   * Make the print files (the interior with bleed, through a generated wrapper
+   * that includes the book unchanged; and the cover), then check them.
+   */
+  async preparePrint() {
+    const ws = this.state.workspace;
+    if (!ws?.entry || this.state.print.status === 'working') return;
+    const setPrint = (p: Partial<StudioState['print']>) => this.store.set((s) => ({ print: { ...s.print, ...p } }));
+    if (!this.typst.running) {
+      setPrint({ status: 'done', files: {}, checks: [{ level: 'bad', text: 'The print files need the Typst preview running. Restart the preview and try again.' }] });
+      return;
+    }
+    setPrint({ status: 'working' });
+    const rel = (path: string) => (path.startsWith(ws.root + '/') ? path.slice(ws.root.length + 1) : path);
+    const info = (path: string) => ipc.pdfInfo(path).catch((): PdfInfo | null => null);
+    const failures: Check[] = [];
+    const files: StudioState['print']['files'] = {};
+    try {
+      const unsaved = (await this.docs?.saveAll()) ?? [];
+      if (unsaved.length) throw new Error(`couldn't save ${unsaved.map((f) => f.path).join(', ')}`);
+
+      // The wrapper is Typst Studio's own file; never write over anything else there.
+      const existing = await ipc.fsRead(PRINT_WRAPPER).catch(() => null);
+      if (existing && !existing.text.startsWith('// Typst Studio writes this file for printing')) throw new Error(`${PRINT_WRAPPER} isn't Typst Studio's; move it away first`);
+      const wrapper = printWrapper(ws.entry);
+      if (!existing) {
+        await ipc.fsMkdir('.typst-studio').catch(() => {});
+        await ipc.fsWrite(PRINT_WRAPPER, wrapper, null);
+      }
+      await this.editForExport(PRINT_WRAPPER, () => wrapper);
+
+      let interior: PdfInfo | null = null;
+      try {
+        files.interior = rel(await this.typst.exportPdf(`${ws.root}/${PRINT_WRAPPER}`));
+        interior = await info(files.interior);
+      } catch (e) {
+        failures.push({ level: 'bad', text: `The interior PDF couldn’t be made: ${errorMessage(e)}` });
+      }
+
+      let cover: PrintFacts['cover'] = null;
+      if (this.hasCover()) {
+        const spec = parseCoverSpec((await ipc.fsRead(COVER_SPEC).catch(() => ({ text: '' }))).text);
+        let pdf: PdfInfo | null = null;
+        try {
+          files.cover = rel(await this.typst.exportPdf(`${ws.root}/${COVER_PRINT}`));
+          pdf = await info(files.cover);
+        } catch (e) {
+          failures.push({ level: 'bad', text: `The cover PDF couldn’t be made: ${errorMessage(e)}` });
+        }
+        cover = { spec, pdf };
+      }
+
+      const main = await this.currentText(ws.entry);
+      const trim = main ? trimFromMain(main) : null;
+      const edgeToEdge: string[] = [];
+      for (const f of ws.files) {
+        if (!f.endsWith('.typ') || f.startsWith('cover/') || f.startsWith('.typst-studio/')) continue;
+        const text = await this.currentText(f);
+        if (text && edgeToEdgeWithoutBleed(text)) edgeToEdge.push(f);
+      }
+      const facts: PrintFacts = {
+        trim: trim && lengthPt(trim.width) && lengthPt(trim.height) ? { width: lengthPt(trim.width)!, height: lengthPt(trim.height)! } : null,
+        interior,
+        cover,
+        // Problems are the previewed document's: the book's only while the book is showing.
+        errors: this.state.previewTarget === 'book' ? this.state.problems.errors : 0,
+        staleCode: this.code.problems().length,
+        edgeToEdge,
+      };
+      setPrint({ status: 'done', files, facts, checks: [...failures, ...printChecks(facts)] });
+      void this.refreshFiles();
+    } catch (e) {
+      setPrint({ status: 'done', files, checks: [{ level: 'bad', text: `Couldn’t make the print files: ${errorMessage(e)}` }] });
+    }
+  }
+
+  /** Use the printer's spine width for the cover, then make the print files again. */
+  async setCoverSpine(width: string) {
+    const length = typstLength(width.trim());
+    if (!length) return this.toast(`Not a width: ${width}. Use a length like 15.2mm or 0.6in.`, 'error');
+    try {
+      await this.editForExport(COVER_SPEC, (text) => updateSpec(text, { spineWidth: length }));
+    } catch (e) {
+      return this.toast(`Couldn't update the cover: ${errorMessage(e)}`, 'error');
+    }
+    await this.preparePrint();
+  }
+
+  /** A printer's page in the browser (the Rust side only opens known printers' https pages). */
+  async openPrinterPage(url: string) {
+    try {
+      await ipc.openUrl(url);
+    } catch (e) {
+      this.toast(`Couldn't open ${url}: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** A fix offered next to a print check. */
+  async printAction(action: NonNullable<Check['action']>) {
+    if (action === 'design-cover') {
+      this.closePrint();
+      return this.openCoverDialog();
+    }
+    if (action === 'update-cover') {
+      // The page count of the PDF just made is the one that matters.
+      await this.updateCoverFromBook(this.state.print.facts?.interior?.pages);
+      return this.preparePrint();
+    }
+    if (action === 'run-code') {
+      await this.code.runAll({ onlyStale: true });
+      return this.preparePrint();
+    }
+    this.closePrint();
+    await this.nextProblem();
   }
 
   /** Export the printable cover (no guides) to the export folder. */
@@ -1601,7 +1754,7 @@ export class Studio {
     const ok = this.state.preview.status !== 'error';
     // The preview is a native view above the page; hide it while a dialog is open
     // so the dialog isn't drawn underneath it.
-    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.prompt || this.state.coverDialogOpen;
+    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.prompt || this.state.coverDialogOpen || this.state.print.open;
     void ipc.previewSetVisible(this.previewVisible && ok && !dialog);
   }
 

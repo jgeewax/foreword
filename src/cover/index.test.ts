@@ -32,6 +32,9 @@ describe('keeping the cover in step with the book', () => {
     expect(next).toMatch(/^#let trim-width = 5\.5in$/m);
     expect(next).toMatch(/^#let pages = 312$/m);
     expect(next).toContain('#let bleed = 3mm');
+    expect(next).toMatch(/^#let spine-width = none$/m);
+    expect(updateSpec(next, { spineWidth: '16.3mm' })).toMatch(/^#let spine-width = 16\.3mm$/m);
+    expect(updateSpec(next, { spineWidth: '16.3mm) #panic(' })).toBe(next);
   });
 
   it("reads the book's page size from its main file", () => {

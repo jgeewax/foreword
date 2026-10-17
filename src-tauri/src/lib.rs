@@ -10,6 +10,7 @@ mod logs;
 mod lsp;
 mod packages;
 mod preview;
+mod print;
 #[cfg(target_os = "macos")]
 mod snapshot;
 mod workspace;
@@ -282,6 +283,13 @@ pub fn run() {
                     MenuItem::with_id(handle, "new-file", "New File…", true, Some("CmdOrCtrl+N"))?;
                 let cover =
                     MenuItem::with_id(handle, "design-cover", "Design Cover…", true, None::<&str>)?;
+                let print = MenuItem::with_id(
+                    handle,
+                    "print-mixam",
+                    "Print with Mixam…",
+                    true,
+                    None::<&str>,
+                )?;
                 file.prepend_items(&[
                     &new_book,
                     &new_chapter,
@@ -289,6 +297,7 @@ pub fn run() {
                     &PredefinedMenuItem::separator(handle)?,
                     &cover,
                     &export,
+                    &print,
                     &PredefinedMenuItem::separator(handle)?,
                 ])?;
             }
@@ -321,6 +330,7 @@ pub fn run() {
                     "new-chapter",
                     "new-file",
                     "design-cover",
+                    "print-mixam",
                     "typst-guide",
                 ]
                 .contains(&id)
@@ -395,6 +405,8 @@ pub fn run() {
             files::fs_copy,
             files::fs_trash,
             clipboard::clipboard_write,
+            print::pdf_info,
+            print::open_url,
             code::code_run,
             lsp::typst_start,
             lsp::typst_send,

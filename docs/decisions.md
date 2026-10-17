@@ -640,6 +640,71 @@ pane top (off by 0 pt).
   PDF/X. Printers such as Mixam convert to PDF/X themselves; KDP accepts
   standard PDFs.
 
+### Printing with Mixam
+
+- **What Typst Studio does:** it makes print-ready PDFs, checks them, and
+  opens Mixam's product page in the browser. Size, paper, binding, price,
+  upload and payment all happen on Mixam's site. Typst Studio never places
+  an order or handles money.
+- **Mixam's requirements** (mixam.com/support/filesetup and /support/bleed,
+  October 2026):
+  - 0.125in (UK: 3mm) bleed on inner pages and covers. Files without bleed are
+    scaled up to the bleed size, which moves text toward the edge.
+  - Single pages for the interior; the cover as one spread with the spine.
+  - Perfect binding from 32–48 pages, depending on the paper.
+  - CMYK preferred; RGB is converted on upload.
+  - Quiet areas: 0.25in from the edges and 0.5in from the binding (UK: 5mm and
+    12mm or more).
+- **Interior bleed without touching the book:** Typst 0.15 has `page(bleed:)`.
+  The PDF grows by the bleed, a TrimBox marks the finished page, and the page
+  `fill` runs into the bleed. Typst Studio writes `.typst-studio/interior.typ`
+  (`#set page(bleed: 0.125in)` + `#include "/main.typ"`) and exports that.
+  Pagination is unchanged, since `100%` is still the trim size.
+  - Content sized to the page stops at the trim. The picture-book template's
+    `picture-page` now reaches into `page.bleed`, and the checks warn about
+    zero-margin pages elsewhere that don't use `page.bleed`.
+- **Checks read the real PDFs.** The Rust `pdf_info` command uses lopdf to
+  read page count, MediaBox and TrimBox, and a test runs on PDFs that Typst
+  made. It checks:
+  - every page has the same size, with bleed, and matches main.typ's trim;
+  - the page count is even, and long enough for perfect binding;
+  - the cover's trim and page count match the book, and the cover PDF is one
+    page of exactly 2 × trim + spine + 2 × bleed (to 0.1pt, under one page of
+    spine);
+  - code examples are up to date, and there are no errors.
+  - Fixes sit next to the checks: Design a cover, Update cover from book, and
+    Run code examples.
+- **The spine comes from Mixam.** Mixam shows the spine width for the chosen
+  paper and page count, but only on its site (or through its API). The dialog
+  takes that number, writes it into `cover/spec.typ` and makes the cover again.
+- **Exports straight after an edit:** Tinymist sees disk writes through its
+  file watcher, a moment later, and the first print run exported a cover
+  from the old spine. Edits that are exported straight away (the cover spec,
+  the wrapper) now go through an open document, so Tinymist gets `didChange`
+  at once.
+- **Opening the site:** the Rust `open_url` command only opens `https://` pages
+  on mixam.com, mixam.co.uk, mixam.ca and mixam.com.au (tested against
+  look-alike hosts). Each site's `/novels`, `/paperbackbooks`, `/textbook`,
+  `/childrensbooks`, `/hardcoverbooks` and `/support/filesetup` pages were
+  checked (HTTP 200); mixam.de redirects them, so it's left out. The site
+  follows the system region and can be changed.
+- **The Mixam API (not used yet):** `POST /api/public/offers` returns prices,
+  production days and the spine width for an item specification. It needs a
+  Mixam account approved for API use, and a JWT from `GET /api/user/token`
+  (Basic auth). Orders need the PDFs at public URLs, plus billing and delivery
+  addresses. Quotes inside Typst Studio are worth doing once there's an
+  account to test with (credentials in the Keychain). Ordering stays on
+  Mixam's site.
+- **Verified in the app** (self-test `print`):
+  - A 5.5×8.5in novel produced a 414 × 630 pt interior with TrimBox
+    9 9 405 621, with the short-book and odd-page warnings.
+  - "Design a cover" from the check opened the cover dialog.
+  - After four chapters were added, the spine mismatch was caught, and Update
+    cover from book fixed it (11.2725in wrap).
+  - An exact 16.3mm spine gave an 11.892in wrap.
+  - A picture book had no edge warning.
+  - `open_url` refused another host.
+
 ### Helper processes, revised
 
 The child-process registry is now per app instance (`children-<pid>.json`).

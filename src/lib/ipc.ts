@@ -1,5 +1,6 @@
 // Typed wrappers for the Rust commands (src-tauri/src/*.rs).
 import { Channel, invoke } from '@tauri-apps/api/core';
+import type { PdfInfo } from '../print';
 
 export type CmdErrorKind = 'conflict' | 'notFound' | 'invalid' | 'unavailable' | 'io';
 export type CmdError = { kind: CmdErrorKind; message: string };
@@ -56,6 +57,10 @@ export const ipc = {
       timeoutMs: timeoutMs ?? null,
     }),
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
+  /** Page count and page boxes of a PDF in the workspace (for the print checks). */
+  pdfInfo: (path: string) => invoke<PdfInfo>('pdf_info', { path }),
+  /** Open a printer's web page in the browser (https, known printers only). */
+  openUrl: (url: string) => invoke<void>('open_url', { url }),
   /** New project from a Typst Universe template package (downloaded from packages.typst.org). */
   projectCreateFromPackage: (parent: string, name: string, pkg: { name: string; version: string }, extra: { path: string; text: string }[]) =>
     invoke<{ root: string; entry: string }>('project_create_from_package', { parent, name, package: pkg, extra }),

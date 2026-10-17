@@ -814,6 +814,75 @@ async function coverChecks() {
   return out;
 }
 
+/**
+ * Print with Mixam: print files and checks for a fresh novel (no cover → a
+ * cover through the check's action → the book grows → Update cover from
+ * book → the printer's exact spine), and a picture book whose full-page
+ * pictures reach into the bleed. Never opens a printer page (only checks that
+ * other sites are refused). Works next to the scratch book, then reopens it.
+ */
+async function printChecksRun() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const stamp = Date.now().toString(36);
+  const compiled = () => waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+  const run = async () => {
+    await sleep(300);
+    await waitFor(() => studio.state.print.status === 'done', 90000, 'print files');
+    const p = studio.state.print;
+    return { files: p.files, interior: p.facts?.interior, checks: p.checks.filter((c) => c.level !== 'info').map((c) => `${c.level}: ${c.text}${c.action ? ` [${c.action}]` : ''}`) };
+  };
+
+  await studio.createBook('novel', { title: `Print ${stamp}`, author: 'Ada Example', size: { width: '5.5in', height: '8.5in' } }, parent);
+  await compiled();
+  studio.openPrint();
+  out.first = await run();
+  out.dialog = {
+    shown: !!document.querySelector('[aria-label="Print with Mixam"]'),
+    actions: [...document.querySelectorAll('.print-checks button')].map((b) => b.textContent),
+    spec: document.querySelector('.print-spec')?.textContent,
+  };
+  out.snapshotFirst = await snap('print-first');
+
+  // The check's own action opens the cover dialog.
+  await studio.printAction('design-cover');
+  await sleep(400);
+  out.coverDialogFromCheck = studio.state.coverDialogOpen && !studio.state.print.open;
+  studio.closeCoverDialog();
+  await studio.designCover('classic', { title: 'The Quiet Harbour', author: 'Ada Example', paper: '0.0025in', spineWidth: null });
+  await compiled();
+  await studio.setPreviewTarget('book');
+  await compiled();
+  studio.openPrint();
+  out.withCover = await run();
+
+  // The book grows past the cover's spine.
+  studio.closePrint();
+  for (const name of ['One', 'Two', 'Three', 'Four']) await studio.addChapter(name);
+  await studio.save();
+  studio.openPrint();
+  out.grown = await run();
+  await studio.printAction('update-cover');
+  out.fixed = await run();
+  await studio.setCoverSpine('16.3mm');
+  out.exactSpine = await run();
+  out.snapshotDone = await snap('print-done');
+  out.refusedUrl = await ipc.openUrl('https://evil.example/mixam.com').then(
+    () => 'opened!',
+    (e) => errorMessage(e),
+  );
+  studio.closePrint();
+
+  await studio.createBook('picture-book', { title: `Pictures ${stamp}`, author: 'Ada Example' }, parent);
+  await compiled();
+  studio.openPrint();
+  out.pictureBook = await run();
+  studio.closePrint();
+  await studio.openWorkspace(original);
+  return out;
+}
+
 /** Runnable code examples: run, outdated, and the assistant fix loop (a fresh programming book). */
 async function codeChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
@@ -1920,6 +1989,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('cover')) {
       log('cover');
       result.cover = await coverChecks();
+    }
+    if (want('print')) {
+      log('print');
+      result.print = await printChecksRun();
     }
     if (want('menus')) {
       log('menus');

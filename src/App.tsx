@@ -9,6 +9,7 @@ import { PreviewPane } from './components/PreviewPane';
 import { CoverDialog } from './components/CoverDialog';
 import { HistoryDiff } from './components/HistoryDiff';
 import { NewBookDialog } from './components/NewBookDialog';
+import { PrintDialog } from './components/PrintDialog';
 import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
@@ -154,12 +155,14 @@ export function App() {
   const settingsOpen = useStore(studio.store, (s) => s.settingsOpen);
   const newBookOpen = useStore(studio.store, (s) => s.newBookOpen);
   const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
+  const printOpen = useStore(studio.store, (s) => s.print.open);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
       {settingsOpen && <SettingsDialog />}
       {newBookOpen && <NewBookDialog />}
       {coverDialogOpen && <CoverDialog />}
+      {printOpen && <PrintDialog />}
       <PromptDialog />
       <HistoryDiff />
     </>

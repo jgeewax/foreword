@@ -82,8 +82,8 @@ export function coverFiles(style: CoverStyle, info: CoverInfo): { path: string; 
   ];
 }
 
-/** spec.typ with new page size and page count (leaves everything else as the author left it). */
-export function updateSpec(text: string, update: { width?: string | null; height?: string | null; pages?: number | null }): string {
+/** spec.typ with new page size, page count or exact spine width (leaves everything else as the author left it). */
+export function updateSpec(text: string, update: { width?: string | null; height?: string | null; pages?: number | null; spineWidth?: string | null }): string {
   let out = text;
   const set = (name: string, value: string) => {
     out = out.replace(new RegExp(`^(#let ${name} = ).*$`, 'm'), `$1${value}`);
@@ -91,6 +91,7 @@ export function updateSpec(text: string, update: { width?: string | null; height
   if (update.width && typstLength(update.width)) set('trim-width', typstLength(update.width)!);
   if (update.height && typstLength(update.height)) set('trim-height', typstLength(update.height)!);
   if (update.pages && update.pages > 0) set('pages', String(Math.round(update.pages)));
+  if (update.spineWidth && typstLength(update.spineWidth)) set('spine-width', typstLength(update.spineWidth)!);
   return out;
 }
 

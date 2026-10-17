@@ -33,7 +33,12 @@
   #v(1fr)
 ]
 
-/// A page that is all picture, for a big moment in the story.
-#let picture-page(picture) = page(margin: 0pt, image(picture, width: 100%, height: 100%, fit: "cover"))
+/// A page that is all picture, for a big moment in the story. When the book is
+/// printed (with bleed), the picture runs past the page edge into the bleed,
+/// so no white edge shows after cutting.
+#let picture-page(picture) = page(margin: 0pt, context {
+  let b = if type(page.bleed) == dictionary { 0pt } else { page.bleed }
+  place(top + left, dx: -b, dy: -b, image(picture, width: 100% + 2 * b, height: 100% + 2 * b, fit: "cover"))
+})
 
 #let the-end() = page(align(center + horizon, text(size: 34pt, weight: "bold")[The End]))

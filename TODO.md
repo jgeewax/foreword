@@ -58,7 +58,7 @@
 
 - [x] review mode, where i can add lots of comments across a chapter, section, paragraph, etc. and then we can address them all at once. we can explore this more to clarify what this should look like...
 
-- [ ] can we build an integration with a printer like Mixam to print the book?
+- [x] can we build an integration with a printer like Mixam to print the book?
 
 - [x] cover designer: can we make a cover.typ and give people templates to make that work? aligning w the book templates? maybe this depends on the printer also? not sure if this is a good idea?
 

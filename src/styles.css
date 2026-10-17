@@ -52,6 +52,18 @@ button.icon { background: transparent; border-color: transparent; padding: 1px 6
 button.icon:hover:not(:disabled) { background: var(--bg-3); border-color: transparent; }
 button.link { background: none; border: none; color: var(--accent); padding: 0; }
 button.small { padding: 1px 8px; font-size: 11.5px; }
+.print-dialog { width: min(720px, 92vw); }
+.print-checks { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.print-checks li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; line-height: 1.45; }
+.print-checks .check-icon { flex: none; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--bg); }
+.print-checks .check-ok .check-icon { background: var(--good); }
+.print-checks .check-warn .check-icon { background: var(--warn); }
+.print-checks .check-bad .check-icon { background: var(--bad); }
+.print-checks .check-info .check-icon { background: var(--muted); }
+.print-checks .check-info { color: var(--muted); }
+.print-checks .check-text button { margin-left: 8px; }
+.print-file-kind { width: 64px; flex: none; color: var(--muted); font-size: 12px; }
+.print-spec strong { color: var(--fg); font-weight: 600; }
 .muted { color: var(--muted); }
 .bad { color: var(--bad); }
 .spacer { flex: 1; }

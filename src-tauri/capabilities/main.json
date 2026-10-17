@@ -32,6 +32,8 @@
     "allow-fs-copy",
     "allow-fs-trash",
     "allow-clipboard-write",
+    "allow-pdf-info",
+    "allow-open-url",
     "allow-code-run",
     "allow-typst-start",
     "allow-typst-send",

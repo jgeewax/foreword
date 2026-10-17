@@ -24,6 +24,8 @@ fn main() {
             "fs_copy",
             "fs_trash",
             "clipboard_write",
+            "pdf_info",
+            "open_url",
             "code_run",
             "typst_start",
             "typst_send",

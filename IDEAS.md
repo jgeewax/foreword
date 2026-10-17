@@ -79,3 +79,12 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Ask the assistant for cover copy (back-cover blurb, tagline) in the book's voice, from the manuscript and style guide.
 - A front-only export (ebook cover, 1600×2560 PNG) from the same design.
 - Hardcover case wraps and dust jackets (different hinge and wrap allowances).
+
+## Printing
+- Mixam quotes in the print dialog through its Offers API (price, production days, exact spine) once there's an approved API account; credentials in the Keychain.
+- A print proof: the interior and cover PDFs side by side in a spread view with trim and bleed marked, before uploading.
+- Check margins against the printer's quiet area (text frames within 0.25in of the trim, 0.5in of the binding) from the compiled layout.
+- Other printers through the same checks: Amazon KDP (no bleed unless images run off the page), IngramSpark, Lulu; each with its own page-count and cover rules.
+- Grayscale check for black-and-white printing (colour on an inside page costs more at most printers).
+- Blank-page padding as an option (add the blank pages a printer needs, as a print-only setting, instead of in the book).
+
