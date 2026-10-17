@@ -50,6 +50,7 @@ fn main() {
             "agent_subscribe",
             "agent_stop",
             "history_init",
+            "history_reveal",
             "history_snapshot",
             "history_list",
             "history_changes",

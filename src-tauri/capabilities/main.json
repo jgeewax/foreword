@@ -57,6 +57,7 @@
     "allow-agent-subscribe",
     "allow-agent-stop",
     "allow-history-init",
+    "allow-history-reveal",
     "allow-history-snapshot",
     "allow-history-list",
     "allow-history-changes",
