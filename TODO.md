@@ -70,7 +70,7 @@
 
 - [x] add thinking animations, something to the user know things are happening in the ai chatbox
 
-- [ ] less engineery tool calls (read/grep => Reading Chapter 4 (lines 1-200) / Searching for "xyz")
+- [x] less engineery tool calls (read/grep => Reading Chapter 4 (lines 1-200) / Searching for "xyz")
 
 - [ ] i cant switch tasks and have multiple tasks going at the same time... thats aproblem. i need to be able to multi-task
 

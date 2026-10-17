@@ -12,6 +12,7 @@ import { TypstGuide } from './TypstGuide';
 import { ContextMeter, TaskMenu } from './TaskMenu';
 import { withoutMarker } from '../app/tasks';
 import { withoutAddressed } from '../app/review';
+import { describeTool } from '../app/tool-labels';
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -96,6 +97,39 @@ const itemMenu = (text: string, what: string) =>
     !!selectedText() && { label: 'Copy', action: () => studio.copy(selectedText()) },
     { label: `Copy ${what}`, action: () => studio.copy(text) },
   ]);
+
+/** A tool call in words ("Read “The Storm” (chapter 2) · lines 1–40"); its raw output folds out. */
+function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
+  const names = useStore(studio.store, (s) => s.names);
+  const label = describeTool(item.name, item.input, names, undefined, item.read);
+  const text = item.status === 'running' ? `${label.running}…` : label.done;
+  const note = item.note ?? label.note;
+  const open = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (item.read) void studio.showRead(item.read);
+    else if (label.path) void studio.openFile(label.path);
+  };
+  return (
+    <details className={`tool ${item.status}`}>
+      <summary title={`${item.name}: ${item.summary}`}>
+        <span className="tool-status" aria-hidden>
+          {item.status === 'running' ? <span className="tool-spinner" /> : item.status === 'done' ? '✓' : '✕'}
+        </span>
+        {label.path && (item.read || item.name !== 'read') ? (
+          <button className="tool-label link" title={item.read ? 'Open the file with these lines selected' : 'Open the file'} onClick={open}>
+            {text}
+          </button>
+        ) : (
+          <span className="tool-label">{text}</span>
+        )}
+        {note && <span className="tool-note">· {note}</span>}
+        {label.code && <code className="tool-code">{label.code}</code>}
+      </summary>
+      {item.detail && <pre className="tool-detail">{item.detail}</pre>}
+    </details>
+  );
+}
 
 /** The model's reasoning: its last lines while it streams, then folded to "Thought for 4 s". */
 function Thinking({ item }: { item: Extract<ChatItem, { kind: 'thinking' }> }) {
@@ -196,30 +230,7 @@ function ItemBody({ item }: { item: ChatItem }) {
         </div>
       );
     case 'tool':
-      return (
-        <details className={`tool ${item.status}`}>
-          <summary>
-            <span className="tool-status">{item.status === 'running' ? '◌' : item.status === 'done' ? '✓' : '✕'}</span>
-            <span className="tool-name">{item.name}</span>
-            {item.read ? (
-              <button
-                className="tool-summary link"
-                title="Open the file with these lines selected"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void studio.showRead(item.read!);
-                }}
-              >
-                {item.summary}
-              </button>
-            ) : (
-              <span className="tool-summary">{item.summary}</span>
-            )}
-          </summary>
-          {item.detail && <pre className="tool-detail">{item.detail}</pre>}
-        </details>
-      );
+      return <ToolRow item={item} />;
     case 'permission': {
       const pending = item.state === 'pending' || item.state === 'sending';
       return (

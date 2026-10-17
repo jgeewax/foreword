@@ -792,7 +792,7 @@ async function aiReadChecks(withAgent: boolean) {
 
   // The chat row opens the file with those lines selected.
   await studio.openFile('main.typ');
-  (document.querySelector('.tool button.tool-summary') as HTMLButtonElement | null)?.click();
+  (document.querySelector('.tool button.tool-label') as HTMLButtonElement | null)?.click();
   await sleep(600);
   const sel = studio.editor?.getSelection();
   out.clicked = { active: studio.state.active, selection: sel && `${sel.startLineNumber}-${sel.endLineNumber}` };
@@ -1887,6 +1887,7 @@ async function thinkingChecks() {
     phases,
     thinking: thinking.map((t) => (t.kind === 'thinking' ? { done: t.done, seconds: t.ended && Math.round((t.ended - t.started) / 1000), text: t.text.slice(0, 80) } : null)),
     folded: [...document.querySelectorAll('.thinking .thinking-head')].map((e) => e.textContent),
+    toolRows: [...document.querySelectorAll('.tool summary')].map((e) => e.textContent),
     lineGone: !document.querySelector('.activity-line'),
     shots,
   };

@@ -4,6 +4,7 @@
 // author to confirm. Finished tasks are remembered per book on this Mac.
 
 import { readLabel, readOf, type AiRead } from './ai-marks';
+import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
@@ -107,6 +108,8 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
             id: part.id ?? `${m.id}:${i}`,
             name: part.name ?? 'tool',
             summary: read ? readLabel(read) : toolSummary(part.state?.input),
+            input: part.state?.input,
+            note: describeTool(part.name ?? 'tool', part.state?.input, NO_NAMES, output).note,
             ...(read ? { read: { path: read.path, from: read.start, to: read.start + read.lines.length - 1 } } : {}),
             status: status === 'error' || status === 'failed' ? 'failed' : 'done',
             detail: (part.state?.error ?? part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '').slice(0, 4000),

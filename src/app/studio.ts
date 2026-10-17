@@ -26,7 +26,7 @@ import {
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
-import { toolActivity } from './tool-labels';
+import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
@@ -85,6 +85,9 @@ export type ChatItem =
       detail: string;
       /** A read: the lines it read (1-based, inclusive). */
       read?: { path: string; from: number; to: number };
+      /** The tool's input (for describing it in words) and a note on its result ("3 matches"). */
+      input?: unknown;
+      note?: string;
     }
   | {
       kind: 'permission';
@@ -183,6 +186,8 @@ export type StudioState = {
   /** The book's page count, last seen while previewing the book (for the cover's spine). */
   bookPages: number | null;
   coverDialogOpen: boolean;
+  /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
+  names: BookNames;
   /** Bumped when the assistant's marks change (the editor repaints them). */
   aiMarks: number;
   /** Print with Mixam: the print files and the checks on them. */
@@ -251,6 +256,7 @@ const initialState: StudioState = {
   coverDialogOpen: false,
   print: { open: false, status: 'idle', checks: [], files: {} },
   aiMarks: 0,
+  names: NO_NAMES,
   sidebar: 'files',
 };
 
@@ -478,7 +484,11 @@ export class Studio {
           }, 400);
         }
       },
-      onDirtyChange: (p, dirty) => this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } })),
+      onDirtyChange: (p, dirty) => {
+        this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } }));
+        // Saved: headings (and, for the main file, the chapter order) may have changed.
+        if (!dirty && p.endsWith('.typ')) void this.refreshNames([p]);
+      },
       onConflict: (p, message) =>
         this.store.set((s) => {
           const conflicts = { ...s.conflicts };
@@ -493,6 +503,7 @@ export class Studio {
     await this.loadStyleGuide();
     this.aiEdits.clear();
     this.aiReads = [];
+    void this.refreshNames();
     void this.history.start(this.historyExcludes()).then(() => this.refreshAiEdits());
     void this.code.scan();
     void this.scanTodos();
@@ -1673,6 +1684,7 @@ export class Studio {
       void this.refreshFiles().then(() => {
         void this.code.scan();
         void this.scanTodos();
+        void this.refreshNames(batch);
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
       });
       this.history.scheduleSave();
@@ -2575,8 +2587,8 @@ export class Studio {
         break;
       case 'tool-called':
         this.toolCalls.set(e.callId, { name: this.toolCalls.get(e.callId)?.name ?? '', input: e.input });
-        this.setActivity({ phase: 'tool', label: toolActivity(this.toolCalls.get(e.callId)!.name, e.input) });
-        this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, summary: summarizeToolInput(e.input) } : it));
+        this.setActivity({ phase: 'tool', label: toolActivity(this.toolCalls.get(e.callId)!.name, e.input, this.state.names) });
+        this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, input: e.input, summary: summarizeToolInput(e.input) } : it));
         break;
       case 'tool-succeeded': {
         this.setActivity({ phase: 'thinking' });
@@ -2584,12 +2596,14 @@ export class Studio {
         this.toolCalls.delete(e.callId);
         const read = call && this.state.workspace ? readOf(this.state.workspace.root, call.name, call.input, e.output) : null;
         if (read) this.addAiRead(read);
+        const note = call ? describeTool(call.name, call.input, this.state.names, e.output).note : undefined;
         this.updateItem(e.callId, (it) =>
           it.kind === 'tool'
             ? {
                 ...it,
                 status: 'done',
                 detail: e.output.slice(0, 4000),
+                note,
                 ...(read ? { summary: readLabel(read), read: { path: read.path, from: read.start, to: read.start + read.lines.length - 1 } } : {}),
               }
             : it,
@@ -2769,6 +2783,26 @@ export class Studio {
     } finally {
       this.store.set({ exporting: false });
     }
+  }
+
+  /**
+   * The book's names for its files: headings of the .typ files and the order the
+   * main file includes them. With `only`, just those files are re-read.
+   */
+  private async refreshNames(only?: string[]) {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    const typ = ws.files.filter((f) => f.endsWith('.typ'));
+    const titles = only ? { ...this.state.names.titles } : {};
+    for (const f of only ? only.filter((p) => p.endsWith('.typ')) : typ) {
+      const text = await this.currentText(f).catch(() => null);
+      const heading = text == null ? null : firstHeading(text);
+      if (heading) titles[f] = heading;
+      else delete titles[f];
+    }
+    const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
+    const chapters = main && ws.entry ? includedFiles(main, ws.entry) : [];
+    if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles } });
   }
 
   /** The last PDF exported in this session (Open Exported PDF). */

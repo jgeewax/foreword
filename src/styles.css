@@ -226,6 +226,16 @@ button.indicator:hover { background: var(--bg-3); }
 .tool summary { display: flex; gap: 6px; align-items: baseline; list-style: none; }
 .tool summary::-webkit-details-marker { display: none; }
 .tool-name { font-weight: 600; color: var(--fg); }
+.tool { animation: rise-in 0.16s ease-out; }
+.tool summary { cursor: default; }
+.tool-label { color: var(--fg); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.tool-label { font-size: 12px; text-align: left; color: var(--fg); text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 2px; }
+button.tool-label:hover { color: var(--accent); text-decoration-color: currentColor; }
+.tool.running .tool-label { color: var(--muted); }
+.tool-note { color: var(--muted); white-space: nowrap; }
+.tool-code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; padding: 0 4px; border-radius: 3px; background: var(--bg-2); color: var(--fg); }
+.tool-status { flex: none; width: 12px; display: inline-flex; justify-content: center; }
+.tool-spinner { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--border); border-top-color: var(--accent); animation: spin 0.75s linear infinite; align-self: center; }
 .tool-summary { font-family: "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .tool.failed .tool-status { color: var(--bad); }

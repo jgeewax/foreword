@@ -798,6 +798,25 @@ pane top (off by 0 pt).
   the reasoning parts' times).
 - `prefers-reduced-motion` stops the spinner and the sweep.
 
+### Tool calls in words
+
+- Chat rows describe each tool call as a sentence, using the book's names:
+  - "Read “The Storm” (chapter 2) · lines 1–40", "Read the main file",
+    "Read the style guide";
+  - "Searched for “lighthouse” in chapters/ · 3 matches", "Looked for
+    **/*.typ · 12 files";
+  - "Edited “The Harbour” (chapter 3)", "Ran a command `python3 count.py`",
+    "Read a web page (typst.app)".
+- While a tool runs, the progress line says the same in the present tense
+  ("Reading …"), with a small spinner on the row.
+- **Names:** chapters are numbered by the main file's `#include` order
+  (commented-out lines skipped) and named by their first `= heading`. The map
+  is rebuilt when a book opens, and for the changed files after a save or a
+  change on disk.
+- The file in a row is a link: reads open with their lines selected, edits
+  open the file. The raw output still folds out under the row, and its tooltip
+  keeps the tool name and input.
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and
