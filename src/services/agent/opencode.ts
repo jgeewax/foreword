@@ -89,6 +89,15 @@ export class OpenCodeAdapter implements AgentAdapter {
     return res.data.id;
   }
 
+  // Experimental in OpenCode 2.0.20; entries appear as `api/<key>` in the system context (verified).
+  async setInstructions(sessionId: string, key: string, text: string) {
+    await call('PUT', `/api/experimental/session/${sessionId}/instructions/entries/${encodeURIComponent(key)}`, { value: text });
+  }
+
+  async getInstructions(sessionId: string) {
+    return (await call('GET', `/api/experimental/session/${sessionId}/instructions/entries`)).data ?? [];
+  }
+
   async switchModel(sessionId: string, model: ModelRef) {
     await call('POST', `/api/session/${sessionId}/model`, { model: { providerID: model.providerID, id: model.id } });
   }

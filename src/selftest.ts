@@ -353,5 +353,18 @@ async function agentTurn(chapter: string, line: number) {
   out.reply = items.filter((i) => i.kind === 'assistant').map((i) => (i.kind === 'assistant' ? i.text : '')).join('\n');
   out.notices = items.filter((i) => i.kind === 'notice').map((i) => (i.kind === 'notice' ? i.text : ''));
   out.chapterDiskUnchanged = !studio.state.dirty[chapter];
+
+  // The session carries the writing-assistant instructions (TODO #4).
+  const sid = studio.state.agent.sessionId;
+  if (sid) {
+    const entries = await studio.agent!.getInstructions(sid).catch((e) => [{ key: 'error', value: errorMessage(e) }]);
+    out.instructions = entries.map((e) => ({ key: e.key, length: String(e.value).length, writingAssistant: String(e.value).includes('writing assistant') }));
+    // And the model sees itself as working on a book (no tools needed).
+    await studio.send('Without using any tools, answer in one short sentence: what kind of project is this, and are you here to write software?');
+    await sleep(1000);
+    await waitFor(() => !studio.state.agent.running, 120000, 'framing question').catch(() => {});
+    const replies = studio.state.agent.items.filter((i) => i.kind === 'assistant');
+    out.framingReply = replies.length ? (replies[replies.length - 1] as { text: string }).text : null;
+  }
   return out;
 }

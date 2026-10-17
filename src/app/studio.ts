@@ -13,6 +13,7 @@ import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
+import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import type { AgentAdapter, AgentEvent, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
@@ -651,6 +652,7 @@ export class Studio {
       if (!sessionId) {
         sessionId = await agent.createSession(this.state.agent.model);
         this.setAgent({ sessionId });
+        await this.applyInstructions(sessionId);
       }
       await agent.send(sessionId, text, context);
       return true;
@@ -681,6 +683,23 @@ export class Studio {
     } catch (e) {
       this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'pending' } : it));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Permission reply failed: ${errorMessage(e)}` });
+    }
+  }
+
+  /** Session context: this is a Typst book, not a software project (see instructions.ts). */
+  private async applyInstructions(sessionId: string) {
+    const ws = this.state.workspace;
+    if (!ws || !this.agent) return;
+    const text = buildInstructions({
+      projectName: ws.name,
+      entry: ws.entry,
+      typFiles: ws.files.filter((f) => f.endsWith('.typ')),
+    });
+    try {
+      await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
+    } catch (e) {
+      // Still usable without them, but the agent will behave like a coding assistant: say so.
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't set the writing-assistant instructions: ${errorMessage(e)}` });
     }
   }
 
