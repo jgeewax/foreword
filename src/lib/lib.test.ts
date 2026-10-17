@@ -34,3 +34,12 @@ describe('PerfTracker', () => {
     expect(p.editToPreview.count).toBe(1);
   });
 });
+
+describe('paths for messages', () => {
+  it('shortens long folders in the middle', async () => {
+    const { shortPath } = await import('./paths');
+    expect(shortPath('/Users/ada/Documents')).toBe('~/Documents');
+    expect(shortPath('/Users/ada/Library/Mobile Documents/com~apple~CloudDocs/Books/Drafts')).toBe('~/…/Books/Drafts');
+    expect(shortPath('/Volumes/Backup')).toBe('/Volumes/Backup');
+  });
+});

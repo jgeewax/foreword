@@ -735,6 +735,24 @@ pane top (off by 0 pt).
   - A real Plan-mode read was marked 1–15 (what the model chose to read),
     gone after switching away, and back from the transcript on return.
 
+### Export PDF asks where to save
+
+- **Export PDF…** (⇧⌘E, the toolbar, the File menu) opens the macOS Save
+  dialog. For each book it starts where that book was last saved. The first
+  time it suggests Documents/<title>.pdf, with the title from `#let title` or
+  `#set document(title: …)`.
+- Tinymist still builds into the book's export folder, and the result is
+  copied to the chosen place. The `export_copy` command only copies `.pdf`
+  files from the book, to an absolute `.pdf` path in a folder that exists,
+  through a temporary file and a rename, so a failed copy never leaves half
+  a PDF.
+- The message says where the PDF went (the folder shortened in the middle when
+  long) and has **Open** and **Show in Finder**. `open_pdf` and `reveal_pdf`
+  only act on existing `.pdf` files.
+- Remembered locations are kept per book in local storage
+  (`studio.exportTargets`), never from self-tests. Self-tests answer the dialog
+  themselves (`studio.pickExportPath`).
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and

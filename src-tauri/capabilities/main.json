@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     "dialog:allow-message",
     "dialog:allow-confirm",
     "dialog:allow-ask",
@@ -33,6 +34,9 @@
     "allow-fs-trash",
     "allow-clipboard-write",
     "allow-pdf-info",
+    "allow-export-copy",
+    "allow-open-pdf",
+    "allow-reveal-pdf",
     "allow-open-url",
     "allow-code-run",
     "allow-typst-start",

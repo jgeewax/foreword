@@ -581,14 +581,23 @@ mod tests {
 
         // One file's history: only the versions that changed it, with its counts.
         std::fs::write(root.join("main.typ"), "= Book\n= More\n").unwrap();
-        snapshot(&r, "agent", "Agent: more", false).await.unwrap().unwrap();
+        snapshot(&r, "agent", "Agent: more", false)
+            .await
+            .unwrap()
+            .unwrap();
         let ch1: Vec<(String, u32)> = list_for(&r, 10, Some(":(literal)chapters/ch1.typ"))
             .await
             .unwrap()
             .into_iter()
             .map(|v| (v.label, v.added))
             .collect();
-        assert_eq!(ch1, [("Edited ch1.typ".to_string(), 1), ("Started".to_string(), 1)]);
+        assert_eq!(
+            ch1,
+            [
+                ("Edited ch1.typ".to_string(), 1),
+                ("Started".to_string(), 1)
+            ]
+        );
         let main = list_for(&r, 10, Some(":(literal)main.typ")).await.unwrap();
         assert_eq!((main[0].kind.as_str(), main[0].files), ("agent", 1));
         std::fs::remove_dir_all(&base).ok();

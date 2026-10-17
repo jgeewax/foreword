@@ -33,7 +33,7 @@ export function Toolbar({ onToggle, visible }: { onToggle: (pane: Pane) => void;
       )}
       {ws && (
         <button title="Export the book to PDF (⇧⌘E)" disabled={exporting} onClick={() => void studio.exportPdf()}>
-          {exporting ? 'Exporting…' : 'Export PDF'}
+          {exporting ? 'Exporting…' : 'Export PDF…'}
         </button>
       )}
       <button title="Open folder (⌘O)" onClick={() => void studio.chooseWorkspace()}>
@@ -200,7 +200,24 @@ export function Toast() {
   if (!toast) return null;
   return (
     <div className={`toast ${toast.tone}`} role="status" onClick={() => studio.store.set({ toast: null })}>
-      {toast.text}
+      <span>{toast.text}</span>
+      {toast.actions?.length ? (
+        <span className="toast-actions">
+          {toast.actions.map((a) => (
+            <button
+              key={a.label}
+              className="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                studio.store.set({ toast: null });
+                a.run();
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ mod clipboard;
 mod code;
 mod discover;
 mod error;
+mod export;
 mod files;
 mod history;
 mod logs;
@@ -261,7 +262,7 @@ pub fn run() {
                 let export = MenuItem::with_id(
                     handle,
                     "export-pdf",
-                    "Export PDF",
+                    "Export PDF…",
                     true,
                     Some("CmdOrCtrl+Shift+E"),
                 )?;
@@ -406,6 +407,9 @@ pub fn run() {
             files::fs_trash,
             clipboard::clipboard_write,
             print::pdf_info,
+            export::export_copy,
+            export::open_pdf,
+            export::reveal_pdf,
             print::open_url,
             code::code_run,
             lsp::typst_start,

@@ -104,9 +104,13 @@ pub fn allowed_url(url: &str) -> bool {
 #[tauri::command]
 pub async fn open_url(url: String) -> CmdResult<()> {
     if !allowed_url(&url) {
-        return Err(CmdError::Invalid(format!("not a printer page Typst Studio opens: {url}")));
+        return Err(CmdError::Invalid(format!(
+            "not a printer page Typst Studio opens: {url}"
+        )));
     }
-    let status = std::process::Command::new("/usr/bin/open").arg(&url).status()?;
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg(&url)
+        .status()?;
     if !status.success() {
         return Err(CmdError::Io(format!("couldn't open {url}")));
     }
@@ -146,19 +150,37 @@ mod tests {
     fn reads_pages_sizes_and_bleed_from_typst_pdfs() {
         let dir = std::env::temp_dir().join(format!("typst-studio-pdf-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let Some(plain) = typst_pdf(&dir, "#set page(width: 6in, height: 9in)\nA\n#pagebreak()\nB\n") else {
+        let Some(plain) = typst_pdf(
+            &dir,
+            "#set page(width: 6in, height: 9in)\nA\n#pagebreak()\nB\n",
+        ) else {
             eprintln!("typst not installed; skipping");
             return;
         };
         let info = pdf_info_at(&plain).unwrap();
-        assert_eq!(info, PdfInfo { pages: 2, media: Some([432.0, 648.0]), trim: None, uniform: true });
+        assert_eq!(
+            info,
+            PdfInfo {
+                pages: 2,
+                media: Some([432.0, 648.0]),
+                trim: None,
+                uniform: true
+            }
+        );
 
-        let bled = typst_pdf(&dir, "#set page(width: 6in, height: 9in, bleed: 0.125in)\nA\n#page(width: 5in)[B]\n").unwrap();
+        let bled = typst_pdf(
+            &dir,
+            "#set page(width: 6in, height: 9in, bleed: 0.125in)\nA\n#page(width: 5in)[B]\n",
+        )
+        .unwrap();
         let info = pdf_info_at(&bled).unwrap();
         assert_eq!(info.pages, 2);
         assert_eq!(info.media, Some([450.0, 666.0]));
         let t = info.trim.unwrap();
-        assert!((t[0] - 9.0).abs() < 0.01 && (t[2] - 432.0).abs() < 0.01 && (t[3] - 648.0).abs() < 0.01, "{t:?}");
+        assert!(
+            (t[0] - 9.0).abs() < 0.01 && (t[2] - 432.0).abs() < 0.01 && (t[3] - 648.0).abs() < 0.01,
+            "{t:?}"
+        );
         assert!(!info.uniform);
 
         std::fs::write(dir.join("bad.pdf"), b"not a pdf").unwrap();

@@ -1792,6 +1792,43 @@ async function figuresChecks() {
 }
 
 /** History below the files (layout option). Restores the author's setting. */
+/**
+ * Export PDF: asks where to save (the dialog is answered here), builds the
+ * book, copies it there, and says where, with Open and Show in Finder.
+ */
+async function exportChecks() {
+  await waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+  const asked: string[] = [];
+  const pick = studio.pickExportPath;
+  const target = `${studio.state.launch!.selftestOut!.replace(/[^/]+$/, '')}selftest-export-chosen.pdf`;
+  studio.pickExportPath = async (d) => {
+    asked.push(d);
+    return target;
+  };
+  await studio.exportPdf();
+  const toast = studio.state.toast;
+  const out: Record<string, unknown> = {
+    asked,
+    toast: toast && { text: toast.text, actions: toast.actions?.map((a) => a.label) },
+    lastExport: studio.lastExport,
+  };
+  await sleep(500);
+  out.snapshot = await snap('export-toast');
+  // Cancelling the dialog exports nothing.
+  studio.pickExportPath = async () => null;
+  studio.store.set({ toast: null });
+  await studio.exportPdf();
+  out.cancelled = { toast: studio.state.toast?.text ?? null };
+  // Refusals from the Rust side: only PDFs, only real folders.
+  out.refused = await Promise.all([
+    ipc.exportCopy('main.typ', target.replace(/\.pdf$/, '.txt')).then(() => 'copied!', (e) => errorMessage(e)),
+    ipc.exportCopy('main.typ', '/nonexistent-folder/x.pdf').then(() => 'copied!', (e) => errorMessage(e)),
+    ipc.openPdf('main.typ').then(() => 'opened!', (e) => errorMessage(e)),
+  ]);
+  studio.pickExportPath = pick;
+  return out;
+}
+
 /** The window as it is: for checking layout by eye (optionally a sidebar tab, e.g. SELFTEST_ONLY=shot). */
 async function shotChecks() {
   await waitFor(() => studio.editor, 15000, 'editor').catch(() => {});
@@ -2168,6 +2205,9 @@ export async function runSelftest(launch: LaunchOptions) {
     const v = localStorage.getItem(key);
     if (v && bad(v)) localStorage.removeItem(key);
   }
+  // The Save dialog can't be clicked from here: exports are saved next to the results file.
+  const outDir = (launch.selftestOut ?? '/tmp/x').slice(0, (launch.selftestOut ?? '/tmp/x').lastIndexOf('/'));
+  studio.pickExportPath = async (defaultPath) => `${outDir}/selftest-export-${defaultPath.slice(defaultPath.lastIndexOf('/') + 1)}`;
   const only = launch.selftestOnly?.split(',').map((x) => x.trim());
   const want = (group: string) => !only || only.includes(group);
   try {
@@ -2301,6 +2341,7 @@ export async function runSelftest(launch: LaunchOptions) {
       result.journey = await journeyChecks();
     }
     if (want('shot')) result.shot = await shotChecks();
+    if (want('export')) result.export = await exportChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

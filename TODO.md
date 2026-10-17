@@ -88,7 +88,7 @@
 
 - [ ] review mode is ... iffy at best. we need to think this through more thoroughly
 
-- [ ] export pdf doesnt tellme where to save it..
+- [x] export pdf doesnt tellme where to save it..
 
 - [x] the review tab is crushed, i can barely see the title
 

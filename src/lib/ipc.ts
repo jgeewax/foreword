@@ -59,6 +59,11 @@ export const ipc = {
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
   /** Page count and page boxes of a PDF in the workspace (for the print checks). */
   pdfInfo: (path: string) => invoke<PdfInfo>('pdf_info', { path }),
+  /** Copy an exported PDF (in the book) to where the author chose to save it (an absolute .pdf path). */
+  exportCopy: (from: string, to: string) => invoke<string>('export_copy', { from, to }),
+  /** Open a PDF (book-relative or absolute) in the default viewer, or show it in Finder. */
+  openPdf: (path: string) => invoke<void>('open_pdf', { path }),
+  revealPdf: (path: string) => invoke<void>('reveal_pdf', { path }),
   /** Open a printer's web page in the browser (https, known printers only). */
   openUrl: (url: string) => invoke<void>('open_url', { url }),
   /** New project from a Typst Universe template package (downloaded from packages.typst.org). */

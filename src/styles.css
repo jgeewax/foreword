@@ -242,6 +242,8 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 
 .toast { position: fixed; left: 12px; bottom: 34px; max-width: 420px; background: var(--bg-3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); }
 .toast.error { border-color: var(--bad); }
+.toast { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toast-actions { display: inline-flex; gap: 6px; }
 
 .welcome { height: 100%; display: grid; place-items: center; background: var(--bg-2); overflow: auto; }
 .welcome-card { width: min(520px, calc(100% - 32px)); padding: 24px 0; }

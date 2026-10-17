@@ -47,6 +47,7 @@ describe('keeping the cover in step with the book', () => {
   it("reads the book's title and author", () => {
     expect(namesFromMain('#let title = "The \\"Quiet\\" Harbour"\n#let author = "Ada"')).toEqual({ title: 'The "Quiet" Harbour', author: 'Ada' });
     expect(namesFromMain('= Hi')).toEqual({ title: null, author: null });
+    expect(namesFromMain('#set document(title: "Linear Algebra Notes", author: "Ada")')).toEqual({ title: 'Linear Algebra Notes', author: 'Ada' });
   });
 
   it('works out the spine for display', () => {

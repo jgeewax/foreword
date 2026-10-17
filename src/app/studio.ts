@@ -1,7 +1,9 @@
 // App controller: owns the workspace, documents, Typst service, preview
 // webview and agent adapter, and exposes UI state through a Store.
 import { listen } from '@tauri-apps/api/event';
-import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
+import { documentDir } from '@tauri-apps/api/path';
+import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { shortPath } from '../lib/paths';
 import { Documents } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
@@ -51,6 +53,8 @@ import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions } from '../services/agent/permissions';
 import type { AgentAdapter, AgentEvent, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { TypstService } from '../services/typst';
+
+export type ToastAction = { label: string; run: () => void };
 
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
@@ -131,7 +135,7 @@ export type StudioState = {
     compacting: boolean;
   };
   perf: { input: Stat; preview: Stat };
-  toast: { text: string; tone: 'info' | 'error' } | null;
+  toast: { text: string; tone: 'info' | 'error'; actions?: ToastAction[] } | null;
   /** UI zoom factor (1 = 100%). */
   zoom: number;
   settings: AppSettings;
@@ -235,6 +239,9 @@ const MODEL_KEY = 'studio.model';
 const ZOOM_KEY = 'studio.zoom';
 const RECENT_KEY = 'studio.recentWorkspaces';
 export const NEW_BOOK_PARENT = 'studio.newBookParent';
+/** Per book: where its PDF was last exported (the Save dialog starts there). */
+const EXPORT_TARGETS_KEY = 'studio.exportTargets';
+
 /** How many of the assistant's latest versions of a file are marked in the editor. */
 const AI_EDIT_VERSIONS = 12;
 
@@ -999,7 +1006,7 @@ export class Studio {
           ]
         : [
             { label: this.hasCover() ? 'Show the Cover' : 'Design a Cover…', action: () => this.openCoverDialog() },
-            { label: 'Export PDF', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+            { label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
             { label: 'Print with Mixam…', action: () => this.openPrint() },
           ]),
       { label: 'Restart Preview', action: () => void this.restartTypst() },
@@ -2579,6 +2586,9 @@ export class Studio {
       if (answer === 'Cancel') return;
       if (answer === 'Yes' || answer === 'Run them, then export') await this.code.runAll({ onlyStale: true });
     }
+    // Where to save it: the Save dialog, starting where this book was last saved.
+    const target = await this.pickExportPath(await this.defaultExportPath());
+    if (!target) return;
     this.store.set({ exporting: true });
     try {
       const failures = (await this.docs?.saveAll()) ?? [];
@@ -2586,12 +2596,61 @@ export class Studio {
       // The book's main file, also while the preview shows the cover.
       const path = await this.typst.exportPdf(ws.entry ? `${ws.root}/${ws.entry}` : undefined);
       const rel = path.startsWith(ws.root + '/') ? path.slice(ws.root.length + 1) : path;
-      this.toast(`Exported ${rel}`);
+      const saved = await ipc.exportCopy(rel, target);
+      this.rememberExportPath(saved);
+      this.lastExport = saved;
+      const name = saved.slice(saved.lastIndexOf('/') + 1);
+      this.toast(`Saved “${name}” in ${shortPath(saved.slice(0, saved.lastIndexOf('/')))}`, 'info', [
+        { label: 'Open', run: () => void this.openPdf(saved) },
+        { label: 'Show in Finder', run: () => void ipc.revealPdf(saved).catch((e) => this.toast(errorMessage(e), 'error')) },
+      ]);
       void this.refreshFiles();
     } catch (e) {
       this.toast(`Export failed: ${errorMessage(e)}`, 'error');
     } finally {
       this.store.set({ exporting: false });
+    }
+  }
+
+  /** The last PDF exported in this session (Open Exported PDF). */
+  lastExport: string | null = null;
+
+  /** The Save dialog for Export PDF (replaced in self-tests, which can't click native dialogs). */
+  pickExportPath: (defaultPath: string) => Promise<string | null> = async (defaultPath) => {
+    const picked = await saveDialog({ title: 'Export PDF', defaultPath, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+    if (!picked) return null;
+    return /\.pdf$/i.test(picked) ? picked : `${picked}.pdf`;
+  };
+
+  private exportTargets() {
+    return readJson<Record<string, string>>(EXPORT_TARGETS_KEY) ?? {};
+  }
+
+  /** Where this book was last saved; else Documents/<title>.pdf. */
+  private async defaultExportPath(): Promise<string> {
+    const ws = this.state.workspace!;
+    const last = this.exportTargets()[ws.root];
+    if (last) return last;
+    const main = ws.entry ? await this.currentText(ws.entry) : null;
+    const title = (main ? namesFromMain(main).title : null) || ws.name;
+    const file = `${title.replace(/[/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Book'}.pdf`;
+    const dir = await documentDir().catch(() => ws.root);
+    return `${dir.replace(/\/$/, '')}/${file}`;
+  }
+
+  private rememberExportPath(path: string) {
+    const root = this.state.workspace?.root;
+    // Self-tests share this storage with the author's app: never record their paths.
+    if (!root || this.state.launch?.selftestOut) return;
+    writeJson(EXPORT_TARGETS_KEY, { ...this.exportTargets(), [root]: path });
+  }
+
+  /** Open a PDF (book-relative or absolute) in Preview (or the author's PDF viewer). */
+  async openPdf(path: string) {
+    try {
+      await ipc.openPdf(path);
+    } catch (e) {
+      this.toast(`Couldn't open ${path}: ${errorMessage(e)}`, 'error');
     }
   }
 
@@ -2682,11 +2741,15 @@ export class Studio {
 
   // ---- misc -----------------------------------------------------------------------
 
-  toast(text: string, tone: 'info' | 'error' = 'info') {
-    this.store.set({ toast: { text, tone } });
-    setTimeout(() => {
-      if (this.state.toast?.text === text) this.store.set({ toast: null });
-    }, 6000);
+  toast(text: string, tone: 'info' | 'error' = 'info', actions?: ToastAction[]) {
+    this.store.set({ toast: { text, tone, actions } });
+    // Longer when there's something to click.
+    setTimeout(
+      () => {
+        if (this.state.toast?.text === text) this.store.set({ toast: null });
+      },
+      actions?.length ? 12000 : 6000,
+    );
   }
 
   now() {

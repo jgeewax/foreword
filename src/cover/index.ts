@@ -109,7 +109,12 @@ export function namesFromMain(main: string): { title: string | null; author: str
     const m = new RegExp(`^#let ${name} = "((?:[^"\\\\]|\\\\.)*)"`, 'm').exec(main);
     return m ? m[1].replace(/\\(.)/g, '$1') : null;
   };
-  return { title: get('title'), author: get('author') };
+  // Books not made from the templates may only name themselves in `#set document(title: "…")`.
+  const doc = (name: string) => {
+    const m = new RegExp(`document\\([^)]*\\b${name}:\\s*"((?:[^"\\\\]|\\\\.)*)"`).exec(main);
+    return m ? m[1].replace(/\\(.)/g, '$1') : null;
+  };
+  return { title: get('title') ?? doc('title'), author: get('author') ?? doc('author') };
 }
 
 /** Spine width in mm for display (pages × thickness), from Typst lengths. */
