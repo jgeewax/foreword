@@ -3,10 +3,14 @@ import { useCallback, useRef, useSyncExternalStore } from 'react';
 /**
  * Minimal external store. Subscribers are notified at most once per animation
  * frame, so bursts of updates (agent token streaming, typing) cost one render.
+ * A hidden or covered window gets no frames, so a timer stands in: what
+ * subscribers do (and what's rendered) keeps up while the window is behind
+ * others.
  */
 export class Store<S> {
   private listeners = new Set<() => void>();
   private scheduled = false;
+  private fallback: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private state: S) {}
 
@@ -17,11 +21,16 @@ export class Store<S> {
     this.state = { ...this.state, ...patch };
     if (this.scheduled) return;
     this.scheduled = true;
-    requestAnimationFrame(() => {
-      this.scheduled = false;
-      for (const l of this.listeners) l();
-    });
+    requestAnimationFrame(this.flush);
+    this.fallback = setTimeout(this.flush, 250);
   }
+
+  private flush = () => {
+    if (!this.scheduled) return;
+    this.scheduled = false;
+    clearTimeout(this.fallback);
+    for (const l of this.listeners) l();
+  };
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
