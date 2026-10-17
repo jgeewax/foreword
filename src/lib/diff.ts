@@ -46,10 +46,11 @@ function middle<T>(
   const max = N + M;
   const offset = max + 1;
   const v = new Int32Array(2 * max + 3);
+  // Before step d, only diagonals -d..d matter: keep just that band (memory O(D²), not O(D·(N+M))).
   const trace: Int32Array[] = [];
   let found = -1;
   for (let d = 0; d <= max && found < 0; d++) {
-    trace.push(v.slice());
+    trace.push(v.slice(offset - d, offset + d + 1));
     for (let k = -d; k <= d; k += 2) {
       let x = k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1]) ? v[offset + k + 1] : v[offset + k - 1] + 1;
       let y = x - k;
@@ -70,10 +71,12 @@ function middle<T>(
   let y = M;
   for (let d = found; d > 0; d--) {
     const vd = trace[d];
+    // vd[i] is diagonal i - d.
+    const at = (k: number) => vd[k + d];
     const k = x - y;
-    const down = k === -d || (k !== d && vd[offset + k - 1] < vd[offset + k + 1]);
+    const down = k === -d || (k !== d && at(k - 1) < at(k + 1));
     const prevK = down ? k + 1 : k - 1;
-    const prevX = vd[offset + prevK];
+    const prevX = at(prevK);
     const prevY = prevX - prevK;
     const snake = Math.min(x - prevX - (down ? 0 : 1), y - prevY - (down ? 1 : 0));
     if (snake > 0) steps.push({ type: 'equal', a: x - snake, b: y - snake, n: snake });

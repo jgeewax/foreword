@@ -22,6 +22,7 @@ import {
 } from './project-settings';
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
+import { aiEdit, type AiEdit } from './ai-marks';
 import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
@@ -150,6 +151,8 @@ export type StudioState = {
   /** The book's page count, last seen while previewing the book (for the cover's spine). */
   bookPages: number | null;
   coverDialogOpen: boolean;
+  /** Bumped when the assistant's marks change (the editor repaints them). */
+  aiMarks: number;
   /** Print with Mixam: the print files and the checks on them. */
   print: {
     open: boolean;
@@ -214,6 +217,7 @@ const initialState: StudioState = {
   bookPages: null,
   coverDialogOpen: false,
   print: { open: false, status: 'idle', checks: [], files: {} },
+  aiMarks: 0,
   sidebar: 'files',
 };
 
@@ -222,6 +226,9 @@ const MODEL_KEY = 'studio.model';
 const ZOOM_KEY = 'studio.zoom';
 const RECENT_KEY = 'studio.recentWorkspaces';
 export const NEW_BOOK_PARENT = 'studio.newBookParent';
+/** How many of the assistant's latest versions of a file are marked in the editor. */
+const AI_EDIT_VERSIONS = 12;
+
 export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
 let seq = 0;
@@ -441,7 +448,8 @@ export class Studio {
 
     await this.loadProjectSettings();
     await this.loadStyleGuide();
-    void this.history.start(this.historyExcludes());
+    this.aiEdits.clear();
+    void this.history.start(this.historyExcludes()).then(() => this.refreshAiEdits());
     void this.code.scan();
     void this.scanTodos();
     void this.loadReview();
@@ -1315,6 +1323,63 @@ export class Studio {
     }
   }
 
+  // ---- the assistant's marks in the editor ---------------------------------------------
+
+  /** Recent agent versions per file, for the "changed by the assistant" marks. */
+  private aiEdits = new Map<string, AiEdit[]>();
+  /** Versions never change: their per-file changes are worked out once. */
+  private aiEditCache = new Map<string, AiEdit>();
+
+  aiEditsFor(path: string): AiEdit[] {
+    return this.aiEdits.get(path) ?? [];
+  }
+
+  /** The assistant's changes to a file, from History's agent versions (the most recent ones). */
+  async loadAiEdits(path: string) {
+    if (this.state.history.status !== 'ready') return;
+    try {
+      const versions = (await ipc.historyList(80, path)).filter((v) => v.kind === 'agent').slice(0, AI_EDIT_VERSIONS);
+      const edits: AiEdit[] = [];
+      for (const v of versions) {
+        const key = `${v.id}\0${path}`;
+        let e = this.aiEditCache.get(key);
+        if (!e) {
+          try {
+            const [before, after] = await Promise.all([v.parent ? ipc.historyFile(v.parent, path) : Promise.resolve(null), ipc.historyFile(v.id, path)]);
+            if (after === null) continue;
+            e = aiEdit(v, before, after);
+            this.aiEditCache.set(key, e);
+          } catch {
+            continue; // not a text file
+          }
+        }
+        edits.push(e);
+      }
+      this.aiEdits.set(path, edits);
+      this.store.set((s) => ({ aiMarks: s.aiMarks + 1 }));
+    } catch (e) {
+      console.warn('assistant marks: history', e);
+    }
+  }
+
+  /** After a turn (or once History is up): reload the marks for the open files. */
+  private async refreshAiEdits() {
+    for (const path of this.state.tabs) await this.loadAiEdits(path);
+  }
+
+  /** "What changed" for a version, by id (from a mark's hover). */
+  async showVersionChanges(versionId: string) {
+    const version = this.state.history.versions.find((v) => v.id === versionId) ?? (await ipc.historyList(300).catch(() => [])).find((v) => v.id === versionId);
+    if (!version) return this.toast('That version is too far back in History to show here.', 'error');
+    await this.history.showChanges(version);
+  }
+
+  /** History, showing only the versions that changed `path`. */
+  async showFileHistory(path: string) {
+    this.showSidebar('history');
+    await this.history.setFilter(path);
+  }
+
   // ---- printing ------------------------------------------------------------------------
 
   openPrint() {
@@ -1800,7 +1865,7 @@ export class Studio {
       void this.afterReviewTurn();
       void this.loadTasks();
       void this.refreshContextSize();
-      void this.history.afterAgent(this.turnMessage);
+      void this.history.afterAgent(this.turnMessage).then(() => this.refreshAiEdits());
       void this.code.afterAgentTurn();
     }
   }

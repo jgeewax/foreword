@@ -742,6 +742,104 @@ async function journeyChecks() {
 }
 
 /**
+ * The assistant's changes in the editor: a fresh novel, a change recorded as
+ * an agent version (as after a turn), the marks and their hover, marks
+ * following the text and leaving lines the author rewrote, the context menu,
+ * "What changed" from a mark, the file's own history, and (with the agent)
+ * one real turn. Works next to the scratch book, then reopens it.
+ */
+async function aiEditChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const hs = () => studio.state.history;
+  await studio.createBook('novel', { title: `Marks ${Date.now().toString(36)}`, author: 'Ada Example' }, parent);
+  await waitFor(() => studio.state.workspace?.root !== original && hs().status === 'ready' && hs().versions.length > 0, 30000, 'history');
+  const file = 'chapters/01-chapter-one.typ';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const marks = () =>
+    model
+      .getAllDecorations()
+      .filter((d) => /ai-edit/.test(d.options.linesDecorationsClassName ?? ''))
+      .map((d) => ({
+        lines: `${d.range.startLineNumber}-${d.range.endLineNumber}`,
+        kind: d.options.linesDecorationsClassName,
+        hover: [d.options.lineNumberHoverMessage].flat()[0]?.value.split('\n\n')[0],
+      }));
+
+  // What a turn does: the files change on disk, then History records an agent version.
+  const { text, hash } = await ipc.fsRead(file);
+  const changed = text
+    .replace('The storm had been building since noon', 'The storm had been gathering since early morning')
+    .replace('"You\'ll catch your death out here," said a voice behind her.', '"You\'ll catch your death out here," said a voice behind her.\n\nShe knew the voice at once.');
+  await ipc.fsWrite(file, changed, hash);
+  await waitFor(() => model.getValue() === changed, 10000, 'reload').catch(() => {});
+  await studio.history.checkpoint('agent', 'Agent: tighten the opening');
+  await studio.loadAiEdits(file);
+  await sleep(400);
+  out.marks = marks();
+  out.snapshot = await snap('aiedits-marks');
+
+  // The author rewrites one of the assistant's lines: that mark goes; the others move with the text.
+  const line = model.getValue().split('\n').findIndex((l) => l.startsWith('She knew the voice')) + 1;
+  editor.executeEdits('selftest', [{ range: new monaco.Range(line, 1, line, model.getLineMaxColumn(line)), text: 'She knew that voice, of course.' }]);
+  editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// note\n' }]);
+  await sleep(600);
+  out.afterAuthorEdits = marks();
+
+  // Right-click on a marked line.
+  let last: Exclude<MenuEntry, null | false | undefined>[] = [];
+  menuRecorder.record = (entries) => (last = entries);
+  const markLine = Number((marks()[0]?.lines ?? '1').split('-')[0]);
+  editor.setPosition({ lineNumber: markLine, column: 3 });
+  editor.revealLineInCenter(markLine);
+  await sleep(200);
+  const p = editor.getScrolledVisiblePosition({ lineNumber: markLine, column: 3 })!;
+  const host = editor.getDomNode()!.getBoundingClientRect();
+  const x = host.left + p.left;
+  const y = host.top + p.top + 5;
+  (document.elementFromPoint(x, y) ?? editor.getDomNode()!).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 }));
+  await sleep(250);
+  menuRecorder.record = undefined;
+  out.menu = last.map((e) => (typeof e === 'string' ? `[${e}]` : e.label));
+  const item = last.find((e) => typeof e !== 'string' && e.label === 'What the Assistant Changed Here');
+  if (item && typeof item !== 'string') item.action();
+  await waitFor(() => hs().changes?.files, 10000, 'what changed').catch(() => {});
+  out.whatChanged = { title: hs().changes?.version.label, words: hs().changes?.files?.map((f) => [f.path, f.diff?.added, f.diff?.removed]) };
+  studio.history.closeChanges();
+  editor.trigger('selftest', 'undo', null);
+  editor.trigger('selftest', 'undo', null);
+  await studio.save(file);
+
+  await studio.showFileHistory(file);
+  await sleep(300);
+  out.fileHistory = { filter: hs().filter, versions: hs().versions.map((v) => `${v.kind}: ${v.label}`), chip: document.querySelector('.history-filter')?.textContent };
+  await studio.history.setFilter(null);
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    // Edits allowed for this turn only; the author's policy is put back after.
+    const policy = studio.state.settings.permissions;
+    studio.updateSettings({ permissions: { ...policy, edit: 'allow' } });
+    try {
+      await studio.setMode('write');
+      studio.newSession();
+      const reply = await askAgent(`In ${file}, change the words "the colour of slate" to "the colour of wet slate". Edit the file directly and change nothing else.`);
+      await waitFor(() => hs().versions[0]?.kind === 'agent' && hs().versions[0].label !== 'Agent: tighten the opening', 15000, 'agent version').catch(() => {});
+      await sleep(1000);
+      out.agent = { reply: reply.slice(0, 160), latest: hs().versions[0] && `${hs().versions[0].kind}: ${hs().versions[0].label}`, marks: marks() };
+      out.snapshotAgent = await snap('aiedits-agent');
+    } finally {
+      studio.updateSettings({ permissions: policy });
+    }
+  }
+  await studio.openWorkspace(original);
+  return out;
+}
+
+/**
  * History, what changed: two edits to a fresh novel and a named version, then
  * the word-by-word view, stepping between versions, and comparing with now.
  * Works next to the scratch book, then reopens it.
@@ -2063,6 +2161,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('journey')) {
       log('journey');
       result.journey = await journeyChecks();
+    }
+    if (want('aiedits')) {
+      log('aiedits');
+      result.aiedits = await aiEditChecks(launch.selftestAgent);
     }
     if (want('changes')) {
       log('changes');

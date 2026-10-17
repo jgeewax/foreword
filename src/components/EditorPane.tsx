@@ -3,10 +3,30 @@ import { studio } from '../app/studio';
 import { monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
+import { editMarks, type EditMark } from '../app/ai-marks';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+
+/** Text shown inside a Markdown hover, as written (no formatting). */
+const md = (s: string) => s.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
+const quote = (s: string, limit = 700) => {
+  const t = s.length > limit ? `${s.slice(0, limit)}…` : s;
+  return t
+    .split('\n')
+    .map((l) => `> ${md(l) || ' '}`)
+    .join('\n');
+};
+const when = (t: number) => new Date(t * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+
+/** The hover on the line number of a line the assistant changed. */
+function editHover(m: EditMark): monaco.IMarkdownString {
+  const link = `[What changed](command:studio.showVersionChanges?${encodeURIComponent(JSON.stringify([m.versionId]))})`;
+  const head = m.removal ? '**✦ The assistant removed text here**' : m.old ? '**✦ Changed by the assistant**' : '**✦ Added by the assistant**';
+  const body = m.old ? `\n\n${m.removal ? 'Removed:' : 'Before:'}\n\n${quote(m.old)}` : '';
+  return { value: `${head} · ${md(m.label.replace(/^Agent: /, ''))} · ${when(m.time)}${body}\n\n${link}`, isTrusted: { enabledCommands: ['studio.showVersionChanges'] } };
+}
 
 export function EditorPane() {
   const tabs = useStore(studio.store, (s) => s.tabs);
@@ -49,8 +69,15 @@ export function EditorPane() {
       editor.focus();
       const hasSelection = !editor.getSelection()?.isEmpty();
       const error = pos ? studio.errorAt(pos.lineNumber, pos.column) : null;
+      const path = studio.state.active;
+      const model = editor.getModel();
+      const mark =
+        pos && path && model && studio.state.settings.markAiEdits
+          ? editMarks(studio.aiEditsFor(path), model.getValue()).find((m) => m.from <= pos.lineNumber && pos.lineNumber <= m.to)
+          : undefined;
       void showContextMenu([
         error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
+        mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         'separator',
         { label: hasSelection ? 'Ask the Assistant About This' : 'Ask the Assistant Here', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
         hasSelection && { label: 'Get Three Versions…', action: () => void studio.optionsForSelection() },
@@ -64,8 +91,50 @@ export function EditorPane() {
         'selectAll',
         'separator',
         { label: 'Show in Preview', action: () => void studio.syncPreviewToCursor() },
+        !!path && { label: 'History of This File', action: () => void studio.showFileHistory(path) },
         { label: 'Typst Basics', action: () => studio.openGuide() },
       ]);
+    });
+    // The assistant's marks: lines it changed (and, later, read), in the gutter.
+    const showVersion = monaco.editor.registerCommand('studio.showVersionChanges', (_accessor, id: string) => void studio.showVersionChanges(id));
+    const aiMarks = editor.createDecorationsCollection();
+    const paintAi = () => {
+      const path = studio.state.active;
+      const model = editor.getModel();
+      if (!path || !model) return aiMarks.clear();
+      const decorations: monaco.editor.IModelDeltaDecoration[] = [];
+      if (studio.state.settings.markAiEdits) {
+        for (const m of editMarks(studio.aiEditsFor(path), model.getValue())) {
+          decorations.push({
+            range: new monaco.Range(m.from, 1, m.to, 1),
+            options: {
+              isWholeLine: true,
+              className: m.removal ? undefined : 'ai-edit-bg',
+              linesDecorationsClassName: m.removal ? 'ai-edit-removal' : 'ai-edit-line',
+              linesDecorationsTooltip: m.removal ? 'The assistant removed text here (hover the line number)' : 'Changed by the assistant (hover the line number)',
+              lineNumberHoverMessage: editHover(m),
+              overviewRuler: { color: '#a371f7', position: monaco.editor.OverviewRulerLane.Left },
+            },
+          });
+        }
+      }
+      aiMarks.set(decorations);
+    };
+    let aiTimer: number | undefined;
+    let lastAi = [studio.state.aiMarks, studio.state.settings.markAiEdits, studio.state.settings.markAiReads] as const;
+    const offAi = studio.store.subscribe(() => {
+      const next = [studio.state.aiMarks, studio.state.settings.markAiEdits, studio.state.settings.markAiReads] as const;
+      if (next.every((v, i) => v === lastAi[i])) return;
+      lastAi = next;
+      paintAi();
+    });
+    editor.onDidChangeModel(() => {
+      paintAi();
+      if (studio.state.active) void studio.loadAiEdits(studio.state.active);
+    });
+    editor.onDidChangeModelContent(() => {
+      clearTimeout(aiTimer);
+      aiTimer = window.setTimeout(paintAi, 300);
     });
     // ▶ Run above each code example, with its status.
     const runCommand = monaco.editor.registerCommand('studio.runCodeExample', (_accessor, name: string) => void studio.code.run([name]));
@@ -168,6 +237,9 @@ export function EditorPane() {
     const off = studio.events.on('focus-editor', () => editor.focus());
     return () => {
       off();
+      offAi();
+      clearTimeout(aiTimer);
+      showVersion.dispose();
       offReview();
       editor.removeContentWidget(commentWidget);
       offLens();

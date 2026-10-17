@@ -64,6 +64,6 @@
 
 - [ ] I want to be able to see what lines were read on a file by the ai
 
-- [ ] i want to be able to see what edits were made on a file by the ai
+- [x] i want to be able to see what edits were made on a file by the ai
 
 - [x] in history, i want to understand the delta from one version/commit to the next

@@ -177,6 +177,24 @@ export function SettingsDialog() {
               />
             </div>
           </Section>
+          <Section title="The assistant’s marks in the editor">
+            <div className="settings-field">
+              <label className="settings-option">
+                <input type="checkbox" checked={settings.markAiEdits} onChange={(e) => studio.updateSettings({ markAiEdits: e.target.checked })} />
+                <span>
+                  Lines the assistant changed <span className="ai-swatch edit" />
+                  <span className="muted"> — until you rewrite them; hover the line number for what was there before</span>
+                </span>
+              </label>
+              <label className="settings-option">
+                <input type="checkbox" checked={settings.markAiReads} onChange={(e) => studio.updateSettings({ markAiReads: e.target.checked })} />
+                <span>
+                  Lines the assistant read <span className="ai-swatch read" />
+                  <span className="muted"> — in the current conversation</span>
+                </span>
+              </label>
+            </div>
+          </Section>
           <Section title="Chat">
             <div className="settings-field">
               <div className="settings-label">Send a message with</div>

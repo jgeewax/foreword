@@ -360,6 +360,16 @@ button.indicator:hover { background: var(--bg-3); }
 .modal.history-diff { width: calc(100% - 64px); height: calc(100% - 64px); max-height: none; }
 .history-diff .modal-header h1 { font-family: "SF Mono", Menlo, monospace; font-size: 13px; }
 .history-diff-editor { flex: 1; min-height: 0; }
+/* The assistant's marks in the editor gutter: changed lines (violet, as ✦ in History) and read lines (blue). */
+.monaco-editor .ai-edit-line { background: #a371f7; width: 3px !important; margin-left: 2px; }
+.monaco-editor .ai-edit-removal { width: 0 !important; height: 0 !important; margin-left: 1px; border-left: 5px solid #a371f7; border-top: 4px solid transparent; border-bottom: 4px solid transparent; margin-top: -4px; }
+.monaco-editor .ai-edit-bg { background: rgba(163, 113, 247, 0.07); }
+.monaco-editor .ai-read-line { background: rgba(88, 166, 255, 0.55); width: 2px !important; margin-left: 7px; }
+.ai-swatch { display: inline-block; width: 4px; height: 12px; vertical-align: -1px; margin-left: 4px; border-radius: 1px; }
+.ai-swatch.edit { background: #a371f7; }
+.ai-swatch.read { background: rgba(88, 166, 255, 0.8); }
+.history-filter { display: flex; align-items: center; gap: 6px; margin: 0 8px 6px; padding: 3px 4px 3px 8px; border-radius: 6px; background: var(--bg-3); font-size: 12px; }
+.history-filter span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modal.history-changes { width: min(980px, calc(100% - 64px)); height: calc(100% - 64px); max-height: none; }
 .history-changes .modal-header { gap: 10px; }
 .changes-title { flex: 1; min-width: 0; }

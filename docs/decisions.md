@@ -667,6 +667,39 @@ pane top (off by 0 pt).
     ("~~noon~~ early morning").
   - Compare with now showed both changes (+6 −2).
 
+### The assistant's changes, marked in the editor
+
+- **Source:** History's agent versions. Every turn that changes files is one
+  version, with the files before and after, so the marks cover every way the
+  assistant changes a file (edit, write, patch, shell) and survive restarts.
+  History is the record; the tool events aren't needed. The per-file log
+  (`history_list` with a path: `git log -- :(literal)path`) finds a file's
+  last 12 agent versions in one call. Their line changes are worked out once
+  per version and cached, since versions never change.
+- **Mapping onto today's text:** each version's changed lines are mapped onto
+  the current text with a line diff. A line keeps its mark only while it is
+  exactly as the assistant left it: rewriting a line makes it the author's,
+  and lines added above move the marks down. Where two versions changed the
+  same line, the newer one wins. Removed text gets a small notch on the line
+  after it. It repaints 300 ms after typing stops, like the review highlights.
+- **What it shows:**
+  - a violet gutter bar (the ✦ colour History uses) with a faint tint on the
+    line, and a scroll-bar mark to find changes in long chapters;
+  - a hover on the line number (`lineNumberHoverMessage`, so text hovers stay
+    quiet), with the request, the time, the earlier text, and a **What
+    changed** link (a trusted command link, only for that command);
+  - right-click → **What the Assistant Changed Here**;
+  - **History of This File** (editor and file-list menus) filters History to
+    that file's versions.
+  - Settings can turn the marks off.
+- **Verified in the app** (self-test `aiedits`):
+  - A recorded agent version marked line 10 (changed) and 16–17 (added).
+  - After the author rewrote line 17 and added a line on top, the marks moved
+    to 11 and 17 (the blank line); the rewritten line lost its mark.
+  - The menu entry opened the right version (+9 −2 words), and the file's
+    history listed its two versions.
+  - A real turn (change "the colour of slate") marked line 11 when it ended.
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and

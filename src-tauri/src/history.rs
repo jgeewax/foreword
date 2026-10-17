@@ -296,6 +296,12 @@ fn one_line(s: &str) -> String {
 }
 
 async fn list(r: &Repo, limit: u32) -> CmdResult<Vec<Version>> {
+    list_for(r, limit, None).await
+}
+
+/// Versions, newest first; with `path`, only those that changed that file
+/// (and their counts are for that file).
+async fn list_for(r: &Repo, limit: u32, path: Option<&str>) -> CmdResult<Vec<Version>> {
     if !has_head(r).await? {
         return Ok(vec![]);
     }
@@ -303,12 +309,12 @@ async fn list(r: &Repo, limit: u32) -> CmdResult<Vec<Version>> {
     let format = format!(
         "--format=%x1e%H%x1f%P%x1f%ct%x1f%s%x1f%(trailers:key={KIND_TRAILER},valueonly,separator=%x2C)"
     );
-    let out = git_ok(
-        &r.git_dir,
-        &r.root,
-        &["log", &n, &format, "--numstat", "--no-renames", "HEAD"],
-    )
-    .await?;
+    let mut args = vec!["log", &n, &format, "--numstat", "--no-renames", "HEAD"];
+    if let Some(p) = path {
+        // A literal path, not a pattern.
+        args.extend(["--", p]);
+    }
+    let out = git_ok(&r.git_dir, &r.root, &args).await?;
     Ok(parse_log(&out))
 }
 
@@ -348,9 +354,19 @@ pub async fn history_list(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     limit: u32,
+    path: Option<String>,
 ) -> CmdResult<Vec<Version>> {
     let _guard = state.history.lock().await;
-    list(&repo(&app, &state).await?, limit.clamp(1, 5000)).await
+    let r = repo(&app, &state).await?;
+    let path = match path.as_deref() {
+        Some(p) => {
+            // Validates the path stays inside the workspace.
+            workspace::resolve(&r.root, p)?;
+            Some(format!(":(literal){}", p.trim_start_matches("./")))
+        }
+        None => None,
+    };
+    list_for(&r, limit.clamp(1, 5000), path.as_deref()).await
 }
 
 /// Files that differ between two versions; `from` null = the version's parent.
@@ -562,6 +578,19 @@ mod tests {
             .unwrap();
         assert_eq!(milestone.files, 0);
         assert_eq!(list(&r, 10).await.unwrap().len(), 3);
+
+        // One file's history: only the versions that changed it, with its counts.
+        std::fs::write(root.join("main.typ"), "= Book\n= More\n").unwrap();
+        snapshot(&r, "agent", "Agent: more", false).await.unwrap().unwrap();
+        let ch1: Vec<(String, u32)> = list_for(&r, 10, Some(":(literal)chapters/ch1.typ"))
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|v| (v.label, v.added))
+            .collect();
+        assert_eq!(ch1, [("Edited ch1.typ".to_string(), 1), ("Started".to_string(), 1)]);
+        let main = list_for(&r, 10, Some(":(literal)main.typ")).await.unwrap();
+        assert_eq!((main[0].kind.as_str(), main[0].files), ("agent", 1));
         std::fs::remove_dir_all(&base).ok();
     }
 

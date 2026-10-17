@@ -13,12 +13,18 @@ export type AppSettings = {
   /** What the assistant may do (see permissions.ts). */
   permissions: AgentPermissions;
   historyPlacement: HistoryPlacement;
+  /** Mark the lines the assistant changed (from History), in the editor's gutter. */
+  markAiEdits: boolean;
+  /** Mark the lines the assistant read in the current conversation. */
+  markAiReads: boolean;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   sendKey: 'enter',
   permissions: DEFAULT_PERMISSIONS,
   historyPlacement: 'tab',
+  markAiEdits: true,
+  markAiReads: true,
 };
 
 const KEY = 'studio.settings';
@@ -46,6 +52,8 @@ function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   // Before fine-grained permissions there was one switch: edit without asking, or ask.
   else if (raw.agentEdits === 'allow') out.permissions = PRESETS.edit.permissions;
   if (raw.historyPlacement === 'tab' || raw.historyPlacement === 'below') out.historyPlacement = raw.historyPlacement;
+  if (typeof raw.markAiEdits === 'boolean') out.markAiEdits = raw.markAiEdits;
+  if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
   return out;
 }
 

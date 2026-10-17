@@ -146,7 +146,19 @@ export function HistoryPanel() {
       <div className="history-actions">
         <NameVersion />
       </div>
-      <div className="history-help muted">Versions are saved automatically as you work and around every agent change.</div>
+      {history.filter ? (
+        <div className="history-filter">
+          <span>
+            Only <code>{history.filter}</code>
+          </span>
+          <button className="icon" title="Show every version" aria-label="Show every version" onClick={() => void studio.history.setFilter(null)}>
+            ✕
+          </button>
+        </div>
+      ) : (
+        <div className="history-help muted">Versions are saved automatically as you work and around every agent change.</div>
+      )}
+      {history.filter && !history.versions.length && <div className="history-empty muted">No versions changed this file yet.</div>}
       <div className="history-list">
         {history.versions.map((v, i) => {
           const day = dayLabel(v.time);

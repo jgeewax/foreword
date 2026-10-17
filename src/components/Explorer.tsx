@@ -54,6 +54,7 @@ function FileTree() {
               !n.dir && { label: 'Duplicate', action: () => void studio.duplicate(n.path) },
               !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
               { label: 'Move to Trash…', action: () => void studio.trashPath(n.path) },
+              !n.dir && { label: 'History of This File', action: () => void studio.showFileHistory(n.path) },
               'separator',
               { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
               { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(n.path), 'Path copied') },

@@ -98,7 +98,8 @@ export const ipc = {
   historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
   /** `{files}` in the label becomes the names of the changed files. Null: nothing changed. */
   historySnapshot: (kind: string, label: string, allowEmpty = false) => invoke<Version | null>('history_snapshot', { kind, label, allowEmpty }),
-  historyList: (limit: number) => invoke<Version[]>('history_list', { limit }),
+  /** Versions, newest first; with `path`, only those that changed that file. */
+  historyList: (limit: number, path: string | null = null) => invoke<Version[]>('history_list', { limit, path }),
   /** Files that differ between two versions; `from` null = the version's parent. */
   historyChanges: (from: string | null, to: string) => invoke<FileChange[]>('history_changes', { from, to }),
   /** A file's text at a version, or null if it didn't exist then. */

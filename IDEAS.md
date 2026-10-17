@@ -71,6 +71,12 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - A one-line gist of each version ("since noon → since early morning") under its label.
 - Changes in the rendered book: the preview with changed passages highlighted, for authors who think in pages rather than source.
 
+## The assistant's marks
+- Accept the assistant's changes (clear their marks) per passage or per file, like reviewing a pull request; "Accept all" after reading.
+- Show the assistant's changes in the preview too (a violet margin bar on changed paragraphs).
+- Next/previous assistant change (keyboard), across files.
+- A per-paragraph authorship view ("who wrote this": you or the assistant, from History), for authors who must disclose AI use.
+
 ## Review
 - Comments in the preview: a margin bubble next to the rendered passage. Click it to see and reply.
 - Reply threads on a comment, and the assistant's per-comment answer shown under it.

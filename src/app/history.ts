@@ -48,10 +48,12 @@ export type HistoryState = {
   open: { id: string; changes: FileChange[] | null } | null;
   diff: HistoryDiff | null;
   changes: ChangesView | null;
+  /** Only the versions that changed this file (null: all). */
+  filter: string | null;
   busy: boolean;
 };
 
-export const initialHistory: HistoryState = { status: 'off', versions: [], open: null, diff: null, changes: null, busy: false };
+export const initialHistory: HistoryState = { status: 'off', versions: [], open: null, diff: null, changes: null, filter: null, busy: false };
 
 /** Files shown in one "what changed" view (the rest are counted). */
 const CHANGES_LIMIT = 40;
@@ -128,8 +130,15 @@ export class History {
 
   async refresh() {
     if (!this.started) return;
-    const versions = await ipc.historyList(LIST_LIMIT);
-    this.host.set({ versions });
+    const filter = this.state.filter;
+    const versions = await ipc.historyList(LIST_LIMIT, filter);
+    if (this.state.filter === filter) this.host.set({ versions });
+  }
+
+  /** Show only the versions that changed `path` (null: every version). */
+  async setFilter(path: string | null) {
+    this.host.set({ filter: path, open: null });
+    await this.refresh().catch((e) => this.host.report(`History: ${errorMessage(e)}`, 'error'));
   }
 
   /** After a save or a change on disk: snapshot once things are quiet. */
