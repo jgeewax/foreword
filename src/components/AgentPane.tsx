@@ -415,7 +415,7 @@ function Starter() {
       </p>
       <div className="starter-label">Try asking</div>
       {SUGGESTIONS.map((s) => (
-        <button key={s} className="suggestion" disabled={!ready} onClick={() => studio.fillComposer(s)}>
+        <button key={s} className="suggestion" disabled={!ready} title="Ask this now" onClick={() => void studio.send(s)}>
           {s}
         </button>
       ))}

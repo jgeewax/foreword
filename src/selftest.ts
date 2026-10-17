@@ -582,15 +582,20 @@ async function onboardingChecks() {
   studio.closeGuide();
   await sleep(200);
 
-  // Chat starter: suggestions fill the composer.
+  // Chat starter: a suggestion starts the conversation right away.
   studio.newSession();
   await sleep(300);
   const suggestions = [...document.querySelectorAll<HTMLButtonElement>('.starter .suggestion')];
-  suggestions[1]?.click();
-  await sleep(300);
-  const composer = document.querySelector<HTMLTextAreaElement>('.composer textarea');
-  out.starter = { shown: !!document.querySelector('.starter'), suggestions: suggestions.length, filled: composer?.value === suggestions[1]?.textContent };
-  studio.fillComposer('');
+  out.starter = { shown: !!document.querySelector('.starter'), suggestions: suggestions.length, labels: suggestions.map((b) => b.textContent) };
+  if (studio.state.agent.status === 'ready') {
+    suggestions[3]?.click();
+    await sleep(800);
+    await waitFor(() => !studio.state.agent.running, 120000, 'suggestion turn').catch(() => {});
+    const items = studio.state.agent.items;
+    (out.starter as any).sent = (items.find((i) => i.kind === 'user') as any)?.text;
+    (out.starter as any).reply = ((items.filter((i) => i.kind === 'assistant').pop() as any)?.text ?? '').slice(0, 200);
+    studio.newSession();
+  }
   try {
     out.snapshotStarter = await ipc.previewSnapshot('starter', 'main');
   } catch (e) {
