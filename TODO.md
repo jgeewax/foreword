@@ -28,7 +28,7 @@
 
 - [x] slightly more color on the bottom bar (its all grey. icons + colors for agents ready vs unavailable)
 
-- [ ] model selector needs to be at the bottom, close to where we're typing, maybe right above the box? or near the mode selector?
+- [x] model selector needs to be at the bottom, close to where we're typing, maybe right above the box? or near the mode selector?
 
 - [ ] modes for image / figure generation and editing versus text?
 

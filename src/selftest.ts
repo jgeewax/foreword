@@ -900,7 +900,7 @@ async function settingsChecks() {
       await sleep(50);
       r[name] = sent.length - n;
     }
-    r.hint = (document.querySelector('.composer-footer .hint')?.textContent ?? '') as unknown as number;
+    r.hint = (document.querySelector('.composer-hint')?.textContent ?? '') as unknown as number;
     return r;
   };
   out.enterMode = await trial('enter');

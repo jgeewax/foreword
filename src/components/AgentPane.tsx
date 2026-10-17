@@ -211,7 +211,6 @@ function Composer() {
   return (
     <div className="composer">
       <PlanActions />
-      <ModeSwitch />
       {attachments.length > 0 && (
         <div className="chips">
           {attachments.map((a) => (
@@ -248,10 +247,10 @@ function Composer() {
           }
         }}
       />
-      <div className="composer-footer">
-        <span className="hint" title="Change in Settings (⌘,)">
-          ⌘I attach selection · {sendHint(sendKey)}
-        </span>
+      <div className="composer-controls">
+        <ModeSwitch />
+        <ModelPicker placement="up" />
+        <span className="spacer" />
         {running ? (
           <button onClick={() => void studio.cancel()}>Stop</button>
         ) : (
@@ -259,6 +258,9 @@ function Composer() {
             Send
           </button>
         )}
+      </div>
+      <div className="composer-hint" title="Change in Settings (⌘,)">
+        ⌘I attach selection · {sendHint(sendKey)}
       </div>
     </div>
   );
@@ -367,8 +369,12 @@ export function AgentPane() {
       {/* Hidden, not unmounted, while the guide is open: keeps the draft message and scroll position. */}
       <div className="agent-body" hidden={guideOpen}>
         <header className="pane-header">
-          <ModelPicker />
-          <button className="icon" title="New session" disabled={agent.running} onClick={() => studio.newSession()}>
+          <span className="pane-title session-title" title={agent.title ?? undefined}>
+            {agent.title ?? 'Assistant'}
+          </span>
+          {agent.running && <span className="working">working…</span>}
+          <span className="spacer" />
+          <button className="icon" title="New conversation" aria-label="New conversation" disabled={agent.running} onClick={() => studio.newSession()}>
             ＋
           </button>
         </header>
@@ -377,8 +383,7 @@ export function AgentPane() {
           {agent.status === 'error' && <span className="bad">OpenCode: {agent.error}</span>}
           {agent.status === 'ready' && (
             <>
-              <span className={agent.connection === 'lost' ? 'bad' : ''}>{agent.connection === 'lost' ? 'Event stream reconnecting…' : agent.title ?? 'New session'}</span>
-              {agent.running && <span className="working">working…</span>}
+              <span className={agent.connection === 'lost' ? 'bad' : ''}>{agent.connection === 'lost' ? 'Event stream reconnecting…' : 'Ready'}</span>
               <span className="spacer" />
               <EditPolicyToggle />
             </>

@@ -5,7 +5,7 @@ import { formatContext, modelKey, modelSections, moveHighlight, selectableRows }
 import type { ModelInfo } from '../services/agent/types';
 
 /** Searchable model picker (replaces a plain <select>, which is unusable with dozens of models). */
-export function ModelPicker() {
+export function ModelPicker({ placement = 'down' }: { placement?: 'up' | 'down' }) {
   const models = useStore(studio.store, (s) => s.agent.models);
   const model = useStore(studio.store, (s) => s.agent.model);
   const recent = useStore(studio.store, (s) => s.agent.recentModels);
@@ -69,7 +69,7 @@ export function ModelPicker() {
   };
 
   return (
-    <div className="model-picker" ref={rootRef}>
+    <div className={`model-picker ${placement}`} ref={rootRef}>
       <button
         className="model-trigger"
         aria-haspopup="listbox"
