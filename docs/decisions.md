@@ -1095,6 +1095,25 @@ pane top (off by 0 pt).
 - `sessionRules` takes extra commands to allow (the config file, next).
 - **Verified live in "Ask first":** `ls chapters && wc -l main.typ` ran without
   a question; `echo hi > probe-out.txt` asked, was rejected, and wrote nothing.
+- **Redirections that write nothing:**
+  - The `*>*` rule caught `ls -la . figures 2>&1; cat style.typ 2>/dev/null`.
+    Models write that often, to look around quietly. It asked, and a
+    self-test without anyone to answer sat there until it timed out.
+  - Glob rules can't tell `2>/dev/null` from `> out.txt 2>&1`, so the app
+    decides when the request arrives (`allowedWithoutRedirects`). It removes
+    redirections into /dev/null and `n>&m`, then checks each command against
+    the session's own rules (the same matching as OpenCode: wildcards, last
+    match wins).
+  - If they would all be allowed, the app answers "once" for the author and
+    nothing is shown.
+  - These still ask:
+    - anything that still redirects (into a file, or `<`);
+    - `$(…)` or backticks;
+    - commands that aren't allowed anyway (rm, typst compile, python3 unless
+      allowed).
+  - Background conversations are judged as read-only, whatever their mode.
+  - Verified (self-test `figures`, real model): that exact command ran
+    without a question, and the turn went on to write the figure.
 
 ### The assistant asks: multiple choice or free text
 

@@ -323,7 +323,7 @@ function PermissionsPage() {
         <PermissionsEditor />
       </Section>
       <Section title="Commands that never need asking">
-        <p className="settings-help">They only look (list, read, search, compare), so they run in every mode. Written with a redirect (&gt;) or a writing option, they ask like any other command.</p>
+        <p className="settings-help">They only look (list, read, search, compare), so they run in every mode. Written to save into a file (&gt; file) or with a writing option, they ask like any other command; hiding errors (2&gt;/dev/null) doesn't count.</p>
         <div className="command-chips">
           {LOOK_COMMANDS.map((c) => (
             <code key={c} className="command-chip">

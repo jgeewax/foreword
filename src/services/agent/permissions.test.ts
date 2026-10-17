@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { describePermissions, NO_COMPILE_RULES, presetOf, PRESETS, sanitizePermissions, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
-
-/** OpenCode's wildcard matching for permission resources (`*` = any run of characters). */
-const matches = (pattern: string, value: string) =>
-  new RegExp(`^${pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(value);
+import {
+  allowedWithoutRedirects,
+  describePermissions,
+  NO_COMPILE_RULES,
+  presetOf,
+  PRESETS,
+  ruleEffect,
+  sanitizePermissions,
+  sessionRules,
+  withoutHarmlessRedirects,
+  type AgentPermissions,
+  type PermissionRule,
+} from './permissions';
 
 /** Last matching rule wins (verified against OpenCode 2.0.20). */
-function effect(action: string, resource: string, rules: readonly PermissionRule[]) {
-  let result = 'none';
-  for (const r of rules) if ((r.action === '*' || r.action === action) && matches(r.resource, resource)) result = r.effect;
-  return result;
-}
+const effect = (action: string, resource: string, rules: readonly PermissionRule[]) => ruleEffect(action, resource, rules) ?? 'none';
 
 const ask = sessionRules(PRESETS.ask.permissions);
 const edit = sessionRules(PRESETS.edit.permissions);
@@ -139,5 +143,32 @@ describe('presets and descriptions', () => {
   it('sanitizes stored values', () => {
     expect(sanitizePermissions({ edit: 'allow', web: 'yes', junk: 1 })).toEqual({ ...PRESETS.ask.permissions, edit: 'allow' });
     expect(sanitizePermissions('nope')).toBeNull();
+  });
+});
+
+describe('redirections that write nothing', () => {
+  it('are taken out: into /dev/null, or one output into another', () => {
+    expect(withoutHarmlessRedirects('ls -la . figures 2>&1')).toBe('ls -la . figures');
+    expect(withoutHarmlessRedirects('cat style.typ 2>/dev/null')).toBe('cat style.typ');
+    expect(withoutHarmlessRedirects('grep -r x . > /dev/null')).toBe('grep -r x .');
+    expect(withoutHarmlessRedirects('find . -name "*.typ" &>/dev/null')).toBe('find . -name "*.typ"');
+    // Into a file: stays.
+    expect(withoutHarmlessRedirects('ls > out.txt 2>&1')).toBe('ls > out.txt');
+    expect(withoutHarmlessRedirects('cat a 2>/dev/nullx')).toBe('cat a 2>/dev/nullx');
+  });
+
+  it('answer for the author only when the commands would be allowed without them', () => {
+    const lookOnly = ['ls -la . figures 2>&1', 'echo', 'cat style.typ 2>/dev/null'];
+    for (const rules of [ask, edit, ro]) expect(allowedWithoutRedirects('shell', lookOnly, rules)).toBe(true);
+    // Writing into a file, a command that isn't a look command, hidden commands, other actions: still ask.
+    for (const cmd of ['ls > files.txt', 'ls 2>/dev/null > files.txt', 'python3 x.py 2>/dev/null', 'rm a 2>/dev/null', 'find . -delete 2>/dev/null', 'echo $(rm a) 2>/dev/null', 'typst compile main.typ 2>&1', 'sort a < b']) {
+      expect(allowedWithoutRedirects('shell', [cmd], edit), cmd).toBe(false);
+    }
+    expect(allowedWithoutRedirects('edit', ['main.typ'], edit)).toBe(false);
+    expect(allowedWithoutRedirects('shell', [], edit)).toBe(false);
+    // Commands the author allowed count too, but not in read-only modes.
+    expect(allowedWithoutRedirects('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, false, ['python3']))).toBe(true);
+    expect(allowedWithoutRedirects('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(false);
+    expect(allowedWithoutRedirects('shell', ['ls 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(true);
   });
 });

@@ -168,6 +168,43 @@ export function sessionRules(p: AgentPermissions, readOnly = false, allowCommand
   ];
 }
 
+/** OpenCode's wildcard matching for permission resources (`*` = any run of characters). */
+export function ruleMatches(pattern: string, value: string): boolean {
+  return new RegExp(`^${pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 's').test(value);
+}
+
+/** What `rules` say about one request: the last matching rule wins, as in OpenCode. */
+export function ruleEffect(action: string, resource: string, rules: readonly PermissionRule[]): Level | null {
+  let result: Level | null = null;
+  for (const r of rules) if ((r.action === '*' || r.action === action) && ruleMatches(r.resource, resource)) result = r.effect;
+  return result;
+}
+
+/** Redirections that write no file: into /dev/null, or one output into another (`2>&1`). */
+export function withoutHarmlessRedirects(command: string): string {
+  return command
+    .replace(/(^|\s)(?:\d|&)?>>?\s*\/dev\/null(?=\s|$)/g, '$1')
+    .replace(/(^|\s)\d?>&\d(?=\s|$)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * OpenCode asks about any command with a ">" in it, so "ls figures 2>/dev/null"
+ * asks although it only looks. True when, without the redirections that write
+ * nothing, the session's own rules allow every command in the request; the app
+ * then answers for the author. Anything else that could hide a command
+ * (`$(…)`, backticks) or still redirects keeps asking.
+ */
+export function allowedWithoutRedirects(action: string, resources: readonly string[], rules: readonly PermissionRule[]): boolean {
+  if (action !== 'shell' || !resources.length) return false;
+  return resources.every((r) => {
+    if (/\$\(|`/.test(r)) return false;
+    const bare = withoutHarmlessRedirects(r);
+    return !/[<>]/.test(bare) && ruleEffect('shell', bare, rules) === 'allow';
+  });
+}
+
 /** A short sentence for the chat when permissions change mid-conversation. */
 export function describePermissions(p: AgentPermissions): string {
   const preset = presetOf(p);
