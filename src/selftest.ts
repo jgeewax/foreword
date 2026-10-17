@@ -932,6 +932,7 @@ async function aiEditChecks(withAgent: boolean) {
 async function changesChecks() {
   const out: Record<string, unknown> = {};
   const original = studio.state.workspace!.root;
+  const sidebar = studio.state.sidebar;
   const parent = original.slice(0, original.lastIndexOf('/'));
   const hs = () => studio.state.history;
   await studio.createBook('novel', { title: `Changes ${Date.now().toString(36)}`, author: 'Ada Example' }, parent);
@@ -997,6 +998,7 @@ async function changesChecks() {
   await sleep(400);
   out.previewShownAfterClose = !(await hidden());
   await studio.openWorkspace(original);
+  studio.showSidebar(sidebar);
   return out;
 }
 
@@ -1388,7 +1390,10 @@ async function menuChecks() {
   };
   const action = (label: string) => last.find((e): e is Extract<MenuEntry, { label: string }> => typeof e === 'object' && !!e && e.label === label)?.action;
 
+  // The file tree and an editor, whatever earlier groups left showing.
+  studio.showSidebar('files');
   await studio.openFile('chapters/ch1-vectors.typ');
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
   const editor = studio.editor!;
   const model = editor.getModel()!;
   const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
