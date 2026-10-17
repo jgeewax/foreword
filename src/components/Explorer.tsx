@@ -7,6 +7,7 @@ import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
 import { TodoPanel } from './TodoPanel';
 import { ReviewPanel } from './ReviewPanel';
+import { TasksPanel } from './TasksPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { Icon, type IconName } from './icons';
 
@@ -119,7 +120,7 @@ function PlacementButton({ to }: { to: 'tab' | 'below' }) {
   );
 }
 
-export type View = 'files' | 'history' | 'code' | 'todos' | 'review';
+export type View = 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
 function useViews() {
@@ -128,7 +129,9 @@ function useViews() {
   // Review is always there: it's where comments are written about and checked.
   const hasReview = true;
   const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
-  return { hasCode, todoCount, hasReview, reviewOpen };
+  // Conversations that need the author: a question, a permission, a reply not yet seen.
+  const tasksWaiting = useStore(studio.store, (s) => Object.values(s.agent.background).filter((b) => b.attention || b.unread).length);
+  return { hasCode, todoCount, hasReview, reviewOpen, tasksWaiting };
 }
 
 /** The sidebar's views as a column of icons on its left edge, each with room for its own title. */
@@ -139,12 +142,18 @@ function useViews() {
  */
 export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
   const { view: current, below } = useSidebarView();
-  const { hasCode, todoCount, hasReview, reviewOpen } = useViews();
+  const { hasCode, todoCount, hasReview, reviewOpen, tasksWaiting } = useViews();
   const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
     { id: 'files', icon: 'files', label: 'Files' },
     ...(below ? [] : [{ id: 'history' as const, icon: 'history' as const, label: 'History: saved versions of the book' }]),
     ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples' }] : []),
     ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'todos' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
+    {
+      id: 'tasks' as const,
+      icon: 'chats' as const,
+      label: `Conversations with the assistant${tasksWaiting ? `: ${tasksWaiting} waiting for you` : ''}`,
+      badge: tasksWaiting || undefined,
+    },
     ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
   ];
   return (
@@ -180,7 +189,9 @@ function ViewHeader({ view, below }: { view: View; below: boolean }) {
           ? 'Code examples'
           : view === 'todos'
             ? `To do · ${todoCount}`
-            : `Review · ${reviewOpen} open`;
+            : view === 'tasks'
+              ? 'Conversations'
+              : `Review · ${reviewOpen} open`;
   return (
     <header className="pane-header">
       <span className="pane-title" title={title}>
@@ -194,12 +205,29 @@ function ViewHeader({ view, below }: { view: View; below: boolean }) {
         </>
       )}
       {view === 'history' && !below && <PlacementButton to="below" />}
+      {view === 'tasks' && (
+        <button className="icon" title="New task (a new conversation)" aria-label="New task" onClick={() => studio.newSession()}>
+          +
+        </button>
+      )}
     </header>
   );
 }
 
 function ViewBody({ view }: { view: View }) {
-  return view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : view === 'code' ? <CodePanel /> : view === 'todos' ? <TodoPanel /> : <ReviewPanel />;
+  return view === 'files' ? (
+    <FileTree />
+  ) : view === 'history' ? (
+    <HistoryPanel />
+  ) : view === 'code' ? (
+    <CodePanel />
+  ) : view === 'todos' ? (
+    <TodoPanel />
+  ) : view === 'tasks' ? (
+    <TasksPanel />
+  ) : (
+    <ReviewPanel />
+  );
 }
 
 /** The current view on top and History below, with a draggable divider. */
@@ -235,7 +263,8 @@ function useSidebarView(): { view: View; below: boolean } {
   const { hasCode, todoCount, hasReview } = useViews();
   const below = placement === 'below';
   // A view with nothing in it (or History, when it's shown below) falls back to the files.
-  const available = sidebar === 'files' || (sidebar === 'history' && !below) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+  const available =
+    sidebar === 'files' || sidebar === 'tasks' || (sidebar === 'history' && !below) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
   return { view: available ? sidebar : 'files', below };
 }
 

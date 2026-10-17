@@ -2472,6 +2472,27 @@ async function typingSyncChecks() {
   return out;
 }
 
+/** The Conversations view: the book's tasks in groups, opened from the activity bar or the View menu. */
+async function conversationsChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.sidebar;
+  await studio.loadTasks();
+  [...document.querySelectorAll<HTMLButtonElement>('.activity-bar button')].find((b) => b.getAttribute('aria-label')?.startsWith('Conversations'))?.click();
+  await sleep(500);
+  out.view = studio.state.sidebar;
+  out.title = document.querySelector('.explorer .pane-title')?.textContent;
+  out.sections = [...document.querySelectorAll('.tasks-panel .task-section')].map((e) => e.textContent);
+  out.rows = document.querySelectorAll('.tasks-panel .task-row').length;
+  out.tasks = studio.state.agent.tasks.length;
+  out.snapshot = await snap('conversations');
+  studio.showSidebar('files');
+  await studio.menuCommand('show-tasks');
+  await sleep(200);
+  out.fromMenu = studio.state.sidebar;
+  studio.showSidebar(saved);
+  return out;
+}
+
 /** The activity bar: the open view's icon hides the sidebar, any icon brings it back at that view. */
 async function activityChecks() {
   const out: Record<string, unknown> = {};
@@ -3331,6 +3352,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
+    if (want('conversations')) result.conversations = await conversationsChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();

@@ -33,9 +33,47 @@ export function ContextMeter() {
   );
 }
 
+type Task = ReturnType<typeof studio.store.get>['agent']['tasks'][number];
+
+/** The book's tasks (conversations) in groups: at work or waiting, open, done; and each one's state in words. */
+export function useTaskGroups() {
+  const agent = useStore(studio.store, (s) => s.agent);
+  // In progress: the shown one while it runs, and any at work or waiting in the background.
+  const busy = (id: string) => (id === agent.sessionId ? agent.running : !!agent.background[id]);
+  const status = (t: Task): { icon: React.ReactNode; text: string; tone: string } => {
+    if (t.sessionId === agent.sessionId) return agent.running ? { icon: <span className="tool-spinner" />, text: 'working', tone: 'busy' } : { icon: '●', text: '', tone: 'current' };
+    const bg = agent.background[t.sessionId];
+    if (bg?.attention) return { icon: '!', text: bg.attention === 'question' ? 'has a question' : 'asks permission', tone: 'attention' };
+    if (bg?.running) return { icon: <span className="tool-spinner" />, text: bg.label, tone: 'busy' };
+    if (bg?.unread) return { icon: '●', text: bg.failed ? 'stopped' : 'new reply', tone: bg.failed ? 'failed' : 'unread' };
+    return { icon: t.status === 'done' ? '✓' : '○', text: '', tone: '' };
+  };
+  return {
+    agent,
+    status,
+    inProgress: agent.tasks.filter((t) => busy(t.sessionId)),
+    open: agent.tasks.filter((t) => t.status === 'open' && !busy(t.sessionId)),
+    done: agent.tasks.filter((t) => t.status === 'done' && !busy(t.sessionId)),
+  };
+}
+
+/** One task in a list: its state, title and when it last changed. */
+export function TaskRow({ task, status, current, onPick, onContextMenu }: { task: Task; status: ReturnType<ReturnType<typeof useTaskGroups>['status']>; current: boolean; onPick: () => void; onContextMenu?: (e: React.MouseEvent) => void }) {
+  return (
+    <button className={`task-row${current ? ' current' : ''}${task.status === 'done' ? ' done' : ''} ${status.tone}`} onClick={onPick} onContextMenu={onContextMenu}>
+      <span className="task-status">{status.icon}</span>
+      <span className="task-title">
+        {task.title}
+        {status.text && <span className="task-doing">{status.text}</span>}
+      </span>
+      <span className="task-when">{ago(task.updated)}</span>
+    </button>
+  );
+}
+
 /** The current task, and a list of the book's other tasks (conversations). */
 export function TaskMenu() {
-  const agent = useStore(studio.store, (s) => s.agent);
+  const { agent, status, inProgress, open: openTasks, done: doneTasks } = useTaskGroups();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = agent.tasks.find((t) => t.sessionId === agent.sessionId);
@@ -53,39 +91,18 @@ export function TaskMenu() {
     };
   }, [open]);
 
-  // In progress: the shown one while it runs, and any at work or waiting in the background.
-  const busy = (id: string) => (id === agent.sessionId ? agent.running : !!agent.background[id]);
-  const inProgress = agent.tasks.filter((t) => busy(t.sessionId));
-  const openTasks = agent.tasks.filter((t) => t.status === 'open' && !busy(t.sessionId));
-  const doneTasks = agent.tasks.filter((t) => t.status === 'done' && !busy(t.sessionId));
-  const status = (t: (typeof agent.tasks)[number]) => {
-    if (t.sessionId === agent.sessionId) return agent.running ? { icon: <span className="tool-spinner" />, text: 'working', tone: 'busy' } : { icon: '●', text: '', tone: 'current' };
-    const bg = agent.background[t.sessionId];
-    if (bg?.attention) return { icon: '!', text: bg.attention === 'question' ? 'has a question' : 'asks permission', tone: 'attention' };
-    if (bg?.running) return { icon: <span className="tool-spinner" />, text: bg.label, tone: 'busy' };
-    if (bg?.unread) return { icon: '●', text: bg.failed ? 'stopped' : 'new reply', tone: bg.failed ? 'failed' : 'unread' };
-    return { icon: t.status === 'done' ? '✓' : '○', text: '', tone: '' };
-  };
-  const row = (t: (typeof agent.tasks)[number]) => {
-    const st = status(t);
-    return (
-      <button
-        key={t.sessionId}
-        className={`task-row${t.sessionId === agent.sessionId ? ' current' : ''}${t.status === 'done' ? ' done' : ''} ${st.tone}`}
-        onClick={() => {
-          setOpen(false);
-          void studio.switchTask(t.sessionId);
-        }}
-      >
-        <span className="task-status">{st.icon}</span>
-        <span className="task-title">
-          {t.title}
-          {st.text && <span className="task-doing">{st.text}</span>}
-        </span>
-        <span className="task-when">{ago(t.updated)}</span>
-      </button>
-    );
-  };
+  const row = (t: Task) => (
+    <TaskRow
+      key={t.sessionId}
+      task={t}
+      status={status(t)}
+      current={t.sessionId === agent.sessionId}
+      onPick={() => {
+        setOpen(false);
+        void studio.switchTask(t.sessionId);
+      }}
+    />
+  );
   // On the trigger: how many others are at work, and whether any needs the author.
   const others = Object.values(agent.background);
   const working = others.filter((b) => b.running).length;

@@ -309,6 +309,27 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### Conversations in the sidebar
+
+- **Before:** the only list of tasks was the small menu under "New task ▾" in
+  the assistant's header.
+- **Now:** the sidebar has a **Conversations** view (a speech bubble in the
+  activity bar; View → Conversations). It groups every task:
+  - at work or waiting for you;
+  - open;
+  - done (resolved).
+- Each group shows a count. Each row shows its state (working, has a
+  question, asks permission, new reply, stopped) and when it last changed.
+- A click opens the conversation in the assistant pane. Right-click: Open,
+  Mark Done, or Open Again. Marking another task done records a named
+  version in History, as finishing the shown one does.
+- The activity bar's badge counts conversations waiting for you.
+- The header menu and the view share their grouping and rows
+  (`useTaskGroups`, `TaskRow`).
+- Verified (self-test `conversations`): the view lists all 60 of the scratch
+  book's tasks under Open and Done, and opens from the activity bar and the
+  View menu.
+
 ### The assistant hears about the author's edits to its text
 
 - **Every change is tracked.** History records:

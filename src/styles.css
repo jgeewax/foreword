@@ -795,3 +795,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .monaco-editor .ctag-label.ctag-question { color: light-dark(#8250df, #d2a8ff) !important; background: light-dark(rgba(130, 80, 223, 0.13), rgba(210, 168, 255, 0.16)); }
 .monaco-editor .ctag-text.ctag-question { color: light-dark(#6639ba, #dcc2fb) !important; }
 .monaco-editor .ctag-line.ctag-question { background: light-dark(rgba(130, 80, 223, 0.05), rgba(210, 168, 255, 0.05)); }
+
+/* The sidebar's Conversations view: the task rows of the header's menu, full width. */
+.tasks-panel { flex: 1; overflow: auto; padding: 4px 0 8px; }
+.tasks-panel .task-section { padding: 8px 12px 3px; }

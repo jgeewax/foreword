@@ -246,7 +246,7 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review';
+  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks';
 };
 
 const initialState: StudioState = {
@@ -504,6 +504,7 @@ export class Studio {
     'show-files': () => this.revealSidebar('files'),
     'show-review': () => this.showReview(),
     'show-history': () => this.revealSidebar(this.state.settings.historyPlacement === 'below' ? 'files' : 'history'),
+    'show-tasks': () => this.revealSidebar('tasks'),
     'show-in-preview': () => this.syncPreviewToCursor(),
     'zoom-in': () => this.zoom('in', 'menu'),
     'zoom-out': () => this.zoom('out', 'menu'),
@@ -2677,6 +2678,15 @@ export class Studio {
   dismissTaskCheck(itemId: string) {
     this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, taskCheck: 'dismissed' } : it));
     this.events.emit('focus-composer');
+  }
+
+  /** Mark any task done (the shown one goes through `finishTask`, which starts the next). */
+  async markTaskDone(sessionId: string) {
+    if (sessionId === this.state.agent.sessionId) return this.finishTask();
+    const title = this.taskTitle(sessionId);
+    this.setTaskRecord(sessionId, 'done');
+    await this.history.saveNamed(`Task done: ${title}`).catch(() => {});
+    await this.loadTasks();
   }
 
   reopenTask(sessionId: string) {
