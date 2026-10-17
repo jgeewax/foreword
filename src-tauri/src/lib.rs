@@ -521,6 +521,7 @@ pub fn run() {
             agent::agent_subscribe,
             agent::agent_stop,
             history::history_init,
+            history::history_reveal,
             history::history_snapshot,
             history::history_list,
             history::history_changes,

@@ -2394,6 +2394,38 @@ async function quickOpenChecks() {
   return out;
 }
 
+/** History explains itself: where versions are kept (the app's repo, outside the book) and how to go back. */
+async function historyAboutChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.history.status === 'ready', 30000, 'history').catch(() => {});
+  const repo = studio.state.history.repo;
+  const root = studio.state.workspace?.root ?? '';
+  out.repo = repo && { outsideBook: !repo.gitDir.startsWith(`${root}/`) && repo.gitDir !== root, endsWithGit: repo.gitDir.endsWith('.git') };
+  // History is below the files or a sidebar view of its own (the author's choice): show it either way.
+  const sidebar = studio.state.sidebar;
+  if (!document.querySelector('.history-help')) {
+    studio.showSidebar('history');
+    await sleep(400);
+  }
+  const link = [...document.querySelectorAll<HTMLButtonElement>('.history-help .link')].find((b) => b.textContent?.includes('How does this work'));
+  out.link = !!link;
+  link?.click();
+  await sleep(250);
+  const about = document.querySelector('.history-about');
+  out.about = {
+    shown: !!about,
+    where: /Git repository/.test(about?.textContent ?? ''),
+    goingBack: /Older/.test(about?.textContent ?? '') && /Compare with/.test(about?.textContent ?? ''),
+    buttons: [...(about?.querySelectorAll('button') ?? [])].map((b) => b.textContent),
+  };
+  out.snapshot = await snap('history-about');
+  [...document.querySelectorAll<HTMLButtonElement>('.history-help .link')].find((b) => b.textContent === 'Less')?.click();
+  await sleep(150);
+  out.closed = !document.querySelector('.history-about');
+  studio.showSidebar(sidebar);
+  return out;
+}
+
 /** The app's chrome at 67% and 100% zoom: the same size on screen, the pane headers in line. The zoom is put back after. */
 async function chromeChecks() {
   const out: Record<string, unknown> = {};
@@ -3041,6 +3073,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
     if (want('chrome')) result.chrome = await chromeChecks();
+    if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

@@ -757,3 +757,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .quick-open-row.current .quick-open-main::after { content: " · open"; color: var(--muted); font-size: 11px; }
 .quick-open-empty { padding: 8px 10px; }
 .quick-open-hint { padding: 5px 12px 7px; font-size: 11px; border-top: 1px solid var(--border); }
+
+/* History: what it is and where it's kept, on request. */
+.history-help .link { padding: 0; font-size: inherit; }
+.history-about { margin-top: 6px; padding: 8px 10px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--fg); }
+.history-about p { margin: 0 0 6px; line-height: 1.45; }
+.history-about-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }

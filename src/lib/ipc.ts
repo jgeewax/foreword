@@ -106,6 +106,7 @@ export const ipc = {
   agentStop: () => invoke<void>('agent_stop'),
 
   historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
+  historyReveal: () => invoke<void>('history_reveal'),
   /** `{files}` in the label becomes the names of the changed files. Null: nothing changed. */
   historySnapshot: (kind: string, label: string, allowEmpty = false) => invoke<Version | null>('history_snapshot', { kind, label, allowEmpty }),
   /** Versions, newest first; with `path`, only those that changed that file. */

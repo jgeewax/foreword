@@ -383,6 +383,24 @@ pane top (off by 0 pt).
 - No pruning yet: history grows with the book (text compresses well). Moving
   the book folder starts a new history (the key is its path).
 
+- **History explains itself** (an author asked where it's kept, whether it's
+  Git, and whether they could go back and see the changes). The panel's line
+  ends with "How does this work?", which opens three short paragraphs:
+  - **Where:** the app's own Git repository for the book, outside the book
+    folder, leaving the author's Git alone.
+  - **Going back:** What changed line by line, ◀ Older / Newer ▶, Compare
+    with Now, Undo, Restore. Restoring adds a version, so you can go forward
+    again.
+  - **Named versions.**
+- **The panel also has:**
+  - **Show in Finder:** `history_reveal` works the path out in Rust, so no
+    path comes from the page.
+  - **Copy Git command:** `git --git-dir=… --work-tree=… log -p`, quoted for
+    the shell, since "Application Support" has a space.
+- Verified (self-test `historyabout`):
+  - The repo is outside the book and the explanation opens and closes.
+  - The copied form of the command lists versions with their changes.
+
 ### Book templates (TODO #12)
 
 - Five templates in `src/templates/<id>/`: novel, non-fiction, textbook,

@@ -120,7 +120,7 @@
 
 - [x] update prompt to try to encourage consistent style ? specifically for figures? in this case, cetz diagrams i suppose?
 
-- [ ] im confused where change istory is stored? is this living in a git repository? can i work backwards ? see deltas? that seems like a good idea, no?
+- [x] im confused where change istory is stored? is this living in a git repository? can i work backwards ? see deltas? that seems like a good idea, no?
 
 - [ ] the menu system seems crowded and silly. we need to rethink and revamp the menus.
 

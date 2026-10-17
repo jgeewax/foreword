@@ -148,6 +148,24 @@ async fn repo(app: &tauri::AppHandle, state: &AppState) -> CmdResult<Repo> {
     Ok(Repo { git_dir, root })
 }
 
+/// Show the open book's history repo in Finder. It's in the app's data folder;
+/// the path is worked out here, not taken from the page.
+#[tauri::command]
+pub async fn history_reveal(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    let r = repo(&app, &state).await?;
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg("-R")
+        .arg(&r.git_dir)
+        .status()?;
+    if !status.success() {
+        return Err(CmdError::Io(format!(
+            "couldn't reveal {}",
+            r.git_dir.display()
+        )));
+    }
+    Ok(())
+}
+
 /// Create (or update) the history repo for the open workspace. `exclude` adds
 /// patterns such as the PDF output folder.
 #[tauri::command]

@@ -51,9 +51,11 @@ export type HistoryState = {
   /** Only the versions that changed this file (null: all). */
   filter: string | null;
   busy: boolean;
+  /** Where the versions are kept: the app's own Git repo for this book, and the git it uses. */
+  repo: { gitDir: string; git: string } | null;
 };
 
-export const initialHistory: HistoryState = { status: 'off', versions: [], open: null, diff: null, changes: null, filter: null, busy: false };
+export const initialHistory: HistoryState = { status: 'off', versions: [], open: null, diff: null, changes: null, filter: null, busy: false, repo: null };
 
 /** Files shown in one "what changed" view (the rest are counted). */
 const CHANGES_LIMIT = 40;
@@ -108,15 +110,24 @@ export class History {
   async start(exclude: string[]) {
     this.host.set({ ...initialHistory, status: 'starting' });
     try {
-      await ipc.historyInit(exclude);
+      const repo = await ipc.historyInit(exclude);
       this.started = true;
       const first = (await ipc.historyList(1)).length === 0;
       await ipc.historySnapshot('opened', first ? 'Started keeping history' : 'Changed outside Typst Studio: {files}');
-      this.host.set({ status: 'ready' });
+      this.host.set({ status: 'ready', repo });
       await this.refresh();
     } catch (e) {
       this.started = false;
       this.host.set({ status: 'unavailable', error: errorMessage(e) });
+    }
+  }
+
+  /** The history repo in Finder. */
+  async reveal() {
+    try {
+      await ipc.historyReveal();
+    } catch (e) {
+      this.host.report(`Couldn't show it in Finder: ${errorMessage(e)}`, 'error');
     }
   }
 

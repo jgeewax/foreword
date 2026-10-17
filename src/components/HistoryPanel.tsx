@@ -103,6 +103,50 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
   );
 }
 
+/** Single-quoted for a shell, for the Git command the author can copy. */
+const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** What History is, where it's kept, and how to go back: one line, more on request. */
+function HistoryAbout() {
+  const repo = useStore(studio.store, (s) => s.history.repo);
+  const root = useStore(studio.store, (s) => s.workspace?.root);
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="history-help muted">
+      Versions are saved automatically as you work and around every assistant change.{' '}
+      <button className="link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? 'Less' : 'How does this work?'}
+      </button>
+      {open && (
+        <div className="history-about">
+          <p>
+            <b>Where:</b> in a Git repository Typst Studio keeps for this book, in its own data folder rather than in the book folder. Your own Git, if you use one, is never touched.
+          </p>
+          <p>
+            <b>Going back:</b> click a version to see what changed in it, line by line. <b>◀ Older</b> and <b>Newer ▶</b> step through the versions one at a time; <b>Compare with
+            Now</b> shows everything since. You can undo just what the assistant changed, or put the whole book back as it was. Restoring adds a new version, so you can always go
+            forward again.
+          </p>
+          <p>
+            <b>Marking points:</b> <i>Name this version…</i> keeps a point like “Draft sent to editor” easy to find.
+          </p>
+          {repo && root && (
+            <div className="history-about-actions">
+              <button onClick={() => void studio.history.reveal()}>Show in Finder</button>
+              <button
+                title="A Git command that lists every version with its changes, for Terminal"
+                onClick={() => studio.copy(`git --git-dir=${shellQuote(repo.gitDir)} --work-tree=${shellQuote(root)} log -p`, 'Git command copied')}
+              >
+                Copy Git command
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NameVersion() {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
@@ -156,7 +200,7 @@ export function HistoryPanel() {
           </button>
         </div>
       ) : (
-        <div className="history-help muted">Versions are saved automatically as you work and around every agent change.</div>
+        <HistoryAbout />
       )}
       {history.filter && !history.versions.length && <div className="history-empty muted">No versions changed this file yet.</div>}
       <div className="history-list">
