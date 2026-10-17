@@ -111,6 +111,27 @@ export class OpenCodeAdapter implements AgentAdapter {
     await call('POST', `/api/session/${sessionId}/prompt`, { text });
   }
 
+  /** This book's conversations, newest first. */
+  async listSessions(limit = 50) {
+    const res = await call('GET', `/api/session?directory=${encodeURIComponent(this.root)}&limit=${limit}&order=desc`);
+    return ((res.data ?? []) as any[]).map((s) => ({
+      id: s.id as string,
+      title: (s.title as string) ?? '',
+      updated: (s.time?.updated ?? s.time?.created ?? 0) as number,
+      tokens: (s.tokens?.input as number | undefined) ?? null,
+    }));
+  }
+
+  /** A conversation's messages, normalized by OpenCode (user text, assistant text and tool parts). */
+  async sessionContext(sessionId: string) {
+    return ((await call('GET', `/api/session/${sessionId}/context`)).data ?? []) as any[];
+  }
+
+  /** Summarize the conversation so far to free up the context window. */
+  async compact(sessionId: string) {
+    await call('POST', `/api/session/${sessionId}/compact`, {});
+  }
+
   async cancel(sessionId: string) {
     await call('POST', `/api/session/${sessionId}/interrupt`);
   }

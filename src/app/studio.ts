@@ -33,6 +33,7 @@ import { chapterImports, chapterText, includePath, nextChapterPath, withInclude 
 import { referencesTo, removeIncludes, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
+import { asksTaskDone, contextTokens, itemsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -48,7 +49,7 @@ import { TypstService } from '../services/typst';
 
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
-  | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState }
+  | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
   | { kind: 'tool'; id: string; name: string; summary: string; status: 'running' | 'done' | 'failed'; detail: string }
   | {
       kind: 'permission';
@@ -109,6 +110,11 @@ export type StudioState = {
     selectionDismissed: string | null;
     /** Write (default), Plan (discuss and outline) or Options (three versions to pick from). */
     mode: AgentMode;
+    /** This book's conversations (tasks), newest first. */
+    tasks: TaskSummary[];
+    /** Input tokens of the latest call: how full the context window is. */
+    contextTokens: number | null;
+    compacting: boolean;
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error' } | null;
@@ -165,6 +171,9 @@ const initialState: StudioState = {
     selection: null,
     selectionDismissed: null,
     mode: 'write',
+    tasks: [],
+    contextTokens: null,
+    compacting: false,
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
@@ -193,6 +202,11 @@ export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
 let seq = 0;
 const uid = (p: string) => `${p}${++seq}`;
+
+/** Wait until OpenCode reports the session idle (e.g. after compaction), up to a minute. */
+async function waitIdle(agent: AgentAdapter, sessionId: string) {
+  for (let i = 0; i < 120 && (await agent.isRunning(sessionId).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 500));
+}
 
 function readJson<T>(key: string): T | null {
   try {
@@ -1372,6 +1386,8 @@ export class Studio {
     this.store.set((s) => ({ agent: { ...s.agent, ...(typeof patch === 'function' ? patch(s.agent) : patch) } }));
     // What the agent changed in this turn becomes one history version.
     if (wasRunning && !this.state.agent.running) {
+      void this.loadTasks();
+      void this.refreshContextSize();
       void this.history.afterAgent(this.turnMessage);
       void this.code.afterAgentTurn();
     }
@@ -1389,6 +1405,7 @@ export class Studio {
       await agent.start();
       this.setAgent({ status: 'ready' });
       await this.loadModels();
+      void this.loadTasks();
     } catch (e) {
       this.setAgent({ status: 'error', error: errorMessage(e) });
     }
@@ -1467,7 +1484,105 @@ export class Studio {
 
   newSession() {
     if (this.state.agent.running) return;
-    this.setAgent({ sessionId: null, title: null, items: [] });
+    this.setAgent({ sessionId: null, title: null, items: [], contextTokens: null });
+  }
+
+  // ---- tasks (conversations) ----------------------------------------------------------
+
+  private tasksKey() {
+    return `studio.tasks:${this.state.workspace?.root ?? ''}`;
+  }
+
+  private taskRecords(): TaskRecord[] {
+    return readJson<TaskRecord[]>(this.tasksKey()) ?? [];
+  }
+
+  private setTaskRecord(sessionId: string, status: TaskRecord['status']) {
+    const records = this.taskRecords().filter((r) => r.sessionId !== sessionId);
+    records.push({ sessionId, status, ...(status === 'done' ? { doneAt: Date.now() } : {}) });
+    writeJson(this.tasksKey(), records.slice(-500));
+  }
+
+  /** The book's conversations from OpenCode, with done/open from this Mac. */
+  async loadTasks() {
+    if (!this.agent || this.state.agent.status !== 'ready') return;
+    try {
+      const sessions = await this.agent.listSessions(60);
+      const records = new Map(this.taskRecords().map((r) => [r.sessionId, r.status]));
+      this.setAgent({
+        tasks: sessions.map((s) => ({ sessionId: s.id, title: s.title || 'Untitled task', status: records.get(s.id) ?? 'open', updated: s.updated, tokens: s.tokens })),
+      });
+    } catch (e) {
+      console.warn('tasks: list failed', e);
+    }
+  }
+
+  /** Open another conversation: its messages come back from OpenCode. */
+  async switchTask(sessionId: string) {
+    if (!this.agent || this.state.agent.running || sessionId === this.state.agent.sessionId) return;
+    try {
+      const messages = await this.agent.sessionContext(sessionId);
+      const task = this.state.agent.tasks.find((t) => t.sessionId === sessionId);
+      this.setAgent({ sessionId, title: task?.title ?? null, items: itemsFromContext(messages), contextTokens: contextTokens(messages), attachments: [] });
+      // Bring the conversation in line with the current mode, permissions and instructions.
+      const config = modeConfig(this.state.agent.mode);
+      await this.agent.switchAgent(sessionId, config.agent).catch(() => {});
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly).catch(() => {});
+      await this.applyInstructions(sessionId);
+    } catch (e) {
+      this.toast(`Couldn't open that conversation: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** How full the current conversation is, from its latest call. */
+  private async refreshContextSize() {
+    const { sessionId } = this.state.agent;
+    if (!sessionId || !this.agent) return;
+    try {
+      const size = contextTokens(await this.agent.sessionContext(sessionId));
+      if (this.state.agent.sessionId === sessionId) this.setAgent({ contextTokens: size });
+    } catch {}
+  }
+
+  /** "Yes, it's done": mark the task finished, save a named version, start a new one. */
+  async finishTask() {
+    const { sessionId, title } = this.state.agent;
+    if (!sessionId || this.state.agent.running) return;
+    this.setTaskRecord(sessionId, 'done');
+    await this.history.saveNamed(`Task done: ${title ?? 'untitled'}`).catch(() => {});
+    this.newSession();
+    await this.loadTasks();
+    this.toast(`Done: ${title ?? 'task'}. Ready for the next one.`);
+  }
+
+  /** "Not yet": hide the buttons on that reply. */
+  dismissTaskCheck(itemId: string) {
+    this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, taskCheck: 'dismissed' } : it));
+    this.events.emit('focus-composer');
+  }
+
+  reopenTask(sessionId: string) {
+    this.setTaskRecord(sessionId, 'open');
+    void this.loadTasks();
+  }
+
+  /** Summarize the conversation so far, freeing context (OpenCode compaction). */
+  async compactTask() {
+    const { sessionId } = this.state.agent;
+    if (!sessionId || !this.agent || this.state.agent.running) return;
+    this.setAgent({ compacting: true });
+    try {
+      await this.agent.compact(sessionId);
+      await new Promise((r) => setTimeout(r, 500));
+      await waitIdle(this.agent, sessionId);
+      const messages = await this.agent.sessionContext(sessionId);
+      this.setAgent({ items: itemsFromContext(messages), contextTokens: contextTokens(messages) });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Compacted: the conversation so far was summarized to free up the context window.' });
+    } catch (e) {
+      this.toast(`Couldn't compact: ${errorMessage(e)}`, 'error');
+    } finally {
+      this.setAgent({ compacting: false });
+    }
   }
 
   /** ⌘I: attach the selection (or cursor position) to the chat and focus it. */
@@ -1558,6 +1673,8 @@ export class Studio {
       });
       return false;
     }
+    // Sending in a finished task reopens it.
+    if (state.sessionId && state.tasks.find((t) => t.sessionId === state.sessionId)?.status === 'done') this.reopenTask(state.sessionId);
     // Everything up to now is its own version, so the agent's changes can be undone separately.
     await this.history.beforeAgent();
     this.turnMessage = text;
@@ -1636,6 +1753,7 @@ export class Studio {
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
       if (this.styleGuideText?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText));
+      await this.agent.setInstructions(sessionId, TASK_INSTRUCTIONS_KEY, TASK_INSTRUCTIONS);
       const modeText = modeConfig(this.state.agent.mode).instructions;
       if (modeText) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, modeText);
     } catch (e) {
@@ -1758,10 +1876,11 @@ export class Studio {
       }
       case 'text-ended': {
         const id = `${e.messageId}:${e.ordinal}`;
+        const taskCheck = asksTaskDone(e.text) ? ({ taskCheck: 'ask' } as const) : {};
         this.setAgent((a) =>
           a.items.some((it) => it.id === id)
-            ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true } : it)) }
-            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState() }] },
+            ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true, ...taskCheck } : it)) }
+            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState(), ...taskCheck }] },
         );
         break;
       }

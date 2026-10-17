@@ -55,6 +55,12 @@ export interface AgentAdapter {
   getInstructions(sessionId: string): Promise<{ key: string; value: unknown }[]>;
   removeInstructions(sessionId: string, key: string): Promise<void>;
   switchModel(sessionId: string, model: ModelRef): Promise<void>;
+  /** This book's conversations, newest first. */
+  listSessions(limit?: number): Promise<{ id: string; title: string; updated: number; tokens: number | null }[]>;
+  /** A conversation's messages (user text, assistant text and tool parts). */
+  sessionContext(sessionId: string): Promise<any[]>;
+  /** Summarize the conversation so far to free up the context window. */
+  compact(sessionId: string): Promise<void>;
   /** Resolves when the backend has accepted the message (not when the turn ends). */
   send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[]): Promise<void>;
   cancel(sessionId: string): Promise<void>;

@@ -58,3 +58,9 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 ## TODOs
 - Show TODOs in the preview (a margin marker) in draft mode, hidden when exporting.
 - Assign a TODO to the assistant in the background (its own task session), and mark it done when that finishes.
+
+## Tasks
+- Run several tasks at once in the background (OpenCode supports concurrent sessions), with a badge when one finishes or needs permission.
+- Hand a task its own History branch, so finishing it can be reviewed as one change ("Review task changes" diff) and undone as one.
+- Suggest a new task when the context meter goes red, or when a message drifts away from the task's goal.
+- Rename, archive and delete tasks; search them.

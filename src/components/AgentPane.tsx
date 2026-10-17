@@ -9,6 +9,8 @@ import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
 import { TypstGuide } from './TypstGuide';
+import { ContextMeter, TaskMenu } from './TaskMenu';
+import { withoutMarker } from '../app/tasks';
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -123,7 +125,8 @@ function ItemBody({ item }: { item: ChatItem }) {
       if (item.options) return <OptionsReply item={item} />;
       return (
         <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
-          <Markdown text={item.text} />
+          <Markdown text={withoutMarker(item.text)} />
+          {item.taskCheck === 'ask' && <TaskCheck id={item.id} />}
         </div>
       );
     case 'tool':
@@ -174,6 +177,22 @@ function ItemBody({ item }: { item: ChatItem }) {
         </div>
       );
   }
+}
+
+/** "Is the task done?" under the reply that asks it. */
+function TaskCheck({ id }: { id: string }) {
+  const running = useStore(studio.store, (s) => s.agent.running);
+  return (
+    <div className="task-check">
+      <span>Is this task done?</span>
+      <button className="primary" disabled={running} onClick={() => void studio.finishTask()}>
+        Yes, it's done: new task
+      </button>
+      <button disabled={running} onClick={() => studio.dismissTaskCheck(id)}>
+        Not yet
+      </button>
+    </div>
+  );
 }
 
 /** The mode menu: compact trigger, opens upward with a description per mode. ⇧Tab cycles. */
@@ -468,12 +487,11 @@ export function AgentPane() {
       {/* Hidden, not unmounted, while the guide is open: keeps the draft message and scroll position. */}
       <div className="agent-body" hidden={guideOpen}>
         <header className="pane-header">
-          <span className="pane-title session-title" title={agent.title ?? undefined}>
-            {agent.title ?? 'Assistant'}
-          </span>
+          <TaskMenu />
           {agent.running && <span className="working">working…</span>}
           <span className="spacer" />
-          <button className="icon" title="New conversation" aria-label="New conversation" disabled={agent.running} onClick={() => studio.newSession()}>
+          <ContextMeter />
+          <button className="icon" title="New task" aria-label="New task" disabled={agent.running} onClick={() => studio.newSession()}>
             ＋
           </button>
         </header>

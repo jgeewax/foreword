@@ -1020,6 +1020,67 @@ async function menuChecks() {
   return out;
 }
 
+/** Task-based conversations: goal, done check, finish, switch back, compact. */
+async function taskChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  const original = (await ipc.fsRead(file)).text;
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
+  studio.newSession();
+  const heading = original.split('\n')[0];
+  const reply = await askAgent(`In ${file}, change the chapter heading on the first line to exactly: = Vectors and Spaces <ch-vectors>`);
+  await sleep(1500);
+  const last = [...studio.state.agent.items].reverse().find((i) => i.kind === 'assistant') as any;
+  const sessionId = studio.state.agent.sessionId;
+  out.turn = {
+    replyEnd: reply.slice(-160),
+    taskCheck: last?.taskCheck,
+    checkShown: !!document.querySelector('.task-check'),
+    contextTokens: studio.state.agent.contextTokens,
+    meter: document.querySelector('.agent-pane .pane-header .context-meter')?.textContent,
+    headingNow: (await ipc.fsRead(file)).text.split('\n')[0],
+    instructionKeys: sessionId ? (await studio.agent!.getInstructions(sessionId)).map((e) => e.key) : [],
+  };
+  out.snapshotCheck = await snap('task-check');
+
+  document.querySelector<HTMLButtonElement>('.task-check .primary')?.click();
+  await sleep(1500);
+  out.finished = {
+    sessionCleared: studio.state.agent.sessionId === null,
+    items: studio.state.agent.items.length,
+    record: studio.state.agent.tasks.find((t) => t.sessionId === sessionId),
+    historyLatest: studio.state.history.versions[0]?.label,
+  };
+
+  document.querySelector<HTMLButtonElement>('.task-trigger')?.click();
+  await sleep(1200);
+  out.menu = [...document.querySelectorAll('.task-row')].slice(0, 5).map((e) => e.textContent);
+  out.snapshotMenu = await snap('task-menu');
+  document.querySelector<HTMLButtonElement>('.task-trigger')?.click();
+
+  if (sessionId) {
+    await studio.switchTask(sessionId);
+    await sleep(500);
+    out.switched = {
+      sessionId: studio.state.agent.sessionId === sessionId,
+      title: studio.state.agent.title,
+      items: studio.state.agent.items.map((i) => `${i.kind}${i.kind === 'user' || i.kind === 'assistant' ? `: ${i.text.slice(0, 60)}` : ''}`),
+      contextTokens: studio.state.agent.contextTokens,
+    };
+    const before = studio.state.agent.contextTokens;
+    await studio.compactTask();
+    out.compacted = { before, after: studio.state.agent.contextTokens, notice: (studio.state.agent.items.filter((i) => i.kind === 'notice').pop() as any)?.text, items: studio.state.agent.items.length };
+    out.compactedItems = studio.state.agent.items.map((i) => `${i.kind}: ${'text' in i ? i.text.slice(0, 60) : ''}`);
+  }
+  studio.updateSettings({ permissions: policy });
+  await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  void heading;
+  studio.newSession();
+  return out;
+}
+
 /** TODOs: found as you type, listed, offered as suggestions, done, and handed to the assistant. */
 async function todoChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
@@ -1127,6 +1188,30 @@ async function selectionChecks(withAgent: boolean) {
   out.snapshotPreviewSel = await snap('selection-from-preview');
   await ipc.previewEval('window.getSelection().removeAllRanges()');
   return out;
+}
+
+/** Probe: OpenCode sessions and message shapes (for task switching). */
+async function sessionProbe() {
+  await waitFor(() => studio.state.agent.status === 'ready', 60000, 'agent');
+  const root = studio.state.workspace!.root;
+  const list = (await ipc.agentRequest('GET', `/api/session?directory=${encodeURIComponent(root)}&limit=5`)).body;
+  const sessions = list?.data ?? list;
+  const first = Array.isArray(sessions) ? sessions[0] : null;
+  const messages = first ? (await ipc.agentRequest('GET', `/api/session/${first.id}/message?limit=6`)).body : null;
+  const context = first ? (await ipc.agentRequest('GET', `/api/session/${first.id}/context`)).body : null;
+  const shape = (v: any, depth = 0): any =>
+    depth > 4 ? '…' : Array.isArray(v) ? [v.length ? shape(v[0], depth + 1) : null, `len ${v.length}`] : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shape(x, depth + 1)])) : typeof v === 'string' ? `str(${v.length}): ${v.slice(0, 50)}` : v;
+  const ctx = (context as any)?.data ?? [];
+  return {
+    listKeys: list && Object.keys(list),
+    count: Array.isArray(sessions) ? sessions.length : null,
+    sessionKeys: first && Object.keys(first),
+    title: first?.title,
+    time: first?.time,
+    contextItems: ctx.map((m: any) => ({ type: m.type, keys: Object.keys(m), content: (m.content ?? []).map((c: any) => ({ keys: Object.keys(c), type: c.type, name: c.name, state: c.state && Object.keys(c.state) })) })).slice(0, 8),
+    assistantSample: shape(ctx.find((m: any) => m.type !== 'user')),
+    messagesShape: shape((messages as any)?.data?.[0]),
+  };
 }
 
 /** Probe: what the preview's text elements contain (is the rendered text selectable?). */
@@ -1682,6 +1767,11 @@ export async function runSelftest(launch: LaunchOptions) {
       result.menus = await menuChecks();
     }
     if (want('probe')) result.probe = await previewProbe();
+    if (want('sessions')) result.sessions = await sessionProbe();
+    if (launch.selftestEdits && launch.selftestAgent && want('tasks')) {
+      log('tasks');
+      result.tasks = await taskChecks();
+    }
     if (launch.selftestEdits && want('todos')) {
       log('todos');
       result.todos = await todoChecks(launch.selftestAgent);

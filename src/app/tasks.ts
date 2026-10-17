@@ -1,0 +1,104 @@
+// Task-based conversations: each OpenCode session is a task with one goal.
+// The assistant restates the goal first and, when it thinks the goal is met,
+// ends its reply with a marker line; Typst Studio hides the marker and asks the
+// author to confirm. Finished tasks are remembered per book on this Mac.
+
+import type { ChatItem } from './studio';
+
+export const TASK_INSTRUCTIONS_KEY = 'task';
+
+export const TASK_MARKER = 'TASK COMPLETE?';
+
+export const TASK_INSTRUCTIONS = `# This conversation is one task
+
+The author works in tasks: each conversation has one goal.
+- At the start, restate the goal in one sentence. If something important is unclear, ask one or two short questions before starting; otherwise get going.
+- Stay on that goal. If the author asks for something unrelated, help briefly, or suggest starting a new task for it.
+- When you believe the goal is done, say in a sentence or two what you did, then end your reply with this exact line on its own:
+${TASK_MARKER}
+Typst Studio shows the author buttons to confirm. Don't use that line at any other time.`;
+
+const MARKER_LINE = /\n?[ \t]*[*_`]*TASK COMPLETE\?[*_`]*[ \t]*$/;
+
+/** Whether the reply asks the author to confirm the task is done. */
+export function asksTaskDone(text: string): boolean {
+  return MARKER_LINE.test(text.trimEnd());
+}
+
+/** The reply without the marker line (for display). */
+export function withoutMarker(text: string): string {
+  return text.trimEnd().replace(MARKER_LINE, '').trimEnd();
+}
+
+export type TaskRecord = { sessionId: string; status: 'open' | 'done'; doneAt?: number };
+
+export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null };
+
+/** The selection context Typst Studio appends to a message (see editor/selection.ts). */
+const CONTEXT_TAIL = /\n\n(?:Selected in the editor: [\s\S]*|The cursor is in [^\n]*)$/;
+
+/** User message text as the author typed it, plus the labels of what was attached. */
+export function splitUserText(text: string): { text: string; attachments: string[] } {
+  const attachments = [...text.matchAll(/<selection path="([^"]+)" start="(\d+):\d+" end="(\d+):\d+">/g)].map(([, path, a, b]) => (a === b ? `${path}:${a}` : `${path}:${a}–${b}`));
+  return { text: text.replace(CONTEXT_TAIL, ''), attachments };
+}
+
+type ContextPart = { type: string; text?: string; name?: string; id?: string; state?: { status?: string; input?: Record<string, unknown>; content?: { text?: string }[]; error?: string } };
+type ContextMessage = {
+  id: string;
+  type: string;
+  text?: string;
+  content?: ContextPart[];
+  tokens?: { input?: number; cache?: { read?: number; write?: number } };
+  /** Compaction: the summary that replaced earlier messages, and any kept verbatim. */
+  summary?: string;
+  recent?: unknown;
+};
+
+const toolSummary = (input: Record<string, unknown> = {}) => String(input.path ?? input.filePath ?? input.command ?? input.pattern ?? input.url ?? input.query ?? '');
+
+/** Chat items for a saved conversation (from GET /api/session/{id}/context). */
+export function itemsFromContext(messages: ContextMessage[]): ChatItem[] {
+  const items: ChatItem[] = [];
+  for (const m of messages) {
+    if (m.type === 'compaction') {
+      if (m.summary?.trim()) items.push({ kind: 'assistant', id: m.id, text: `**Summary of the conversation so far**\n\n${m.summary}`, done: true });
+      if (Array.isArray(m.recent)) items.push(...itemsFromContext(m.recent as ContextMessage[]));
+    } else if (m.type === 'user') {
+      const { text, attachments } = splitUserText(m.text ?? '');
+      items.push({ kind: 'user', id: m.id, text, attachments });
+    } else if (m.type === 'assistant') {
+      (m.content ?? []).forEach((part, i) => {
+        if (part.type === 'text' && part.text?.trim()) {
+          items.push({ kind: 'assistant', id: `${m.id}:${i}`, text: part.text, done: true });
+        } else if (part.type === 'tool') {
+          const status = part.state?.status;
+          items.push({
+            kind: 'tool',
+            id: part.id ?? `${m.id}:${i}`,
+            name: part.name ?? 'tool',
+            summary: toolSummary(part.state?.input),
+            status: status === 'error' || status === 'failed' ? 'failed' : 'done',
+            detail: (part.state?.error ?? part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '').slice(0, 4000),
+          });
+        }
+      });
+    }
+  }
+  return items;
+}
+
+/**
+ * The latest model call's prompt size (input plus cached tokens): how much of
+ * the context window the conversation fills. (session.usage.updated carries
+ * the session's running total instead, which overstates it.)
+ */
+export function contextTokens(messages: ContextMessage[]): number | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const t = messages[i].tokens;
+    if (messages[i].type !== 'assistant' || !t) continue;
+    const total = (t.input ?? 0) + (t.cache?.read ?? 0) + (t.cache?.write ?? 0);
+    if (total > 0) return total;
+  }
+  return null;
+}

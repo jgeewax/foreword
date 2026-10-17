@@ -351,6 +351,31 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Task-based conversations
+
+- **Each OpenCode session is a task.** The header's task menu lists this
+  book's sessions, from `GET /api/session?directory=<book>`, under Open and
+  Done. Switching restores the transcript from `/api/session/{id}/context`:
+  user text without our appended selection block (its labels become chips),
+  plus assistant text and tool parts. It also re-applies the current mode,
+  permissions and instructions.
+- **Goal and done check:** a `task` instruction entry asks the assistant to
+  restate the goal first (asking only if it's unclear), stay on it, and end
+  with the line `TASK COMPLETE?` when it believes the goal is met. The UI hides
+  that line and shows "Yes, it's done: new task" / "Not yet". Done marks the
+  task finished (remembered per book on this Mac), saves a named History
+  version "Task done: …" and starts a fresh conversation. Sending in a done
+  task reopens it.
+- **Context meter.** It shows the latest call's prompt size (input + cached
+  tokens) against the model's context window, turning amber over 55% and red
+  over 80%. `session.usage.updated` is the session's running total, which
+  overstates it.
+  - **Compact** calls OpenCode's compaction. The conversation becomes one
+    summary message, shown as "Summary of the conversation so far".
+- Verified with gemini-3.8-flash: restated goal, did it, `TASK COMPLETE?`,
+  finish (task done, History version), switch back (messages restored),
+  compact (summary shown).
+
 ### Selections go with chat messages (editor or preview)
 
 - **Automatic, like Claude Code:** the editor's current selection appears in
