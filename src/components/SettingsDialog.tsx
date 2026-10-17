@@ -4,6 +4,8 @@ import { PROJECT_FILE } from '../app/project-settings';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
 import { PermissionsEditor } from './Permissions';
+import { Icon, type IconName } from './icons';
+import { LOOK_COMMANDS } from '../services/agent/permissions';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -135,13 +137,192 @@ function ProjectSection() {
   );
 }
 
-export function SettingsDialog() {
+type Page = 'general' | 'assistant' | 'permissions' | 'book' | 'tools';
+const PAGE_KEY = 'studio.settingsPage';
+
+function readPage(): Page {
+  try {
+    const p = localStorage.getItem(PAGE_KEY);
+    return p === 'general' || p === 'assistant' || p === 'permissions' || p === 'book' || p === 'tools' ? p : 'general';
+  } catch {
+    return 'general';
+  }
+}
+
+function GeneralPage() {
   const settings = useStore(studio.store, (s) => s.settings);
+  const zoom = useStore(studio.store, (s) => s.zoom);
+  return (
+    <>
+      <Section title="Chat">
+        <div className="settings-field">
+          <div className="settings-label">Send a message with</div>
+          <Radio name="sendKey" value="enter" current={settings.sendKey} onChange={(v) => studio.updateSettings({ sendKey: v })} label="Enter" detail="Shift+Enter for a new line" />
+          <Radio name="sendKey" value="mod-enter" current={settings.sendKey} onChange={(v) => studio.updateSettings({ sendKey: v })} label="⌘ Enter" detail="Enter for a new line" />
+          <p className="settings-help">While the assistant works, the same key queues a message; ⌥⏎ sends it to the assistant right away.</p>
+        </div>
+      </Section>
+      <Section title="Layout">
+        <div className="settings-field">
+          <div className="settings-label">History</div>
+          <Radio name="historyPlacement" value="tab" current={settings.historyPlacement} onChange={(v) => studio.updateSettings({ historyPlacement: v })} label="In its own tab" detail="next to Files" />
+          <Radio
+            name="historyPlacement"
+            value="below"
+            current={settings.historyPlacement}
+            onChange={(v) => studio.updateSettings({ historyPlacement: v })}
+            label="Below the files"
+            detail="both visible at once; drag the divider to resize"
+          />
+        </div>
+        <div className="settings-field">
+          <div className="settings-label">Size of everything</div>
+          <div className="settings-row">
+            <button onClick={() => void studio.zoom('out', 'key')} aria-label="Smaller">
+              −
+            </button>
+            <span className="settings-zoom">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => void studio.zoom('in', 'key')} aria-label="Bigger">
+              +
+            </button>
+            <button onClick={() => void studio.zoom('reset', 'key')}>Actual size</button>
+          </div>
+          <p className="settings-help">⌘= and ⌘− too. Toolbar and sidebar icons never get smaller than they are at 100%.</p>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+function AssistantPage() {
+  const settings = useStore(studio.store, (s) => s.settings);
+  const model = useStore(studio.store, (s) => s.agent.model);
+  const guide = useStore(studio.store, (s) => s.styleGuide);
+  const ws = useStore(studio.store, (s) => s.workspace);
+  return (
+    <>
+      <Section title="Model">
+        <p className="settings-help">
+          Now: <strong>{model ? `${model.id} (${model.providerID})` : 'the server’s default'}</strong>. Change it under the chat’s message box; each conversation remembers its own.
+        </p>
+      </Section>
+      <Section title="The assistant’s marks in the editor">
+        <div className="settings-field">
+          <label className="settings-option">
+            <input type="checkbox" checked={settings.markAiEdits} onChange={(e) => studio.updateSettings({ markAiEdits: e.target.checked })} />
+            <span>
+              Lines the assistant changed <span className="ai-swatch edit" />
+              <span className="muted"> — until you rewrite them; hover the line number for what was there before</span>
+            </span>
+          </label>
+          <label className="settings-option">
+            <input type="checkbox" checked={settings.markAiReads} onChange={(e) => studio.updateSettings({ markAiReads: e.target.checked })} />
+            <span>
+              Lines the assistant read <span className="ai-swatch read" />
+              <span className="muted"> — in the current conversation</span>
+            </span>
+          </label>
+        </div>
+      </Section>
+      {ws && (
+        <Section title="Writing style guide">
+          <p className="settings-help">
+            {guide.exists ? (
+              <>
+                Every message follows <code>WRITING_STYLE.md</code>.{' '}
+                <button
+                  className="link"
+                  onClick={() => {
+                    studio.closeSettings();
+                    void studio.openFile('WRITING_STYLE.md');
+                  }}
+                >
+                  Open it
+                </button>
+              </>
+            ) : (
+              'This book has no style guide yet: the chat offers to draft one from your chapters.'
+            )}
+          </p>
+        </Section>
+      )}
+    </>
+  );
+}
+
+function PermissionsPage() {
+  return (
+    <>
+      <Section title="What the assistant may do">
+        <PermissionsEditor />
+      </Section>
+      <Section title="Commands that never need asking">
+        <p className="settings-help">They only look (list, read, search, compare), so they run in every mode. Written with a redirect (&gt;) or a writing option, they ask like any other command.</p>
+        <div className="command-chips">
+          {LOOK_COMMANDS.map((c) => (
+            <code key={c} className="command-chip">
+              {c}
+            </code>
+          ))}
+        </div>
+      </Section>
+    </>
+  );
+}
+
+function ToolsPage() {
+  const tools = useStore(studio.store, (s) => s.tools);
+  const history = useStore(studio.store, (s) => s.history);
+  const row = (label: string, purpose: string, info: { path: string | null; version: string | null } | undefined, install: string) => (
+    <div className="tool-status-row" key={label}>
+      <span className={info?.path ? 'ok' : 'bad'}>{info ? (info.path ? '✓' : '✕') : '…'}</span>
+      <div>
+        <div className="settings-label">
+          {label} {info?.version && <span className="muted">{info.version}</span>}
+        </div>
+        <div className="settings-help">{purpose}</div>
+        {info?.path ? <code className="selectable">{info.path}</code> : info && <div className="settings-help">Not installed. In Terminal: <code className="selectable">{install}</code>, then restart Typst Studio.</div>}
+      </div>
+    </div>
+  );
+  return (
+    <Section title="Tools Typst Studio uses">
+      {row('Tinymist', 'Typesets the live preview and exports PDFs.', tools?.tinymist, 'brew install tinymist')}
+      {row('OpenCode', 'Runs the writing assistant.', tools?.opencode, 'brew install opencode')}
+      <div className="tool-status-row">
+        <span className={history.status === 'ready' ? 'ok' : history.status === 'unavailable' ? 'bad' : 'muted'}>{history.status === 'ready' ? '✓' : history.status === 'unavailable' ? '✕' : '…'}</span>
+        <div>
+          <div className="settings-label">git</div>
+          <div className="settings-help">Keeps History (in Typst Studio’s own folder; your book’s git is never touched).</div>
+          {history.error && <div className="settings-help bad">{history.error}</div>}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+export function SettingsDialog() {
+  const ws = useStore(studio.store, (s) => s.workspace);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [page, setPageState] = useState<Page>(readPage);
+  const setPage = (p: Page) => {
+    setPageState(p);
+    try {
+      localStorage.setItem(PAGE_KEY, p);
+    } catch {
+      // Only a convenience.
+    }
+  };
+  const pages: { id: Page; label: string; icon: IconName }[] = [
+    { id: 'general', label: 'General', icon: 'settings' },
+    { id: 'assistant', label: 'Assistant', icon: 'sparkle' },
+    { id: 'permissions', label: 'Permissions', icon: 'shield' },
+    ...(ws ? [{ id: 'book' as const, label: 'This book', icon: 'book' as const }] : []),
+    { id: 'tools', label: 'Tools', icon: 'code' },
+  ];
+  const current = pages.some((p) => p.id === page) ? page : 'general';
 
   useEffect(() => {
-    const root = dialogRef.current;
-    (root?.querySelector<HTMLElement>('.modal-body input:checked') ?? root?.querySelector<HTMLElement>('.modal-body input, .modal-body select'))?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -151,67 +332,38 @@ export function SettingsDialog() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  useEffect(() => {
+    const root = dialogRef.current;
+    (root?.querySelector<HTMLElement>('.settings-content input:checked') ?? root?.querySelector<HTMLElement>('.settings-content input, .settings-content select, .settings-content button'))?.focus();
+  }, [current]);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeSettings()}>
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings" ref={dialogRef}>
         <header className="modal-header">
           <h1>Settings</h1>
+          <span className="muted settings-shortcut">⌘,</span>
+          <span className="spacer" />
           <button className="icon" aria-label="Close settings" onClick={() => studio.closeSettings()}>
             ×
           </button>
         </header>
-        <div className="modal-body">
-          <ProjectSection />
-          <Section title="Layout">
-            <div className="settings-field">
-              <div className="settings-label">History</div>
-              <Radio name="historyPlacement" value="tab" current={settings.historyPlacement} onChange={(v) => studio.updateSettings({ historyPlacement: v })} label="In its own tab" detail="next to Files" />
-              <Radio
-                name="historyPlacement"
-                value="below"
-                current={settings.historyPlacement}
-                onChange={(v) => studio.updateSettings({ historyPlacement: v })}
-                label="Below the files"
-                detail="both visible at once; drag the divider to resize"
-              />
-            </div>
-          </Section>
-          <Section title="The assistant’s marks in the editor">
-            <div className="settings-field">
-              <label className="settings-option">
-                <input type="checkbox" checked={settings.markAiEdits} onChange={(e) => studio.updateSettings({ markAiEdits: e.target.checked })} />
-                <span>
-                  Lines the assistant changed <span className="ai-swatch edit" />
-                  <span className="muted"> — until you rewrite them; hover the line number for what was there before</span>
-                </span>
-              </label>
-              <label className="settings-option">
-                <input type="checkbox" checked={settings.markAiReads} onChange={(e) => studio.updateSettings({ markAiReads: e.target.checked })} />
-                <span>
-                  Lines the assistant read <span className="ai-swatch read" />
-                  <span className="muted"> — in the current conversation</span>
-                </span>
-              </label>
-            </div>
-          </Section>
-          <Section title="Chat">
-            <div className="settings-field">
-              <div className="settings-label">Send a message with</div>
-              <Radio name="sendKey" value="enter" current={settings.sendKey} onChange={(v) => studio.updateSettings({ sendKey: v })} label="Enter" detail="Shift+Enter for a new line" />
-              <Radio
-                name="sendKey"
-                value="mod-enter"
-                current={settings.sendKey}
-                onChange={(v) => studio.updateSettings({ sendKey: v })}
-                label="⌘ Enter"
-                detail="Enter for a new line"
-              />
-            </div>
-          </Section>
-          <Section title="Assistant permissions">
-            <PermissionsEditor />
-          </Section>
+        <div className="settings-layout">
+          <nav className="settings-nav" role="tablist" aria-orientation="vertical">
+            {pages.map((p) => (
+              <button key={p.id} role="tab" aria-selected={current === p.id} className={current === p.id ? 'active' : ''} onClick={() => setPage(p.id)}>
+                <Icon name={p.icon} size={16} />
+                {p.label}
+              </button>
+            ))}
+          </nav>
+          <div className="settings-content" role="tabpanel">
+            {current === 'general' && <GeneralPage />}
+            {current === 'assistant' && <AssistantPage />}
+            {current === 'permissions' && <PermissionsPage />}
+            {current === 'book' && <ProjectSection />}
+            {current === 'tools' && <ToolsPage />}
+          </div>
         </div>
       </div>
     </div>

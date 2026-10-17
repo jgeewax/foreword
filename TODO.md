@@ -82,7 +82,7 @@
 
 - [x] much more animation when things are in progress. it needs to feel extra fast.
 
-- [ ] a full settings UI, available from menu as well as teh teeny tiny gear icon, make it larger, not narrow panel.
+- [x] a full settings UI, available from menu as well as teh teeny tiny gear icon, make it larger, not narrow panel.
 
 - [x] basic tools for the common things so we dont have to approve shell commands (e.g., we should never have to approve an ls command. thats crazy)
 

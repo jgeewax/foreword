@@ -819,6 +819,20 @@ pane top (off by 0 pt).
   - A steered one was delivered mid-turn and answered in it.
   - A taken-back one never reached the conversation.
 
+### Settings, full size
+
+- A 960×700 window, with sections in a sidebar: General, Assistant,
+  Permissions, This book and Tools.
+  - **General:** the send key, History's place, the UI size.
+  - **Assistant:** the model in use, the editor marks, the style guide.
+  - **Permissions:** presets, the detailed settings, and the commands that
+    never need asking.
+  - **This book:** `.typst-studio.json`.
+  - **Tools:** Tinymist, OpenCode and git, with versions and paths.
+- Open it with Settings… in the app menu (⌘,), as on any Mac app, or the
+  toolbar's settings icon, now full size. The last section shown is
+  remembered.
+
 ### Commands that only look never ask
 
 - **How OpenCode checks shell commands** (verified live in 2.0.20):

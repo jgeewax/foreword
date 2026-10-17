@@ -51,6 +51,13 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   comment: <path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z" />,
+  shield: <path d="M12 3.2l7 2.8v5.2c0 4.3-2.9 7.7-7 9.6-4.1-1.9-7-5.3-7-9.6V6z" />,
+  book: (
+    <>
+      <path d="M5 5.5A2 2 0 0 1 7 3.5h12v14H7a2 2 0 0 0-2 2z" />
+      <path d="M5 19.5a2 2 0 0 0 2 2h12v-4" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

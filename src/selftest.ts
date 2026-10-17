@@ -2360,11 +2360,20 @@ async function settingsChecks() {
   await sleep(500);
   out.previewHiddenWhileOpen = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
   out.dialogShown = !!document.querySelector('.modal.settings');
-  try {
-    out.snapshot = await ipc.previewSnapshot('settings-main', 'main');
-  } catch (e) {
-    out.snapshot = errorMessage(e);
+  const box = document.querySelector('.modal.settings')?.getBoundingClientRect();
+  out.size = box && `${Math.round(box.width)}×${Math.round(box.height)}`;
+  // Every page, with a picture.
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')];
+  out.pages = {} as Record<string, unknown>;
+  for (const t of tabs) {
+    t.click();
+    await sleep(250);
+    (out.pages as Record<string, unknown>)[t.textContent ?? '?'] = {
+      headings: [...document.querySelectorAll('.settings-content h2')].map((h) => h.textContent),
+      snapshot: await snap(`settings-${(t.textContent ?? 'page').toLowerCase().replace(/\s+/g, '-')}`),
+    };
   }
+  tabs[0]?.click();
   studio.closeSettings();
   await sleep(500);
   out.previewHiddenAfterClose = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
@@ -2373,12 +2382,12 @@ async function settingsChecks() {
   const sent: string[] = [];
   const realSend = studio.send.bind(studio);
   studio.send = async (text: string) => (sent.push(text), true);
-  const box = document.querySelector<HTMLTextAreaElement>('.composer textarea')!;
+  const textarea = document.querySelector<HTMLTextAreaElement>('.composer textarea')!;
   const type = (value: string) => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, value);
-    box.dispatchEvent(new Event('input', { bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
   };
-  const press = (init: KeyboardEventInit) => box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }));
+  const press = (init: KeyboardEventInit) => textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }));
   const trial = async (sendKey: 'enter' | 'mod-enter') => {
     studio.updateSettings({ sendKey });
     await sleep(100);
