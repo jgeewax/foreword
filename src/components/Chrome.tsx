@@ -33,7 +33,13 @@ export function Toolbar({ onToggle, visible }: { onToggle: (pane: Pane) => void;
       )}
       {ws && (
         <button title="Export the book to PDF (⇧⌘E)" disabled={exporting} onClick={() => void studio.exportPdf()}>
-          {exporting ? 'Exporting…' : 'Export PDF…'}
+          {exporting ? (
+            <>
+              <span className="btn-spinner" aria-hidden /> Exporting…
+            </>
+          ) : (
+            'Export PDF…'
+          )}
         </button>
       )}
       <button title="Open folder (⌘O)" onClick={() => void studio.chooseWorkspace()}>

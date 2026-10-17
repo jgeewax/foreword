@@ -798,6 +798,23 @@ pane top (off by 0 pt).
   the reasoning parts' times).
 - `prefers-reduced-motion` stops the spinner and the sweep.
 
+### Feeling fast
+
+- **Instant response:** Send clears the composer and shows the message at
+  once. Saving, the History version, creating the conversation and the request
+  follow. If sending fails, the message is removed again and its text goes
+  back in the composer, with the reason.
+- **Work in progress always moves:**
+  - a sweeping bar under the assistant's header for the whole turn, plus the
+    progress line;
+  - the same bar under the preview's header while it typesets or starts, shown
+    only after 150 ms, since typesetting is usually faster than that;
+  - spinners on running tool rows and in the Export button.
+- **Entrances:** chat items rise in, dialogs scale in, toasts pop up, tabs and
+  sidebar views fade in, and buttons give a slight press. All take about
+  0.1–0.2 s.
+- `prefers-reduced-motion` turns it all into a still bar.
+
 ### Tool calls in words
 
 - Chat rows describe each tool call as a sentence, using the book's names:

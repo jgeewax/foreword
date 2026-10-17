@@ -80,7 +80,7 @@
 
 - [ ] question answering like in claude code (prompt for multiple choice or free text, give access to those tools)
 
-- [ ] much more animation when things are in progress. it needs to feel extra fast.
+- [x] much more animation when things are in progress. it needs to feel extra fast.
 
 - [ ] a full settings UI, available from menu as well as teh teeny tiny gear icon, make it larger, not narrow panel.
 

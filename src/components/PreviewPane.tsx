@@ -87,6 +87,7 @@ export function PreviewPane() {
             Open PDF
           </button>
         )}
+        {(compile.status === 'compiling' || preview.status === 'starting') && <span className="busy-bar delayed" aria-hidden />}
         <button className="icon" title="Restart preview" onClick={() => void studio.restartTypst()}>
           ↻
         </button>

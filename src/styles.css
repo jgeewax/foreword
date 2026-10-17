@@ -132,7 +132,7 @@ button.indicator:hover { background: var(--bg-3); }
 .sidebar-section .tree { flex: 1; overflow: auto; }
 
 .pane { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg); }
-.pane-header { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--border); background: var(--bg-2); flex: none; }
+.pane-header { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--border); background: var(--bg-2); flex: none; position: relative; }
 .pane-title { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pill { font-size: 11px; color: var(--muted); }
 .pill.bad { color: var(--bad); }
@@ -577,3 +577,26 @@ button.thinking-head:hover { color: var(--fg); }
 .thinking-text { margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); white-space: pre-wrap; line-height: 1.45; }
 /* While it streams, only the last few lines, fading out at the top. */
 .thinking-tail { margin-top: 3px; padding-left: 10px; border-left: 2px solid var(--border); max-height: 4.4em; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; line-height: 1.45; white-space: pre-wrap; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 45%); mask-image: linear-gradient(to bottom, transparent, #000 45%); }
+
+/* ---- Motion: things respond at once, and work in progress always moves. ---- */
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@keyframes appear { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
+/* A thin bar sweeping along the bottom of a pane header: the assistant working, the book typesetting. */
+.busy-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; pointer-events: none; animation: appear 0.2s ease-out both; }
+.busy-bar::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+/* Typesetting usually takes a few milliseconds: only show the bar if it takes longer. */
+.busy-bar.delayed { animation: appear 0.15s ease-out 0.15s both; }
+.btn-spinner { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; border-radius: 50%; border: 1.5px solid var(--border); border-top-color: var(--accent); animation: spin 0.75s linear infinite; }
+.msg, .notice, .permission, .task-check { animation: rise-in 0.16s ease-out; }
+.modal-backdrop { animation: appear 0.12s ease-out; }
+.modal { animation: pop-in 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.toast { animation: pop-in 0.16s ease-out; }
+button { transition: background-color 0.08s, border-color 0.08s, color 0.08s, transform 0.06s; }
+button:active:not(:disabled) { transform: scale(0.97); }
+.tab { animation: appear 0.12s ease-out; }
+.explorer-main > .pane-header + *, .sidebar-section > .pane-header + * { animation: appear 0.12s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
+  .busy-bar::before { left: 0; width: 100%; transform: none; opacity: 0.6; }
+}

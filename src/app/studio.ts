@@ -2325,26 +2325,31 @@ export class Studio {
     const { agent, docs } = this;
     const state = this.state.agent;
     if (!agent || state.status !== 'ready' || state.running || !text.trim()) return false;
+    // Options replace a passage: use the editor's cursor when nothing is selected or attached.
+    if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
+    const attachments = this.outgoingAttachments();
+    // The message shows at once; saving, the History version and the request follow.
+    const userId = uid('u');
+    this.setAgent((a) => ({
+      running: true,
+      attachments: [],
+      activity: { phase: 'sending', since: Date.now() },
+      items: [...a.items, { kind: 'user', id: userId, text, attachments: attachments.map((x) => x.label) }],
+    }));
+    const unsend = (why: string) => {
+      this.setAgent((a) => ({ running: false, attachments, items: a.items.filter((it) => it.id !== userId) }));
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: why });
+      return false;
+    };
     // SPEC §4: flush pending editor writes so the agent sees what the user sees.
     const failures = (await docs?.saveAll()) ?? [];
-    if (failures.length) {
-      this.pushItem({
-        kind: 'notice',
-        id: uid('n'),
-        tone: 'error',
-        text: `Not sent: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`,
-      });
-      return false;
-    }
+    if (failures.length) return unsend(`Not sent: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`);
     // Sending in a finished task reopens it.
     if (state.sessionId && state.tasks.find((t) => t.sessionId === state.sessionId)?.status === 'done') this.reopenTask(state.sessionId);
     // Everything up to now is its own version, so the agent's changes can be undone separately.
     await this.history.beforeAgent();
     this.turnMessage = text;
     this.turnErrors.clear();
-    // Options replace a passage: use the editor's cursor when nothing is selected or attached.
-    if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
-    const attachments = this.outgoingAttachments();
     const context = attachments.map((a) => ({
       selection: a.selection,
       stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
@@ -2354,12 +2359,6 @@ export class Studio {
       state.mode === 'options'
         ? { target: target ? { path: target.relativePath, start: target.start, end: target.end, text: target.selectedText } : null }
         : null;
-    this.setAgent((a) => ({
-      running: true,
-      attachments: [],
-      activity: { phase: 'sending', since: Date.now() },
-      items: [...a.items, { kind: 'user', id: uid('u'), text, attachments: attachments.map((x) => x.label) }],
-    }));
     try {
       let sessionId = this.state.agent.sessionId;
       if (!sessionId) {
@@ -2375,9 +2374,7 @@ export class Studio {
       await agent.send(sessionId, text, context);
       return true;
     } catch (e) {
-      this.setAgent({ running: false });
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Message not sent: ${errorMessage(e)}` });
-      return false;
+      return unsend(`Message not sent: ${errorMessage(e)}`);
     }
   }
 

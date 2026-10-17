@@ -416,7 +416,9 @@ function Composer() {
 
   const send = async () => {
     const message = text;
-    if (await studio.send(message)) setText('');
+    // Cleared at once (it feels instant); put back if it couldn't be sent.
+    setText('');
+    if (!(await studio.send(message))) setText(message);
   };
 
   return (
@@ -579,7 +581,7 @@ export function AgentPane() {
       <div className="agent-body" hidden={guideOpen}>
         <header className="pane-header">
           <TaskMenu />
-          {agent.running && <span className="working">working…</span>}
+          {agent.running && <span className="busy-bar" aria-hidden />}
           <span className="spacer" />
           <ContextMeter />
           <button className="icon" title="New task" aria-label="New task" disabled={agent.running} onClick={() => studio.newSession()}>
