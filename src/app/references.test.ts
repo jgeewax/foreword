@@ -62,3 +62,13 @@ describe('references for deletion', () => {
     expect(removeIncludes(text, 'main.typ', 'chapters/03.typ')).toEqual({ text: 'See #include "chapters/03.typ" inline.\n', count: 1 });
   });
 });
+
+describe('a book kept in a subfolder (Typst root "src")', () => {
+  it('resolves and rewrites root-absolute paths inside the root', () => {
+    expect(resolveRef('src/chapters/one.typ', '/figures/a.png', 'src')).toBe('src/figures/a.png');
+    expect(resolveRef('src/chapters/one.typ', '../figures/a.png', 'src')).toBe('src/figures/a.png');
+    const r = updateReferences('#image("/figures/a.png")', 'src/chapters/one.typ', 'src/figures', 'src/art', 'src/chapters/one.typ', 'src');
+    expect(r).toEqual({ text: '#image("/art/a.png")', count: 1 });
+    expect(referencesTo('#include "/chapters/one.typ"', 'src/main.typ', 'src/chapters/one.typ', 'src')).toHaveLength(1);
+  });
+});

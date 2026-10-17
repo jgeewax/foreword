@@ -169,6 +169,8 @@ pub fn write_text(path: &Path, text: &str, expected_hash: Option<&str>) -> CmdRe
 struct StudioSettings {
     #[serde(rename = "entryPoint")]
     entry_point: Option<String>,
+    /// The Typst root ("src" for a book kept in src/), relative to the folder.
+    root: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -179,15 +181,46 @@ pub struct WorkspaceInfo {
     files: Vec<String>,
 }
 
+/// The main file: the configured one; else `main.typ` in the configured root;
+/// else the shallowest `main.typ` (a book kept in src/ of a larger folder);
+/// else the shallowest .typ file.
 fn find_entry(root: &Path, files: &[String]) -> Option<String> {
-    let configured = fs::read_to_string(root.join(".typst-studio.json"))
+    let settings = fs::read_to_string(root.join(".typst-studio.json"))
         .ok()
         .and_then(|s| serde_json::from_str::<StudioSettings>(&s).ok())
-        .and_then(|s| s.entry_point);
-    configured
+        .unwrap_or_default();
+    let typst_root = settings
+        .root
+        .map(|r| {
+            r.trim()
+                .trim_start_matches("./")
+                .trim_end_matches('/')
+                .to_string()
+        })
+        .filter(|r| !r.is_empty() && r != ".");
+    let depth = |f: &&String| f.matches('/').count();
+    settings
+        .entry_point
         .filter(|e| files.contains(e))
-        .or_else(|| files.iter().find(|f| *f == "main.typ").cloned())
-        .or_else(|| files.iter().find(|f| f.ends_with(".typ")).cloned())
+        .or_else(|| {
+            typst_root
+                .map(|r| format!("{r}/main.typ"))
+                .filter(|m| files.contains(m))
+        })
+        .or_else(|| {
+            files
+                .iter()
+                .filter(|f| *f == "main.typ" || f.ends_with("/main.typ"))
+                .min_by_key(depth)
+                .cloned()
+        })
+        .or_else(|| {
+            files
+                .iter()
+                .filter(|f| f.ends_with(".typ"))
+                .min_by_key(depth)
+                .cloned()
+        })
 }
 
 /// Open a folder as the workspace and start watching it. File-change batches
@@ -534,5 +567,32 @@ mod tests {
         )
         .unwrap();
         assert_eq!(find_entry(&root, &files).as_deref(), Some("book.typ"));
+    }
+
+    #[test]
+    fn entry_point_finds_a_book_in_a_subfolder() {
+        let root = temp_root();
+        // No configuration: the shallowest main.typ, not the first .typ file.
+        let files = vec![
+            "docs/notes.typ".to_string(),
+            "src/chapters/a.typ".to_string(),
+            "src/main.typ".to_string(),
+            "templates/x/main.typ".to_string(),
+        ];
+        assert_eq!(find_entry(&root, &files).as_deref(), Some("src/main.typ"));
+        // A configured root picks its main.typ.
+        fs::write(
+            root.join(".typst-studio.json"),
+            r#"{"root":"templates/x/"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            find_entry(&root, &files).as_deref(),
+            Some("templates/x/main.typ")
+        );
+        // Without any main.typ, the shallowest .typ file.
+        let others = vec!["b/c/deep.typ".to_string(), "a/top.typ".to_string()];
+        fs::write(root.join(".typst-studio.json"), "{}").unwrap();
+        assert_eq!(find_entry(&root, &others).as_deref(), Some("a/top.typ"));
     }
 }

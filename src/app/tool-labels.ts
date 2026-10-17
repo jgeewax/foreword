@@ -21,12 +21,12 @@ export function firstHeading(text: string): string | null {
 }
 
 /** The files the main file includes, in order (book-relative), skipping commented-out lines. */
-export function includedFiles(main: string, mainPath: string): string[] {
+export function includedFiles(main: string, mainPath: string, root = ''): string[] {
   const out: string[] = [];
   for (const line of main.split('\n')) {
     if (/^\s*\/\//.test(line)) continue;
     for (const m of line.matchAll(/#include\s+"([^"]+)"/g)) {
-      const p = resolveRef(mainPath, m[1]);
+      const p = resolveRef(mainPath, m[1], root);
       if (p && !out.includes(p)) out.push(p);
     }
   }

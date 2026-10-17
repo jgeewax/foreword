@@ -12,7 +12,8 @@ export function pdfName(title: string): string {
   return `${slug || 'book'}.pdf`;
 }
 
-export function makefile(title: string, main = 'main.typ', fontPaths: string[] = []): string {
+/** `root`: the Typst root (for paths starting with "/"), relative to the Makefile's folder. */
+export function makefile(title: string, main = 'main.typ', fontPaths: string[] = [], root = '.'): string {
   const fonts = fontPaths.map((p) => ` --font-path ${JSON.stringify(p)}`).join('');
   return `# Build the book from the command line (Typst Studio's Export PDF does the
 # same). Needs the typst command: brew install typst
@@ -28,12 +29,12 @@ PDF  := export/${pdfName(title)}
 
 pdf:
 \t@mkdir -p export
-\ttypst compile --root .${fonts} $(MAIN) $(PDF)
+\ttypst compile --root ${root}${fonts} $(MAIN) $(PDF)
 \t@echo "Wrote $(PDF)"
 
 watch:
 \t@mkdir -p export
-\ttypst watch --root .${fonts} $(MAIN) $(PDF)
+\ttypst watch --root ${root}${fonts} $(MAIN) $(PDF)
 
 clean:
 \trm -rf export

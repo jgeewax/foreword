@@ -6,8 +6,15 @@ export const PROJECT_FILE = '.typst-studio.json';
 
 
 export type ProjectSettings = {
-  /** Main file the preview and export compile, e.g. "main.typ". */
+  /** Main file the preview and export compile, e.g. "main.typ" (relative to the folder opened). */
   entryPoint?: string;
+  /**
+   * The Typst root: where paths starting with "/" begin, and the folder Typst
+   * may read from. Relative to the folder opened, e.g. "src" for a book kept
+   * in src/ of a larger folder. Default: the main file's folder, as `typst
+   * compile` does.
+   */
+  root?: string;
   /** Folder for exported PDFs, relative to the project root. Empty = next to the entry file. */
   outputDir?: string;
   /** Extra font folders (relative to the project root, or absolute). */
@@ -37,6 +44,7 @@ export function parseProjectSettings(text: string | null): ParsedProjectSettings
   const r = raw as Record<string, unknown>;
   const settings: ProjectSettings = {};
   if (typeof r.entryPoint === 'string') settings.entryPoint = r.entryPoint;
+  if (typeof r.root === 'string') settings.root = r.root;
   if (typeof r.outputDir === 'string') settings.outputDir = r.outputDir;
   if (Array.isArray(r.fontPaths)) settings.fontPaths = r.fontPaths.filter((p): p is string => typeof p === 'string');
   if (Array.isArray(r.allowCommands)) settings.allowCommands = sanitizeCommands(r.allowCommands);
@@ -50,6 +58,9 @@ export function validateProjectSettings(s: ProjectSettings, typFiles: string[]):
   const errors: string[] = [];
   if (s.entryPoint !== undefined && !typFiles.includes(s.entryPoint)) errors.push(`Entry point "${s.entryPoint}" isn't a .typ file in this project.`);
   if (s.outputDir && !isRelativeInside(s.outputDir)) errors.push('The output folder must be inside the project (a relative path without "..").');
+  const root = typstRootOf(s, s.entryPoint ?? null);
+  if (s.root && !isRelativeInside(s.root.trim())) errors.push('The book’s root folder must be inside the project (a relative path without "..").');
+  else if (s.entryPoint && root && !s.entryPoint.startsWith(`${root}/`)) errors.push(`The main file must be inside the root folder (${root}).`);
   for (const p of s.fontPaths ?? []) if (!p.trim()) errors.push('Font folders can’t be empty.');
   return errors;
 }
@@ -63,10 +74,22 @@ export function serializeProjectSettings(raw: Record<string, unknown>, patch: Pr
   return JSON.stringify(next, null, 2) + '\n';
 }
 
-/** Tinymist `outputPath` pattern for exports. */
-export function outputPathPattern(s: ProjectSettings): string {
+/** The Typst root, relative to the folder opened ('' for the folder itself): the setting, else the main file's folder. */
+export function typstRootOf(s: ProjectSettings, entry: string | null): string {
+  const configured = s.root?.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
+  if (configured === '.') return ''; // the folder opened itself
+  if (configured) return configured;
+  return entry?.includes('/') ? entry.slice(0, entry.lastIndexOf('/')) : '';
+}
+
+/**
+ * Tinymist `outputPath` pattern for exports. The export folder is relative to
+ * the folder opened (`folder`), whatever the Typst root; without one, the PDF
+ * goes next to the main file.
+ */
+export function outputPathPattern(s: ProjectSettings, folder: string): string {
   const dir = s.outputDir?.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
-  return dir ? `$root/${dir}/$name` : '$root/$dir/$name';
+  return dir ? `${folder}/${dir}/$name` : '$root/$dir/$name';
 }
 
 /** Font folders as absolute paths (Tinymist resolves them from its own working directory otherwise). */

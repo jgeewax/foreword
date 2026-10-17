@@ -1,8 +1,10 @@
 // File references inside Typst sources (#include, #import, image(...),
 // bibliography(...), read/json/csv/…), so renaming or deleting a file keeps
 // the book compiling. Typst resolves paths relative to the file they appear
-// in, or to the project root when they start with "/". Package imports
-// ("@preview/…") are never touched.
+// in, or to the Typst root when they start with "/". Paths here are relative
+// to the folder opened; `root` is the Typst root within it ('' when it's the
+// folder itself, "src" for a book in src/). Package imports ("@preview/…") are
+// never touched.
 
 const PATH_ARG = /(#include\s+|#import\s+|\b(?:image|read|json|csv|yaml|toml|xml|cbor|plugin|bibliography)\(\s*)"([^"\n]+)"/g;
 
@@ -21,10 +23,10 @@ export function normalize(path: string): string | null {
   return out.join('/');
 }
 
-/** What a path string in `fromFile` points at (relative to the book root). */
-export function resolveRef(fromFile: string, spec: string): string | null {
+/** What a path string in `fromFile` points at (relative to the folder opened). */
+export function resolveRef(fromFile: string, spec: string, root = ''): string | null {
   if (spec.startsWith('@')) return null;
-  if (spec.startsWith('/')) return normalize(spec.slice(1));
+  if (spec.startsWith('/')) return normalize(root ? `${root}/${spec.slice(1)}` : spec.slice(1));
   const dir = dirOf(fromFile);
   return normalize(dir ? `${dir}/${spec}` : spec);
 }
@@ -46,15 +48,16 @@ const inside = (path: string, target: string) => path === target || path.startsW
  * location, `fileWas` its old one). Keeps the author's style: root-absolute
  * stays root-absolute.
  */
-export function updateReferences(text: string, filePath: string, oldPath: string, newPath: string, fileWas = filePath): { text: string; count: number } {
+export function updateReferences(text: string, filePath: string, oldPath: string, newPath: string, fileWas = filePath, root = ''): { text: string; count: number } {
   let count = 0;
   const out = text.replace(PATH_ARG, (whole, call: string, spec: string) => {
-    const target = resolveRef(fileWas, spec);
+    const target = resolveRef(fileWas, spec, root);
     if (target == null) return whole;
     const moved = inside(target, oldPath) ? newPath + target.slice(oldPath.length) : target;
     // Unchanged target in an unmoved file: leave it exactly as written.
     if (moved === target && fileWas === filePath) return whole;
-    const next = spec.startsWith('/') ? `/${moved}` : relativeRef(filePath, moved);
+    const underRoot = !root || inside(moved, root);
+    const next = spec.startsWith('/') && underRoot ? `/${root ? moved.slice(root.length + 1) : moved}` : relativeRef(filePath, moved);
     if (next === spec) return whole;
     count++;
     return `${call}"${next}"`;
@@ -65,11 +68,11 @@ export function updateReferences(text: string, filePath: string, oldPath: string
 export type Reference = { line: number; text: string; wholeInclude: boolean };
 
 /** Where a file mentions `target` (or anything inside it). */
-export function referencesTo(text: string, filePath: string, target: string): Reference[] {
+export function referencesTo(text: string, filePath: string, target: string, root = ''): Reference[] {
   const refs: Reference[] = [];
   text.split('\n').forEach((line, i) => {
     for (const m of line.matchAll(PATH_ARG)) {
-      const t = resolveRef(filePath, m[2]);
+      const t = resolveRef(filePath, m[2], root);
       if (t != null && inside(t, target)) refs.push({ line: i, text: line, wholeInclude: /^\s*#include\s+"[^"]+"\s*$/.test(line) });
     }
   });
@@ -77,8 +80,8 @@ export function referencesTo(text: string, filePath: string, target: string): Re
 }
 
 /** Remove whole-line `#include` lines for `target` (used when a chapter is deleted). */
-export function removeIncludes(text: string, filePath: string, target: string): { text: string; count: number } {
+export function removeIncludes(text: string, filePath: string, target: string, root = ''): { text: string; count: number } {
   const lines = text.split('\n');
-  const drop = new Set(referencesTo(text, filePath, target).filter((r) => r.wholeInclude).map((r) => r.line));
+  const drop = new Set(referencesTo(text, filePath, target, root).filter((r) => r.wholeInclude).map((r) => r.line));
   return { text: lines.filter((_, i) => !drop.has(i)).join('\n'), count: drop.size };
 }

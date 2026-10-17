@@ -17,6 +17,7 @@ import { Emitter, Store } from '../lib/store';
 import {
   absoluteFontPaths,
   outputPathPattern,
+  typstRootOf,
   parseProjectSettings,
   PROJECT_FILE,
   serializeProjectSettings,
@@ -826,7 +827,7 @@ export class Studio {
       try {
         let count = 0;
         const changed = await this.editFile(now, (text) => {
-          const r = updateReferences(text, now, path, to, was);
+          const r = updateReferences(text, now, path, to, was, this.typstRoot());
           count = r.count;
           return r.text;
         });
@@ -876,7 +877,7 @@ export class Studio {
       if (f === path || f.startsWith(`${path}/`)) continue;
       const doc = this.docs?.get(f);
       const text = doc ? doc.model.getValue() : await ipc.fsRead(f).then((r) => r.text, () => '');
-      for (const ref of referencesTo(text, f, path)) refs.push({ file: f, include: ref.wholeInclude });
+      for (const ref of referencesTo(text, f, path, this.typstRoot())) refs.push({ file: f, include: ref.wholeInclude });
     }
     const includeFiles = [...new Set(refs.filter((r) => r.include).map((r) => r.file))];
     const otherFiles = [...new Set(refs.filter((r) => !r.include).map((r) => r.file))];
@@ -900,7 +901,7 @@ export class Studio {
     let removed = 0;
     for (const f of includeFiles) {
       await this.editFile(f, (text) => {
-        const r = removeIncludes(text, f, path);
+        const r = removeIncludes(text, f, path, this.typstRoot());
         removed += r.count;
         return r.text;
       }).catch((e) => this.toast(`Couldn't update ${f}: ${errorMessage(e)}`, 'error'));
@@ -1093,6 +1094,15 @@ export class Studio {
     const errors = await this.updateProjectSettings({ entryPoint: path });
     if (errors.length) this.toast(errors.join(' '), 'error');
     else this.toast(`${path} is now the main file`);
+  }
+
+  /**
+   * The Typst root, relative to the folder opened ('' for the folder itself):
+   * where paths starting with "/" begin. `root` in .typst-studio.json, else the
+   * main file's folder, as `typst compile` does.
+   */
+  typstRoot(): string {
+    return typstRootOf(this.state.project.settings, this.state.workspace?.entry ?? null);
   }
 
   absolutePath(path: string) {
@@ -1326,7 +1336,7 @@ export class Studio {
     if (!ws) return;
     const fonts = this.state.project.settings.fontPaths ?? [];
     try {
-      await ipc.fsWrite('Makefile', makefile(ws.name, ws.entry ?? 'main.typ', fonts), null);
+      await ipc.fsWrite('Makefile', makefile(ws.name, ws.entry ?? 'main.typ', fonts, this.typstRoot() || '.'), null);
       await this.refreshFiles();
       await this.openFile('Makefile');
       this.toast('Added a Makefile: run make in the book folder to build the PDF into export/ (needs brew install typst).');
@@ -2262,8 +2272,10 @@ export class Studio {
     try {
       const project = this.state.project.settings;
       const { previewUrl } = await this.typst.start(ws.root, entry, {
-        outputPath: outputPathPattern(project),
+        outputPath: outputPathPattern(project, ws.root),
         fontPaths: absoluteFontPaths(project, ws.root),
+        // The book's root; the cover's files live outside it, in .typst-studio/.
+        rootPath: this.state.previewTarget === 'cover' ? ws.root : `${ws.root}/${this.typstRoot()}`.replace(/\/$/, ''),
       });
       this.docs?.syncLsp();
       this.store.set({ preview: { status: 'starting', url: previewUrl } });
@@ -3626,7 +3638,7 @@ export class Studio {
       else delete titles[f];
     }
     const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
-    const chapters = main && ws.entry ? includedFiles(main, ws.entry) : [];
+    const chapters = main && ws.entry ? includedFiles(main, ws.entry, this.typstRoot()) : [];
     if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles } });
   }
 
@@ -3808,7 +3820,7 @@ export class Studio {
 
 /** Settings Tinymist reads at start-up: changing them needs a restart. */
 function needsRestart(a: ProjectSettings, b: ProjectSettings): boolean {
-  return a.entryPoint !== b.entryPoint || (a.outputDir ?? '') !== (b.outputDir ?? '') || JSON.stringify(a.fontPaths ?? []) !== JSON.stringify(b.fontPaths ?? []);
+  return a.entryPoint !== b.entryPoint || (a.root ?? '') !== (b.root ?? '') || (a.outputDir ?? '') !== (b.outputDir ?? '') || JSON.stringify(a.fontPaths ?? []) !== JSON.stringify(b.fontPaths ?? []);
 }
 
 /** A running turn's activity in a few words (the task list). */

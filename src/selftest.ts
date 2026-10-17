@@ -2472,6 +2472,21 @@ async function typingSyncChecks() {
   return out;
 }
 
+/** A book kept in src/ of a larger folder: found, compiled with src/ as the Typst root, chapters named. (Run with that folder as the workspace.) */
+async function subRootChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.compile.status === 'ok' || studio.state.compile.status === 'error', 60000, 'compile').catch(() => {});
+  await sleep(1500);
+  out.entry = studio.state.workspace?.entry;
+  out.typstRoot = studio.typstRoot();
+  out.compile = studio.state.compile.status;
+  out.errors = studio.state.problems.errors;
+  out.chapters = studio.state.names.chapters;
+  out.titles = studio.state.names.titles;
+  out.snapshot = await snap('subroot', 'preview');
+  return out;
+}
+
 /** The Conversations view: the book's tasks in groups, opened from the activity bar or the View menu. */
 async function conversationsChecks() {
   const out: Record<string, unknown> = {};
@@ -3353,6 +3368,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
+    if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();

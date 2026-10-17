@@ -36,6 +36,8 @@ function ProjectSection() {
   const [errors, setErrors] = useState<string[]>([]);
   const [outputDir, setOutputDir] = useState(project.settings.outputDir ?? '');
   useEffect(() => setOutputDir(project.settings.outputDir ?? ''), [project.settings.outputDir]);
+  const [root, setRoot] = useState(project.settings.root ?? '');
+  useEffect(() => setRoot(project.settings.root ?? ''), [project.settings.root]);
   if (!ws) return null;
 
   const typFiles = ws.files.filter((f) => f.endsWith('.typ'));
@@ -85,6 +87,25 @@ function ProjectSection() {
           ))}
         </select>
         <p className="settings-help">The file the preview and PDF export start from; chapters are included from it.</p>
+      </div>
+      <div className="settings-field">
+        <label className="settings-label" htmlFor="project-root">
+          Book folder (Typst root)
+        </label>
+        <input
+          id="project-root"
+          className="settings-input"
+          value={root}
+          placeholder={entryDir ? `${entryDir.replace(/\/$/, '')} (the main file’s folder)` : 'this folder'}
+          disabled={locked}
+          onChange={(e) => setRoot(e.target.value)}
+          onBlur={() => root.trim() !== (project.settings.root ?? '') && void save({ root: root.trim() })}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+        <p className="settings-help">
+          Where paths starting with <code>/</code> begin, like <code>image("/figures/map.png")</code>, and the folder Typst may read. For a book kept in a subfolder such as{' '}
+          <code>src/</code>, the main file’s folder is used unless you set it here.
+        </p>
       </div>
       <div className="settings-field">
         <label className="settings-label" htmlFor="project-output">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { absoluteFontPaths, outputPathPattern, parseProjectSettings, serializeProjectSettings, validateProjectSettings } from './project-settings';
+import { absoluteFontPaths, outputPathPattern, parseProjectSettings, serializeProjectSettings, typstRootOf, validateProjectSettings } from './project-settings';
 
 describe('parseProjectSettings', () => {
   it('reads known keys and keeps the raw object', () => {
@@ -40,10 +40,21 @@ describe('serializeProjectSettings', () => {
 
 describe('export and font paths', () => {
   it('builds the Tinymist output pattern', () => {
-    expect(outputPathPattern({})).toBe('$root/$dir/$name');
-    expect(outputPathPattern({ outputDir: './dist/' })).toBe('$root/dist/$name');
+    expect(outputPathPattern({}, '/b')).toBe('$root/$dir/$name');
+    expect(outputPathPattern({ outputDir: './dist/' }, '/b')).toBe('/b/dist/$name');
   });
   it('makes font folders absolute', () => {
     expect(absoluteFontPaths({ fontPaths: ['fonts', './more', '/Library/Fonts', ''] }, '/b')).toEqual(['/b/fonts', '/b/more', '/Library/Fonts']);
+  });
+});
+
+describe('the Typst root', () => {
+  it('is the setting, else the main file’s folder, as typst compile does', () => {
+    expect(typstRootOf({}, 'main.typ')).toBe('');
+    expect(typstRootOf({}, 'src/main.typ')).toBe('src');
+    expect(typstRootOf({ root: './src/' }, 'src/book/main.typ')).toBe('src');
+    expect(typstRootOf({ root: '.' }, 'src/main.typ')).toBe('');
+    expect(validateProjectSettings({ root: '../x' }, [])).toEqual(['The book’s root folder must be inside the project (a relative path without "..").']);
+    expect(validateProjectSettings({ root: 'src', entryPoint: 'main.typ' }, ['main.typ'])).toEqual(['The main file must be inside the root folder (src).']);
   });
 });

@@ -142,7 +142,7 @@
 
 - [x] explain all tool calls in english. this is NOT A SYSTEM FOR ENGINEERS ITS FOR WRITERS
 
-- [ ] sometimes teh book root is inside a subdirectory (like src/). can we make our project config json file understand that ?
+- [x] sometimes teh book root is inside a subdirectory (like src/). can we make our project config json file understand that ?
 
 - [x] display // NOTE: and // TODO: , etc as something prettier in the editor UI ?
 

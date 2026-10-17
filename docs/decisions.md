@@ -309,6 +309,40 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### A book in a subfolder (`src/`)
+
+- **The problem:** some books live in a subfolder of a larger folder
+  (`src/main.typ` beside a README and notes).
+  - Opened at the top, the app picked "the first .typ file" as the main file
+    when there was no top-level main.typ.
+  - Tinymist used the opened folder as the Typst root, so `/figures/x.png`
+    pointed outside `src/`. `typst compile src/main.typ` uses the main file's
+    folder, so a book that builds on the command line failed here.
+- **The Typst root** is now `root` in .typst-studio.json (e.g. `"src"`;
+  `"."` for the folder opened). By default it's the main file's folder, as
+  `typst compile` does. That changes nothing for a main file at the top.
+  It applies to:
+  - Tinymist (`rootPath`) for the book's preview and export (the cover keeps
+    the opened folder: its files live in .typst-studio/);
+  - the Makefile's `--root`;
+  - reference handling (chapter names from `#include`, rename and delete
+    updating references, root-absolute paths kept root-absolute).
+- **Finding the main file:**
+  - the configured entry;
+  - else `<root>/main.typ`;
+  - else the shallowest `main.typ`;
+  - else the shallowest .typ file.
+- **Settings → This book** has a "Book folder (Typst root)" field. It's
+  validated: inside the project, and containing the main file.
+- The export folder is relative to the folder opened (an absolute
+  `outputPath` for Tinymist), whatever the root.
+- Verified (self-test `subroot`):
+  - A folder with README.md, notes/aaa-notes.typ and src/ found
+    `src/main.typ`, used `src` as the root, compiled with 0 errors (including
+    `image("/figures/dot.svg")`) and named the chapter "One".
+  - With `"root": "."` the same book has 1 error: the image isn't found.
+  - The `export` group still builds into `dist/`.
+
 ### Conversations in the sidebar
 
 - **Before:** the only list of tasks was the small menu under "New task ▾" in

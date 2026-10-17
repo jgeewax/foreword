@@ -13,7 +13,7 @@ const CONFIG = {
   preview: { refresh: 'onType', partialRendering: true },
 };
 
-type Config = typeof CONFIG & { outputPath?: string; fontPaths?: string[] };
+type Config = typeof CONFIG & { outputPath?: string; fontPaths?: string[]; rootPath?: string };
 
 function lookupConfig(config: Config, section?: string): unknown {
   if (!section || section === 'tinymist') return config;
@@ -25,7 +25,7 @@ function lookupConfig(config: Config, section?: string): unknown {
 }
 
 /** Per-project options that Tinymist reads at start-up. */
-export type TypstOptions = { outputPath?: string; fontPaths?: string[] };
+export type TypstOptions = { outputPath?: string; fontPaths?: string[]; rootPath?: string };
 
 export type CompileStatus = {
   status: 'compiling' | 'compileSuccess' | 'compileError';
@@ -59,7 +59,13 @@ export class TypstService extends Emitter<Events> {
   async start(root: string, entry: string, options: TypstOptions = {}): Promise<{ previewUrl: string }> {
     // Export location and fonts are read at initialization (verified: outputPath is
     // ignored when only answered via workspace/configuration).
-    this.config = { ...CONFIG, ...(options.outputPath ? { outputPath: options.outputPath } : {}), ...(options.fontPaths?.length ? { fontPaths: options.fontPaths } : {}) };
+    this.config = {
+      ...CONFIG,
+      ...(options.outputPath ? { outputPath: options.outputPath } : {}),
+      ...(options.fontPaths?.length ? { fontPaths: options.fontPaths } : {}),
+      // Where paths starting with "/" begin (Tinymist otherwise uses the folder opened).
+      ...(options.rootPath ? { rootPath: options.rootPath } : {}),
+    };
     const channel = new Channel<any>();
     channel.onmessage = (msg) => this.dispatch(msg);
     this.bin = (await ipc.typstStart(channel)).bin;
