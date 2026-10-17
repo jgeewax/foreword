@@ -165,11 +165,16 @@ export class History {
 
   /** Record the current state now (if it changed). Returns the latest version id. */
   async checkpoint(kind = 'save', label = 'Edited {files}'): Promise<string | null> {
-    if (!this.started) return null;
+    return (await this.snapshot(kind, label)).head;
+  }
+
+  /** A version, if anything changed: the version the book is at now, and the new one (null when nothing changed). */
+  private async snapshot(kind: string, label: string): Promise<{ head: string | null; created: string | null }> {
+    if (!this.started) return { head: null, created: null };
     clearTimeout(this.timer);
     const v = await ipc.historySnapshot(kind, label);
     if (v) await this.refresh();
-    return v?.id ?? this.state.versions[0]?.id ?? (await ipc.historyList(1))[0]?.id ?? null;
+    return { head: v?.id ?? this.state.versions[0]?.id ?? (await ipc.historyList(1))[0]?.id ?? null, created: v?.id ?? null };
   }
 
   /** A named version (always recorded, even with no changes). */
@@ -190,11 +195,13 @@ export class History {
   }
 
   /** After an agent turn: what it changed becomes one version (none if it changed nothing). */
-  async afterAgent(message: string) {
+  /** After an agent turn: its changes are one version. Returns the version the book is at now, and the agent's (null if it changed nothing). */
+  async afterAgent(message: string): Promise<{ head: string | null; created: string | null }> {
     try {
-      await this.checkpoint('agent', `Agent: ${shorten(message) || 'changes'}`);
+      return await this.snapshot('agent', `Agent: ${shorten(message) || 'changes'}`);
     } catch (e) {
       console.warn('history: snapshot after agent turn failed', e);
+      return { head: null, created: null };
     }
   }
 

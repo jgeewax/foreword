@@ -309,6 +309,40 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### The assistant hears about the author's edits to its text
+
+- **Every change is tracked.** History records:
+  - the author's edits 10 s after the last save;
+  - everything right before each assistant turn (unsaved editor changes are
+    saved first, so the assistant reads what the author sees);
+  - the assistant's changes right after its turn, as their own version.
+- **What was missing:** the assistant wasn't told. Say it wrote A and the
+  author changed it to A′; asked to look again, it worked from its memory of
+  A, and could undo the author's change.
+- **Now:** each conversation remembers the version right after its last turn
+  and the versions its turns made. Sending the next message:
+  - diffs that version against the files now. Between turns only the author
+    changes them, so the differences are theirs;
+  - keeps the differences that touch lines the assistant wrote in this
+    conversation (its versions' changes, mapped onto that version);
+  - appends them as `<author-edit>` blocks: "you wrote … / the author changed
+    it to …", saying to build on the author's version and not put back what
+    they removed.
+- Each passage runs between unchanged lines, so it reads whole. Removed and
+  inserted lines count too. At most 6 passages of 40 lines go with a message.
+- The message shows a chip per passage ("Your edit: chapters/ch1.typ:3"). A
+  conversation loaded again shows the chips, without the block.
+- **Limits:**
+  - In memory: after a restart, edits count from the next turn on.
+  - Another conversation's changes to the same file between turns would
+    count as the author's.
+- Verified (self-test `authoredits`, deepseek-v4-flash):
+  - The assistant added "A vector is an arrow with a length and a
+    direction."; the author changed "an arrow" to "a quantity".
+  - Asked, without reading files, what the sentence says now, it quoted "A
+    vector is a quantity with a length and a direction." and added "I'll keep
+    your version".
+
 ### Tagged comments look like notes
 
 - `// TODO:`, `// NOTE:`, `// FIXME`, `// IDEA:`, `// QUESTION:` (also

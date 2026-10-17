@@ -2,6 +2,7 @@
 // Rust bridge (agent.rs). API shapes verified against the server's own
 // /openapi.json (OpenCode 2.0.20); the npm SDK (1.x) targets the older API.
 import { formatSelectionContext } from '../../editor/selection';
+import { formatAuthorEdits } from './author-edits';
 import { Channel, ipc } from '../../lib/ipc';
 import { mapOpenCodeEvent, toFormRequest } from './opencode-events';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
@@ -111,7 +112,7 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   async send(sessionId: string, message: string, context: Parameters<AgentAdapter['send']>[2], delivery?: Delivery) {
-    const text = [message, ...context.map((c) => formatSelectionContext(c.selection, c.stale))].join('\n\n');
+    const text = [message, ...context.map((c) => ('authorEdits' in c ? formatAuthorEdits(c.authorEdits) : formatSelectionContext(c.selection, c.stale)))].join('\n\n');
     const res = await call('POST', `/api/session/${sessionId}/prompt`, delivery ? { text, delivery } : { text });
     return (res.data?.id as string | undefined) ?? null;
   }

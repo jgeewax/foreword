@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { formatAuthorEdits } from '../services/agent/author-edits';
 import { asksTaskDone, contextTokens, itemsFromContext, readsFromContext, splitUserText, TASK_INSTRUCTIONS, TASK_MARKER, withoutMarker } from './tasks';
 
 describe('the task-done marker', () => {
@@ -87,5 +88,11 @@ describe('restoring a conversation', () => {
 
   it('splits the cursor-position context too', () => {
     expect(splitUserText('Hi\n\nThe cursor is in a.typ at line 3, column 1.')).toEqual({ text: 'Hi', attachments: [] });
+    // The author's edits to the assistant's text: chips, and gone from the text.
+    const sent = `Tighten it\n\n${formatAuthorEdits([
+      { path: 'ch1.typ', from: 4, to: 5, wrote: 'A', now: 'B' },
+      { path: 'ch2.typ', from: 9, to: 8, wrote: 'C', now: '' },
+    ])}`;
+    expect(splitUserText(sent)).toEqual({ text: 'Tighten it', attachments: ['Your edit: ch1.typ:4–5', 'Your edit: ch2.typ:9'] });
   });
 });

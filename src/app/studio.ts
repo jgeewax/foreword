@@ -11,7 +11,7 @@ import { monaco } from '../editor/monaco';
 import { jumpCandidates } from '../editor/preview-sync';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
-import { Channel, errorMessage, ipc, isCmdError, type Bounds, type LaunchOptions, type ToolsStatus, type WorkspaceInfo } from '../lib/ipc';
+import { Channel, errorMessage, ipc, isCmdError, type Bounds, type LaunchOptions, type ToolsStatus, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
 import {
@@ -25,7 +25,7 @@ import {
 } from './project-settings';
 import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
-import { aiEdit, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
+import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
 import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
 import { History, initialHistory, type HistoryState } from './history';
@@ -42,7 +42,7 @@ import { chapterImports, chapterText, includePath, nextChapterPath, withInclude 
 import { referencesTo, removeIncludes, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
-import { asksTaskDone, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
+import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
@@ -55,7 +55,8 @@ import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
-import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
 import { TypstService } from '../services/typst';
 
 export type ToastAction = { label: string; run: () => void };
@@ -1645,24 +1646,72 @@ export class Studio {
       const versions = (await ipc.historyList(80, path)).filter((v) => v.kind === 'agent').slice(0, AI_EDIT_VERSIONS);
       const edits: AiEdit[] = [];
       for (const v of versions) {
-        const key = `${v.id}\0${path}`;
-        let e = this.aiEditCache.get(key);
-        if (!e) {
-          try {
-            const [before, after] = await Promise.all([v.parent ? ipc.historyFile(v.parent, path) : Promise.resolve(null), ipc.historyFile(v.id, path)]);
-            if (after === null) continue;
-            e = aiEdit(v, before, after);
-            this.aiEditCache.set(key, e);
-          } catch {
-            continue; // not a text file
-          }
-        }
-        edits.push(e);
+        const e = await this.aiEditOf(v, path);
+        if (e) edits.push(e);
       }
       this.aiEdits.set(path, edits);
       this.store.set((s) => ({ aiMarks: s.aiMarks + 1 }));
     } catch (e) {
       console.warn('assistant marks: history', e);
+    }
+  }
+
+  /** What one agent version changed in a file (cached; null if it isn't a text file there). */
+  private async aiEditOf(v: Version, path: string): Promise<AiEdit | null> {
+    const key = `${v.id}\0${path}`;
+    let e = this.aiEditCache.get(key);
+    if (!e) {
+      try {
+        const [before, after] = await Promise.all([v.parent ? ipc.historyFile(v.parent, path) : Promise.resolve(null), ipc.historyFile(v.id, path)]);
+        if (after === null) return null;
+        e = aiEdit(v, before, after);
+        this.aiEditCache.set(key, e);
+      } catch {
+        return null; // not a text file
+      }
+    }
+    return e;
+  }
+
+  /**
+   * Each conversation's place in History: the version right after its last
+   * turn, and the versions its turns made. In memory: after a restart, edits
+   * are reported from the next turn on.
+   */
+  private turnVersions = new Map<string, { head: string; versions: string[] }>();
+
+  private recordTurn(sessionId: string | null, turn: { head: string | null; created: string | null }) {
+    if (!sessionId || !turn.head) return;
+    const t = this.turnVersions.get(sessionId) ?? { head: turn.head, versions: [] };
+    t.head = turn.head;
+    if (turn.created) t.versions.push(turn.created);
+    this.turnVersions.set(sessionId, t);
+  }
+
+  /**
+   * The author's changes, since this conversation's last turn, to text the
+   * assistant wrote in it ("you wrote A, the author changed it to A′"), for the
+   * next message. Between turns only the author changes the files.
+   */
+  private async authorEditsSince(sessionId: string): Promise<AuthorEdit[]> {
+    const turn = this.turnVersions.get(sessionId);
+    if (!turn?.versions.length || this.state.history.status !== 'ready') return [];
+    try {
+      const paths = new Set<string>();
+      for (const id of turn.versions) for (const c of await ipc.historyChanges(null, id)) if (c.status !== 'D') paths.add(c.path);
+      const out: AuthorEdit[] = [];
+      for (const path of paths) {
+        const [after, current] = await Promise.all([ipc.historyFile(turn.head, path).catch(() => null), ipc.fsRead(path).then((f) => f.text).catch(() => null)]);
+        if (after == null || current == null || after === current) continue;
+        const versions = (await ipc.historyList(80, path)).filter((v) => turn.versions.includes(v.id));
+        const edits = (await Promise.all(versions.map((v) => this.aiEditOf(v, path)))).filter((e): e is AiEdit => !!e);
+        const lines = editMarks(edits, after).filter((m) => !m.removal);
+        out.push(...authorEdits(path, after, current, lines));
+      }
+      return out.slice(0, 6);
+    } catch (e) {
+      console.warn("author's edits: history", e);
+      return [];
     }
   }
 
@@ -2290,7 +2339,11 @@ export class Studio {
       void this.afterReviewTurn();
       void this.loadTasks();
       void this.refreshContextSize();
-      void this.history.afterAgent(this.turnMessage).then(() => this.refreshAiEdits());
+      const sessionId = this.state.agent.sessionId;
+      void this.history.afterAgent(this.turnMessage).then((turn) => {
+        this.recordTurn(sessionId, turn);
+        return this.refreshAiEdits();
+      });
       void this.code.afterAgentTurn();
     }
   }
@@ -2500,7 +2553,10 @@ export class Studio {
     if (!bg?.running) return;
     this.setBackground(sessionId, { ...bg, running: false, unread: true, label: failed ? `Stopped: ${failed}` : 'Finished', failed });
     const title = this.taskTitle(sessionId);
-    void this.history.afterAgent(this.turnMessages.get(sessionId) || title).then(() => this.refreshAiEdits());
+    void this.history.afterAgent(this.turnMessages.get(sessionId) || title).then((turn) => {
+      this.recordTurn(sessionId, turn);
+      return this.refreshAiEdits();
+    });
     if (this.reviewTurn?.sessionId === sessionId) void this.afterReviewTurn(sessionId);
     void this.loadTasks();
     this.toast(failed ? `“${title}” stopped: ${failed}` : `“${title}” is done.`, failed ? 'error' : 'info', [{ label: 'Show', run: () => void this.switchTask(sessionId) }]);
@@ -2774,10 +2830,16 @@ export class Studio {
     await this.history.beforeAgent();
     this.turnMessage = text;
     this.turnErrors.clear();
-    const context = attachments.map((a) => ({
-      selection: a.selection,
-      stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
-    }));
+    // What the author changed in the assistant's text since its last turn goes with the message.
+    const edits = state.sessionId ? await this.authorEditsSince(state.sessionId) : [];
+    if (edits.length) this.updateItem(userId, (it) => (it.kind === 'user' ? { ...it, attachments: [...it.attachments, ...edits.map((e) => `${AUTHOR_EDIT_CHIP} ${authorEditLabel(e)}`)] } : it));
+    const context: MessageContext[] = [
+      ...attachments.map((a) => ({
+        selection: a.selection,
+        stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
+      })),
+      ...(edits.length ? [{ authorEdits: edits }] : []),
+    ];
     const target = attachments[0]?.selection;
     this.optionsTurn =
       state.mode === 'options'

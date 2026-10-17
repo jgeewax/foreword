@@ -148,7 +148,7 @@
 
 - [ ] the only way to see what's going on right now is that one little drop down of the things that i have as tasks (sort of) for the ai chat box. can we build another tab perhaps of the conversational history? and things that are resolved or not?
 
-- [ ] can we confirm that ALL changes are tracked? if i use the chatbox and it changes a line, i want that tracked. then if i go and edit that line. i want that tracked AND I WANT THE AI AGENT TO KNOW ABOUT IT. so if i then ask it to look again, we should include this context that it wrote A, i modified it to be A', and now im asking for more iteration on that same chunk of text. make sense?
+- [x] can we confirm that ALL changes are tracked? if i use the chatbox and it changes a line, i want that tracked. then if i go and edit that line. i want that tracked AND I WANT THE AI AGENT TO KNOW ABOUT IT. so if i then ask it to look again, we should include this context that it wrote A, i modified it to be A', and now im asking for more iteration on that same chunk of text. make sense?
 
 - [x] click on the current icon on the left nav should close the left nav. if im on the files tab and i click on it again, it should close the nav
 

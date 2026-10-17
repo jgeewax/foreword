@@ -2540,6 +2540,40 @@ async function readToolsChecks() {
   return out;
 }
 
+/** The author's edit to a sentence the assistant wrote goes with the next message (real model; the chapter is put back). */
+async function authorEditsChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model && studio.state.history.status === 'ready', 60000, 'agent');
+  const policy = studio.state.settings.permissions;
+  studio.updateSettings({ permissions: { ...policy, edit: 'allow' } });
+  studio.newSession();
+  const original = (await ipc.fsRead(file)).text;
+  out.first = (await askAgent(`In ${file}, add this sentence as a paragraph of its own right after the chapter heading, exactly as written: "A vector is an arrow with a length and a direction."`)).slice(0, 120);
+  await sleep(2500);
+  const written = (await ipc.fsRead(file)).text;
+  out.agentWrote = written.includes('A vector is an arrow with a length and a direction.');
+  // The author rewrites it in the editor.
+  await studio.openFile(file);
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
+  const model = studio.editor!.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => l.includes('an arrow with a length')) + 1;
+  if (line > 0) {
+    const col = model.getLineContent(line).indexOf('an arrow') + 1;
+    studio.editor!.executeEdits('selftest', [{ range: new monaco.Range(line, col, line, col + 'an arrow'.length), text: 'a quantity' }]);
+    await studio.save();
+  }
+  const reply = await askAgent(`Without reading any files: what exactly does the sentence you added to ${file} say now? Quote it.`);
+  const user = studio.state.agent.items.filter((i) => i.kind === 'user').pop() as { attachments?: string[] } | undefined;
+  out.chips = user?.attachments;
+  out.reply = reply.slice(0, 300);
+  out.knowsTheEdit = /a quantity with a length/i.test(reply);
+  out.snapshot = await snap('author-edits');
+  await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  studio.updateSettings({ permissions: policy });
+  return out;
+}
+
 /** One sentence per line in what the assistant writes (real model; the chapter is put back). */
 async function sentencesChecks() {
   const out: Record<string, unknown> = {};
@@ -3302,6 +3336,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();
+    if (launch.selftestAgent && launch.selftestEdits && want('authoredits')) result.authoredits = await authorEditsChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

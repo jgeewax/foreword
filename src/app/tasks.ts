@@ -6,6 +6,7 @@
 import { readLabel, readOf, type AiRead } from './ai-marks';
 import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
+import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
 
@@ -34,16 +35,22 @@ export function withoutMarker(text: string): string {
   return text.replace(MARKER_LINE, '').replace(/\n{3,}/g, '\n\n').trimEnd();
 }
 
+/** Marks a message's chip for the author's edits sent with it. */
+export const AUTHOR_EDIT_CHIP = 'Your edit:';
+
 export type TaskRecord = { sessionId: string; status: 'open' | 'done'; doneAt?: number };
 
 export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null };
 
-/** The selection context Typst Studio appends to a message (see editor/selection.ts). */
-const CONTEXT_TAIL = /\n\n(?:Selected in the editor: [\s\S]*|The cursor is in [^\n]*)$/;
+/** The context Typst Studio appends to a message: selections (editor/selection.ts) and the author's edits (agent/author-edits.ts). */
+const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${AUTHOR_EDITS_INTRO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})[\\s\\S]*$`);
 
 /** User message text as the author typed it, plus the labels of what was attached. */
 export function splitUserText(text: string): { text: string; attachments: string[] } {
-  const attachments = [...text.matchAll(/<selection path="([^"]+)" start="(\d+):\d+" end="(\d+):\d+">/g)].map(([, path, a, b]) => (a === b ? `${path}:${a}` : `${path}:${a}–${b}`));
+  const attachments = [
+    ...[...text.matchAll(/<selection path="([^"]+)" start="(\d+):\d+" end="(\d+):\d+">/g)].map(([, path, a, b]) => (a === b ? `${path}:${a}` : `${path}:${a}–${b}`)),
+    ...[...text.matchAll(/<author-edit path="([^"]+)" lines="(\d+)(?:–(\d+)| \(removed\))">/g)].map(([, path, a, b]) => `${AUTHOR_EDIT_CHIP} ${path}:${b && b !== a ? `${a}–${b}` : a}`),
+  ];
   return { text: text.replace(CONTEXT_TAIL, ''), attachments };
 }
 

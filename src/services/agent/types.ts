@@ -1,7 +1,11 @@
 import type { AgentPermissions } from './permissions';
 // Provider-neutral agent interface (SPEC §4). The UI depends only on this;
 // OpenCodeAdapter is the first implementation.
+import type { AuthorEdit } from './author-edits';
 import type { SourceSelection } from '../../editor/selection';
+
+/** What goes with a message besides its text: a selection, or the author's changes to the assistant's text. */
+export type MessageContext = { selection: SourceSelection; stale: boolean } | { authorEdits: AuthorEdit[] };
 
 export type ModelRef = { providerID: string; id: string };
 
@@ -105,7 +109,7 @@ export interface AgentAdapter {
    * Send a message. While a turn runs, `queue` delivers it when the turn ends and
    * `steer` hands it to the running turn at its next step. Returns its inbox id.
    */
-  send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[], delivery?: Delivery): Promise<string | null>;
+  send(sessionId: string, message: string, context: MessageContext[], delivery?: Delivery): Promise<string | null>;
   /** Conversations with a turn running now. */
   activeSessions(): Promise<Set<string>>;
   /** Permission requests waiting in a conversation (after a switch). */
