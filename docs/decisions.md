@@ -854,6 +854,22 @@ pane top (off by 0 pt).
   the reasoning parts' times).
 - `prefers-reduced-motion` stops the spinner and the sweep.
 
+### Resume after Stop (or a failure)
+
+- When a turn is stopped or fails, the conversation is marked `stopped`. With
+  the message box empty, **Send** becomes **Resume** (⏎ too). The "Stopped."
+  notice and the error notices have a Resume button. Resuming uses the model
+  chosen now, so stop, switch model, resume works.
+- **How:** `POST /api/session/{id}/synthetic` admits a synthetic message, the
+  kind OpenCode uses for its own reminders, and schedules the agent loop.
+  The message tells the model to carry on from where it left off without
+  redoing finished steps. No invented message from the author appears in the
+  conversation.
+- **Verified with a real model** (self-test `resume`): a multi-step read was
+  stopped mid-way; the model was switched (deepseek-v4-flash →
+  deepseek-v4-pro); Resume carried on and finished, with no new user
+  message.
+
 ### Starting and finishing tasks from the header
 
 - The assistant's header has a labelled **New task** button (blue, never

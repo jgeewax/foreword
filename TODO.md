@@ -128,4 +128,4 @@
 
 - [ ] slash commands int he ai chatbxo to change modes, etc
 
-- [ ] ability to resume. if i click stop, change models, i want to resuem and start again... i need to be able to resume (if the box is empty and we aborted the request)
+- [x] ability to resume. if i click stop, change models, i want to resuem and start again... i need to be able to resume (if the box is empty and we aborted the request)

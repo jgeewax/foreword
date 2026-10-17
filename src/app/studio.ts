@@ -125,7 +125,7 @@ export type ChatItem =
       patches: FilePatch[];
       state: 'pending' | 'sending' | 'once' | 'always' | 'reject';
     }
-  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt: string } };
+  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
 
 export type Attachment = { id: string; label: string; selection: SourceSelection };
 
@@ -187,6 +187,8 @@ export type StudioState = {
     queued: QueuedMessage[];
     /** Other conversations still at work, or waiting on the author, while another is shown. */
     background: Record<string, BackgroundTask>;
+    /** The last turn was stopped or failed: it can be resumed (with the model chosen now). */
+    stopped: boolean;
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error'; actions?: ToastAction[] } | null;
@@ -275,6 +277,7 @@ const initialState: StudioState = {
     activity: null,
     queued: [],
     background: {},
+    stopped: false,
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
@@ -2266,7 +2269,7 @@ export class Studio {
   newSession() {
     // A conversation still at work carries on in the background.
     this.stashCurrent();
-    this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null } }));
+    this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
     this.setAiReads([]);
   }
 
@@ -2450,6 +2453,7 @@ export class Studio {
             running,
             activity: running ? { phase: 'thinking', since: bg?.since ?? Date.now() } : null,
             background,
+            stopped: false,
           },
         };
       });
@@ -2606,6 +2610,7 @@ export class Studio {
     const userId = uid('u');
     this.setAgent((a) => ({
       running: true,
+      stopped: false,
       attachments: [],
       activity: { phase: 'sending', since: Date.now() },
       items: [...a.items, { kind: 'user', id: userId, text, attachments: attachments.map((x) => x.label) }],
@@ -2873,7 +2878,27 @@ export class Studio {
   private agentError(message: string) {
     this.turnErrors.add(message);
     const m = this.state.agent.model;
-    this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: m ? `${m.providerID}/${m.id}: ${message}` : message });
+    this.pushItem({
+      kind: 'notice',
+      id: uid('n'),
+      tone: 'error',
+      text: m ? `${m.providerID}/${m.id}: ${message}` : message,
+      ...(this.state.agent.sessionId ? { action: { label: 'Resume', resume: true } } : {}),
+    });
+  }
+
+  /** Carry on with a stopped or failed turn (with the model chosen now). */
+  async resume() {
+    const sessionId = this.state.agent.sessionId;
+    if (!this.agent || !sessionId || this.state.agent.running) return;
+    this.setAgent({ running: true, stopped: false, activity: { phase: 'sending', since: Date.now() } });
+    await this.history.beforeAgent();
+    try {
+      await this.agent.resume(sessionId);
+    } catch (e) {
+      this.setAgent({ running: false, stopped: true });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't resume: ${errorMessage(e)}` });
+    }
   }
 
   private pushItem(item: ChatItem) {
@@ -2905,12 +2930,12 @@ export class Studio {
         this.setAgent((a) => ({ running: true, activity: a.activity ?? { phase: 'thinking', since: Date.now() } }));
         break;
       case 'turn-finished':
-        this.setAgent({ running: false });
+        this.setAgent({ running: false, stopped: e.outcome === 'failed' || e.outcome === 'interrupted' });
         if (e.outcome === 'failed') {
           // The same failure usually arrives first as a session error; show it once.
           if (!e.error || !this.turnErrors.has(e.error)) this.agentError(e.error ?? 'The agent stopped with an error.');
         } else if (e.outcome === 'interrupted') {
-          this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Stopped.' });
+          this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Stopped. Change the model if you like, then resume.', action: { label: 'Resume', resume: true } });
         }
         break;
       case 'step-started':

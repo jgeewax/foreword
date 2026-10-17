@@ -422,7 +422,7 @@ function ItemBody({ item }: { item: ChatItem }) {
           {item.text}
           {item.action && (
             <div className="notice-action">
-              <button onClick={() => void studio.send(item.action!.prompt)}>{item.action.label}</button>
+              <button onClick={() => void (item.action!.resume ? studio.resume() : studio.send(item.action!.prompt ?? ''))}>{item.action.label}</button>
             </div>
           )}
         </div>
@@ -574,9 +574,15 @@ function Composer() {
     [],
   );
 
+  const stopped = useStore(studio.store, (s) => s.agent.stopped && !!s.agent.sessionId);
+  // An empty box after a stop: Send (and ⏎) resume instead.
+  const canResume = stopped && !running && !text.trim();
   const send = async (delivery: 'queue' | 'steer' = 'queue') => {
     const message = text;
-    if (!message.trim()) return;
+    if (!message.trim()) {
+      if (canResume) void studio.resume();
+      return;
+    }
     // Cleared at once (it feels instant); put back if it couldn't be sent.
     setText('');
     if (!(await studio.send(message, { delivery }))) setText(message);
@@ -642,8 +648,13 @@ function Composer() {
             )}
           </>
         ) : (
-          <button className="primary" disabled={!ready || !text.trim()} onClick={() => void send()}>
-            Send
+          <button
+            className="primary"
+            disabled={!ready || (!text.trim() && !canResume)}
+            title={canResume ? 'Carry on where it stopped, with the model chosen now (⏎)' : undefined}
+            onClick={() => void send()}
+          >
+            {canResume ? 'Resume' : 'Send'}
           </button>
         )}
       </div>

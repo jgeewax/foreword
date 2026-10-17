@@ -2139,6 +2139,46 @@ async function multitaskChecks() {
   return out;
 }
 
+/** Stop, change the model, resume (real model): the turn carries on, with no made-up message from the author. */
+async function resumeChecks() {
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  await studio.setMode('plan');
+  studio.newSession();
+  const a = () => studio.state.agent;
+  const out: Record<string, unknown> = {};
+  void studio.send('Read every chapter file in chapters/ one by one, then list each one\'s headings. Do not change anything.');
+  await waitFor(() => a().activity && a().activity!.phase !== 'sending', 60000, 'working');
+  await sleep(1500);
+  await studio.cancel();
+  await waitFor(() => !a().running, 30000, 'stopped').catch(() => {});
+  await sleep(500);
+  const usersBefore = a().items.filter((i) => i.kind === 'user').length;
+  out.stopped = {
+    flag: a().stopped,
+    notice: (a().items.filter((i) => i.kind === 'notice').pop() as { text?: string; action?: { label: string } } | undefined)?.action?.label,
+    button: [...document.querySelectorAll<HTMLButtonElement>('.composer-controls button')].map((b) => b.textContent),
+  };
+  // Another model, then Resume (from the composer, with the box empty).
+  const current = a().model;
+  const other = a().models.find((m) => m.supportsTools && (m.providerID !== current?.providerID || m.id !== current?.id) && m.providerID === current?.providerID);
+  if (other) await studio.selectModel({ providerID: other.providerID, id: other.id });
+  out.model = { from: current?.id, to: a().model?.id };
+  [...document.querySelectorAll<HTMLButtonElement>('.composer-controls button')].find((b) => b.textContent === 'Resume')?.click();
+  await waitFor(() => a().running, 15000, 'resumed').catch(() => {});
+  out.resumedRunning = a().running;
+  await waitFor(() => !a().running, 240000, 'done').catch(() => {});
+  await sleep(800);
+  const replies = a().items.filter((i) => i.kind === 'assistant');
+  out.after = {
+    stopped: a().stopped,
+    noNewUserMessage: a().items.filter((i) => i.kind === 'user').length === usersBefore,
+    lastReply: (replies.at(-1) as { text?: string } | undefined)?.text?.slice(0, 160),
+  };
+  if (current) await studio.selectModel(current);
+  await studio.setMode('write');
+  return out;
+}
+
 /** One real turn: which OpenCode event types arrive, with one sample of each (for the chat's progress display). */
 async function eventProbe() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
@@ -2811,6 +2851,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestAgent && want('questions')) result.questions = await questionChecks();
     if (launch.selftestAgent && want('safe-commands')) result.safeCommands = await safeCommandChecks();
     if (launch.selftestAgent && want('multitask')) result.multitask = await multitaskChecks();
+    if (launch.selftestAgent && want('resume')) result.resume = await resumeChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

@@ -114,6 +114,8 @@ export interface AgentAdapter {
   pendingForms(sessionId: string): Promise<FormRequest[]>;
   replyForm(sessionId: string, formId: string, answer: FormAnswer): Promise<void>;
   cancelForm(sessionId: string, formId: string): Promise<void>;
+  /** Carry on with a stopped (or failed) turn, with the model chosen now. */
+  resume(sessionId: string): Promise<void>;
   /** A queued message: send it to the running turn now, or take it back. */
   steer(sessionId: string, inboxId: string): Promise<void>;
   unqueue(sessionId: string, inboxId: string): Promise<void>;

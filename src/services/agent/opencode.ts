@@ -146,6 +146,14 @@ export class OpenCodeAdapter implements AgentAdapter {
     await call('DELETE', `/api/session/${sessionId}/form/${formId}`);
   }
 
+  async resume(sessionId: string) {
+    // A synthetic message (like OpenCode's own reminders): no made-up line from the author.
+    await call('POST', `/api/session/${sessionId}/synthetic`, {
+      text: 'The author stopped you (or the model failed) and now wants you to carry on. Continue the task from where you left off; don\'t redo steps that are already done.',
+      description: 'Resume',
+    });
+  }
+
   async steer(sessionId: string, inboxId: string) {
     await call('PATCH', `/api/session/${sessionId}/inbox/${inboxId}`, { delivery: 'steer' });
   }
