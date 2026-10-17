@@ -1020,6 +1020,55 @@ async function menuChecks() {
   return out;
 }
 
+/** TODOs: found as you type, listed, offered as suggestions, done, and handed to the assistant. */
+async function todoChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  const original = (await ipc.fsRead(file)).text;
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => l.startsWith('stated otherwise.')) + 1;
+  const end = { lineNumber: line, column: model.getLineMaxColumn(line) };
+  editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: '\n// TODO: add one sentence saying a vector with length one is called a unit vector\n// FIXME tidy this paragraph' }]);
+  await sleep(800);
+  out.fromBuffer = studio.state.todos.map((t) => `${t.path}:${t.line} ${t.kind} ${t.text}`);
+  await studio.save();
+  out.status = document.querySelector('.statusbar .indicator[title="TODOs left in the book"]')?.textContent;
+  studio.showSidebar('todos');
+  studio.newSession();
+  await sleep(400);
+  out.tab = [...document.querySelectorAll('.sidebar-tabs button')].map((b) => b.textContent);
+  out.panel = [...document.querySelectorAll('.todo-row .todo-text')].map((e) => e.textContent);
+  out.suggestions = [...document.querySelectorAll('.suggestion.todo')].map((e) => e.textContent);
+  out.snapshot = await snap('todos');
+
+  const fixme = studio.state.todos.find((t) => t.text.startsWith('tidy'));
+  if (fixme) await studio.todoDone(fixme);
+  await sleep(300);
+  out.afterDone = { todos: studio.state.todos.map((t) => t.text), fileHasFixme: (await ipc.fsRead(file)).text.includes('FIXME') };
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    const policy = studio.state.settings.permissions;
+    studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
+    const todo = studio.state.todos.find((t) => t.text.includes('unit vector'));
+    if (todo) {
+      await studio.askTodo(todo);
+      await sleep(1000);
+      await waitFor(() => !studio.state.agent.running, 120000, 'todo turn').catch(() => {});
+      await sleep(2000);
+      const text = (await ipc.fsRead(file)).text;
+      out.agent = { sent: (studio.state.agent.items.find((i) => i.kind === 'user') as any)?.text, todoGone: !text.includes('TODO'), mentionsUnit: /unit vector/i.test(text), todos: studio.state.todos.length };
+    }
+    studio.updateSettings({ permissions: policy });
+  }
+  await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  await sleep(500);
+  studio.showSidebar('files');
+  return out;
+}
+
 /** The selection goes with chat messages; text selected in the preview maps to the source. */
 async function selectionChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
@@ -1633,6 +1682,10 @@ export async function runSelftest(launch: LaunchOptions) {
       result.menus = await menuChecks();
     }
     if (want('probe')) result.probe = await previewProbe();
+    if (launch.selftestEdits && want('todos')) {
+      log('todos');
+      result.todos = await todoChecks(launch.selftestAgent);
+    }
     if (want('selection')) {
       log('selection');
       result.selection = await selectionChecks(launch.selftestAgent);

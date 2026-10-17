@@ -407,12 +407,26 @@ const SUGGESTIONS = [
 /** Shown before the first message: what the assistant does, and things to try. */
 function Starter() {
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
+  const todos = useStore(studio.store, (s) => s.todos);
   return (
     <div className="starter">
       <h3>Your writing assistant</h3>
       <p>
         It reads your book, follows your style guide, and can edit for you. Every change shows up in the preview, and History keeps a version from before it.
       </p>
+      {todos.length > 0 && (
+        <>
+          <div className="starter-label">From your TODOs</div>
+          {todos.slice(0, 3).map((t) => (
+            <button key={`${t.path}:${t.line}`} className="suggestion todo" disabled={!ready} title="Ask the assistant to do this now" onClick={() => void studio.askTodo(t)}>
+              {t.text}
+              <span className="suggestion-where">
+                {t.path.split('/').pop()}:{t.line}
+              </span>
+            </button>
+          ))}
+        </>
+      )}
       <div className="starter-label">Try asking</div>
       {SUGGESTIONS.map((s) => (
         <button key={s} className="suggestion" disabled={!ready} title="Ask this now" onClick={() => void studio.send(s)}>

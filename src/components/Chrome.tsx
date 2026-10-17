@@ -87,6 +87,7 @@ export function StatusBar() {
   const perf = useStore(studio.store, (s) => s.perf);
   const zoom = useStore(studio.store, (s) => s.zoom);
   const canAsk = agent === 'ready' && !running;
+  const todos = useStore(studio.store, (s) => s.todos.length);
 
   const compileTone: Tone = compile.status === 'ok' ? 'ok' : compile.status === 'compiling' ? 'busy' : compile.status === 'error' ? 'bad' : 'off';
   const compileLabel =
@@ -135,6 +136,12 @@ export function StatusBar() {
         </span>
       )}
       {compileLabel && <Indicator tone={compileTone} icon="" label={compileLabel} title="Typesetting status of the whole book" />}
+      {todos > 0 && (
+        <button className="indicator" title="TODOs left in the book" onClick={() => studio.showSidebar('todos')}>
+          <span className="indicator-icon">☐</span>
+          {todos} to do
+        </button>
+      )}
       <span className="spacer" />
       {Math.abs(zoom - 1) > 0.001 && (
         <button className="link zoom-indicator" title="Zoom (⌘= / ⌘− / ⌘0). Click to reset." onClick={() => void studio.zoom('reset', 'key')}>

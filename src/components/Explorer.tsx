@@ -5,6 +5,7 @@ import { onContextMenu, type MenuEntry } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
+import { TodoPanel } from './TodoPanel';
 import { HistoryPanel } from './HistoryPanel';
 
 function FileTree() {
@@ -119,34 +120,43 @@ function Stacked() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const view = useStore(studio.store, (s) => s.sidebar);
   const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
+  const todoCount = useStore(studio.store, (s) => s.todos.length);
   const showCode = hasCode && view === 'code';
+  const showTodos = todoCount > 0 && view === 'todos';
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-sidebar', storage: localStorage });
   return (
     <Group className="sidebar-stack" orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
       <Panel id="files" minSize="60px">
         <div className="sidebar-section">
           <header className="pane-header">
-            {hasCode ? (
+            {hasCode || todoCount > 0 ? (
               <div className="sidebar-tabs" role="tablist">
-                <button role="tab" aria-selected={!showCode} className={!showCode ? 'active' : ''} onClick={() => studio.showSidebar('files')}>
+                <button role="tab" aria-selected={!showCode && !showTodos} className={!showCode && !showTodos ? 'active' : ''} onClick={() => studio.showSidebar('files')}>
                   {ws?.name ?? 'Files'}
                 </button>
-                <button role="tab" aria-selected={showCode} className={showCode ? 'active' : ''} onClick={() => studio.showSidebar('code')}>
-                  Code
-                </button>
+                {hasCode && (
+                  <button role="tab" aria-selected={showCode} className={showCode ? 'active' : ''} onClick={() => studio.showSidebar('code')}>
+                    Code
+                  </button>
+                )}
+                {todoCount > 0 && (
+                  <button role="tab" aria-selected={showTodos} className={showTodos ? 'active' : ''} onClick={() => studio.showSidebar('todos')}>
+                    To do {todoCount}
+                  </button>
+                )}
               </div>
             ) : (
               <span className="pane-title">{ws?.name ?? 'Files'}</span>
             )}
             <span className="spacer" />
-            {!showCode && (
+            {!showCode && !showTodos && (
               <>
                 <NewChapterButton />
                 <RefreshButton />
               </>
             )}
           </header>
-          {showCode ? <CodePanel /> : <FileTree />}
+          {showCode ? <CodePanel /> : showTodos ? <TodoPanel /> : <FileTree />}
         </div>
       </Panel>
       <Separator className="separator separator-h" />
@@ -169,6 +179,7 @@ export function Explorer() {
   const view = useStore(studio.store, (s) => s.sidebar);
   const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
   const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
+  const todoCount = useStore(studio.store, (s) => s.todos.length);
   if (placement === 'below') {
     return (
       <section className="pane explorer">
@@ -191,6 +202,11 @@ export function Explorer() {
               Code
             </button>
           )}
+          {todoCount > 0 && (
+            <button role="tab" aria-selected={view === 'todos'} className={view === 'todos' ? 'active' : ''} title="TODOs left in the book" onClick={() => studio.showSidebar('todos')}>
+              To do {todoCount}
+            </button>
+          )}
         </div>
         {view === 'files' ? (
           <>
@@ -201,7 +217,7 @@ export function Explorer() {
           <PlacementButton to="below" />
         ) : null}
       </header>
-      {view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : <CodePanel />}
+      {view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : view === 'code' ? <CodePanel /> : <TodoPanel />}
     </section>
   );
 }

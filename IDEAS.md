@@ -54,3 +54,7 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 ## Selection and context
 - "Selected in preview" for images and figures: clicking a figure in the preview attaches its #figure call.
 - Attach a whole file or chapter to the chat by dragging it from the file tree onto the message box.
+
+## TODOs
+- Show TODOs in the preview (a margin marker) in draft mode, hidden when exporting.
+- Assign a TODO to the assistant in the background (its own task session), and mark it done when that finishes.

@@ -32,6 +32,7 @@ import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
 import { referencesTo, removeIncludes, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
+import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -130,8 +131,10 @@ export type StudioState = {
   history: HistoryState;
   /** Runnable code examples in the book. */
   code: CodeState;
-  /** Left pane: the file tree, the book's history, or its code examples. */
-  sidebar: 'files' | 'history' | 'code';
+  /** TODOs left in the book's files. */
+  todos: Todo[];
+  /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
+  sidebar: 'files' | 'history' | 'code' | 'todos';
 };
 
 const initialState: StudioState = {
@@ -177,6 +180,7 @@ const initialState: StudioState = {
   styleGuide: { exists: false, chars: 0, dismissed: false },
   history: initialHistory,
   code: initialCode,
+  todos: [],
   sidebar: 'files',
 };
 
@@ -377,7 +381,9 @@ export class Studio {
           clearTimeout(this.codeScanTimer);
           this.codeScanTimer = window.setTimeout(() => {
             const doc = this.docs?.get(p);
-            if (doc) this.code.updateFile(p, doc.model.getValue());
+            if (!doc) return;
+            this.code.updateFile(p, doc.model.getValue());
+            this.updateTodos(p, doc.model.getValue());
           }, 400);
         }
       },
@@ -396,6 +402,7 @@ export class Studio {
     await this.loadStyleGuide();
     void this.history.start(this.historyExcludes());
     void this.code.scan();
+    void this.scanTodos();
     void this.startTypst();
     void this.startAgent();
 
@@ -977,6 +984,67 @@ export class Studio {
     this.toast(`Created “${created.root.split('/').pop()}” from the ${paper.name} template (${paper.package.name} ${paper.package.version})`);
   }
 
+  // ---- TODOs in the book -----------------------------------------------------------
+
+  private todoFiles = new Map<string, Todo[]>();
+
+  private static todoSource = (f: string) => f.endsWith('.typ') || f.endsWith('.md');
+
+  /** Read every .typ and .md file (open buffers as they are) for TODOs. */
+  async scanTodos() {
+    const docs = this.docs;
+    const next = new Map<string, Todo[]>();
+    for (const path of (this.state.workspace?.files ?? []).filter(Studio.todoSource)) {
+      const doc = docs?.get(path);
+      const text = doc ? doc.model.getValue() : await ipc.fsRead(path).then((r) => r.text, () => '');
+      const found = parseTodos(text, path);
+      if (found.length) next.set(path, found);
+    }
+    this.todoFiles = next;
+    this.store.set({ todos: [...next.values()].flat() });
+  }
+
+  private updateTodos(path: string, text: string) {
+    if (!Studio.todoSource(path)) return;
+    const found = parseTodos(text, path);
+    if (!found.length && !this.todoFiles.has(path)) return;
+    if (found.length) this.todoFiles.set(path, found);
+    else this.todoFiles.delete(path);
+    this.store.set({ todos: [...this.todoFiles.values()].flat() });
+  }
+
+  /** "Done": remove the TODO comment (undoable in the editor, and kept in History). */
+  async todoDone(todo: Todo) {
+    let removed = false;
+    try {
+      await this.editFile(todo.path, (text) => {
+        const lines = text.split('\n');
+        const line = lines[todo.line - 1];
+        const next = line === undefined ? null : withoutTodo(line, todo);
+        if (next === null) return text;
+        removed = true;
+        if (next === '') lines.splice(todo.line - 1, 1);
+        else lines[todo.line - 1] = next;
+        return lines.join('\n');
+      });
+    } catch (e) {
+      return this.toast(`Couldn't update ${todo.path}: ${errorMessage(e)}`, 'error');
+    }
+    if (!removed) this.toast('Remove this one in the editor (it isn’t a // TODO comment).', 'error');
+    await this.scanTodos();
+  }
+
+  /** Ask the assistant to do a TODO, with its line attached. */
+  async askTodo(todo: Todo) {
+    await this.openAt(todo.path, todo.line);
+    const model = this.editor?.getModel();
+    if (model) this.editor!.setSelection(new monaco.Range(todo.line, 1, todo.line, model.getLineMaxColumn(todo.line)));
+    this.setAgent({ attachments: [] });
+    await this.attachSelection({ focus: false });
+    this.events.emit('show-agent-pane');
+    await this.send(todoPrompt(todo));
+  }
+
   /** Open a file with the cursor on a line (1-based). */
   async openAt(path: string, line: number) {
     await this.openFile(path);
@@ -1001,6 +1069,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.composerDraft = '';
     this.code.reset();
+    this.store.set({ todos: [] });
     await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
@@ -1043,7 +1112,10 @@ export class Studio {
       const batch = [...this.pendingDisk];
       this.pendingDisk.clear();
       void this.docs?.diskChanged(batch);
-      void this.refreshFiles().then(() => this.code.scan());
+      void this.refreshFiles().then(() => {
+        void this.code.scan();
+        void this.scanTodos();
+      });
       this.history.scheduleSave();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
       if (batch.includes(STYLE_GUIDE_FILE)) void this.loadStyleGuide({ updateSession: true });

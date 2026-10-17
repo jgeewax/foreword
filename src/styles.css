@@ -266,6 +266,21 @@ button.indicator:hover { background: var(--bg-3); }
 .code-state { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .code-cell .icon { flex: none; }
 
+/* todos */
+.todo-panel { overflow-y: auto; flex: 1; padding: 4px 0 12px; }
+.todo-panel.empty { padding: 12px; line-height: 1.45; }
+.todo-row { display: flex; gap: 6px; align-items: baseline; padding: 3px 8px 3px 10px; cursor: default; }
+.todo-row:hover { background: var(--bg-3); }
+.todo-box { color: var(--muted); }
+.todo-text { flex: 1; min-width: 0; line-height: 1.35; }
+.todo-line { font-size: 10.5px; color: var(--muted); }
+.todo-actions { display: none; gap: 8px; }
+.todo-row:hover .todo-actions { display: inline-flex; }
+.todo-row:hover .todo-line { display: none; }
+.todo-actions .link { font-size: 11.5px; }
+.suggestion.todo { display: flex; gap: 8px; justify-content: space-between; border-style: dashed; }
+.suggestion-where { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
 /* agent starter */
 .starter { padding: 10px 4px; display: flex; flex-direction: column; gap: 6px; color: var(--fg); }
 .starter h3 { margin: 0; font-size: 13px; }
