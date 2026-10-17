@@ -14,6 +14,7 @@ mod menu;
 mod packages;
 mod preview;
 mod print;
+mod render;
 #[cfg(target_os = "macos")]
 mod snapshot;
 mod workspace;
@@ -330,6 +331,7 @@ pub fn run() {
             export::reveal_pdf,
             print::open_url,
             code::code_run,
+            render::typst_render,
             lsp::typst_start,
             lsp::typst_send,
             lsp::typst_stop,

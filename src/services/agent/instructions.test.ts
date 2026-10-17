@@ -32,6 +32,11 @@ describe('buildInstructions', () => {
     expect(text).toMatch(/read tool with an offset and a limit \(not sed, head or tail\)/);
   });
 
+  it('asks for Typst math in replies, which the chat draws', () => {
+    expect(text).toMatch(/formulas in Typst math between dollar signs/);
+    expect(text).toMatch(/never LaTeX/);
+  });
+
   it('asks for one sentence per line, only in what it writes', () => {
     expect(text).toMatch(/One sentence per line/);
     expect(text).toMatch(/even where the file's existing paragraphs are wrapped differently/);

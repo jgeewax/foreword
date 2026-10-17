@@ -2576,6 +2576,61 @@ async function readToolsChecks() {
   return out;
 }
 
+/** What changed draws the formulas an edit changed (the chapter is put back). */
+async function mathDiffChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.history.status === 'ready', 30000, 'history');
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const { text, hash } = await ipc.fsRead(file);
+  await ipc.fsWrite(file, text.replace('$ p(lambda) = det(A - lambda I). $', '$ p(lambda) = det(lambda I - A). $'), hash);
+  await sleep(300);
+  await studio.history.checkpoint('save', 'Formula edit');
+  const latest = studio.state.history.versions[0];
+  await studio.history.showChanges(latest);
+  await waitFor(() => studio.state.history.changes?.files, 15000, 'changes');
+  await waitFor(() => document.querySelectorAll('.change-formula img').length >= 2, 10000, 'drawn').catch(() => {});
+  out.pairs = document.querySelectorAll('.change-formula').length;
+  out.drawn = document.querySelectorAll('.change-formula img').length;
+  out.snapshot = await snap('math-diff');
+  studio.history.closeChanges();
+  const now = await ipc.fsRead(file);
+  await ipc.fsWrite(file, text, now.hash);
+  await sleep(300);
+  await studio.history.checkpoint('save', 'Put back');
+  return out;
+}
+
+/** Formulas and Typst blocks drawn in the chat (real model) and in a review comment (put back after). */
+async function mathChatChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.newSession();
+  out.reply = (
+    await askAgent(
+      "Without changing or reading any files: what is the characteristic polynomial of the 2×2 matrix with entries a, b, c, d? Give it as one inline formula in a sentence, then show the Typst markup for it as a display equation in a typst block.",
+    )
+  ).slice(0, 400);
+  await waitFor(() => document.querySelectorAll('.transcript img.typst-inline, .transcript .typst-block img').length > 0, 15000, 'drawn').catch(() => {});
+  await sleep(500);
+  out.inlineFormulas = document.querySelectorAll('.transcript img.typst-inline').length;
+  out.blocks = document.querySelectorAll('.transcript .typst-block img').length;
+  out.unrendered = [...document.querySelectorAll('.transcript code.md-math')].map((e) => e.textContent);
+  out.snapshot = await snap('math-chat');
+  // A review comment with a formula.
+  await studio.openFile('chapters/ch2-eigenvalues.typ');
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
+  studio.editor!.setSelection(new monaco.Range(3, 1, 3, 10));
+  await studio.addComment();
+  await sleep(300);
+  await studio.saveDraftComment('Should this be $det(A - lambda I) = 0$ instead?');
+  await sleep(1500);
+  out.commentFormulas = document.querySelectorAll('.comment-text img.typst-inline').length;
+  out.snapshotComment = await snap('math-comment');
+  const added = studio.state.review.comments.find((c) => c.text.startsWith('Should this be $det'));
+  if (added) await studio.deleteComment(added.id);
+  return out;
+}
+
 /** The author's edit to a sentence the assistant wrote goes with the next message (real model; the chapter is put back). */
 async function authorEditsChecks() {
   const out: Record<string, unknown> = {};
@@ -3369,12 +3424,14 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('activity')) result.activity = await activityChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('subroot')) result.subroot = await subRootChecks();
+    if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('authoredits')) result.authoredits = await authorEditsChecks();
+    if (launch.selftestAgent && launch.selftestEdits && want('mathchat')) result.mathchat = await mathChatChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

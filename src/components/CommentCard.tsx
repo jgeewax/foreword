@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { wordPieces } from '../app/prose-diff';
 import type { ReviewComment } from '../app/review';
 import { studio } from '../app/studio';
+import { Markdown } from './Markdown';
 import { useStore } from '../lib/store';
 
 /** Writing a new comment, under the passage it's about. Enter saves; Shift+Enter is a new line; Esc cancels. */
@@ -85,7 +86,9 @@ export function CommentCard({ comment: c }: { comment: ReviewComment }) {
           }}
         />
       ) : (
-        <div className="comment-text">{c.text}</div>
+        <div className="comment-text md">
+          <Markdown text={c.text} />
+        </div>
       )}
       {c.outcome?.kind === 'declined' && (
         <div className="comment-outcome declined">

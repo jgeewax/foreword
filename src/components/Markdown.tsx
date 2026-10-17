@@ -1,5 +1,7 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react';
 import { parseMarkdown, type Block, type Inline } from '../lib/markdown';
+import { mathSource } from '../lib/typst-render';
+import { TypstSnippet } from './TypstSnippet';
 
 function inlines(nodes: Inline[]): ReactNode {
   return nodes.map((n, k) => {
@@ -13,7 +15,8 @@ function inlines(nodes: Inline[]): ReactNode {
       case 'code':
         return <code key={k}>{n.v}</code>;
       case 'math':
-        return <code key={k} className="md-math">{n.v}</code>;
+        // Typst math, drawn; as written if it doesn't compile (LaTeX, say).
+        return <TypstSnippet key={k} source={mathSource(n.v)} inline fallback={<code className="md-math">{n.v}</code>} />;
       case 'link':
         // Never navigate the app's webview; show where it points instead.
         return <span key={k} className="md-link" title={n.href}>{inlines(n.c)}</span>;
@@ -38,6 +41,15 @@ function block(b: Block, k: number): ReactNode {
     case 'quote':
       return <blockquote key={k}>{inlines(b.c)}</blockquote>;
     case 'code':
+      // Typst blocks keep their source (it may be markup to copy) and show what it makes.
+      if (/^(typst|typ)$/i.test(b.lang ?? '')) {
+        return (
+          <div key={k} className="md-typst">
+            <pre className="md-code" data-lang={b.lang}>{b.v}</pre>
+            <TypstSnippet source={b.v} inline={false} caption="Renders as" />
+          </div>
+        );
+      }
       return <pre key={k} className="md-code" data-lang={b.lang || undefined}>{b.v}</pre>;
     case 'hr':
       return <hr key={k} />;

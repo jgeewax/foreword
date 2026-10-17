@@ -130,7 +130,7 @@
 
 - [x] ability to resume. if i click stop, change models, i want to resuem and start again... i need to be able to resume (if the box is empty and we aborted the request)
 
-- [ ] we need to render the formula blocks and etc when we're showing ti to users outside of the typst text editor. that means in comments, in diffs (?), and in the ai chatbox. it needs to respond with blocks of typst text and we need to render those block sin the ui
+- [x] we need to render the formula blocks and etc when we're showing ti to users outside of the typst text editor. that means in comments, in diffs (?), and in the ai chatbox. it needs to respond with blocks of typst text and we need to render those block sin the ui
 
 - [x] when we stop, you dont need ot meniton "change the model" . just say that the request was interrrupted.
 

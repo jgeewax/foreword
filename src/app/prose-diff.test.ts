@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countWords, proseDiff, wordPieces } from './prose-diff';
+import { changedFormulas, countWords, proseDiff, wordPieces } from './prose-diff';
 
 describe('word pieces', () => {
   it('marks a changed phrase as one deletion and one insertion', () => {
@@ -53,5 +53,21 @@ describe('prose diff', () => {
   it('reports where a removed paragraph was', () => {
     const d = proseDiff(before, before.replace('Mara stood on the pier.\n', ''));
     expect(d.hunks[0]).toMatchObject({ line: 3, oldLine: 3, pieces: [{ kind: 'del', text: 'Mara stood on the pier.' }] });
+  });
+});
+
+describe('formulas a change made', () => {
+  it('pairs the old and new formulas of a passage', () => {
+    const hunk = {
+      pieces: [
+        { kind: 'same' as const, text: 'Then ' },
+        { kind: 'del' as const, text: '$x^2$' },
+        { kind: 'add' as const, text: '$x^3$' },
+        { kind: 'same' as const, text: ' and $y$ stay.' },
+      ],
+    };
+    expect(changedFormulas(hunk)).toEqual([{ before: '$x^2$', after: '$x^3$' }]);
+    expect(changedFormulas({ pieces: [{ kind: 'add', text: 'See $a + b$.' }] })).toEqual([{ before: null, after: '$a + b$' }]);
+    expect(changedFormulas({ pieces: [{ kind: 'del', text: 'words' }, { kind: 'add', text: 'other words' }] })).toEqual([]);
   });
 });

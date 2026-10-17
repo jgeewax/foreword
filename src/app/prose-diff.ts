@@ -126,3 +126,17 @@ export function proseDiff(before: string | null, after: string | null, context =
   });
   return { hunks, added, removed };
 }
+
+/**
+ * Formulas (`$…$`) a passage changed, paired old → new in order (either side
+ * null when one was only removed or added), so What changed can draw them.
+ */
+export function changedFormulas(hunk: Pick<Hunk, 'pieces'>, max = 4): { before: string | null; after: string | null }[] {
+  const text = (skip: Piece['kind']) => hunk.pieces.filter((p) => p.kind !== skip).map((p) => p.text).join('');
+  const spans = (t: string) => [...t.matchAll(/\$[^$\n]+\$/g)].map((m) => m[0]);
+  const before = spans(text('add'));
+  const after = spans(text('del'));
+  const removed = before.filter((f) => !after.includes(f));
+  const added = after.filter((f) => !before.includes(f));
+  return Array.from({ length: Math.min(max, Math.max(removed.length, added.length)) }, (_, i) => ({ before: removed[i] ?? null, after: added[i] ?? null }));
+}

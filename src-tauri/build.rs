@@ -34,6 +34,7 @@ fn main() {
             "reveal_pdf",
             "open_url",
             "code_run",
+            "typst_render",
             "typst_start",
             "typst_send",
             "typst_stop",

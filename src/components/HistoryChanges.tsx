@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ChangedFile } from '../app/history';
-import type { Hunk } from '../app/prose-diff';
+import { changedFormulas, type Hunk } from '../app/prose-diff';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
+import { TypstSnippet } from './TypstSnippet';
 
 const KIND_TITLE: Record<string, string> = {
   opened: 'Opened in Typst Studio',
@@ -54,7 +55,35 @@ function Passage({ hunk, path, latest }: { hunk: Hunk; path: string; latest: boo
             Show all
           </button>
         )}
+        <Formulas hunk={hunk} />
       </div>
+    </div>
+  );
+}
+
+/** Formulas the passage changed, drawn: what it was, and what it is now. */
+function Formulas({ hunk }: { hunk: Hunk }) {
+  const pairs = changedFormulas(hunk);
+  if (!pairs.length) return null;
+  const draw = (f: string | null, kind: 'was' | 'now') =>
+    f ? (
+      <span className={`change-formula-${kind}`}>
+        <TypstSnippet source={f} inline fallback={<code>{f}</code>} />
+      </span>
+    ) : (
+      <span className="muted">{kind === 'was' ? 'new' : 'removed'}</span>
+    );
+  return (
+    <div className="change-formulas">
+      {pairs.map((p, i) => (
+        <div key={i} className="change-formula">
+          {draw(p.before, 'was')}
+          <span className="muted" aria-label="became">
+            →
+          </span>
+          {draw(p.after, 'now')}
+        </div>
+      ))}
     </div>
   );
 }

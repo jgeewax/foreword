@@ -309,6 +309,41 @@ pane top (off by 0 pt).
   Files opens it again; Review switches views; while hidden, Files opens it on
   Files. The `chrome` group's pane headers still line up.
 
+### Typst drawn outside the editor (chat, comments, What changed)
+
+- **Formulas are drawn as they would print**, not shown as source:
+  - in the assistant's replies: inline `$…$`, and a "Renders as" box under
+    each ```` ```typst ```` block, whose source stays (it may be markup to
+    copy);
+  - in review comments, now rendered as Markdown;
+  - in What changed: the formulas a passage changed, old → new, on red and
+    green.
+- **How:** a `typst_render` command compiles each snippet with Tinymist
+  (`tinymist compile … page-{0p}.svg`, about 30 ms).
+  - Each snippet compiles in a fresh temp folder that is also its Typst root,
+    so it can't read the book or anything else (a test reads /etc/hosts and
+    fails).
+  - Limits: 20 KB per snippet, 40 per call, a 15 s timeout that kills the
+    process group.
+  - The preamble sets an auto-sized page, no fill, and the UI's text colour
+    (`#rrggbb` only).
+- **The page:**
+  - It batches requests made in the same moment, caches results by colour,
+    size and source, and redraws when light/dark mode changes.
+  - It shows each SVG as an `<img>` with a data: URL, so nothing in it can
+    run. The height is in em (×1.2: Computer Modern reads small beside the UI
+    font).
+  - Until a snippet is ready, or if it doesn't compile (LaTeX, a book-only
+    function), the source shows as before.
+- Every session's instructions ask for Typst math in replies (never LaTeX),
+  and for Typst markup in ```` ```typst ```` blocks.
+- Verified:
+  - Self-test `mathchat` (deepseek-v4-flash): a reply with 6 inline formulas
+    (including a `mat(…)`) and a Typst block all drawn, none left as source;
+    a review comment's `$det(A - lambda I) = 0$` drawn.
+  - Self-test `mathdiff`: changing `det(A - lambda I)` to `det(lambda I - A)`
+    showed both formulas drawn in What changed.
+
 ### A book in a subfolder (`src/`)
 
 - **The problem:** some books live in a subfolder of a larger folder

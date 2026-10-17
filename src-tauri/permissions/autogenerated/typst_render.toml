@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-typst-render"
+description = "Enables the typst_render command without any pre-configured scope."
+commands.allow = ["typst_render"]
+
+[[permission]]
+identifier = "deny-typst-render"
+description = "Denies the typst_render command without any pre-configured scope."
+commands.deny = ["typst_render"]

@@ -43,6 +43,7 @@
     "allow-reveal-pdf",
     "allow-open-url",
     "allow-code-run",
+    "allow-typst-render",
     "allow-typst-start",
     "allow-typst-send",
     "allow-typst-stop",

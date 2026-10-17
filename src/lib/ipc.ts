@@ -52,6 +52,8 @@ export const ipc = {
   projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
     invoke<string>('project_create', { parent, name, files }),
   /** Run one code example in the book folder (only for trusted books). */
+  /** Typst snippets (formulas, small blocks) to SVG, each on its own; see src-tauri/src/render.rs. */
+  typstRender: (sources: string[], fill: string, sizePt: number) => invoke<{ pages: string[]; error: string | null }[]>('typst_render', { sources, fill, sizePt }),
   codeRun: (lang: string, code: string, timeoutMs?: number) =>
     invoke<{ stdout: string; stderr: string; exit: number | null; timedOut: boolean; truncated: boolean; durationMs: number; interpreter: string }>('code_run', {
       lang,
