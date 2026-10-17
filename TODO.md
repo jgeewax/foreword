@@ -2,7 +2,7 @@
 
 - [x] Since we are live previewing by default, AI agents should NEVER EVER offer to compile
 
-- [ ] setting for whether its enter or command+enter in the ai chatbox. default o just enter (shift enter for new line)
+- [x] setting for whether its enter or command+enter in the ai chatbox. default o just enter (shift enter for new line)
 
 - [ ] the model selector is just a stock select dropdown. with a long list of models it gets crazy long. lets make a proper ui for selecting
 

@@ -29,6 +29,9 @@ export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' 
       <button className="icon" title="Toggle agent" onClick={() => onToggle('agent')}>
         ✦
       </button>
+      <button className="icon" title="Settings (⌘,)" aria-label="Settings" onClick={() => studio.openSettings()}>
+        ⚙
+      </button>
     </header>
   );
 }

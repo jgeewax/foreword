@@ -139,6 +139,56 @@ async function previewChecks(chapter: string, editor: monaco.editor.IStandaloneC
   return { states, snapshots, clickToSource };
 }
 
+/** Settings dialog hides the native preview; the composer honours the send-key setting (TODO #2). */
+async function settingsChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.settings;
+  studio.openSettings();
+  await sleep(500);
+  out.previewHiddenWhileOpen = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+  out.dialogShown = !!document.querySelector('.modal.settings');
+  try {
+    out.snapshot = await ipc.previewSnapshot('settings-main', 'main');
+  } catch (e) {
+    out.snapshot = errorMessage(e);
+  }
+  studio.closeSettings();
+  await sleep(500);
+  out.previewHiddenAfterClose = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+
+  // Drive the real composer; record send() calls instead of messaging the model.
+  const sent: string[] = [];
+  const realSend = studio.send.bind(studio);
+  studio.send = async (text: string) => (sent.push(text), true);
+  const box = document.querySelector<HTMLTextAreaElement>('.composer textarea')!;
+  const type = (value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, value);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const press = (init: KeyboardEventInit) => box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }));
+  const trial = async (sendKey: 'enter' | 'mod-enter') => {
+    studio.updateSettings({ sendKey });
+    await sleep(100);
+    const r: Record<string, number> = {};
+    for (const [name, init] of [['enter', {}], ['shiftEnter', { shiftKey: true }], ['cmdEnter', { metaKey: true }]] as const) {
+      type(`hello ${name}`);
+      await sleep(50);
+      const n = sent.length;
+      press(init);
+      await sleep(50);
+      r[name] = sent.length - n;
+    }
+    r.hint = (document.querySelector('.composer-footer .hint')?.textContent ?? '') as unknown as number;
+    return r;
+  };
+  out.enterMode = await trial('enter');
+  out.modEnterMode = await trial('mod-enter');
+  studio.send = realSend;
+  type('');
+  studio.updateSettings(saved);
+  return out;
+}
+
 /** UI zoom: native zoom applied, preview webview still exactly over its pane. Restores the user's zoom. */
 async function zoomChecks() {
   const original = studio.state.zoom;
@@ -239,6 +289,8 @@ export async function runSelftest(launch: LaunchOptions) {
     }
     log('zoom checks');
     result.zoomChecks = await zoomChecks();
+    log('settings checks');
+    result.settingsChecks = await settingsChecks();
 
     editor.setPosition({ lineNumber: line, column: 1 });
     editor.revealLineInCenter(line);

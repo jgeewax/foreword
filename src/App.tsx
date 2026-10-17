@@ -6,6 +6,7 @@ import { StatusBar, Toast, Toolbar, Welcome } from './components/Chrome';
 import { EditorPane } from './components/EditorPane';
 import { Explorer } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
+import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
 import { zoomActionForKey } from './lib/zoom';
 
@@ -89,6 +90,12 @@ export function App() {
     // Capture phase, so zoom keys win over Monaco; preventDefault also stops the
     // native View-menu shortcut from applying the same press twice.
     const onZoomKey = (e: KeyboardEvent) => {
+      if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key === ',') {
+        e.preventDefault();
+        e.stopPropagation();
+        studio.openSettings();
+        return;
+      }
       const action = zoomActionForKey(e);
       if (!action) return;
       e.preventDefault();
@@ -108,5 +115,11 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [workspace]);
-  return workspace ? <Workbench key={workspace} /> : <Welcome />;
+  const settingsOpen = useStore(studio.store, (s) => s.settingsOpen);
+  return (
+    <>
+      {workspace ? <Workbench key={workspace} /> : <Welcome />}
+      {settingsOpen && <SettingsDialog />}
+    </>
+  );
 }

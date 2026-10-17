@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
 import { useStore } from '../lib/store';
 import type { ModelInfo } from '../services/agent/types';
@@ -115,6 +116,7 @@ function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
   const running = useStore(studio.store, (s) => s.agent.running);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
+  const sendKey = useStore(studio.store, (s) => s.settings.sendKey);
   const [text, setText] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -146,7 +148,7 @@ function Composer() {
         placeholder={ready ? 'Ask about the selection, or request an edit…' : 'Agent not available'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey) === 'send') {
             e.preventDefault();
             void send();
           } else if (e.key === 'Escape') {
@@ -156,7 +158,9 @@ function Composer() {
         }}
       />
       <div className="composer-footer">
-        <span className="hint">⌘I attach selection · ⌘↩ send · Esc editor</span>
+        <span className="hint" title="Change in Settings (⌘,)">
+          ⌘I attach selection · {sendHint(sendKey)}
+        </span>
         {running ? (
           <button onClick={() => void studio.cancel()}>Stop</button>
         ) : (

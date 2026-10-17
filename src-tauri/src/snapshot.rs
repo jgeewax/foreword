@@ -79,6 +79,7 @@ pub async fn window_geometry(
                 "contentViewFrame": content.map(|c| vec![c.origin.x, c.origin.y, c.size.width, c.size.height]),
                 "webviewFrame": [wk_frame.origin.x, wk_frame.origin.y, wk_frame.size.width, wk_frame.size.height],
                 "webviewSafeAreaInsets": { "top": insets.top, "left": insets.left, "bottom": insets.bottom, "right": insets.right },
+                "webviewHidden": wk.isHidden(),
             });
             if let Some(tx) = tx.lock().unwrap().take() {
                 let _ = tx.send(value);

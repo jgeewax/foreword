@@ -11,6 +11,7 @@ import { captureSelection, selectionLabel, type SourceSelection } from '../edito
 import { Channel, errorMessage, ipc, type Bounds, type LaunchOptions, type ToolsStatus, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
+import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -66,6 +67,8 @@ export type StudioState = {
   toast: { text: string; tone: 'info' | 'error' } | null;
   /** UI zoom factor (1 = 100%). */
   zoom: number;
+  settings: AppSettings;
+  settingsOpen: boolean;
 };
 
 const initialState: StudioState = {
@@ -96,6 +99,8 @@ const initialState: StudioState = {
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
   zoom: 1,
+  settings: loadSettings(),
+  settingsOpen: false,
 };
 
 const LAST_WORKSPACE = 'studio.lastWorkspace';
@@ -175,6 +180,7 @@ export class Studio {
       }
     });
     void listen<string>('menu', (e) => {
+      if (e.payload === 'settings') return this.openSettings();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
     });
@@ -494,7 +500,9 @@ export class Studio {
   private syncPreviewVisibility() {
     if (!this.previewOpened) return;
     const ok = this.state.preview.status !== 'error';
-    void ipc.previewSetVisible(this.previewVisible && ok);
+    // The preview is a native view above the page; hide it while a dialog is open
+    // so the dialog isn't drawn underneath it.
+    void ipc.previewSetVisible(this.previewVisible && ok && !this.state.settingsOpen);
   }
 
   private async showPreview() {
@@ -819,6 +827,25 @@ export class Studio {
     } catch {
       // Non-macOS or unavailable: no inset.
     }
+  }
+
+  // ---- settings -------------------------------------------------------------------
+
+  openSettings() {
+    this.store.set({ settingsOpen: true });
+    this.syncPreviewVisibility();
+  }
+
+  closeSettings() {
+    this.store.set({ settingsOpen: false });
+    this.syncPreviewVisibility();
+    this.events.emit('focus-editor');
+  }
+
+  updateSettings(patch: Partial<AppSettings>) {
+    const settings = { ...this.state.settings, ...patch };
+    saveSettings(settings);
+    this.store.set({ settings });
   }
 
   // ---- zoom -----------------------------------------------------------------------

@@ -231,6 +231,13 @@ pub fn run() {
             )?;
             let separator = PredefinedMenuItem::separator(handle)?;
             let items = menu.items()?;
+            // App menu (first submenu): "Settings…" after "About", like other Mac apps.
+            if let Some(app_menu) = items.first().and_then(|i| i.as_submenu()) {
+                let settings =
+                    MenuItem::with_id(handle, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
+                app_menu.insert(&settings, 2)?;
+                app_menu.insert(&PredefinedMenuItem::separator(handle)?, 3)?;
+            }
             if let Some(view) = items
                 .iter()
                 .filter_map(|i| i.as_submenu())
@@ -242,7 +249,7 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
-            if id.starts_with("zoom-") {
+            if id.starts_with("zoom-") || id == "settings" {
                 let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
             }
         })
