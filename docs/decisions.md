@@ -241,6 +241,22 @@ bottom). It now adds the main webview's native safe-area inset, re-read on
 resize (full screen removes the title bar). Verified natively: preview top =
 pane top (off by 0 pt).
 
+### Figures mode
+
+- Figures are made as code the author can see in the preview and keep
+  editing: fletcher diagrams, CeTZ drawings, Lilaq charts (from inline numbers
+  or CSV/JSON), SVG files and tables. The mode's instructions pin exact package
+  versions, all compiled with Typst 0.15.1. Models guess versions otherwise,
+  and mismatches fail: cetz-plot 0.1.4 only works with cetz 0.5.x, not 0.4.2.
+- No AI image generation. OpenCode has no image tool, and its LiteLLM key is in
+  OpenCode's own auth store, which Typst Studio doesn't read. The mode says so
+  and offers diagrams, SVG or a placeholder instead (see IDEAS.md).
+- With four modes, the mode control became a compact menu (opens upward, a
+  description per mode) next to the model picker. ⇧Tab in the message box
+  cycles modes, as in Claude Code.
+- Verified in-app with gemini-3.8-flash: it added a fletcher flowchart with a
+  caption and label using the pinned version; 0 errors; it renders in the preview.
+
 ### Book history (TODO #8)
 
 - **A snapshot repo owned by the app, separate from the author's Git.** Each workspace

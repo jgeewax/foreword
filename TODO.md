@@ -30,7 +30,7 @@
 
 - [x] model selector needs to be at the bottom, close to where we're typing, maybe right above the box? or near the mode selector?
 
-- [ ] modes for image / figure generation and editing versus text?
+- [x] modes for image / figure generation and editing versus text?
 
 - [ ] right clicking doesnt open context menus appropriately. we need to add that
 

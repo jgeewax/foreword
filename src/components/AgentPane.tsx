@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
 import { useStore } from '../lib/store';
-import { AGENT_MODES, modeConfig } from '../services/agent/modes';
+import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
@@ -148,24 +148,70 @@ function Item({ item }: { item: ChatItem }) {
   }
 }
 
-function ModeSwitch() {
+/** The mode menu: compact trigger, opens upward with a description per mode. ⇧Tab cycles. */
+function ModeMenu() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const running = useStore(studio.store, (s) => s.agent.running);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const current = modeConfig(mode);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !rootRef.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="mode-switch" role="radiogroup" aria-label="Agent mode">
-      {AGENT_MODES.map((m) => (
-        <button
-          key={m}
-          role="radio"
-          aria-checked={mode === m}
-          className={mode === m ? 'active' : ''}
-          disabled={running}
-          title={modeConfig(m).description}
-          onClick={() => void studio.setMode(m)}
-        >
-          {modeConfig(m).label}
-        </button>
-      ))}
+    <div className="mode-menu" ref={rootRef}>
+      <button
+        className={`mode-trigger mode-${mode}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Mode: ${current.label}`}
+        disabled={running}
+        title={`${current.description} (⇧Tab to switch)`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="mode-icon">{current.icon}</span>
+        {current.label}
+        <span className="model-trigger-chevron">▾</span>
+      </button>
+      {open && (
+        <div className="mode-popover" role="menu">
+          {AGENT_MODES.map((m) => {
+            const c = modeConfig(m);
+            return (
+              <button
+                key={m}
+                role="menuitemradio"
+                aria-checked={m === mode}
+                className={`mode-option${m === mode ? ' current' : ''}`}
+                onClick={() => {
+                  setOpen(false);
+                  void studio.setMode(m);
+                }}
+              >
+                <span className="mode-icon">{c.icon}</span>
+                <span className="mode-text">
+                  <span className="mode-name">{c.label}</span>
+                  <span className="mode-description">{c.description}</span>
+                </span>
+                <span className="model-check">{m === mode ? '✓' : ''}</span>
+              </button>
+            );
+          })}
+          <div className="model-footer">
+            <span className="muted">⇧Tab in the message box switches mode</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -227,15 +273,7 @@ function Composer() {
         ref={inputRef}
         value={text}
         rows={3}
-        placeholder={
-          !ready
-            ? 'Agent not available'
-            : mode === 'plan'
-              ? 'What should we plan? A chapter, a section, an argument…'
-              : mode === 'options'
-                ? 'Select text, then say what to change (e.g. “make it punchier”)…'
-                : 'Ask about the selection, or request an edit…'
-        }
+        placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey) === 'send') {
@@ -244,11 +282,14 @@ function Composer() {
           } else if (e.key === 'Escape') {
             e.preventDefault();
             studio.events.emit('focus-editor');
+          } else if (e.key === 'Tab' && e.shiftKey && !running) {
+            e.preventDefault();
+            void studio.setMode(nextMode(mode));
           }
         }}
       />
       <div className="composer-controls">
-        <ModeSwitch />
+        <ModeMenu />
         <ModelPicker placement="up" />
         <span className="spacer" />
         {running ? (

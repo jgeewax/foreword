@@ -682,6 +682,54 @@ async function statusbarChecks() {
   return out;
 }
 
+/** Figures mode (TODO: image/figure modes). Edits a chapter: scratch book only; restores it. */
+async function figuresChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  const policy = studio.state.settings.agentEdits;
+  studio.updateSettings({ agentEdits: 'allow' });
+  studio.newSession();
+  await studio.setMode('write');
+  document.querySelector<HTMLButtonElement>('.mode-trigger')?.click();
+  await sleep(300);
+  out.menu = [...document.querySelectorAll('.mode-option .mode-name')].map((e) => e.textContent);
+  out.snapshotMenu = await snap('mode-menu');
+  [...document.querySelectorAll<HTMLButtonElement>('.mode-option')].find((b) => b.textContent?.includes('Figures'))?.click();
+  await sleep(500);
+  out.mode = studio.state.agent.mode;
+  const before = (await ipc.fsRead(file)).text;
+  const reply = await askAgent(
+    `In ${file}, right after the paragraph that ends "stated otherwise.", add a small flowchart figure showing: vectors → linear combinations → span. Give it a caption and a label.`,
+  );
+  await sleep(2500);
+  const after = (await ipc.fsRead(file)).text;
+  out.result = {
+    reply: reply.slice(0, 300),
+    changed: after !== before,
+    usesFletcher: after.includes('@preview/fletcher:0.5.8'),
+    hasFigure: /#figure\(/.test(after.slice(before.length > 0 ? 0 : 0)),
+    hasCaption: /caption:/.test(after),
+    hasLabel: /<fig-[\w-]+>/.test(after),
+    errors: studio.state.problems.errors,
+    compile: studio.state.compile,
+    tools: studio.state.agent.items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}`),
+  };
+  await studio.openFile(file);
+  const line = after.split('\n').findIndex((l) => l.includes('#figure') || l.includes('diagram(')) + 1;
+  if (line > 0) {
+    studio.editor?.setPosition({ lineNumber: line, column: 1 });
+    await studio.syncPreviewToCursor().catch(() => {});
+    await sleep(1200);
+  }
+  out.snapshotPreview = await snap('figure-preview', 'preview');
+  out.snapshotMain = await snap('figure-main');
+  await ipc.fsWrite(file, before, await ipc.fsHash(file));
+  await studio.setMode('write');
+  studio.updateSettings({ agentEdits: policy });
+  return out;
+}
+
 /** History below the files (layout option). Restores the author's setting. */
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
@@ -1115,6 +1163,10 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('history')) {
         log('history');
         result.history = await historyChecks(true);
+      }
+      if (want('figures')) {
+        log('figures');
+        result.figures = await figuresChecks();
       }
       if (want('options')) {
         log('options mode');
