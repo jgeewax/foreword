@@ -1045,8 +1045,9 @@ pane top (off by 0 pt).
 ### Resume after Stop (or a failure)
 
 - When a turn is stopped or fails, the conversation is marked `stopped`. With
-  the message box empty, **Send** becomes **Resume** (⏎ too). The "Stopped."
-  notice and the error notices have a Resume button. Resuming uses the model
+  the message box empty, **Send** becomes **Resume** (⏎ too). The "The request
+  was interrupted." notice (plain: no advice about models) and the error
+  notices have a Resume button. Resuming uses the model
   chosen now, so stop, switch model, resume works.
 - **How:** `POST /api/session/{id}/synthetic` admits a synthetic message, the
   kind OpenCode uses for its own reminders, and schedules the agent loop.

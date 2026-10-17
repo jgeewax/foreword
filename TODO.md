@@ -129,3 +129,31 @@
 - [x] slash commands int he ai chatbxo to change modes, etc
 
 - [x] ability to resume. if i click stop, change models, i want to resuem and start again... i need to be able to resume (if the box is empty and we aborted the request)
+
+- [ ] we need to render the formula blocks and etc when we're showing ti to users outside of the typst text editor. that means in comments, in diffs (?), and in the ai chatbox. it needs to respond with blocks of typst text and we need to render those block sin the ui
+
+- [x] when we stop, you dont need ot meniton "change the model" . just say that the request was interrrupted.
+
+- [ ] add support for mutliple windows like vs.code?
+
+- [ ] if books get long, will we find the need for a single chapter preview at a time?
+
+- [ ] why is the model trying to run sed so muhc? "Allow shell sed -n '205,242p' chapters/ch01_what_is_a_vector.typ?" thats crazy. why not tell the model to use tools we have that dont need approval?
+
+- [ ] explain all tool calls in english. this is NOT A SYSTEM FOR ENGINEERS ITS FOR WRITERS
+
+- [ ] sometimes teh book root is inside a subdirectory (like src/). can we make our project config json file understand that ?
+
+- [ ] display // NOTE: and // TODO: , etc as something prettier in the editor UI ?
+
+- [ ] the only way to see what's going on right now is that one little drop down of the things that i have as tasks (sort of) for the ai chat box. can we build another tab perhaps of the conversational history? and things that are resolved or not?
+
+- [ ] can we confirm that ALL changes are tracked? if i use the chatbox and it changes a line, i want that tracked. then if i go and edit that line. i want that tracked AND I WANT THE AI AGENT TO KNOW ABOUT IT. so if i then ask it to look again, we should include this context that it wrote A, i modified it to be A', and now im asking for more iteration on that same chunk of text. make sense?
+
+- [ ] click on the current icon on the left nav should close the left nav. if im on the files tab and i click on it again, it should close the nav
+
+- [ ] use vs-code style icons for the left nav. files for example.
+
+- [ ] when i type im seeing lots of click indicators on the preview like i clicked 4x times. none of them are on the part that im typing in
+
+- [ ] update system prompt to encourage one sentence per line.

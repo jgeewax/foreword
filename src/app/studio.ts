@@ -3146,7 +3146,7 @@ export class Studio {
           // The same failure usually arrives first as a session error; show it once.
           if (!e.error || !this.turnErrors.has(e.error)) this.agentError(e.error ?? 'The agent stopped with an error.');
         } else if (e.outcome === 'interrupted') {
-          this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Stopped. Change the model if you like, then resume.', action: { label: 'Resume', resume: true } });
+          this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'The request was interrupted.', action: { label: 'Resume', resume: true } });
         }
         break;
       case 'step-started':
