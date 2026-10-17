@@ -364,3 +364,39 @@ pub fn run() {
             }
         });
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every command the app registers is in the command manifest (build.rs) and
+    /// allowed for a window (capabilities/). Without both, Tauri refuses the call
+    /// at run time ("not allowed"), which no type check catches.
+    #[test]
+    fn every_registered_command_is_allowed() {
+        let lib = include_str!("lib.rs");
+        let build = include_str!("../build.rs");
+        let capabilities = [
+            include_str!("../capabilities/main.json"),
+            include_str!("../capabilities/preview.json"),
+        ];
+        let open = "generate_handler![";
+        let start = lib.find(open).expect("generate_handler!") + open.len();
+        let end = start + lib[start..].find(']').expect("end of generate_handler!");
+        let names: Vec<&str> = lib[start..end]
+            .split(',')
+            .filter_map(|p| p.trim().rsplit("::").next())
+            .filter(|n| !n.is_empty())
+            .collect();
+        assert!(names.len() > 50, "found only {names:?}");
+        for name in names {
+            assert!(
+                build.contains(&format!("\"{name}\"")),
+                "{name} isn't in build.rs's command manifest"
+            );
+            let permission = format!("\"allow-{}\"", name.replace('_', "-"));
+            assert!(
+                capabilities.iter().any(|c| c.contains(&permission)),
+                "{name} isn't allowed in capabilities/ ({permission})"
+            );
+        }
+    }
+}
