@@ -2301,9 +2301,10 @@ export class Studio {
 
   /** A conversation's title; until OpenCode has named it, its first words. */
   private taskTitle(sessionId: string) {
-    const title = this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title;
+    const title = sessionId === this.state.agent.sessionId ? (this.state.agent.title ?? this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title) : this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title;
     if (title && title !== 'Untitled task') return title;
-    const first = (this.turnMessages.get(sessionId) ?? '').replace(/\s+/g, ' ').trim();
+    const message = sessionId === this.state.agent.sessionId ? this.turnMessage : this.turnMessages.get(sessionId);
+    const first = (message ?? '').replace(/\s+/g, ' ').trim();
     return first ? (first.length > 48 ? `${first.slice(0, 47)}…` : first) : 'A task';
   }
 
@@ -2476,13 +2477,14 @@ export class Studio {
 
   /** "Yes, it's done": mark the task finished, save a named version, start a new one. */
   async finishTask() {
-    const { sessionId, title } = this.state.agent;
+    const { sessionId } = this.state.agent;
     if (!sessionId || this.state.agent.running) return;
+    const title = this.taskTitle(sessionId);
     this.setTaskRecord(sessionId, 'done');
-    await this.history.saveNamed(`Task done: ${title ?? 'untitled'}`).catch(() => {});
+    await this.history.saveNamed(`Task done: ${title}`).catch(() => {});
     this.newSession();
     await this.loadTasks();
-    this.toast(`Done: ${title ?? 'task'}. Ready for the next one.`);
+    this.toast(`Done: ${title}. Ready for the next one.`, 'info', [{ label: 'Open it again', run: () => void this.switchTask(sessionId) }]);
   }
 
   /** "Not yet": hide the buttons on that reply. */

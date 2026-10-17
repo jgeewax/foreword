@@ -121,6 +121,18 @@ export function TaskMenu() {
             >
               New task
             </button>
+            {agent.sessionId && current?.status !== 'done' && (
+              <button
+                disabled={agent.running}
+                title="Mark this task done (a named version in History), and start a new one"
+                onClick={() => {
+                  setOpen(false);
+                  void studio.finishTask();
+                }}
+              >
+                Mark done
+              </button>
+            )}
             {agent.sessionId && (
               <button
                 disabled={agent.running || agent.compacting}

@@ -102,7 +102,7 @@
 
 - [x] similar keyboard shortcuts for tab management as vs code (cmd+k w for closing all, etc)
 
-- [ ] the new task button is too far away and too small... how can we make it more prominent to start a new convo?
+- [x] the new task button is too far away and too small... how can we make it more prominent to start a new convo?
 
 - [ ] icons still feel weird and awkward. (look at top right as well as close icon for settings page at 67% zoom to see how weird things look)
 
@@ -124,7 +124,7 @@
 
 - [ ] the menu system seems crowded and silly. we need to rethink and revamp the menus.
 
-- [ ] after asking a question, i have no way to resolve teh task and mark it as done... is there a way to do this im missing? if not we need to make sure thats doable?
+- [x] after asking a question, i have no way to resolve teh task and mark it as done... is there a way to do this im missing? if not we need to make sure thats doable?
 
 - [ ] slash commands int he ai chatbxo to change modes, etc
 

@@ -51,6 +51,11 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   comment: <path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  chevronRight: <path d="M9.5 6l6 6-6 6" />,
+  chevronDown: <path d="M6 9.5l6 6 6-6" />,
   shield: <path d="M12 3.2l7 2.8v5.2c0 4.3-2.9 7.7-7 9.6-4.1-1.9-7-5.3-7-9.6V6z" />,
   book: (
     <>

@@ -2033,6 +2033,18 @@ async function questionChecks() {
     summary: document.querySelector('.question.done')?.textContent,
   };
   out.snapshotAnswered = await snap('question-answered');
+  // No "Is this task done?" was asked: the header's Done button finishes it anyway.
+  const answeredSession = studio.state.agent.sessionId;
+  const doneButton = [...document.querySelectorAll<HTMLButtonElement>('.agent-pane .header-button')].find((b) => b.textContent?.includes('Done'));
+  out.doneButton = !!doneButton;
+  doneButton?.click();
+  await sleep(1500);
+  out.afterDone = {
+    newConversation: studio.state.agent.sessionId === null,
+    marked: studio.state.agent.tasks.find((t) => t.sessionId === answeredSession)?.status,
+    toast: studio.state.toast?.text,
+    newTaskButton: !!document.querySelector('.agent-pane .header-button.new-task'),
+  };
 
   // Dismissed: the model is told, and the turn ends.
   studio.newSession();

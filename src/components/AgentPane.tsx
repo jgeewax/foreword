@@ -5,6 +5,7 @@ import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
+import { Icon } from './icons';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
@@ -795,8 +796,19 @@ export function AgentPane() {
           {agent.running && <span className="busy-bar" aria-hidden />}
           <span className="spacer" />
           <ContextMeter />
-          <button className="icon" title={agent.running ? 'New task (this one carries on in the background)' : 'New task'} aria-label="New task" onClick={() => studio.newSession()}>
-            ＋
+          {agent.sessionId && !agent.running && agent.items.some((i) => i.kind === 'assistant') && agent.tasks.find((t) => t.sessionId === agent.sessionId)?.status !== 'done' && (
+            <button className="header-button" title="This task is done: it's saved as a named version in History, and a new task starts" onClick={() => void studio.finishTask()}>
+              <Icon name="check" size={14} />
+              Done
+            </button>
+          )}
+          <button
+            className="header-button new-task"
+            title={agent.running ? 'Start a new task (this one carries on in the background)' : 'Start a new task (a new conversation)'}
+            onClick={() => studio.newSession()}
+          >
+            <Icon name="plus" size={14} />
+            New task
           </button>
         </header>
         {(agent.status !== 'ready' || agent.connection === 'lost') && (
