@@ -2070,21 +2070,35 @@ export class Studio {
     if (root) writeJson(tabsKey(root), { tabs: this.state.tabs, active: this.state.active });
   }
 
-  setCursor(line: number, column: number) {
+  /** `typing`: the cursor moved with an edit (typing, paste, undo), not a click or an arrow key. */
+  setCursor(line: number, column: number, typing = false) {
     this.store.set({ cursor: { line, column } });
-    this.schedulePreviewSync();
+    this.schedulePreviewSync(typing);
   }
 
   // ---- source ↔ preview sync ----------------------------------------------------
 
-  /** Source → preview: once the cursor settles, scroll the preview to it. */
-  private schedulePreviewSync() {
+  /**
+   * Source → preview: once the cursor settles, scroll the preview to it. While
+   * typing, after a longer pause and quietly (see `syncPreviewToCursor`).
+   */
+  private schedulePreviewSync(typing = false) {
     if (performance.now() < this.suppressSyncUntil) return;
     clearTimeout(this.syncTimer);
-    this.syncTimer = window.setTimeout(() => void this.syncPreviewToCursor(), 150);
+    this.syncTimer = window.setTimeout(() => void this.syncPreviewToCursor({ quiet: typing }), typing ? 400 : 150);
   }
 
-  async syncPreviewToCursor() {
+  /**
+   * Scroll the preview to the editor's cursor. Tinymist marks each jump with a
+   * ripple; a jump it can't map is ignored, so nearby positions are tried in
+   * turn until one jumps.
+   * - `quiet` (while typing): the cursor's own position only, with the ripple
+   *   hidden. Fallbacks while the preview recompiles answered late, so several
+   *   jumped, each with a ripple somewhere else.
+   * - Otherwise one ripple, and a preview still compiling gets time to answer
+   *   before the next position is tried.
+   */
+  async syncPreviewToCursor({ quiet = false } = {}) {
     const root = this.state.workspace?.root;
     const path = this.state.active;
     const model = this.editor?.getModel();
@@ -2092,11 +2106,24 @@ export class Studio {
     if (!root || !path?.endsWith('.typ') || !model || !pos || !this.previewOpened || !this.typst.running) return;
     const lineAt = (n: number) => (n >= 0 && n < model.getLineCount() ? model.getLineContent(n + 1) : null);
     const run = ++this.syncRun;
-    // Best candidate first; stop at the first the preview actually jumps to
-    // (one smooth scroll, one ripple). Unmapped positions are silently ignored.
-    for (const c of jumpCandidates(lineAt, pos.lineNumber - 1, pos.column - 1).slice(0, 16)) {
+    const candidates = jumpCandidates(lineAt, pos.lineNumber - 1, pos.column - 1);
+    if (quiet) {
+      if (!candidates.length) return;
+      await ipc
+        .previewEval(
+          "document.documentElement.classList.add('studio-quiet-jump'); clearTimeout(window.__studioQuiet); window.__studioQuiet = setTimeout(() => document.documentElement.classList.remove('studio-quiet-jump'), 1500);",
+        )
+        .catch(() => {});
+      await this.typst.scrollPreviewTo(`${root}/${path}`, candidates[0].line, candidates[0].character).catch(() => {});
+      return;
+    }
+    // A click or arrow key right after typing: the ripple shows again.
+    await ipc.previewEval("clearTimeout(window.__studioQuiet); document.documentElement.classList.remove('studio-quiet-jump');").catch(() => {});
+    // Best candidate first; stop at the first the preview actually jumps to (one smooth scroll, one ripple).
+    const wait = this.state.compile.status === 'compiling' ? 400 : 120;
+    for (const c of candidates.slice(0, 16)) {
       if (run !== this.syncRun) return; // the cursor moved again
-      const jumped = this.nextPreviewJump(80);
+      const jumped = this.nextPreviewJump(wait);
       await this.typst.scrollPreviewTo(`${root}/${path}`, c.line, c.character).catch(() => {});
       if (await jumped) return;
     }

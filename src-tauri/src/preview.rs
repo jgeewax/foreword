@@ -77,6 +77,15 @@ const JUMP_SCRIPT: &str = r#"
       });
     }
   };
+  // Jumps made while the author types follow the cursor without a ripple (the
+  // app sets this class for a moment). Hidden, not removed: the ripple's
+  // animation still ends, and Tinymist takes it away.
+  const add = () => {
+    const style = document.createElement('style');
+    style.textContent = '.studio-quiet-jump .typst-jump-ripple { visibility: hidden !important; }';
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
 })();
 "#;
 

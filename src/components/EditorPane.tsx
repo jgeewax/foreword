@@ -331,7 +331,8 @@ export function EditorPane() {
       const ts = e.browserEvent.timeStamp;
       studio.perf.keyDown(ts > 1e12 ? ts : performance.timeOrigin + ts);
     });
-    editor.onDidChangeCursorPosition((e) => studio.setCursor(e.position.lineNumber, e.position.column));
+    // Explicit: a click or an arrow key; anything else (typing, paste, undo) moved it with an edit.
+    editor.onDidChangeCursorPosition((e) => studio.setCursor(e.position.lineNumber, e.position.column, e.reason !== monaco.editor.CursorChangeReason.Explicit));
     editor.onDidChangeCursorSelection(() => studio.onEditorSelection());
     editor.onDidChangeModel(() => studio.onEditorSelection());
     studio.attachEditor(editor);

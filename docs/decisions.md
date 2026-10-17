@@ -217,6 +217,23 @@ pages in order and painted 150 ms after scrolling to the end and back
   wrapping its WebSocket in an init script. Result: one smooth scroll and one
   ripple per cursor move. Measured in-app: 1 jump per move on both books; a
   heading lands in the body, not the TOC.
+- **Typing doesn't flash the preview.** An author saw several ripples per
+  pause while typing, none where they were typing.
+  - **Causes:** every keystroke moved the cursor, so every pause ran the
+    candidate ladder. Each candidate got 80 ms to answer, and while the
+    preview recompiles answers come late. Later candidates (other words,
+    lines above) then jumped too, each with a ripple.
+  - **Now:** a move that came with an edit (Monaco's cursor reason isn't
+    `Explicit`) waits 400 ms and tries only the cursor's own position. The
+    preview's ripple is hidden for that jump: a class on the preview's
+    `<html>` for 1.5 s, and `visibility: hidden`, so Tinymist's animation
+    still ends and removes it.
+  - **Clicks and arrow keys** keep one visible ripple. They end any quiet
+    period, and while a compile is running each candidate gets 400 ms
+    (otherwise 120 ms) before the next is tried.
+  - Verified (self-test `typingsync`): two typing bursts gave 2 jumps with 0
+    visible ripples (the old code: 2 visible); an arrow key gave 1 jump with 1
+    visible ripple.
 
 ### UI zoom (⌘= / ⌘− / ⌘0)
 

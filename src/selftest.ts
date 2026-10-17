@@ -2399,6 +2399,53 @@ async function quickOpenChecks() {
   return out;
 }
 
+/**
+ * Typing doesn't flash the preview: while typing, at most one jump per pause and
+ * no visible ripple; an arrow key still gets one visible ripple. (The chapter is
+ * put back by undo.)
+ */
+async function typingSyncChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 60000, 'preview').catch(() => {});
+  await studio.openFile('chapters/ch2-eigenvalues.typ');
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => l.startsWith('The eigenvalues of')) + 1;
+  editor.focus();
+  editor.setPosition({ lineNumber: line, column: 5 });
+  await sleep(1500);
+  const events: { tag: string; hidden?: boolean; t: number }[] = [];
+  const unlisten = await listen<{ tag?: string; hidden?: boolean }>('preview:report', (e) => {
+    if (e.payload?.tag === 'jump' || e.payload?.tag === 'ripple') events.push({ tag: e.payload.tag, hidden: e.payload.hidden, t: Date.now() });
+  });
+  // Report each ripple, and whether it shows.
+  await ipc.previewEval(`new MutationObserver((rs) => { for (const r of rs) for (const n of r.addedNodes) if (n.classList && n.classList.contains('typst-jump-ripple')) { const hidden = getComputedStyle(n).visibility === 'hidden'; window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'ripple', hidden } }); } }).observe(document, { childList: true, subtree: true });`);
+  const versionBefore = model.getAlternativeVersionId();
+  const type = async (text: string) => {
+    for (const ch of text) {
+      editor.trigger('keyboard', 'type', { text: ch });
+      await sleep(70);
+    }
+  };
+  await type(' quickly typed');
+  await sleep(1500);
+  await type(' and more');
+  await sleep(1500);
+  const typing = events.splice(0);
+  out.typing = { jumps: typing.filter((e) => e.tag === 'jump').length, ripples: typing.filter((e) => e.tag === 'ripple').length, visibleRipples: typing.filter((e) => e.tag === 'ripple' && !e.hidden).length };
+  // An arrow key: one jump, one visible ripple.
+  editor.trigger('keyboard', 'cursorDown', null);
+  editor.trigger('keyboard', 'cursorDown', null);
+  await sleep(1500);
+  const nav = events.splice(0);
+  out.arrow = { jumps: nav.filter((e) => e.tag === 'jump').length, visibleRipples: nav.filter((e) => e.tag === 'ripple' && !e.hidden).length };
+  unlisten();
+  while (model.getAlternativeVersionId() !== versionBefore && model.canUndo()) await model.undo();
+  await studio.save().catch(() => {});
+  return out;
+}
+
 /** The activity bar: the open view's icon hides the sidebar, any icon brings it back at that view. */
 async function activityChecks() {
   const out: Record<string, unknown> = {};
@@ -3224,6 +3271,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
+    if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();

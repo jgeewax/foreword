@@ -154,7 +154,7 @@
 
 - [x] use vs-code style icons for the left nav. files for example.
 
-- [ ] when i type im seeing lots of click indicators on the preview like i clicked 4x times. none of them are on the part that im typing in
+- [x] when i type im seeing lots of click indicators on the preview like i clicked 4x times. none of them are on the part that im typing in
 
 - [x] update system prompt to encourage one sentence per line.
 
