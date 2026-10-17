@@ -5,12 +5,12 @@
 // Running headers and page numbers start at the first chapter.
 #let in-story = state("in-story", false)
 
-#let book(title: "", author: "", body) = {
+#let book(title: "", author: "", width: 6in, height: 9in, body) = {
   set document(title: title, author: author)
   set page(
-    // A 6 × 9 inch trade paperback; wider margin on the binding side.
-    width: 6in,
-    height: 9in,
+    // Wider margin on the binding side.
+    width: width,
+    height: height,
     margin: (inside: 0.9in, outside: 0.7in, top: 0.85in, bottom: 0.9in),
     header: context {
       if not in-story.get() { return }

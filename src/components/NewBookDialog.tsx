@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AUTHOR_KEY, NEW_BOOK_PARENT, studio } from '../app/studio';
 import { errorMessage } from '../lib/ipc';
 import { tildePath as tilde } from '../lib/paths';
-import { bookFolderName, TEMPLATES } from '../templates';
+import { bookFolderName, TEMPLATES, typstLength } from '../templates';
 
 const stored = (key: string) => {
   try {
@@ -16,6 +16,13 @@ const stored = (key: string) => {
 
 export function NewBookDialog() {
   const [template, setTemplate] = useState(TEMPLATES[0].id);
+  const chosen = TEMPLATES.find((t) => t.id === template)!;
+  // Index into the template's sizes, or -1 for a custom size.
+  const [sizeIndex, setSizeIndex] = useState(chosen.defaultSize);
+  const [custom, setCustom] = useState({ width: '', height: '', unit: 'in' });
+  useEffect(() => setSizeIndex(chosen.defaultSize), [chosen]);
+  const customSize = { width: typstLength(`${custom.width}${custom.unit}`), height: typstLength(`${custom.height}${custom.unit}`) };
+  const size = sizeIndex >= 0 ? chosen.sizes[sizeIndex] : customSize.width && customSize.height ? { width: customSize.width, height: customSize.height } : null;
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState(() => stored(AUTHOR_KEY));
   const [parent, setParent] = useState(() => stored(NEW_BOOK_PARENT));
@@ -40,7 +47,7 @@ export function NewBookDialog() {
     setError(null);
     setCreating(true);
     try {
-      await studio.createBook(template, { title: title.trim(), author: author.trim() }, parent);
+      await studio.createBook(template, { title: title.trim(), author: author.trim(), size: size ?? undefined }, parent);
     } catch (e) {
       setError(errorMessage(e));
       setCreating(false);
@@ -48,7 +55,7 @@ export function NewBookDialog() {
   };
 
   const folder = bookFolderName(title);
-  const ready = !!title.trim() && !!parent && !creating;
+  const ready = !!title.trim() && !!parent && !!size && !creating;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !creating && studio.closeNewBook()}>
       <form
@@ -82,6 +89,32 @@ export function NewBookDialog() {
                 <span className="template-details">{t.details}</span>
               </button>
             ))}
+          </div>
+          <div className="field">
+            <span>Page size</span>
+            <div className="field-row">
+              <select value={sizeIndex} aria-label="Page size" onChange={(e) => setSizeIndex(Number(e.target.value))}>
+                {chosen.sizes.map((s, i) => (
+                  <option key={s.label} value={i}>
+                    {s.label}
+                  </option>
+                ))}
+                <option value={-1}>Custom…</option>
+              </select>
+              {sizeIndex < 0 && (
+                <span className="custom-size">
+                  <input aria-label="Width" inputMode="decimal" placeholder="width" value={custom.width} onChange={(e) => setCustom({ ...custom, width: e.target.value })} />
+                  ×
+                  <input aria-label="Height" inputMode="decimal" placeholder="height" value={custom.height} onChange={(e) => setCustom({ ...custom, height: e.target.value })} />
+                  <select aria-label="Unit" value={custom.unit} onChange={(e) => setCustom({ ...custom, unit: e.target.value })}>
+                    <option value="in">in</option>
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                  </select>
+                </span>
+              )}
+            </div>
+            <span className="field-note">You can change it later in main.typ. Printers list the sizes they offer as "trim sizes".</span>
           </div>
           <label className="field">
             <span>Title</span>

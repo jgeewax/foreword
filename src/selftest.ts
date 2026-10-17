@@ -660,6 +660,75 @@ async function snap(name: string, target: 'main' | 'preview' = 'main') {
 }
 
 /**
+ * New-book journey: dialog with a custom page size, create a novel, add
+ * chapters (directly and through the prompt dialog). Works next to the
+ * scratch book, then reopens it.
+ */
+async function journeyChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = original.slice(0, original.lastIndexOf('/'));
+  const stamp = Date.now().toString(36);
+
+  studio.openNewBook();
+  await sleep(400);
+  const sizeSelect = document.querySelector<HTMLSelectElement>('.new-book select[aria-label="Page size"]');
+  out.sizeOptions = [...(sizeSelect?.options ?? [])].map((o) => o.textContent);
+  if (sizeSelect) {
+    sizeSelect.value = '-1';
+    sizeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await sleep(300);
+  out.customFields = document.querySelectorAll('.custom-size input').length;
+  out.snapshotDialog = await snap('journey-dialog');
+  studio.closeNewBook();
+
+  await studio.createBook('novel', { title: `Journey ${stamp}`, author: 'Ada Example', size: { width: '5.5in', height: '8.5in' } }, parent);
+  await waitFor(() => studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+  const pagesBefore = studio.state.compile.pages;
+  const main0 = (await ipc.fsRead('main.typ')).text;
+  out.size = /width: 5\.5in, height: 8\.5in/.test(main0);
+
+  const added = await studio.addChapter('The Storm’s *Eye* #2');
+  await sleep(1500);
+  const main1 = (await ipc.fsRead('main.typ')).text;
+  out.addChapter = {
+    path: added,
+    text: added ? (await ipc.fsRead(added)).text : null,
+    includes: main1.split('\n').filter((l) => l.startsWith('#include')),
+    mainDirty: !!studio.state.dirty['main.typ'],
+    active: studio.state.active,
+  };
+
+  // Through the prompt dialog, as the menu and the + button do.
+  const pending = studio.newChapter();
+  await sleep(300);
+  const input = document.querySelector<HTMLInputElement>('.prompt input');
+  out.promptShown = !!input;
+  if (input) {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(input, 'Morning After');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(100);
+    out.snapshotPrompt = await snap('journey-prompt');
+    document.querySelector<HTMLFormElement>('.prompt')?.requestSubmit();
+  }
+  await pending;
+  await waitFor(() => studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > (pagesBefore ?? 0), 30000, 'pages').catch(() => {});
+  await sleep(1000);
+  out.afterPrompt = {
+    files: studio.state.workspace?.files.filter((f) => f.startsWith('chapters/')),
+    includes: (await ipc.fsRead('main.typ')).text.split('\n').filter((l) => l.startsWith('#include')),
+    errors: studio.state.problems.errors,
+    pages: { before: pagesBefore, after: studio.state.compile.pages },
+  };
+  out.snapshotPreview = await snap('journey-preview', 'preview');
+  out.book = studio.state.workspace?.root;
+  await studio.openWorkspace(original);
+  return out;
+}
+
+/**
  * Right-click menus in every pane. Native popups are modal, so the menus are
  * recorded (not shown) and their actions run directly.
  */
@@ -1078,6 +1147,14 @@ const summary = (s: LatencyStats) => ({
 
 export async function runSelftest(launch: LaunchOptions) {
   const result: Record<string, any> = { startedAt: new Date().toISOString(), msSinceNavigationAtInit: Math.round(performance.now()) };
+  // Earlier self-tests saved their scratch folder and test author as the New Book defaults; undo that.
+  for (const [key, bad] of [
+    ['studio.newBookParent', (v: string) => v.startsWith('/private/tmp/') || v.includes('/scratchpad')],
+    ['studio.author', (v: string) => v === 'Ada Example'],
+  ] as const) {
+    const v = localStorage.getItem(key);
+    if (v && bad(v)) localStorage.removeItem(key);
+  }
   const only = launch.selftestOnly?.split(',').map((x) => x.trim());
   const want = (group: string) => !only || only.includes(group);
   try {
@@ -1194,6 +1271,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (want('journey')) {
+      log('journey');
+      result.journey = await journeyChecks();
+    }
     if (want('menus')) {
       log('menus');
       result.menus = await menuChecks();

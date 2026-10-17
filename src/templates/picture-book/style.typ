@@ -2,10 +2,10 @@
 // #story-page and #picture-page (see story.typ). Change the page size, the
 // typeface or the text size here and every page follows.
 
-#let book(title: "", author: "", body) = {
+#let book(title: "", author: "", width: 8.5in, height: 8.5in, body) = {
   set document(title: title, author: author)
-  // A square 8.5 × 8.5 inch picture book, no page numbers.
-  set page(width: 8.5in, height: 8.5in, margin: 0.55in)
+  // No page numbers; the size is set in main.typ.
+  set page(width: width, height: height, margin: 0.55in)
   // Rounded, friendly type; falls back to the bundled serif if missing.
   set text(font: ("Avenir Next", "Helvetica Neue", "Libertinus Serif"), size: 21pt, lang: "en")
   set par(leading: 0.75em, spacing: 1.1em, justify: false)

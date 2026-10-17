@@ -26,6 +26,8 @@ import { History, initialHistory, type HistoryState } from './history';
 import { bookFolderName, TEMPLATES, templateFiles } from '../templates';
 import { snippetInsertion } from '../help/guide';
 import { copyText, showContextMenu } from '../lib/context-menu';
+import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
+import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
@@ -52,6 +54,8 @@ export type ChatItem =
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error' };
 
 export type Attachment = { id: string; label: string; selection: SourceSelection };
+
+export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string };
 
 /** Where a picked option goes: the passage as it stands in the buffer (1-based positions). */
 export type OptionTarget = { path: string; start: { line: number; column: number }; end: { line: number; column: number }; text: string };
@@ -103,6 +107,8 @@ export type StudioState = {
   guideOpen: boolean;
   /** Recently opened books, newest first. */
   recent: string[];
+  /** A one-line text question (our own dialog: WKWebView has no window.prompt). */
+  prompt: PromptRequest | null;
   /** `.typst-studio.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
   exporting: boolean;
@@ -147,6 +153,7 @@ const initialState: StudioState = {
   settingsOpen: false,
   newBookOpen: false,
   guideOpen: false,
+  prompt: null,
   recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
@@ -253,6 +260,7 @@ export class Studio {
       if (e.payload === 'settings') return this.openSettings();
       if (e.payload === 'export-pdf') return void this.exportPdf();
       if (e.payload === 'new-book') return this.openNewBook();
+      if (e.payload === 'new-chapter') return void this.newChapter();
       if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
@@ -339,6 +347,92 @@ export class Studio {
     for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
     const active = saved?.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
     if (active) await this.openFile(active);
+  }
+
+  // ---- small dialogs ------------------------------------------------------------------
+
+  private promptResolve: ((value: string | null) => void) | null = null;
+
+  /** Ask for one line of text. Resolves null if cancelled. */
+  prompt(request: Omit<PromptRequest, 'value'> & { value?: string }): Promise<string | null> {
+    this.promptResolve?.(null);
+    this.store.set({ prompt: { value: '', ...request } });
+    this.syncPreviewVisibility();
+    return new Promise((resolve) => (this.promptResolve = resolve));
+  }
+
+  answerPrompt(value: string | null) {
+    const resolve = this.promptResolve;
+    this.promptResolve = null;
+    this.store.set({ prompt: null });
+    this.syncPreviewVisibility();
+    resolve?.(value);
+  }
+
+  // ---- chapters -----------------------------------------------------------------------
+
+  /** File → New Chapter: ask for a title, then add the chapter. */
+  async newChapter() {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    const title = await this.prompt({
+      title: 'New chapter',
+      label: 'Chapter title',
+      placeholder: 'e.g. The Island',
+      okLabel: 'Add chapter',
+      help: ws.entry
+        ? `Creates a numbered file in the chapters folder and adds it to ${ws.entry} after the last chapter.`
+        : 'Creates a numbered file in the chapters folder.',
+    });
+    if (title?.trim()) await this.addChapter(title.trim());
+  }
+
+  /**
+   * Create chapters/NN-title.typ (numbered after the last one, with the same
+   * #import lines) and add its #include to the main file, then open it. The
+   * main file is changed in its buffer (undoable) and saved unless it already
+   * had unsaved edits.
+   */
+  async addChapter(title: string): Promise<string | null> {
+    const ws = this.state.workspace;
+    if (!ws || !this.docs) return null;
+    // Chapters live next to the main file, in "chapters".
+    const folder = `${ws.entry?.includes('/') ? ws.entry.slice(0, ws.entry.lastIndexOf('/') + 1) : ''}chapters`;
+    const path = nextChapterPath(ws.files, title, folder);
+    const sample = ws.files.filter((f) => f.startsWith(`${folder}/`) && f.endsWith('.typ')).sort()[0];
+    const imports = sample ? chapterImports((await ipc.fsRead(sample).catch(() => ({ text: '' }))).text) : [];
+    try {
+      await ipc.fsWrite(path, chapterText(title, imports), null);
+    } catch (e) {
+      this.toast(`Couldn't create ${path}: ${errorMessage(e)}`, 'error');
+      return null;
+    }
+    if (ws.entry) {
+      try {
+        const doc = await this.docs.open(ws.entry);
+        const wasDirty = this.docs.isDirty(doc);
+        const before = doc.model.getValue();
+        const edit = minimalEdit(before, withInclude(before, includePath(ws.entry, path)));
+        if (edit) {
+          const start = doc.model.getPositionAt(edit.start);
+          const end = doc.model.getPositionAt(edit.end);
+          doc.model.pushEditOperations([], [{ range: monaco.Range.fromPositions(start, end), text: edit.text }], () => null);
+        }
+        if (!wasDirty) await this.docs.save(ws.entry);
+      } catch (e) {
+        this.toast(`Created ${path}, but couldn't add it to ${ws.entry}: ${errorMessage(e)}`, 'error');
+      }
+    }
+    await this.refreshFiles();
+    await this.openFile(path);
+    const model = this.editor?.getModel();
+    if (model) {
+      const last = model.getLineCount();
+      this.editor!.setPosition({ lineNumber: last, column: model.getLineMaxColumn(last) });
+      this.editor!.focus();
+    }
+    this.toast(ws.entry ? `Added ${path} to ${ws.entry}` : `Created ${path}`);
+    return path;
   }
 
   // ---- help for writers new to Typst ------------------------------------------------
@@ -514,13 +608,16 @@ export class Studio {
   }
 
   /** Create `parent/<title>` from a template and open it. Throws (for the dialog) if that fails. */
-  async createBook(templateId: string, info: { title: string; author: string }, parent: string) {
+  async createBook(templateId: string, info: { title: string; author: string; size?: { width: string; height: string } }, parent: string) {
     const template = TEMPLATES.find((t) => t.id === templateId);
     if (!template) throw new Error(`Unknown template ${templateId}`);
     const files = templateFiles(template, { ...info, year: String(new Date().getFullYear()) });
     const root = await ipc.projectCreate(parent, bookFolderName(info.title), files);
-    localStorage.setItem(NEW_BOOK_PARENT, parent);
-    if (info.author.trim()) localStorage.setItem(AUTHOR_KEY, info.author.trim());
+    // Remembered for next time, except by self-tests (they share the author's storage).
+    if (!this.state.launch?.selftestOut) {
+      localStorage.setItem(NEW_BOOK_PARENT, parent);
+      if (info.author.trim()) localStorage.setItem(AUTHOR_KEY, info.author.trim());
+    }
     this.closeNewBook();
     await this.openWorkspace(root);
     await this.openFile(template.firstFile).catch(() => {});
@@ -797,7 +894,7 @@ export class Studio {
     const ok = this.state.preview.status !== 'error';
     // The preview is a native view above the page; hide it while a dialog is open
     // so the dialog isn't drawn underneath it.
-    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff;
+    const dialog = this.state.settingsOpen || this.state.newBookOpen || !!this.state.history.diff || !!this.state.prompt;
     void ipc.previewSetVisible(this.previewVisible && ok && !dialog);
   }
 

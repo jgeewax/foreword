@@ -39,6 +39,7 @@ function FileTree() {
           onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
           onContextMenu={onContextMenu((): MenuEntry[] => [
             !n.dir && { label: 'Open', action: () => void studio.openFile(n.path) },
+            (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
             n.dir && { label: expanded.has(n.path) ? 'Collapse' : 'Expand', action: () => toggle(n.path) },
             !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
             'separator',
@@ -60,6 +61,8 @@ function FileTree() {
     <div
       className="tree"
       onContextMenu={onContextMenu(() => [
+        { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+        'separator',
         { label: 'Refresh', action: () => void studio.refreshFiles() },
         { label: 'Reveal Book Folder in Finder', action: () => void studio.reveal('') },
       ])}
@@ -68,6 +71,12 @@ function FileTree() {
     </div>
   );
 }
+
+const NewChapterButton = () => (
+  <button className="icon" title="New chapter (⌥⌘N)" aria-label="New chapter" onClick={() => void studio.newChapter()}>
+    ＋
+  </button>
+);
 
 const RefreshButton = () => (
   <button className="icon" title="Refresh" onClick={() => void studio.refreshFiles()}>
@@ -102,6 +111,7 @@ function Stacked() {
           <header className="pane-header">
             <span className="pane-title">{ws?.name ?? 'Files'}</span>
             <span className="spacer" />
+            <NewChapterButton />
             <RefreshButton />
           </header>
           <FileTree />
@@ -144,7 +154,14 @@ export function Explorer() {
             History
           </button>
         </div>
-        {view === 'files' ? <RefreshButton /> : <PlacementButton to="below" />}
+        {view === 'files' ? (
+          <>
+            <NewChapterButton />
+            <RefreshButton />
+          </>
+        ) : (
+          <PlacementButton to="below" />
+        )}
       </header>
       {view === 'files' ? <FileTree /> : <HistoryPanel />}
     </section>

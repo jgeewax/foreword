@@ -6,7 +6,7 @@
 #let author = "{{author}}"
 
 #set document(title: title, author: author)
-#set page(paper: "a5", margin: (x: 18mm, y: 20mm), numbering: "1")
+#set page(width: {{width}}, height: {{height}}, margin: (x: 18mm, y: 20mm), numbering: "1")
 #set text(font: "Libertinus Serif", size: 11pt, lang: "en")
 #set par(justify: true, first-line-indent: 1.2em, spacing: 0.65em)
 #show heading.where(level: 1): it => {

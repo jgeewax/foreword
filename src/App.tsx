@@ -8,6 +8,7 @@ import { Explorer } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { HistoryDiff } from './components/HistoryDiff';
 import { NewBookDialog } from './components/NewBookDialog';
+import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
 import { zoomActionForKey } from './lib/zoom';
@@ -106,6 +107,12 @@ export function App() {
         void studio.exportPdf();
         return;
       }
+      if (e.metaKey && e.altKey && !e.shiftKey && !e.ctrlKey && e.code === 'KeyN') {
+        e.preventDefault();
+        e.stopPropagation();
+        void studio.newChapter();
+        return;
+      }
       if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         e.stopPropagation();
@@ -144,6 +151,7 @@ export function App() {
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
       {settingsOpen && <SettingsDialog />}
       {newBookOpen && <NewBookDialog />}
+      <PromptDialog />
       <HistoryDiff />
     </>
   );

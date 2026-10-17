@@ -7,12 +7,27 @@ import { STYLE_GUIDE_FILE, styleGuideTemplate, type StyleSection } from '../serv
 
 const RAW = import.meta.glob('./*/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
+/** A page (trim) size; width and height are Typst lengths like "6in" or "148mm". */
+export type PageSize = { label: string; width: string; height: string };
+
+const BOOK_SIZES: PageSize[] = [
+  { label: '5 × 8 in', width: '5in', height: '8in' },
+  { label: '5.25 × 8 in', width: '5.25in', height: '8in' },
+  { label: '5.5 × 8.5 in', width: '5.5in', height: '8.5in' },
+  { label: '6 × 9 in', width: '6in', height: '9in' },
+  { label: 'A5 (148 × 210 mm)', width: '148mm', height: '210mm' },
+  { label: 'B-format (129 × 198 mm)', width: '129mm', height: '198mm' },
+];
+
 export type BookTemplate = {
   id: string;
   name: string;
   description: string;
-  /** Page size and look, one line. */
+  /** The look, one line (the size is shown separately). */
   details: string;
+  sizes: PageSize[];
+  /** Index into `sizes`. */
+  defaultSize: number;
   /** The file to open first. */
   firstFile: string;
   styleHints: Partial<Record<StyleSection, string>>;
@@ -23,7 +38,9 @@ export const TEMPLATES: BookTemplate[] = [
     id: 'novel',
     name: 'Novel',
     description: 'Fiction in chapters, with scene breaks, a title page and running headers.',
-    details: '6 × 9 in paperback · Libertinus Serif',
+    details: 'Libertinus Serif · running headers',
+    sizes: BOOK_SIZES,
+    defaultSize: 3,
     firstFile: 'chapters/01-chapter-one.typ',
     styleHints: {
       Audience: 'Genre and readers, e.g. a literary mystery for adults; readers of Tana French.',
@@ -39,7 +56,9 @@ export const TEMPLATES: BookTemplate[] = [
     id: 'nonfiction',
     name: 'Non-fiction',
     description: 'Ideas and advice: contents, an introduction, sections, footnotes, sources and boxed asides.',
-    details: '6 × 9 in · Libertinus Serif · citations',
+    details: 'Libertinus Serif · citations',
+    sizes: BOOK_SIZES,
+    defaultSize: 3,
     firstFile: 'chapters/01-first-chapter.typ',
     styleHints: {
       Audience: 'Who is this for, what do they already know, and what problem brings them to the book?',
@@ -54,7 +73,14 @@ export const TEMPLATES: BookTemplate[] = [
     id: 'textbook',
     name: 'Textbook',
     description: 'Teaching material: numbered sections, equations, figures, definitions, examples and exercises.',
-    details: '7.5 × 9.25 in · New Computer Modern · math',
+    details: 'New Computer Modern · math',
+    sizes: [
+      { label: '7 × 10 in', width: '7in', height: '10in' },
+      { label: '7.5 × 9.25 in', width: '7.5in', height: '9.25in' },
+      { label: 'US Letter (8.5 × 11 in)', width: '8.5in', height: '11in' },
+      { label: 'A4 (210 × 297 mm)', width: '210mm', height: '297mm' },
+    ],
+    defaultSize: 1,
     firstFile: 'chapters/01-getting-started.typ',
     styleHints: {
       Audience: 'Course and level, e.g. first-year undergraduates who know algebra but not calculus.',
@@ -71,7 +97,14 @@ export const TEMPLATES: BookTemplate[] = [
     id: 'picture-book',
     name: "Children's picture book",
     description: 'A short illustrated story: a cover, one picture and a line or two of text per page.',
-    details: '8.5 × 8.5 in square · large rounded type',
+    details: 'Large rounded type · full-page pictures',
+    sizes: [
+      { label: '8 × 8 in square', width: '8in', height: '8in' },
+      { label: '8.5 × 8.5 in square', width: '8.5in', height: '8.5in' },
+      { label: '10 × 8 in landscape', width: '10in', height: '8in' },
+      { label: '8 × 10 in portrait', width: '8in', height: '10in' },
+    ],
+    defaultSize: 1,
     firstFile: 'story.typ',
     styleHints: {
       Audience: 'Reading age and who reads it aloud, e.g. read aloud to ages 3–6 by a parent.',
@@ -87,13 +120,29 @@ export const TEMPLATES: BookTemplate[] = [
     id: 'blank',
     name: 'Blank',
     description: 'A title page and one chapter. Everything else is up to you.',
-    details: 'A5 · Libertinus Serif',
+    details: 'Libertinus Serif',
+    sizes: [
+      { label: 'A5 (148 × 210 mm)', width: '148mm', height: '210mm' },
+      { label: 'A4 (210 × 297 mm)', width: '210mm', height: '297mm' },
+      { label: 'US Letter (8.5 × 11 in)', width: '8.5in', height: '11in' },
+      { label: '6 × 9 in', width: '6in', height: '9in' },
+    ],
+    defaultSize: 0,
     firstFile: 'chapters/01-chapter.typ',
     styleHints: {},
   },
 ];
 
-export type BookInfo = { title: string; author: string; year: string };
+export type BookInfo = { title: string; author: string; year: string; size?: { width: string; height: string } };
+
+const LENGTH = /^(\d{1,4}(\.\d{1,3})?)(in|mm|cm|pt)$/;
+
+/** A page dimension the author typed: a positive Typst length in in/mm/cm/pt, or null. */
+export function typstLength(value: string): string | null {
+  const v = value.replace(/\s+/g, '').toLowerCase();
+  const m = LENGTH.exec(v);
+  return m && parseFloat(m[1]) > 0 ? v : null;
+}
 
 /** A value placed inside a Typst string literal ("..."). */
 export function typstString(value: string): string {
@@ -115,8 +164,15 @@ export function bookFolderName(title: string): string {
 /** The files of a template, ready to write. Placeholders only appear inside Typst strings. */
 export function templateFiles(template: BookTemplate, info: BookInfo): { path: string; text: string }[] {
   const prefix = `./${template.id}/`;
+  const size = info.size ?? template.sizes[template.defaultSize];
+  const width = typstLength(size.width);
+  const height = typstLength(size.height);
+  if (!width || !height) throw new Error(`Not a page size: ${size.width} × ${size.height}`);
   const fill = (text: string) =>
     text
+      // Lengths are validated above; they go into the markup as they are.
+      .replaceAll('{{width}}', width)
+      .replaceAll('{{height}}', height)
       .replaceAll('{{title}}', typstString(info.title))
       .replaceAll('{{author}}', typstString(info.author))
       .replaceAll('{{year}}', typstString(info.year));

@@ -268,8 +268,16 @@ pub fn run() {
                     true,
                     Some("CmdOrCtrl+Shift+N"),
                 )?;
+                let new_chapter = MenuItem::with_id(
+                    handle,
+                    "new-chapter",
+                    "New Chapter…",
+                    true,
+                    Some("CmdOrCtrl+Alt+N"),
+                )?;
                 file.prepend_items(&[
                     &new_book,
+                    &new_chapter,
                     &PredefinedMenuItem::separator(handle)?,
                     &export,
                     &PredefinedMenuItem::separator(handle)?,
@@ -297,7 +305,14 @@ pub fn run() {
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             if id.starts_with("zoom-")
-                || ["settings", "export-pdf", "new-book", "typst-guide"].contains(&id)
+                || [
+                    "settings",
+                    "export-pdf",
+                    "new-book",
+                    "new-chapter",
+                    "typst-guide",
+                ]
+                .contains(&id)
             {
                 let _ = app.emit_to(EventTarget::webview("main"), "menu", id);
             }

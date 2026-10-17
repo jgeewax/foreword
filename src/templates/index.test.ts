@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookFolderName, TEMPLATES, templateFiles, typstString } from './index';
+import { bookFolderName, TEMPLATES, templateFiles, typstLength, typstString } from './index';
 
 const info = { title: 'The "Quiet" Harbour \\ Part One', author: 'Ada Example', year: '2026' };
 
@@ -31,6 +31,23 @@ describe('templateFiles', () => {
     const guide = templateFiles(TEMPLATES[0], info).find((f) => f.path === 'WRITING_STYLE.md')!.text;
     expect(guide.startsWith(`# Writing style: ${info.title}`)).toBe(true);
     expect(guide).toContain('#scene-break()');
+  });
+});
+
+describe('page sizes', () => {
+  it('every template offers sizes and uses the chosen one', () => {
+    for (const t of TEMPLATES) {
+      expect(t.sizes.length, t.id).toBeGreaterThan(1);
+      const main = templateFiles(t, { ...info, size: { width: '5.5in', height: '210mm' } }).find((f) => f.path === 'main.typ')!.text;
+      expect(main, t.id).toMatch(/width: 5\.5in, height: 210mm/);
+    }
+  });
+
+  it('accepts only plain positive lengths', () => {
+    expect(typstLength(' 6 in ')).toBe('6in');
+    expect(typstLength('148.5mm')).toBe('148.5mm');
+    for (const bad of ['6', '0in', '-6in', '6in)', '6in + 1in', 'calc(1)', '12345in']) expect(typstLength(bad), bad).toBeNull();
+    expect(() => templateFiles(TEMPLATES[0], { ...info, size: { width: '6in); #panic(', height: '9in' } })).toThrow();
   });
 });
 

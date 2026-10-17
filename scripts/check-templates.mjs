@@ -13,12 +13,14 @@ const pngDir = process.argv.includes('--png') ? process.argv[process.argv.indexO
 // Same escaping as typstString() in src/templates/index.ts.
 const str = (v) => v.replace(/\s+/g, ' ').trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 const values = { title: 'The "Quiet" Harbour \\ Part One', author: 'Ada Example', year: '2026' };
+// Raw lengths (validated in the app); a size every template should handle.
+const raw = { width: '5.5in', height: '8.5in' };
 
 function fill(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) fill(p);
-    else if (p.endsWith('.typ')) writeFileSync(p, readFileSync(p, 'utf8').replace(/\{\{(\w+)\}\}/g, (_, k) => str(values[k])));
+    else if (p.endsWith('.typ')) writeFileSync(p, readFileSync(p, 'utf8').replace(/\{\{(\w+)\}\}/g, (_, k) => raw[k] ?? str(values[k])));
   }
 }
 

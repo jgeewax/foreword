@@ -6,11 +6,11 @@
 #let accent = rgb("#1f5fa8")
 #let in-body = state("in-body", false)
 
-#let book(title: "", author: "", body) = {
+#let book(title: "", author: "", width: 7.5in, height: 9.25in, body) = {
   set document(title: title, author: author)
   set page(
-    width: 7.5in,
-    height: 9.25in,
+    width: width,
+    height: height,
     margin: (inside: 1in, outside: 0.8in, top: 0.9in, bottom: 0.9in),
     header: context {
       if not in-body.get() { return }

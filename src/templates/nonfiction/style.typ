@@ -5,11 +5,11 @@
 
 #let in-body = state("in-body", false)
 
-#let book(title: "", author: "", body) = {
+#let book(title: "", author: "", width: 6in, height: 9in, body) = {
   set document(title: title, author: author)
   set page(
-    width: 6in,
-    height: 9in,
+    width: width,
+    height: height,
     margin: (inside: 0.9in, outside: 0.7in, top: 0.85in, bottom: 0.9in),
     header: context {
       if not in-body.get() { return }

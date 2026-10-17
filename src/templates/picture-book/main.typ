@@ -5,7 +5,8 @@
 #let title = "{{title}}"
 #let author = "{{author}}"
 
-#show: book.with(title: title, author: author)
+// The page (trim) size: change both numbers to resize every page.
+#show: book.with(title: title, author: author, width: {{width}}, height: {{height}})
 
 #cover(title: title, author: author, picture: "illustrations/sunny-day.svg")
 

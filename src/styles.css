@@ -260,6 +260,9 @@ button.indicator:hover { background: var(--bg-3); }
 .history-diff .modal-header h1 { font-family: "SF Mono", Menlo, monospace; font-size: 13px; }
 .history-diff-editor { flex: 1; min-height: 0; }
 
+.modal.prompt { width: min(440px, calc(100% - 32px)); }
+.prompt .modal-body { padding-top: 12px; }
+
 /* new book */
 .modal.new-book { width: min(720px, calc(100% - 32px)); }
 .new-book .modal-body { padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -274,6 +277,10 @@ button.indicator:hover { background: var(--bg-3); }
 .field input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; outline: none; }
 .field input:focus { border-color: var(--accent); }
 .field-row { display: flex; gap: 8px; align-items: center; }
+.field select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.custom-size { display: inline-flex; gap: 6px; align-items: center; }
+.custom-size input { width: 64px; }
+.field-note { font-size: 11px; color: var(--muted); font-weight: normal !important; }
 .field-row .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; padding: 5px 8px; background: var(--bg-2); border-radius: 6px; }
 
 /* sidebar tabs + history */
