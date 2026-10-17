@@ -64,3 +64,10 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - Hand a task its own History branch, so finishing it can be reviewed as one change ("Review task changes" diff) and undone as one.
 - Suggest a new task when the context meter goes red, or when a message drifts away from the task's goal.
 - Rename, archive and delete tasks; search them.
+
+## Review
+- Comments in the preview: a margin bubble next to the rendered passage. Click it to see and reply.
+- Reply threads on a comment, and the assistant's per-comment answer shown under it.
+- Address comments one at a time with Options mode (three versions each), for picky passages.
+- Export comments as a PDF with annotations, or import them from one (an editor's PDF markup → review comments).
+- Share a review: other people add comments through a shared link (needs a server, or comments in Git).

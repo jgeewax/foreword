@@ -11,6 +11,7 @@ export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' 
   const ws = useStore(studio.store, (s) => s.workspace);
   const exporting = useStore(studio.store, (s) => s.exporting);
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
+  const reviewing = useStore(studio.store, (s) => s.review.mode);
   return (
     <header className="toolbar">
       <button className="icon" title="Toggle explorer (⌘B)" onClick={() => onToggle('explorer')}>
@@ -25,6 +26,11 @@ export function Toolbar({ onToggle }: { onToggle: (pane: 'explorer' | 'preview' 
         </>
       )}
       <span className="spacer" />
+      {ws && (
+        <button className={reviewing ? 'on' : ''} title="Review mode: read-only editor; select text to comment (⌥⌘M)" onClick={() => studio.setReviewMode(!reviewing)}>
+          {reviewing ? 'Reviewing' : 'Review'}
+        </button>
+      )}
       {ws && (
         <button title="Export the book to PDF (⇧⌘E)" disabled={exporting} onClick={() => void studio.exportPdf()}>
           {exporting ? 'Exporting…' : 'Export PDF'}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { studio } from '../app/studio';
 import { monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
+import { locate } from '../app/review';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
@@ -54,6 +55,7 @@ export function EditorPane() {
         { label: hasSelection ? 'Ask the Assistant About This' : 'Ask the Assistant Here', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
         hasSelection && { label: 'Get Three Versions…', action: () => void studio.optionsForSelection() },
         hasSelection && { label: 'Explain This', action: () => void studio.explainSelection() },
+        hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
         'separator',
         'cut',
         'copy',
@@ -96,6 +98,65 @@ export function EditorPane() {
         lensChanged.fire(undefined as never);
       }
     });
+    // Review comments: highlight their passages, with the comment on hover.
+    const commentMarks = editor.createDecorationsCollection();
+    const paintComments = () => {
+      const path = studio.state.active;
+      const model = editor.getModel();
+      if (!path || !model) return commentMarks.clear();
+      const text = model.getValue();
+      commentMarks.set(
+        studio.state.review.comments
+          .filter((c) => c.path === path && c.status === 'open')
+          .flatMap((c) => {
+            const at = locate(text, c);
+            if (!at) return [];
+            return [
+              {
+                range: monaco.Range.fromPositions(model.getPositionAt(at[0]), model.getPositionAt(at[1])),
+                options: { inlineClassName: 'review-highlight', hoverMessage: { value: `**Comment ${c.id}:** ${c.text}` }, linesDecorationsClassName: 'review-line' },
+              },
+            ];
+          }),
+      );
+    };
+    let lastReview = studio.state.review;
+    let paintTimer: number | undefined;
+    const offReview = studio.store.subscribe(() => {
+      if (studio.state.review === lastReview) return;
+      lastReview = studio.state.review;
+      editor.updateOptions({ readOnly: lastReview.mode });
+      paintComments();
+    });
+    editor.onDidChangeModel(() => paintComments());
+    editor.onDidChangeModelContent(() => {
+      clearTimeout(paintTimer);
+      paintTimer = window.setTimeout(paintComments, 300);
+    });
+    // In review mode, a "Comment" button floats by the selection.
+    const commentButton = document.createElement('button');
+    commentButton.className = 'comment-widget';
+    commentButton.textContent = '💬 Comment';
+    commentButton.title = 'Comment on the selection (⌥⌘M)';
+    commentButton.onmousedown = (e) => e.preventDefault();
+    commentButton.onclick = () => void studio.addComment();
+    let widgetAt: monaco.IPosition | null = null;
+    const commentWidget: monaco.editor.IContentWidget = {
+      getId: () => 'studio.comment',
+      getDomNode: () => commentButton,
+      getPosition: () => (widgetAt ? { position: widgetAt, preference: [monaco.editor.ContentWidgetPositionPreference.ABOVE, monaco.editor.ContentWidgetPositionPreference.BELOW] } : null),
+    };
+    editor.addContentWidget(commentWidget);
+    editor.onDidChangeCursorSelection((e) => {
+      widgetAt = studio.state.review.mode && !e.selection.isEmpty() ? e.selection.getEndPosition() : null;
+      editor.layoutContentWidget(commentWidget);
+    });
+    editor.addAction({
+      id: 'studio.addComment',
+      label: 'Add Review Comment',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyM],
+      run: () => void studio.addComment(),
+    });
     editor.onKeyDown((e) => {
       const ts = e.browserEvent.timeStamp;
       studio.perf.keyDown(ts > 1e12 ? ts : performance.timeOrigin + ts);
@@ -107,6 +168,8 @@ export function EditorPane() {
     const off = studio.events.on('focus-editor', () => editor.focus());
     return () => {
       off();
+      offReview();
+      editor.removeContentWidget(commentWidget);
       offLens();
       lenses.dispose();
       runCommand.dispose();

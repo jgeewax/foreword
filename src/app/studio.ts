@@ -35,6 +35,7 @@ import { referencesTo, removeIncludes, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { asksTaskDone, contextTokens, itemsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
+import { addressPrompt, locate, makeComment, nextCommentId, parseAddressed, parseReview, REVIEW_FILE, serializeReview, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
@@ -67,7 +68,7 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 /** Identifies a selection for "leave it out" (same place and same text). */
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
-export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string };
+export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };
 
 /** Where a picked option goes: the passage as it stands in the buffer (1-based positions). */
 export type OptionTarget = { path: string; start: { line: number; column: number }; end: { line: number; column: number }; text: string };
@@ -140,8 +141,10 @@ export type StudioState = {
   code: CodeState;
   /** TODOs left in the book's files. */
   todos: Todo[];
+  /** Review comments (beside the text, in .typst-studio/review.json) and review mode (read-only editor). */
+  review: { comments: ReviewComment[]; mode: boolean };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'history' | 'code' | 'todos';
+  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review';
 };
 
 const initialState: StudioState = {
@@ -191,6 +194,7 @@ const initialState: StudioState = {
   history: initialHistory,
   code: initialCode,
   todos: [],
+  review: { comments: [], mode: false },
   sidebar: 'files',
 };
 
@@ -418,6 +422,7 @@ export class Studio {
     void this.history.start(this.historyExcludes());
     void this.code.scan();
     void this.scanTodos();
+    void this.loadReview();
     void this.startTypst();
     void this.startAgent();
 
@@ -1075,6 +1080,128 @@ export class Studio {
     }
   }
 
+  // ---- review comments -----------------------------------------------------------------
+
+  private reviewTurn: string[] | null = null;
+
+  async loadReview() {
+    const exists = (this.state.workspace?.files ?? []).includes(REVIEW_FILE);
+    const comments = exists ? parseReview(await ipc.fsRead(REVIEW_FILE).then((r) => r.text, () => '')) : [];
+    this.store.set((s) => ({ review: { ...s.review, comments } }));
+  }
+
+  private async saveReview(comments: ReviewComment[]) {
+    this.store.set((s) => ({ review: { ...s.review, comments } }));
+    try {
+      const hash = await ipc.fsHash(REVIEW_FILE);
+      if (hash === null) await ipc.fsMkdir('.typst-studio').catch(() => {});
+      await ipc.fsWrite(REVIEW_FILE, serializeReview(comments), hash);
+      if (hash === null) await this.refreshFiles();
+    } catch (e) {
+      this.toast(`Couldn't save the comments: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** The current text of a file: its buffer if open, else from disk. */
+  private async currentText(path: string): Promise<string | null> {
+    const doc = this.docs?.get(path);
+    if (doc) return doc.model.getValue();
+    return ipc.fsRead(path).then((r) => r.text, () => null);
+  }
+
+  /** Review mode: the editor is read-only, and selecting text offers a comment. */
+  setReviewMode(on: boolean) {
+    this.store.set((s) => ({ review: { ...s.review, mode: on } }));
+    this.editor?.updateOptions({ readOnly: on });
+    if (on) this.showSidebar('review');
+  }
+
+  /** Comment on the editor's selection. */
+  async addComment() {
+    const path = this.state.active;
+    const editor = this.editor;
+    const model = editor?.getModel();
+    const range = editor?.getSelection();
+    if (!path || !model || !range || range.isEmpty()) return this.toast('Select the passage you want to comment on first.');
+    const quote = model.getValueInRange(range);
+    const text = await this.prompt({
+      title: 'Add a comment',
+      label: `On “${quote.replace(/\s+/g, ' ').slice(0, 80)}${quote.length > 80 ? '…' : ''}”`,
+      placeholder: 'What should change here?',
+      okLabel: 'Add comment',
+      multiline: true,
+      help: '⌘⏎ to add. Comments are kept beside the text (not in it) until you address them.',
+    });
+    if (!text?.trim()) return;
+    const full = model.getValue();
+    const comment = makeComment(nextCommentId(this.state.review.comments), path, full, model.getOffsetAt(range.getStartPosition()), model.getOffsetAt(range.getEndPosition()), text);
+    await this.saveReview([...this.state.review.comments, comment]);
+    editor!.focus();
+  }
+
+  async editComment(id: string) {
+    const c = this.state.review.comments.find((x) => x.id === id);
+    if (!c) return;
+    const text = await this.prompt({ title: 'Edit comment', label: 'Comment', value: c.text, okLabel: 'Save', multiline: true });
+    if (text?.trim()) await this.saveReview(this.state.review.comments.map((x) => (x.id === id ? { ...x, text: text.trim() } : x)));
+  }
+
+  async deleteComment(id: string) {
+    await this.saveReview(this.state.review.comments.filter((x) => x.id !== id));
+  }
+
+  async setCommentStatus(id: string, status: ReviewComment['status']) {
+    await this.saveReview(this.state.review.comments.map((x) => (x.id === id ? { ...x, status, resolved: status === 'resolved' ? Date.now() : undefined } : x)));
+  }
+
+  async clearResolved() {
+    await this.saveReview(this.state.review.comments.filter((x) => x.status !== 'resolved'));
+  }
+
+  /** Where a comment's passage is now (1-based lines), or null if it has changed. */
+  async locateComment(c: ReviewComment): Promise<{ start: number; end: number; line: number } | null> {
+    const text = await this.currentText(c.path);
+    const at = text == null ? null : locate(text, c);
+    return at && text != null ? { start: at[0], end: at[1], line: text.slice(0, at[0]).split('\n').length } : null;
+  }
+
+  async goToComment(c: ReviewComment) {
+    const at = await this.locateComment(c);
+    await this.openAt(c.path, at?.line ?? c.line);
+    const model = this.editor?.getModel();
+    if (at && model) this.editor!.setSelection(monaco.Range.fromPositions(model.getPositionAt(at.start), model.getPositionAt(at.end)));
+  }
+
+  /** Send every open comment to the assistant in one message; resolve the ones it reports as addressed. */
+  async addressComments() {
+    const open = this.state.review.comments.filter((c) => c.status === 'open');
+    if (!open.length || this.state.agent.running) return;
+    const located = [];
+    for (const comment of open) located.push({ comment, line: (await this.locateComment(comment))?.line ?? null });
+    if (this.state.agent.mode !== 'write') await this.setMode('write');
+    this.events.emit('show-agent-pane');
+    this.reviewTurn = open.map((c) => c.id);
+    if (!(await this.send(addressPrompt(located)))) this.reviewTurn = null;
+  }
+
+  private async afterReviewTurn() {
+    const ids = this.reviewTurn;
+    this.reviewTurn = null;
+    if (!ids) return;
+    const last = [...this.state.agent.items].reverse().find((i) => i.kind === 'assistant');
+    const addressed = last && last.kind === 'assistant' ? parseAddressed(last.text).filter((id) => ids.includes(id)) : [];
+    if (addressed.length) {
+      await this.saveReview(this.state.review.comments.map((c) => (addressed.includes(c.id) ? { ...c, status: 'resolved', resolved: Date.now() } : c)));
+    }
+    const left = ids.length - addressed.length;
+    this.pushItem({
+      kind: 'notice',
+      id: uid('n'),
+      tone: 'info',
+      text: `Review: ${addressed.length} of ${ids.length} comment${ids.length > 1 ? 's' : ''} addressed and marked resolved${left ? `; ${left} still open (see the Review tab)` : ''}.`,
+    });
+  }
+
   /** Open a file with the cursor on a line (1-based). */
   async openAt(path: string, line: number) {
     await this.openFile(path);
@@ -1099,7 +1226,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.composerDraft = '';
     this.code.reset();
-    this.store.set({ todos: [] });
+    this.store.set({ todos: [], review: { comments: [], mode: false } });
     await this.history.stop();
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = null;
@@ -1145,6 +1272,7 @@ export class Studio {
       void this.refreshFiles().then(() => {
         void this.code.scan();
         void this.scanTodos();
+        if (batch.includes(REVIEW_FILE)) void this.loadReview();
       });
       this.history.scheduleSave();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
@@ -1402,6 +1530,7 @@ export class Studio {
     this.store.set((s) => ({ agent: { ...s.agent, ...(typeof patch === 'function' ? patch(s.agent) : patch) } }));
     // What the agent changed in this turn becomes one history version.
     if (wasRunning && !this.state.agent.running) {
+      void this.afterReviewTurn();
       void this.loadTasks();
       void this.refreshContextSize();
       void this.history.afterAgent(this.turnMessage);

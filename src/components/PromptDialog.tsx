@@ -31,17 +31,33 @@ export function PromptDialog() {
         <div className="modal-body">
           <label className="field">
             <span>{request.label}</span>
-            <input
-              autoFocus
-              value={value}
-              placeholder={request.placeholder}
-              onChange={(e) => setValue(e.target.value)}
-              onFocus={(e) => {
-                // Select the name without the extension, like Finder.
-                const dot = e.currentTarget.value.lastIndexOf('.');
-                e.currentTarget.setSelectionRange(0, dot > 0 ? dot : e.currentTarget.value.length);
-              }}
-            />
+            {request.multiline ? (
+              <textarea
+                autoFocus
+                rows={4}
+                value={value}
+                placeholder={request.placeholder}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && value.trim()) {
+                    e.preventDefault();
+                    studio.answerPrompt(value);
+                  }
+                }}
+              />
+            ) : (
+              <input
+                autoFocus
+                value={value}
+                placeholder={request.placeholder}
+                onChange={(e) => setValue(e.target.value)}
+                onFocus={(e) => {
+                  // Select the name without the extension, like Finder.
+                  const dot = e.currentTarget.value.lastIndexOf('.');
+                  e.currentTarget.setSelectionRange(0, dot > 0 ? dot : e.currentTarget.value.length);
+                }}
+              />
+            )}
           </label>
           {request.help && <p className="settings-help">{request.help}</p>}
         </div>

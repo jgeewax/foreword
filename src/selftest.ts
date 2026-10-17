@@ -1020,6 +1020,82 @@ async function menuChecks() {
   return out;
 }
 
+/** Review mode: comment on passages, they follow edits, the assistant addresses them all. */
+async function reviewChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const original = (await ipc.fsRead(file)).text;
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const select = (phrase: string) => {
+    const at = model.getValue().indexOf(phrase);
+    editor.setSelection(monaco.Range.fromPositions(model.getPositionAt(at), model.getPositionAt(at + phrase.length)));
+    editor.revealRangeInCenter(editor.getSelection()!);
+  };
+
+  studio.setReviewMode(true);
+  editor.setPosition({ lineNumber: 3, column: 1 });
+  editor.trigger('selftest', 'type', { text: 'xyz' });
+  await sleep(200);
+  out.readOnly = { unchanged: model.getValue() === original, readOnlyOption: editor.getOption(monaco.editor.EditorOption.readOnly) };
+
+  select('is singular');
+  await sleep(400);
+  const widget = document.querySelector<HTMLButtonElement>('.comment-widget');
+  out.widget = { shown: !!widget && widget.getBoundingClientRect().width > 0 };
+  widget?.click();
+  await waitFor(() => !!studio.state.prompt, 3000, 'prompt').catch(() => {});
+  await sleep(150);
+  out.multiline = !!document.querySelector('.prompt textarea');
+  studio.answerPrompt('Say in one sentence why being singular matters here.');
+  await sleep(500);
+  select('so there are at most two eigenvalues');
+  const p2 = studio.addComment();
+  await answerPrompt('Also state the general fact for an n by n matrix.');
+  await p2;
+  await sleep(600);
+  out.comments = studio.state.review.comments.map((c) => `${c.id} ${c.path}:${c.line} “${c.quote}” → ${c.text}`);
+  out.file = (await ipc.fsRead('.typst-studio/review.json').then((r) => JSON.parse(r.text).comments.length, () => null));
+  out.highlights = document.querySelectorAll('.review-highlight').length;
+  studio.showSidebar('review');
+  await sleep(500);
+  out.panel = [...document.querySelectorAll('.review-item .review-text')].map((e) => e.textContent);
+  out.snapshot = await snap('review');
+
+  // Edits above move the passages; the comments follow.
+  studio.setReviewMode(false);
+  editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: 'A new opening line.\n\n' }]);
+  await studio.save();
+  await sleep(400);
+  out.afterEdit = await Promise.all(studio.state.review.comments.map(async (c) => (await studio.locateComment(c))?.line ?? null));
+
+  if (withAgent) {
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+    const policy = studio.state.settings.permissions;
+    studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
+    studio.newSession();
+    await studio.addressComments();
+    await sleep(1000);
+    await waitFor(() => !studio.state.agent.running, 180000, 'review turn').catch(() => {});
+    await sleep(2500);
+    const reply = (studio.state.agent.items.filter((i) => i.kind === 'assistant').pop() as any)?.text ?? '';
+    out.addressed = {
+      statuses: studio.state.review.comments.map((c) => `${c.id}: ${c.status}`),
+      notice: (studio.state.agent.items.filter((i) => i.kind === 'notice').pop() as any)?.text,
+      replyEnd: reply.slice(-120),
+      shownWithoutMarker: !document.querySelector('.msg.assistant:last-of-type')?.textContent?.includes('ADDRESSED'),
+      changed: (await ipc.fsRead(file)).text !== original,
+    };
+    studio.updateSettings({ permissions: policy });
+  }
+  await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  await ipc.fsWrite('.typst-studio/review.json', '{"comments": []}\n', await ipc.fsHash('.typst-studio/review.json'));
+  await sleep(500);
+  studio.showSidebar('files');
+  return out;
+}
+
 /** Task-based conversations: goal, done check, finish, switch back, compact. */
 async function taskChecks() {
   const out: Record<string, unknown> = {};
@@ -1768,6 +1844,10 @@ export async function runSelftest(launch: LaunchOptions) {
     }
     if (want('probe')) result.probe = await previewProbe();
     if (want('sessions')) result.sessions = await sessionProbe();
+    if (launch.selftestEdits && want('review')) {
+      log('review');
+      result.review = await reviewChecks(launch.selftestAgent);
+    }
     if (launch.selftestEdits && launch.selftestAgent && want('tasks')) {
       log('tasks');
       result.tasks = await taskChecks();

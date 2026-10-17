@@ -7,6 +7,7 @@ describe('the task-done marker', () => {
     expect(asksTaskDone('Changed the heading.\n**TASK COMPLETE?**\n')).toBe(true);
     expect(asksTaskDone('Is the TASK COMPLETE? Not yet.')).toBe(false);
     expect(withoutMarker(`Changed the heading.\n\n${TASK_MARKER}\n`)).toBe('Changed the heading.');
+    expect(asksTaskDone(`Done.\n\n${TASK_MARKER}\nADDRESSED: c1`)).toBe(true);
   });
 
   it('is explained in the instructions', () => {

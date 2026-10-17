@@ -351,6 +351,31 @@ pane top (off by 0 pt).
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
+### Review comments (first version)
+
+- **Storage:** comments live beside the text in `.typst-studio/review.json`, in
+  the book so they travel with it. The source stays clean.
+- **Anchoring:** each comment keeps the quoted passage, 32 characters of
+  context either side, and a line hint, like a web annotation's
+  TextQuoteSelector. Re-anchoring picks the occurrence whose context and line
+  match best. A short quote (< 20 chars) only re-anchors if some context
+  matches; otherwise it shows "text changed" rather than jumping to the same
+  phrase elsewhere.
+- **Review mode:** the editor goes read-only and a floating Comment button
+  follows the selection. ⌥⌘M and right-click → Add Comment work in any mode,
+  and preview selections work through the existing mapping. Passages are
+  highlighted, with the comment on hover. The Review tab can go to, edit,
+  resolve/reopen and delete comments, and show or remove resolved ones.
+- **Addressing:** "Address all with the assistant" sends every open comment
+  (id, file, current line, quote, text) in one message, in Write mode. The
+  reply ends with `ADDRESSED: c1, c3`, and those comments are marked resolved.
+  Marker lines are read and hidden as whole lines anywhere near the end of a
+  reply: the model put the task marker after it.
+- Verified in-app with gemini-3.8-flash:
+  - Read-only mode, the widget and the multi-line dialog.
+  - Two comments saved and highlighted; they followed an insertion above.
+  - Both addressed and resolved; markers hidden.
+
 ### Task-based conversations
 
 - **Each OpenCode session is a task.** The header's task menu lists this

@@ -292,6 +292,27 @@ button.indicator:hover { background: var(--bg-3); }
 .task-check { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; padding: 8px; border: 1px solid var(--accent); border-radius: 8px; background: var(--bg-2); }
 .task-check > span { font-weight: 600; margin-right: auto; }
 
+/* review */
+.review-panel { overflow-y: auto; flex: 1; padding: 6px 0 12px; }
+.review-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 8px; }
+.review-actions .on, .toolbar button.on { border-color: var(--accent); color: var(--accent); }
+.review-empty { padding: 4px 10px; line-height: 1.45; }
+.review-item { margin: 4px 8px; padding: 6px 8px; border-radius: 6px; border-left: 3px solid #e3a008; background: var(--bg); cursor: default; }
+.review-item.resolved { border-left-color: var(--good); opacity: 0.7; }
+.review-item:hover { background: var(--bg-3); }
+.review-quote { font-size: 11.5px; color: var(--muted); font-style: italic; display: flex; gap: 6px; justify-content: space-between; }
+.review-where { font-style: normal; white-space: nowrap; }
+.review-text { margin-top: 3px; line-height: 1.4; white-space: pre-wrap; }
+.review-item-actions { display: none; gap: 10px; margin-top: 4px; }
+.review-item:hover .review-item-actions { display: flex; }
+.review-item-actions .link { font-size: 11.5px; }
+.review-footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; font-size: 11.5px; color: var(--muted); }
+.review-highlight { background: rgba(227, 160, 8, 0.22); border-bottom: 1px solid rgba(227, 160, 8, 0.8); }
+.review-line { background: #e3a008; width: 3px !important; margin-left: 3px; }
+.comment-widget { white-space: nowrap; font-size: 11.5px; padding: 2px 8px; border-radius: 12px; background: var(--accent); color: var(--accent-fg); border: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); cursor: pointer; }
+.prompt textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; outline: none; resize: vertical; }
+.prompt textarea:focus { border-color: var(--accent); }
+
 /* todos */
 .todo-panel { overflow-y: auto; flex: 1; padding: 4px 0 12px; }
 .todo-panel.empty { padding: 12px; line-height: 1.45; }

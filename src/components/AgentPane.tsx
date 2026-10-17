@@ -11,6 +11,7 @@ import { PermissionsMenu } from './Permissions';
 import { TypstGuide } from './TypstGuide';
 import { ContextMeter, TaskMenu } from './TaskMenu';
 import { withoutMarker } from '../app/tasks';
+import { withoutAddressed } from '../app/review';
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -125,7 +126,7 @@ function ItemBody({ item }: { item: ChatItem }) {
       if (item.options) return <OptionsReply item={item} />;
       return (
         <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
-          <Markdown text={withoutMarker(item.text)} />
+          <Markdown text={withoutAddressed(withoutMarker(item.text))} />
           {item.taskCheck === 'ask' && <TaskCheck id={item.id} />}
         </div>
       );

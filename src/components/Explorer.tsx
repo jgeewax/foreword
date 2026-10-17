@@ -6,6 +6,7 @@ import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
 import { TodoPanel } from './TodoPanel';
+import { ReviewPanel } from './ReviewPanel';
 import { HistoryPanel } from './HistoryPanel';
 
 function FileTree() {
@@ -124,15 +125,17 @@ function Stacked() {
   const todoCount = useStore(studio.store, (s) => s.todos.length);
   const showCode = hasCode && view === 'code';
   const showTodos = todoCount > 0 && view === 'todos';
+  const hasReview = useStore(studio.store, (s) => s.review.comments.length > 0 || s.review.mode);
+  const showReview = hasReview && view === 'review';
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-sidebar', storage: localStorage });
   return (
     <Group className="sidebar-stack" orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
       <Panel id="files" minSize="60px">
         <div className="sidebar-section">
           <header className="pane-header">
-            {hasCode || todoCount > 0 ? (
+            {hasCode || todoCount > 0 || hasReview ? (
               <div className="sidebar-tabs" role="tablist">
-                <button role="tab" aria-selected={!showCode && !showTodos} className={!showCode && !showTodos ? 'active' : ''} onClick={() => studio.showSidebar('files')}>
+                <button role="tab" aria-selected={!showCode && !showTodos && !showReview} className={!showCode && !showTodos && !showReview ? 'active' : ''} onClick={() => studio.showSidebar('files')}>
                   {ws?.name ?? 'Files'}
                 </button>
                 {hasCode && (
@@ -145,19 +148,24 @@ function Stacked() {
                     To do {todoCount}
                   </button>
                 )}
+                {hasReview && (
+                  <button role="tab" aria-selected={showReview} className={showReview ? 'active' : ''} onClick={() => studio.showSidebar('review')}>
+                    Review
+                  </button>
+                )}
               </div>
             ) : (
               <span className="pane-title">{ws?.name ?? 'Files'}</span>
             )}
             <span className="spacer" />
-            {!showCode && !showTodos && (
+            {!showCode && !showTodos && !showReview && (
               <>
                 <NewChapterButton />
                 <RefreshButton />
               </>
             )}
           </header>
-          {showCode ? <CodePanel /> : showTodos ? <TodoPanel /> : <FileTree />}
+          {showCode ? <CodePanel /> : showTodos ? <TodoPanel /> : showReview ? <ReviewPanel /> : <FileTree />}
         </div>
       </Panel>
       <Separator className="separator separator-h" />
@@ -181,6 +189,8 @@ export function Explorer() {
   const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
   const hasCode = useStore(studio.store, (s) => s.code.cells.length > 0 || s.code.setUp);
   const todoCount = useStore(studio.store, (s) => s.todos.length);
+  const hasReview = useStore(studio.store, (s) => s.review.comments.length > 0 || s.review.mode);
+  const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
   if (placement === 'below') {
     return (
       <section className="pane explorer">
@@ -208,6 +218,11 @@ export function Explorer() {
               To do {todoCount}
             </button>
           )}
+          {hasReview && (
+            <button role="tab" aria-selected={view === 'review'} className={view === 'review' ? 'active' : ''} title="Review comments" onClick={() => studio.showSidebar('review')}>
+              Review {reviewOpen || ''}
+            </button>
+          )}
         </div>
         {view === 'files' ? (
           <>
@@ -218,7 +233,7 @@ export function Explorer() {
           <PlacementButton to="below" />
         ) : null}
       </header>
-      {view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : view === 'code' ? <CodePanel /> : <TodoPanel />}
+      {view === 'files' ? <FileTree /> : view === 'history' ? <HistoryPanel /> : view === 'code' ? <CodePanel /> : view === 'todos' ? <TodoPanel /> : <ReviewPanel />}
     </section>
   );
 }

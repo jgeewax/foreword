@@ -18,16 +18,18 @@ The author works in tasks: each conversation has one goal.
 ${TASK_MARKER}
 Typst Studio shows the author buttons to confirm. Don't use that line at any other time.`;
 
-const MARKER_LINE = /\n?[ \t]*[*_`]*TASK COMPLETE\?[*_`]*[ \t]*$/;
+// A whole line; other marker lines (e.g. ADDRESSED:) may come after it.
+const MARKER_LINE = /^[ \t]*[*_`]*TASK COMPLETE\?[*_`]*[ \t]*$/gm;
 
-/** Whether the reply asks the author to confirm the task is done. */
+/** Whether the reply asks the author to confirm the task is done (in its last few lines). */
 export function asksTaskDone(text: string): boolean {
-  return MARKER_LINE.test(text.trimEnd());
+  const tail = text.trimEnd().split('\n').slice(-4).join('\n');
+  return new RegExp(MARKER_LINE.source, 'm').test(tail);
 }
 
 /** The reply without the marker line (for display). */
 export function withoutMarker(text: string): string {
-  return text.trimEnd().replace(MARKER_LINE, '').trimEnd();
+  return text.replace(MARKER_LINE, '').replace(/\n{3,}/g, '\n\n').trimEnd();
 }
 
 export type TaskRecord = { sessionId: string; status: 'open' | 'done'; doneAt?: number };
