@@ -15,6 +15,9 @@ import { withoutMarker } from '../app/tasks';
 import { withoutAddressed } from '../app/review';
 import { describeTool } from '../app/tool-labels';
 import { parseSlash, slashMatches } from '../app/slash';
+import type { SourceSelection } from '../editor/selection';
+
+const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 function Patch({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
@@ -529,22 +532,49 @@ function PlanActions() {
   );
 }
 
-/** The live selection: sent with the message; click to see it, × to leave it out. */
-function LiveSelectionChip({ live, open, onToggle }: { live: NonNullable<ReturnType<typeof studio.store.get>['agent']['selection']>; open: boolean; onToggle: () => void }) {
-  const sel = live.attachment.selection;
-  const lines = sel.end.line - sel.start.line + 1;
+/**
+ * A passage that goes with the next message: the live selection (it follows the
+ * editor's), or one kept with ⌘I or Keep. Where it's from, and the start of it;
+ * click the text to see all of it, the place to go there.
+ */
+function ContextCard({ selection, live, fromPreview, onKeep, onRemove }: { selection: SourceSelection; live: boolean; fromPreview?: boolean; onKeep?: () => void; onRemove: () => void }) {
+  const [open, setOpen] = useState(false);
+  const title = useStore(studio.store, (s) => s.names.titles[selection.relativePath]);
+  const { relativePath: path, start, end, selectedText } = selection;
+  const lines = !selectedText ? `line ${start.line}, column ${start.column}` : start.line === end.line ? `line ${start.line}` : `lines ${start.line}–${end.line}`;
+  const excerpt = selectedText.replace(/\s+/g, ' ').trim();
   return (
-    <span className={`chip live${open ? ' open' : ''}`} title="Sent with your message. Click to see it.">
-      <button className="chip-main" aria-expanded={open} onClick={onToggle}>
-        <span className="chip-kind">{live.from === 'preview' ? 'From preview' : 'Selected'}</span>
-        {live.attachment.label}
-        <span className="chip-meta">· {lines === 1 ? `${sel.selectedText.length} chars` : `${lines} lines`}</span>
-        <span className="chip-caret">{open ? '▴' : '▾'}</span>
-      </button>
-      <button aria-label="Leave the selection out" title="Leave it out of the next message" onClick={() => studio.dismissSelection()}>
-        ×
-      </button>
-    </span>
+    <div className={`context-card${live ? ' live' : ' kept'}${open ? ' open' : ''}`}>
+      <div className="context-head">
+        {!live && (
+          <span className="context-pin" title="Kept with the chat">
+            <Icon name="pin" size={12} />
+          </span>
+        )}
+        <button className="context-where" title={`${path}, ${lines}: go there`} onClick={() => void studio.revealSelection(selection)}>
+          {title ?? basename(path)}
+          <span className="context-lines"> · {lines}</span>
+        </button>
+        {fromPreview && <span className="context-tag">from the preview</span>}
+        <span className="spacer" />
+        {onKeep && (
+          <button className="context-action" title="Keep it with the chat after you select something else" onClick={onKeep}>
+            <Icon name="pin" size={12} />
+            Keep
+          </button>
+        )}
+        <button className="context-action chip-remove" aria-label={live ? 'Leave the selection out' : `Remove ${path}, ${lines}`} title={live ? 'Leave it out of the next message' : 'Remove'} onClick={onRemove}>
+          <Icon name="close" size={11} />
+        </button>
+      </div>
+      {excerpt ? (
+        <button className="context-text" aria-expanded={open} title={open ? 'Show less' : 'Show all of it'} onClick={() => setOpen((o) => !o)}>
+          {open ? selectedText.replace(/\n$/, '') : excerpt}
+        </button>
+      ) : (
+        <div className="context-text empty">Where the cursor is (no text selected).</div>
+      )}
+    </div>
   );
 }
 
@@ -557,7 +587,6 @@ function Composer() {
   const live = useStore(studio.store, (s) => s.agent.selection);
   useStore(studio.store, (s) => s.agent.selectionDismissed);
   const liveShown = !!live && studio.isSelectionIncluded() && !attachments.some((a) => a.label === live.attachment.label);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [text, setTextState] = useState(() => studio.composerDraft);
   const setText = (t: string) => {
     studio.composerDraft = t;
@@ -615,19 +644,22 @@ function Composer() {
       <QueuedMessages />
       <PlanActions />
       {(attachments.length > 0 || liveShown) && (
-        <div className="chips">
+        <div className="context-cards">
           {attachments.map((a) => (
-            <span key={a.id} className="chip" title={a.selection.selectedText || 'cursor position'}>
-              {a.label}
-              <button className="chip-remove" aria-label={`Remove ${a.label}`} onClick={() => studio.removeAttachment(a.id)}>
-                <Icon name="close" size={11} />
-              </button>
-            </span>
+            <ContextCard key={a.id} selection={a.selection} live={false} onRemove={() => studio.removeAttachment(a.id)} />
           ))}
-          {liveShown && live && <LiveSelectionChip live={live} open={previewOpen} onToggle={() => setPreviewOpen((o) => !o)} />}
+          {liveShown && live && (
+            <ContextCard
+              key={live.attachment.label}
+              selection={live.attachment.selection}
+              live
+              fromPreview={live.from === 'preview'}
+              onKeep={() => studio.keepSelection()}
+              onRemove={() => studio.dismissSelection()}
+            />
+          )}
         </div>
       )}
-      {liveShown && live && previewOpen && <pre className="selection-preview">{live.attachment.selection.selectedText}</pre>}
       {showSlash && (
         <div className="slash-menu" role="listbox" aria-label="Commands">
           {matches.map((c, i) => (

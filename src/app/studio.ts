@@ -2603,6 +2603,25 @@ export class Studio {
     return [...attachments, ...live];
   }
 
+  /** Keep the live selection with the chat, after the editor's selection moves on. */
+  keepSelection() {
+    const live = this.state.agent.selection;
+    if (!live) return;
+    const { label, selection } = live.attachment;
+    this.setAgent((a) => ({ attachments: [...a.attachments.filter((x) => x.label !== label), { id: uid('a'), label, selection }] }));
+  }
+
+  /** Select a passage sent (or to be sent) to the chat, in its file. */
+  async revealSelection(sel: SourceSelection) {
+    await this.openFile(sel.relativePath);
+    const editor = this.editor;
+    if (!editor || this.state.active !== sel.relativePath) return;
+    const range = new monaco.Range(sel.start.line, sel.start.column, sel.end.line, sel.end.column);
+    editor.setSelection(range);
+    editor.revealRangeInCenterIfOutsideViewport(range);
+    editor.focus();
+  }
+
   removeAttachment(id: string) {
     this.setAgent((a) => ({ attachments: a.attachments.filter((x) => x.id !== id) }));
   }

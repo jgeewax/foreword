@@ -485,11 +485,22 @@ pane top (off by 0 pt).
 
 ### Selections go with chat messages (editor or preview)
 
-- **Automatic, like Claude Code:** the editor's current selection appears in
-  the message box as a dashed "Selected" chip (label, length). Clicking it
-  shows the text; × leaves it out of the next message, keyed on place and
-  text, so a different selection comes back. It's sent with every message
-  while selected. ⌘I still pins a selection as a fixed attachment.
+- **Automatic, like Claude Code:** the editor's current selection appears
+  above the message box as a quote card. It's sent with every message while
+  selected.
+- **What the card shows** (it replaced a dashed chip of path:line, which looked
+  odd and showed nothing of the text):
+  - where the text is from, by chapter heading ("Eigenvalues · lines 13–15";
+    the path is in the tooltip);
+  - the start of the text on one line.
+- **What it does:**
+  - clicking the text shows all of it;
+  - clicking the place selects it in the editor again;
+  - × leaves it out of the next message, keyed on place and text, so a
+    different selection comes back;
+  - **Keep** pins it, so it stays after the selection moves on.
+- ⌘I pins a selection directly. Pinned passages use the same card, with a
+  grey bar and a pin instead of the blue bar.
 - **Preview selections:** Tinymist's preview has a real text layer
   (`.typst-text` holds the characters), so a drag there gives text. An init
   script waits for the selection to settle, marks the first and last text
@@ -500,9 +511,10 @@ pane top (off by 0 pt).
      characters (`_ * $ # \`) and typographic quotes and dashes;
   3. if math blocks a full match (the preview shows "λ", the source says
      `lambda`), uses the longest matching start and end;
-  4. selects that range in the editor, labelled "From preview".
+  4. selects that range in the editor, labelled "from the preview".
 - Verified in-app:
-  - The chip, its preview, dismissing and its return.
+  - The card, its full text, dismissing and its return; Keep surviving a new
+    selection; the place selecting the range again; removing a kept one.
   - A message sent without ⌘I carried the selection; the model repeated the
     sentence word for word.
   - A two-run preview selection mapped to the exact source text.

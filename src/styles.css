@@ -230,12 +230,25 @@ button.indicator:hover { background: var(--bg-3); }
 .chip-remove:hover:not(:disabled) { color: var(--fg); }
 .command-chip { display: inline-flex; align-items: center; gap: 2px; }
 .command-chip .chip-remove { padding: 2px; }
-.chip.live { background: transparent; border: 1px dashed var(--accent); padding-left: 0; }
-.chip.live .chip-main { display: inline-flex; gap: 4px; align-items: baseline; padding: 1px 4px 1px 6px; font: inherit; color: inherit; }
-.chip-kind { font-family: -apple-system, system-ui, sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent); }
-.chip-meta { color: var(--muted); }
-.chip-caret { color: var(--muted); font-size: 9px; }
-.selection-preview { margin: 0 0 6px; max-height: 140px; overflow: auto; font: 11px/1.45 "SF Mono", Menlo, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; white-space: pre-wrap; word-wrap: break-word; }
+/* Passages that go with the next message: a quote, with where it's from. */
+.context-cards { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.context-card { position: relative; padding: 4px 6px 5px 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); font-size: 12px; }
+.context-card::before { content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 2px; border-radius: 1px; background: var(--accent); }
+.context-card.kept::before { background: var(--muted); opacity: 0.6; }
+.context-head { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.context-pin { display: inline-grid; color: var(--muted); }
+.context-where { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: none; background: none; font-weight: 600; color: var(--fg); text-align: left; }
+.context-where:hover { color: var(--accent); }
+.context-lines { font-weight: 400; color: var(--muted); }
+.context-tag { flex: none; font-size: 11px; color: var(--accent); }
+.context-action { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border: none; border-radius: 4px; background: none; color: var(--muted); font-size: 11.5px; }
+.context-action:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.context-head .context-action { opacity: 0.75; }
+.context-card:hover .context-head .context-action { opacity: 1; }
+.context-text { display: block; width: 100%; margin-top: 1px; padding: 0; border: none; background: none; text-align: left; color: var(--muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-text:hover { color: var(--fg); }
+.context-text.empty { font-style: normal; }
+.context-card.open .context-text { max-height: 160px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font: 11px/1.45 "SF Mono", Menlo, monospace; color: var(--fg); padding-top: 3px; }
 .tool { font-size: 11.5px; color: var(--muted); }
 .tool summary { display: flex; gap: 6px; align-items: baseline; list-style: none; }
 .tool summary::-webkit-details-marker { display: none; }

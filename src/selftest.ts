@@ -1686,18 +1686,39 @@ async function selectionChecks(withAgent: boolean) {
   const line = model.getLinesContent().findIndex((l) => l.startsWith('The eigenvalues of')) + 1;
   editor.setSelection(new monaco.Range(line, 1, line, model.getLineMaxColumn(line)));
   await sleep(500);
-  out.editor = { selection: studio.state.agent.selection?.attachment.label, from: studio.state.agent.selection?.from, chip: document.querySelector('.chip.live')?.textContent };
-  document.querySelector<HTMLButtonElement>('.chip.live .chip-main')?.click();
-  await sleep(200);
-  out.previewBox = document.querySelector('.selection-preview')?.textContent;
+  const card = () => document.querySelector('.context-card.live');
+  out.editor = {
+    selection: studio.state.agent.selection?.attachment.label,
+    from: studio.state.agent.selection?.from,
+    where: card()?.querySelector('.context-where')?.textContent,
+    excerpt: card()?.querySelector('.context-text')?.textContent?.slice(0, 40),
+  };
   out.snapshotChip = await snap('selection-chip');
-  document.querySelector<HTMLButtonElement>('.chip.live .chip-main')?.click();
-  document.querySelector<HTMLButtonElement>('.chip.live button[aria-label="Leave the selection out"]')?.click();
+  card()?.querySelector<HTMLButtonElement>('.context-text')?.click();
   await sleep(200);
-  out.dismissed = { chip: !!document.querySelector('.chip.live') };
+  out.previewBox = document.querySelector('.context-card.live.open .context-text')?.textContent;
+  out.snapshotOpen = await snap('selection-chip-open');
+  card()?.querySelector<HTMLButtonElement>('.context-text')?.click();
+  card()?.querySelector<HTMLButtonElement>('button[aria-label="Leave the selection out"]')?.click();
+  await sleep(200);
+  out.dismissed = { card: !!card() };
   editor.setSelection(new monaco.Range(line, 1, line, 20));
   await sleep(400);
-  out.backAfterChange = !!document.querySelector('.chip.live');
+  out.backAfterChange = !!card();
+  // Keep: it stays (pinned) when the selection moves on; its place takes you back.
+  [...(card()?.querySelectorAll<HTMLButtonElement>('.context-action') ?? [])].find((b) => b.textContent?.includes('Keep'))?.click();
+  await sleep(200);
+  editor.setSelection(new monaco.Range(1, 1, 1, 6));
+  await sleep(400);
+  out.kept = { kept: document.querySelectorAll('.context-card.kept').length, live: !!card(), attachments: studio.state.agent.attachments.map((a) => a.label) };
+  out.snapshotKept = await snap('selection-kept');
+  document.querySelector<HTMLButtonElement>('.context-card.kept .context-where')?.click();
+  await sleep(300);
+  const back = editor.getSelection();
+  out.goneBack = back && `${back.startLineNumber}:${back.startColumn}-${back.endLineNumber}:${back.endColumn}`;
+  document.querySelector<HTMLButtonElement>('.context-card.kept .chip-remove')?.click();
+  await sleep(200);
+  out.removed = studio.state.agent.attachments.length;
 
   if (withAgent) {
     await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
@@ -1731,7 +1752,7 @@ async function selectionChecks(withAgent: boolean) {
   await waitFor(() => studio.state.agent.selection?.from === 'preview', 8000, 'preview selection').catch(() => {});
   await sleep(300);
   const sel = studio.state.agent.selection;
-  out.preview = { from: sel?.from, label: sel?.attachment.label, text: sel?.attachment.selection.selectedText, active: studio.state.active, chip: document.querySelector('.chip.live')?.textContent };
+  out.preview = { from: sel?.from, label: sel?.attachment.label, text: sel?.attachment.selection.selectedText, active: studio.state.active, card: document.querySelector('.context-card.live .context-head')?.textContent };
   out.snapshotPreviewSel = await snap('selection-from-preview');
   await ipc.previewEval('window.getSelection().removeAllRanges()');
   return out;
