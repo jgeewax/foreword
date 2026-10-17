@@ -66,6 +66,11 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .separator { width: 1px; background: var(--border); position: relative; }
 .separator::after { content: ''; position: absolute; inset: 0 -3px; }
 .separator[data-separator='hover'], .separator[data-separator='active'] { background: var(--accent); }
+.separator.separator-h { width: auto; height: 1px; }
+.separator.separator-h::after { inset: -3px 0; }
+.sidebar-stack { flex: 1; min-height: 0; }
+.sidebar-section { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.sidebar-section .tree { flex: 1; overflow: auto; }
 
 .pane { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg); }
 .pane-header { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--border); background: var(--bg-2); flex: none; }

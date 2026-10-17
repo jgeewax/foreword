@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
+import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { HistoryPanel } from './HistoryPanel';
 
-export function Explorer() {
+function FileTree() {
   const ws = useStore(studio.store, (s) => s.workspace);
-  const view = useStore(studio.store, (s) => s.sidebar);
   const active = useStore(studio.store, (s) => s.active);
   const dirty = useStore(studio.store, (s) => s.dirty);
   const tree = useMemo(() => buildTree(ws?.files ?? []), [ws?.files]);
@@ -46,6 +46,73 @@ export function Explorer() {
       </div>
     ));
 
+  return <div className="tree">{render(tree, 0)}</div>;
+}
+
+const RefreshButton = () => (
+  <button className="icon" title="Refresh" onClick={() => void studio.refreshFiles()}>
+    ↻
+  </button>
+);
+
+function PlacementButton({ to }: { to: 'tab' | 'below' }) {
+  return (
+    <button
+      className="icon"
+      title={to === 'below' ? 'Show History below the files' : 'Show History in its own tab'}
+      aria-label={to === 'below' ? 'Show History below the files' : 'Show History in its own tab'}
+      onClick={() => {
+        studio.updateSettings({ historyPlacement: to });
+        if (to === 'tab') studio.showSidebar('history');
+      }}
+    >
+      {to === 'below' ? '⬓' : '⧉'}
+    </button>
+  );
+}
+
+/** Files and History stacked, with a draggable divider. */
+function Stacked() {
+  const ws = useStore(studio.store, (s) => s.workspace);
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-sidebar', storage: localStorage });
+  return (
+    <Group className="sidebar-stack" orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
+      <Panel id="files" minSize="60px">
+        <div className="sidebar-section">
+          <header className="pane-header">
+            <span className="pane-title">{ws?.name ?? 'Files'}</span>
+            <span className="spacer" />
+            <RefreshButton />
+          </header>
+          <FileTree />
+        </div>
+      </Panel>
+      <Separator className="separator separator-h" />
+      <Panel id="history" defaultSize="40%" minSize="60px">
+        <div className="sidebar-section">
+          <header className="pane-header">
+            <span className="pane-title">History</span>
+            <span className="spacer" />
+            <PlacementButton to="tab" />
+          </header>
+          <HistoryPanel />
+        </div>
+      </Panel>
+    </Group>
+  );
+}
+
+export function Explorer() {
+  const ws = useStore(studio.store, (s) => s.workspace);
+  const view = useStore(studio.store, (s) => s.sidebar);
+  const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
+  if (placement === 'below') {
+    return (
+      <section className="pane explorer">
+        <Stacked />
+      </section>
+    );
+  }
   return (
     <section className="pane explorer">
       <header className="pane-header">
@@ -57,13 +124,9 @@ export function Explorer() {
             History
           </button>
         </div>
-        {view === 'files' && (
-          <button className="icon" title="Refresh" onClick={() => void studio.refreshFiles()}>
-            ↻
-          </button>
-        )}
+        {view === 'files' ? <RefreshButton /> : <PlacementButton to="below" />}
       </header>
-      {view === 'files' ? <div className="tree">{render(tree, 0)}</div> : <HistoryPanel />}
+      {view === 'files' ? <FileTree /> : <HistoryPanel />}
     </section>
   );
 }

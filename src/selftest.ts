@@ -650,6 +650,35 @@ async function onboardingChecks() {
   return out;
 }
 
+async function snap(name: string, target: 'main' | 'preview' = 'main') {
+  try {
+    return await ipc.previewSnapshot(name, target);
+  } catch (e) {
+    return errorMessage(e);
+  }
+}
+
+/** History below the files (layout option). Restores the author's setting. */
+async function layoutChecks() {
+  const saved = studio.state.settings.historyPlacement;
+  studio.updateSettings({ historyPlacement: 'below' });
+  await sleep(500);
+  const out: Record<string, unknown> = {
+    below: {
+      stacked: !!document.querySelector('.explorer .sidebar-stack'),
+      files: !!document.querySelector('.sidebar-stack .tree .tree-row'),
+      history: document.querySelectorAll('.sidebar-stack .history-row').length,
+    },
+    snapshot: await snap('history-below'),
+  };
+  document.querySelector<HTMLButtonElement>('.sidebar-stack button[aria-label="Show History in its own tab"]')?.click();
+  await sleep(300);
+  out.backToTab = { placement: studio.state.settings.historyPlacement, tabShown: studio.state.sidebar === 'history', stacked: !!document.querySelector('.sidebar-stack') };
+  studio.updateSettings({ historyPlacement: saved });
+  studio.showSidebar('files');
+  return out;
+}
+
 /** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
@@ -1026,6 +1055,10 @@ export async function runSelftest(launch: LaunchOptions) {
       };
     }
 
+    if (want('layout')) {
+      log('layout');
+      result.layout = await layoutChecks();
+    }
     if (launch.selftestAgent && want('agent')) {
       log('agent');
       result.agent = await agentTurn(chapter, line);

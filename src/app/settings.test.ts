@@ -45,13 +45,14 @@ describe('settings storage', () => {
   it('defaults to Enter and asking before edits, and round-trips', () => {
     expect(loadSettings().sendKey).toBe('enter');
     expect(loadSettings().agentEdits).toBe('ask');
-    saveSettings({ ...loadSettings(), sendKey: 'mod-enter' });
+    saveSettings({ ...loadSettings(), sendKey: 'mod-enter', historyPlacement: 'below' });
     expect(loadSettings().sendKey).toBe('mod-enter');
+    expect(loadSettings().historyPlacement).toBe('below');
   });
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', agentEdits: 'ask' });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', agentEdits: 'ask', historyPlacement: 'tab' });
     store.set('studio.settings', 'not json');
     expect(loadSettings().sendKey).toBe('enter');
   });

@@ -5,16 +5,21 @@ export type SendKey = 'enter' | 'mod-enter';
 
 export type EditPolicy = 'ask' | 'allow';
 
+/** Where History lives in the left pane: its own tab, or a section below the files. */
+export type HistoryPlacement = 'tab' | 'below';
+
 export type AppSettings = {
   /** Which key sends a chat message. */
   sendKey: SendKey;
   /** Whether the agent may change files without asking each time. */
   agentEdits: EditPolicy;
+  historyPlacement: HistoryPlacement;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   sendKey: 'enter',
   agentEdits: 'ask',
+  historyPlacement: 'tab',
 };
 
 const KEY = 'studio.settings';
@@ -38,6 +43,7 @@ function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const out: Partial<AppSettings> = {};
   if (raw.sendKey === 'enter' || raw.sendKey === 'mod-enter') out.sendKey = raw.sendKey;
   if (raw.agentEdits === 'ask' || raw.agentEdits === 'allow') out.agentEdits = raw.agentEdits;
+  if (raw.historyPlacement === 'tab' || raw.historyPlacement === 'below') out.historyPlacement = raw.historyPlacement;
   return out;
 }
 

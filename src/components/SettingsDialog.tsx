@@ -152,6 +152,20 @@ export function SettingsDialog() {
         </header>
         <div className="modal-body">
           <ProjectSection />
+          <Section title="Layout">
+            <div className="settings-field">
+              <div className="settings-label">History</div>
+              <Radio name="historyPlacement" value="tab" current={settings.historyPlacement} onChange={(v) => studio.updateSettings({ historyPlacement: v })} label="In its own tab" detail="next to Files" />
+              <Radio
+                name="historyPlacement"
+                value="below"
+                current={settings.historyPlacement}
+                onChange={(v) => studio.updateSettings({ historyPlacement: v })}
+                label="Below the files"
+                detail="both visible at once; drag the divider to resize"
+              />
+            </div>
+          </Section>
           <Section title="Chat">
             <div className="settings-field">
               <div className="settings-label">Send a message with</div>
