@@ -53,6 +53,14 @@ export function EditorPane() {
       contextmenu: false,
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void studio.save());
+    // VS Code's ⌘K tab chords (outside the editor, App handles them).
+    const chord = (key: number, command: Parameters<typeof studio.tabCommand>[0]) =>
+      editor.addCommand(monaco.KeyMod.chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, key), () => studio.tabCommand(command));
+    chord(monaco.KeyCode.KeyW, 'close-all');
+    chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, 'close-all');
+    chord(monaco.KeyCode.KeyU, 'close-saved');
+    chord(monaco.KeyCode.KeyP, 'copy-path');
+    chord(monaco.KeyCode.KeyR, 'reveal');
     editor.addAction({
       id: 'studio.askAgent',
       label: 'Ask Agent About Selection',
@@ -277,9 +285,11 @@ export function EditorPane() {
               const i = tabs.indexOf(t);
               return [
                 { label: 'Close', accelerator: 'CmdOrCtrl+W', action: () => void studio.closeTab(t) },
-                { label: 'Close Others', enabled: tabs.length > 1, action: () => void studio.closeTabs(tabs.filter((x) => x !== t)) },
+                { label: 'Close Others', accelerator: 'CmdOrCtrl+Alt+T', enabled: tabs.length > 1, action: () => void studio.closeOtherTabs(t) },
                 { label: 'Close Tabs to the Right', enabled: i < tabs.length - 1, action: () => void studio.closeTabs(tabs.slice(i + 1)) },
-                { label: 'Close All', action: () => void studio.closeTabs([...tabs]) },
+                { label: 'Close Saved  (⌘K U)', enabled: tabs.some((x) => !dirty[x]), action: () => void studio.closeSavedTabs() },
+                { label: 'Close All  (⌘K W)', action: () => void studio.closeAllTabs() },
+                { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', action: () => void studio.reopenClosedTab() },
                 'separator',
                 { label: 'Reveal in Finder', action: () => void studio.reveal(t) },
                 { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(t), 'Path copied') },

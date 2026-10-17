@@ -100,4 +100,4 @@
 
 - [ ] save all settings in the config file?
 
-- [ ] similar keyboard shortcuts for tab management as vs code (cmd+k w for closing all, etc)
+- [x] similar keyboard shortcuts for tab management as vs code (cmd+k w for closing all, etc)

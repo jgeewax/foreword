@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { shortPath } from '../lib/paths';
+import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
@@ -379,6 +380,10 @@ export class Studio {
       if (e.payload === 'design-cover') return this.openCoverDialog();
       if (e.payload === 'print-mixam') return this.openPrint();
       if (e.payload === 'open-pdf') return void this.openExportedPdf();
+      if (e.payload === 'close-tab') return this.tabCommand('close');
+      if (e.payload === 'reopen-tab') return this.tabCommand('reopen');
+      if (e.payload === 'next-tab') return this.tabCommand('next');
+      if (e.payload === 'prev-tab') return this.tabCommand('prev');
       if (e.payload === 'typst-guide') return this.openGuide();
       const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
       if (action) void this.zoom(action, 'menu');
@@ -1708,6 +1713,7 @@ export class Studio {
     const tabs = this.state.tabs.filter((t) => t !== path);
     this.docs?.close(path);
     this.viewStates.delete(path);
+    this.closedTabs = [...this.closedTabs.filter((p) => p !== path), path].slice(-30);
     this.store.set((s) => {
       const dirty = { ...s.dirty };
       delete dirty[path];
@@ -1722,6 +1728,89 @@ export class Studio {
       }
     }
     this.persistTabs();
+  }
+
+  // ---- tabs: VS Code's shortcuts ----------------------------------------------------------
+
+  private lastTabCommand = { id: '', at: 0 };
+
+  /**
+   * Run a tab shortcut. A press can arrive as a key event and again as the
+   * menu's (⌘W, ⌃⇥…): the same command within 300 ms runs once.
+   */
+  tabCommand(command: TabCommand) {
+    if (!this.state.workspace) return;
+    const id = commandId(command);
+    const now = performance.now();
+    if (this.lastTabCommand.id === id && now - this.lastTabCommand.at < 300) return;
+    this.lastTabCommand = { id, at: now };
+    const active = this.state.active;
+    if (typeof command !== 'string') return this.showTabAt(command.at);
+    switch (command) {
+      case 'close':
+        return this.closeActiveTab();
+      case 'reopen':
+        return void this.reopenClosedTab();
+      case 'close-others':
+        return void this.closeOtherTabs();
+      case 'close-all':
+        return void this.closeAllTabs();
+      case 'close-saved':
+        return void this.closeSavedTabs();
+      case 'next':
+        return this.showNextTab(1);
+      case 'prev':
+        return this.showNextTab(-1);
+      case 'copy-path':
+        if (active) this.copy(this.absolutePath(active), 'Path copied');
+        return;
+      case 'reveal':
+        if (active) void this.reveal(active);
+        return;
+    }
+  }
+
+  /** Recently closed tabs, newest last (Reopen Closed Tab). */
+  private closedTabs: string[] = [];
+
+  async reopenClosedTab() {
+    const files = this.state.workspace?.files ?? [];
+    while (this.closedTabs.length) {
+      const path = this.closedTabs.pop()!;
+      if (files.includes(path) && !this.state.tabs.includes(path)) return this.openFile(path);
+    }
+  }
+
+  closeActiveTab() {
+    if (this.state.active) void this.closeTab(this.state.active);
+  }
+
+  async closeAllTabs() {
+    await this.closeTabs([...this.state.tabs]);
+  }
+
+  async closeOtherTabs(keep = this.state.active) {
+    await this.closeTabs(this.state.tabs.filter((t) => t !== keep));
+  }
+
+  /** Close the tabs without unsaved changes. */
+  async closeSavedTabs() {
+    await this.closeTabs(this.state.tabs.filter((t) => !this.state.dirty[t]));
+  }
+
+  /** The next (1) or previous (−1) tab, wrapping round. */
+  showNextTab(step: 1 | -1) {
+    const { tabs, active } = this.state;
+    if (!tabs.length) return;
+    const i = active ? tabs.indexOf(active) : -1;
+    this.activate(tabs[(i + step + tabs.length) % tabs.length]);
+  }
+
+  /** The tab at a position (0-based); −1 is the last. */
+  showTabAt(index: number) {
+    const { tabs } = this.state;
+    const path = index < 0 ? tabs[tabs.length - 1] : tabs[index];
+    if (path) this.activate(path);
   }
 
   private persistTabs() {

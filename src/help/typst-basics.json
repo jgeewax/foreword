@@ -148,7 +148,23 @@
     ],
     [
       "⇧⌘E",
-      "Export a PDF"
+      "Export a PDF (asks where to save it)"
+    ],
+    [
+      "⌥⌘E",
+      "Open the exported PDF"
+    ],
+    [
+      "⌘W / ⇧⌘T",
+      "Close the tab / reopen it"
+    ],
+    [
+      "⌃⇥ / ⌃⇧⇥",
+      "Next / previous tab (also ⌥⌘→ / ⌥⌘←)"
+    ],
+    [
+      "⌘K W",
+      "Close all tabs (⌘K U: the saved ones)"
     ],
     [
       "⌘= / ⌘−",

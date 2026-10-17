@@ -226,6 +226,27 @@ fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResul
     Ok(())
 }
 
+/// The default menu's "Close Window" (⌘W), and a separator left dangling after it.
+fn remove_close_window<R: tauri::Runtime>(menu: &Submenu<R>) -> tauri::Result<()> {
+    for item in menu.items()? {
+        if item
+            .as_predefined_menuitem()
+            .is_some_and(|p| p.text().is_ok_and(|t| t == "Close Window"))
+        {
+            menu.remove(&item)?;
+        }
+    }
+    if let Some(last) = menu.items()?.last() {
+        if last
+            .as_predefined_menuitem()
+            .is_some_and(|p| p.text().is_ok_and(|t| t.is_empty()))
+        {
+            menu.remove(last)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -309,6 +330,55 @@ pub fn run() {
                     &print,
                     &PredefinedMenuItem::separator(handle)?,
                 ])?;
+                // ⌘W closes the tab, as in Safari and VS Code; the window gets ⇧⌘W.
+                remove_close_window(file)?;
+                file.append_items(&[
+                    &MenuItem::with_id(
+                        handle,
+                        "close-tab",
+                        "Close Tab",
+                        true,
+                        Some("CmdOrCtrl+W"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "reopen-tab",
+                        "Reopen Closed Tab",
+                        true,
+                        Some("CmdOrCtrl+Shift+T"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "close-window",
+                        "Close Window",
+                        true,
+                        Some("CmdOrCtrl+Shift+W"),
+                    )?,
+                ])?;
+            }
+            if let Some(window) = items
+                .iter()
+                .filter_map(|i| i.as_submenu())
+                .find(|s| s.text().is_ok_and(|t| t == "Window"))
+            {
+                remove_close_window(window)?;
+                window.append_items(&[
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(
+                        handle,
+                        "prev-tab",
+                        "Show Previous Tab",
+                        true,
+                        Some("Ctrl+Shift+Tab"),
+                    )?,
+                    &MenuItem::with_id(
+                        handle,
+                        "next-tab",
+                        "Show Next Tab",
+                        true,
+                        Some("Ctrl+Tab"),
+                    )?,
+                ])?;
             }
             let guide =
                 MenuItem::with_id(handle, "typst-guide", "Typst Basics", true, None::<&str>)?;
@@ -331,6 +401,12 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
+            if id == "close-window" {
+                if let Some(w) = app.get_window("main") {
+                    let _ = w.close();
+                }
+                return;
+            }
             if id.starts_with("zoom-")
                 || [
                     "settings",
@@ -342,6 +418,10 @@ pub fn run() {
                     "print-mixam",
                     "open-pdf",
                     "typst-guide",
+                    "close-tab",
+                    "reopen-tab",
+                    "next-tab",
+                    "prev-tab",
                 ]
                 .contains(&id)
             {

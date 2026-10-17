@@ -1841,6 +1841,62 @@ async function exportChecks() {
   return out;
 }
 
+/** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
+async function tabChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { tabs: [...studio.state.tabs], active: studio.state.active };
+  const files = (studio.state.workspace?.files ?? []).filter((f) => /\.(typ|md|bib)$/.test(f)).slice(0, 4);
+  for (const f of files) await studio.openFile(f);
+  const press = async (code: string, mods: { meta?: boolean; ctrl?: boolean; alt?: boolean; shift?: boolean } = {}, key = code.replace(/^(Key|Digit)/, '').toLowerCase()) => {
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key, code, metaKey: !!mods.meta, ctrlKey: !!mods.ctrl, altKey: !!mods.alt, shiftKey: !!mods.shift, bubbles: true, cancelable: true }),
+    );
+    await sleep(350); // past the de-duplication window
+  };
+  const where = () => `${studio.state.tabs.indexOf(studio.state.active ?? '')}/${studio.state.tabs.length}`;
+  (document.activeElement as HTMLElement | null)?.blur();
+  await press('Digit2', { ctrl: true });
+  out.ctrl2 = where();
+  await press('ArrowRight', { meta: true, alt: true }, 'ArrowRight');
+  out.next = where();
+  await press('BracketLeft', { meta: true, shift: true }, '{');
+  out.prev = where();
+  await press('Digit0', { ctrl: true });
+  out.last = where();
+  await press('Tab', { ctrl: true }, 'Tab');
+  out.wrapped = where();
+  const closing = studio.state.active;
+  await press('KeyW', { meta: true });
+  out.closed = { gone: !studio.state.tabs.includes(closing ?? ''), now: where() };
+  await press('KeyT', { meta: true, shift: true });
+  out.reopened = { back: studio.state.tabs.includes(closing ?? ''), active: studio.state.active === closing };
+  // ⌘K U closes the saved tabs: one tab gets an unsaved edit first.
+  const model = studio.editor!.getModel()!;
+  const dirtyTab = studio.state.active!;
+  studio.editor!.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// unsaved\n' }]);
+  await sleep(200);
+  (document.activeElement as HTMLElement | null)?.blur();
+  await press('KeyK', { meta: true });
+  await press('KeyU');
+  out.closeSaved = { tabs: [...studio.state.tabs], kept: dirtyTab };
+  while (model.canUndo()) await model.undo();
+  await sleep(300);
+  (document.activeElement as HTMLElement | null)?.blur();
+  await press('KeyK', { meta: true });
+  await press('KeyW');
+  out.closeAll = studio.state.tabs.length;
+  // A press arriving twice (key event, then menu) runs once.
+  for (const f of files) await studio.openFile(f);
+  studio.showTabAt(0);
+  studio.tabCommand('next');
+  studio.tabCommand('next');
+  out.dedup = where();
+  await studio.closeAllTabs();
+  for (const t of saved.tabs) await studio.openFile(t);
+  if (saved.active) studio.activate(saved.active);
+  return out;
+}
+
 /** The window as it is: for checking layout by eye (optionally a sidebar tab, e.g. SELFTEST_ONLY=shot). */
 async function shotChecks() {
   await waitFor(() => studio.editor, 15000, 'editor').catch(() => {});
@@ -2361,6 +2417,7 @@ export async function runSelftest(launch: LaunchOptions) {
     }
     if (want('shot')) result.shot = await shotChecks();
     if (want('export')) result.export = await exportChecks();
+    if (want('tabs')) result.tabs = await tabChecks();
     if (want('aireads')) {
       log('aireads');
       result.aireads = await aiReadChecks(launch.selftestAgent);

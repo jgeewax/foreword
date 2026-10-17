@@ -98,7 +98,7 @@ function ProjectSection() {
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         />
         <p className="settings-help">
-          Export PDF (⇧⌘E) writes <code>{outputExample}</code>.
+          Export PDF (⇧⌘E) builds <code>{outputExample}</code>, then saves a copy where you choose.
         </p>
       </div>
       <div className="settings-field">

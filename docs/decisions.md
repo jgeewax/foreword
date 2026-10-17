@@ -758,6 +758,23 @@ pane top (off by 0 pt).
   (`studio.exportTargets`), never from self-tests. Self-tests answer the dialog
   themselves (`studio.pickExportPath`).
 
+### Tab shortcuts (VS Code's, plus Safari's ⌘W)
+
+- ⌘W closes the tab. Close Window moves to ⇧⌘W, and the default menu's ⌘W
+  "Close Window" is removed from File and Window. ⇧⌘T reopens closed tabs, the
+  last 30 of them, newest first.
+- ⌥⌘T closes the others. ⌘K W or ⌘K ⌘W closes all, ⌘K U the saved ones,
+  ⌘K P copies the path and ⌘K R shows the file in Finder.
+- Next and previous tab: ⌃⇥ / ⌃⇧⇥ (also in the Window menu), ⌥⌘→ / ⌥⌘← and
+  ⇧⌘] / ⇧⌘[. ⌃1…⌃9 picks a tab by position, ⌃0 the last.
+- Keys are matched by position (`KeyboardEvent.code`), since ⌥ changes the
+  character (⌥T is †).
+- In the editor, the ⌘K chords are Monaco keybindings, so Monaco's own (⌘K ⌘C
+  comment, ⌘K ⌘U uncomment) still work. Elsewhere a window handler takes ⌘K
+  and the next key within 1.5 s.
+- A press can reach both the page and the native menu (as zoom found), so the
+  same tab command within 300 ms runs once.
+
 ### Printing with Mixam
 
 - **What Typst Studio does:** it makes print-ready PDFs, checks them, and
