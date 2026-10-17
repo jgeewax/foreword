@@ -4,7 +4,7 @@ import { studio } from './app/studio';
 import { AgentPane } from './components/AgentPane';
 import { StatusBar, Toast, Toolbar, Welcome } from './components/Chrome';
 import { EditorPane } from './components/EditorPane';
-import { Explorer } from './components/Explorer';
+import { ActivityBar, Explorer, type View } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { CoverDialog } from './components/CoverDialog';
 import { HistoryChanges } from './components/HistoryChanges';
@@ -85,36 +85,51 @@ function Workbench() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // The activity bar: the open view's icon closes the sidebar; any icon opens it there.
+  const pickView = (view: View, current: View) => {
+    const p = explorer.current;
+    if (!p) return;
+    if (!p.isCollapsed() && view === current) p.collapse();
+    else {
+      studio.showSidebar(view);
+      if (p.isCollapsed()) p.expand();
+    }
+    readVisible();
+  };
+
   return (
     <div className="app">
       <Toolbar onToggle={toggle} visible={visible} />
-      <Group
-        className="panes"
-        orientation="horizontal"
-        defaultLayout={defaultLayout}
-        onLayoutChange={notifyLayout}
-        onLayoutChanged={(layout, meta) => {
-          onLayoutChanged(layout, meta);
-          notifyLayout();
-          readVisible();
-        }}
-      >
-        <Panel id="explorer" panelRef={explorer} defaultSize="17%" minSize="180px" collapsible>
-          <Explorer />
-        </Panel>
-        <Separator className="separator" />
-        <Panel id="editor" defaultSize="32%" minSize="320px">
-          <EditorPane />
-        </Panel>
-        <Separator className="separator" />
-        <Panel id="preview" panelRef={preview} defaultSize="28%" minSize="200px" collapsible>
-          <PreviewPane />
-        </Panel>
-        <Separator className="separator" />
-        <Panel id="agent" panelRef={agent} defaultSize="25%" minSize="260px" collapsible>
-          <AgentPane />
-        </Panel>
-      </Group>
+      <div className="workbench">
+        <ActivityBar open={visible.explorer} onPick={pickView} />
+        <Group
+          className="panes"
+          orientation="horizontal"
+          defaultLayout={defaultLayout}
+          onLayoutChange={notifyLayout}
+          onLayoutChanged={(layout, meta) => {
+            onLayoutChanged(layout, meta);
+            notifyLayout();
+            readVisible();
+          }}
+        >
+          <Panel id="explorer" panelRef={explorer} defaultSize="17%" minSize="180px" collapsible>
+            <Explorer />
+          </Panel>
+          <Separator className="separator" />
+          <Panel id="editor" defaultSize="32%" minSize="320px">
+            <EditorPane />
+          </Panel>
+          <Separator className="separator" />
+          <Panel id="preview" panelRef={preview} defaultSize="28%" minSize="200px" collapsible>
+            <PreviewPane />
+          </Panel>
+          <Separator className="separator" />
+          <Panel id="agent" panelRef={agent} defaultSize="25%" minSize="260px" collapsible>
+            <AgentPane />
+          </Panel>
+        </Group>
+      </div>
       <StatusBar />
       <Toast />
     </div>

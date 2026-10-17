@@ -119,7 +119,7 @@ function PlacementButton({ to }: { to: 'tab' | 'below' }) {
   );
 }
 
-type View = 'files' | 'history' | 'code' | 'todos' | 'review';
+export type View = 'files' | 'history' | 'code' | 'todos' | 'review';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
 function useViews() {
@@ -132,7 +132,13 @@ function useViews() {
 }
 
 /** The sidebar's views as a column of icons on its left edge, each with room for its own title. */
-function ActivityBar({ current, below }: { current: View; below: boolean }) {
+/**
+ * The sidebar's views, as icons on the window's left edge. It stays when the
+ * sidebar is closed, as in VS Code: the open view's icon closes the sidebar,
+ * any icon opens it at that view.
+ */
+export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
+  const { view: current, below } = useSidebarView();
   const { hasCode, todoCount, hasReview, reviewOpen } = useViews();
   const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
     { id: 'files', icon: 'folder', label: 'Files' },
@@ -147,11 +153,11 @@ function ActivityBar({ current, below }: { current: View; below: boolean }) {
         <button
           key={it.id}
           role="tab"
-          aria-selected={current === it.id}
+          aria-selected={open && current === it.id}
           aria-label={it.label}
-          title={it.label}
-          className={`chrome-icon activity${current === it.id ? ' on' : ''}`}
-          onClick={() => studio.showSidebar(it.id)}
+          title={open && current === it.id ? `${it.label} (click to hide the sidebar)` : it.label}
+          className={`chrome-icon activity${open && current === it.id ? ' on' : ''}`}
+          onClick={() => onPick(it.id, current)}
         >
           <Icon name={it.icon} />
           {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
@@ -222,17 +228,21 @@ function Stacked({ view }: { view: View }) {
   );
 }
 
-export function Explorer() {
+/** The sidebar's view, and whether History is below the files rather than a view of its own. */
+function useSidebarView(): { view: View; below: boolean } {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
   const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
   const { hasCode, todoCount, hasReview } = useViews();
   const below = placement === 'below';
   // A view with nothing in it (or History, when it's shown below) falls back to the files.
   const available = sidebar === 'files' || (sidebar === 'history' && !below) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
-  const view: View = available ? sidebar : 'files';
+  return { view: available ? sidebar : 'files', below };
+}
+
+export function Explorer() {
+  const { view, below } = useSidebarView();
   return (
     <section className="pane explorer">
-      <ActivityBar current={view} below={below} />
       <div className="explorer-main">
         {below ? (
           <Stacked view={view} />

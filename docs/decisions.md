@@ -274,6 +274,19 @@ bottom). It now adds the main webview's native safe-area inset, re-read on
 resize (full screen removes the title bar). Verified natively: preview top =
 pane top (off by 0 pt).
 
+### The activity bar stays when the sidebar closes
+
+- The sidebar's view icons (Files, History, Code, To do, Review) sit on the
+  window's left edge, outside the collapsible sidebar, as in VS Code.
+  - Clicking the open view's icon hides the sidebar.
+  - Clicking any icon while it's hidden opens it at that view.
+  - No icon is marked while the sidebar is hidden.
+- Before, the bar was inside the sidebar, so hiding the sidebar (⌘B, the
+  toolbar) hid the icons too, and clicking the open view did nothing.
+- Verified (self-test `activity`): Files closes it (width 0, bar still 32 pt);
+  Files opens it again; Review switches views; while hidden, Files opens it on
+  Files. The `chrome` group's pane headers still line up.
+
 ### One sentence per line
 
 - Every session's instructions ask for one sentence per line in .typ files

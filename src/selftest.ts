@@ -2399,6 +2399,31 @@ async function quickOpenChecks() {
   return out;
 }
 
+/** The activity bar: the open view's icon hides the sidebar, any icon brings it back at that view. */
+async function activityChecks() {
+  const out: Record<string, unknown> = {};
+  const sidebarWidth = () => Math.round(document.querySelector('.explorer')?.getBoundingClientRect().width ?? 0);
+  const icon = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.activity-bar button')].find((b) => b.getAttribute('aria-label')?.startsWith(label));
+  const click = async (label: string) => {
+    icon(label)?.click();
+    await sleep(400);
+    return { width: sidebarWidth(), view: studio.state.sidebar, on: document.querySelector('.activity-bar .on')?.getAttribute('aria-label')?.split(':')[0] ?? null };
+  };
+  const saved = studio.state.sidebar;
+  studio.showSidebar('files');
+  await sleep(200);
+  out.start = { width: sidebarWidth() };
+  out.clickOpenView = await click('Files');
+  out.barStillThere = !!document.querySelector('.activity-bar') && (document.querySelector('.activity-bar')?.getBoundingClientRect().width ?? 0) > 20;
+  out.snapshotClosed = await snap('activity-closed');
+  out.clickAgain = await click('Files');
+  out.clickOther = await click('Review');
+  await click('Review');
+  out.whileClosedOther = await click('Files');
+  studio.showSidebar(saved);
+  return out;
+}
+
 /** Reading part of a file: the read tool, never a question; an explicit `sed -n` runs without one too (real model, Ask first). */
 async function readToolsChecks() {
   const out: Record<string, unknown> = {};
@@ -3177,6 +3202,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
+    if (want('activity')) result.activity = await activityChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();
