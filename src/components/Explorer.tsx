@@ -43,18 +43,19 @@ function FileTree() {
           onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
           onContextMenu={onContextMenu((): MenuEntry[] => {
             const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
+            // Open, make something new here, change this item, then where it is.
             return [
               !n.dir && { label: /\.pdf$/i.test(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
-              n.dir && { label: expanded.has(n.path) ? 'Collapse' : 'Expand', action: () => toggle(n.path) },
               'separator',
+              (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
               { label: 'New File…', action: () => void studio.newFile(folder) },
               { label: 'New Folder…', action: () => void studio.newFolder(folder) },
-              (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
               'separator',
               { label: 'Rename…', action: () => void studio.renamePath(n.path) },
               !n.dir && { label: 'Duplicate', action: () => void studio.duplicate(n.path) },
-              !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
               { label: 'Move to Trash…', action: () => void studio.trashPath(n.path) },
+              'separator',
+              !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
               !n.dir && { label: 'History of This File', action: () => void studio.showFileHistory(n.path) },
               'separator',
               { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
@@ -75,13 +76,11 @@ function FileTree() {
   return (
     <div
       className="tree"
+      // Book-level commands (cover, runnable code, Makefile) are in the menu bar's Book menu.
       onContextMenu={onContextMenu(() => [
         { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
         { label: 'New File…', accelerator: 'CmdOrCtrl+N', action: () => void studio.newFile('') },
         { label: 'New Folder…', action: () => void studio.newFolder('') },
-        !studio.state.code.setUp && { label: 'Set Up Runnable Code…', action: () => void studio.code.setUp().then(() => studio.showSidebar('code')) },
-        !(studio.state.workspace?.files ?? []).includes('Makefile') && { label: 'Add a Makefile (Build from the Command Line)', action: () => void studio.addMakefile() },
-        { label: studio.hasCover() ? 'Show the Cover' : 'Design a Cover…', action: () => studio.openCoverDialog() },
         'separator',
         { label: 'Refresh', action: () => void studio.refreshFiles() },
         { label: 'Reveal Book Folder in Finder', action: () => void studio.reveal('') },

@@ -1399,7 +1399,7 @@ async function menuChecks() {
   const host = editor.getDomNode()!.getBoundingClientRect();
   out.editor = await right(editor.getDomNode()!.querySelector('.view-lines'), host.left + p.left, host.top + p.top + 5);
   out.monacoMenuShown = !!document.querySelector('.monaco-menu-container, .context-view .monaco-menu');
-  action('Get Three Versions…')?.();
+  action('Three Versions to Pick From…')?.();
   await sleep(500);
   out.threeVersions = { mode: studio.state.agent.mode, attachments: studio.state.agent.attachments.map((a) => a.label) };
   await studio.setMode('write');
@@ -2394,6 +2394,55 @@ async function quickOpenChecks() {
   return out;
 }
 
+/**
+ * The menu bar: every item the app adds has a handler on the page (and every
+ * handler an item), and a few commands do what they say. Items are run through
+ * the same dispatch a click uses (a native menu can't be clicked from here).
+ */
+async function menuBarChecks() {
+  const out: Record<string, unknown> = {};
+  const outline = await ipc.menuOutline();
+  out.menus = outline.map(([title, items]) => `${title}: ${items.map((i) => i.split('=').pop()).join(' | ')}`);
+  const ids = outline.flatMap(([, items]) => items.filter((i) => i.includes('=')).map((i) => i.split('=')[0]));
+  const handled = Object.keys(studio.menuCommands);
+  out.withoutHandler = ids.filter((id) => id !== 'close-window' && !handled.includes(id));
+  out.withoutItem = handled.filter((id) => !ids.includes(id));
+  out.itemsPerMenu = Object.fromEntries(outline.map(([title, items]) => [title, items.filter((i) => i !== '---').length]));
+
+  await studio.menuCommand('go-to-file');
+  await sleep(200);
+  out.goToFile = !!document.querySelector('.quick-open');
+  studio.closeQuickOpen();
+  await studio.menuCommand('book-settings');
+  await sleep(300);
+  out.bookSettings = document.querySelector('.settings-nav button.active')?.textContent;
+  studio.closeSettings();
+  await sleep(200);
+  await studio.menuCommand('find');
+  await sleep(300);
+  out.find = !!document.querySelector('.monaco-editor .find-widget.visible');
+  studio.editor?.trigger('selftest', 'closeFindWidget', null);
+  const previewShown = () => (document.querySelector('.preview-pane')?.getBoundingClientRect().width ?? 0) > 50;
+  const before = previewShown();
+  await studio.menuCommand('toggle-preview');
+  await sleep(400);
+  const toggled = previewShown();
+  await studio.menuCommand('toggle-preview');
+  await sleep(400);
+  out.togglePreview = { before, toggled, after: previewShown() };
+  const sidebar = studio.state.sidebar;
+  await studio.menuCommand('show-review');
+  await sleep(200);
+  out.showReview = studio.state.sidebar;
+  studio.showSidebar(sidebar);
+  const naming = studio.menuCommand('name-version');
+  await sleep(300);
+  out.nameVersionAsks = studio.state.prompt?.title;
+  studio.answerPrompt(null);
+  await naming;
+  return out;
+}
+
 /** History explains itself: where versions are kept (the app's repo, outside the book) and how to go back. */
 async function historyAboutChecks() {
   const out: Record<string, unknown> = {};
@@ -3074,6 +3123,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
+    if (want('menubar')) result.menubar = await menuBarChecks();
     if (want('config')) result.config = await configChecks();
     if (launch.selftestAgent && want('events')) result.events = await eventProbe();
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();

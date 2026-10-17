@@ -1,7 +1,7 @@
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PROJECT_FILE } from '../app/project-settings';
-import { studio } from '../app/studio';
+import { studio, type SettingsPage } from '../app/studio';
 import { useStore } from '../lib/store';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
@@ -138,7 +138,7 @@ function ProjectSection() {
   );
 }
 
-type Page = 'general' | 'assistant' | 'permissions' | 'book' | 'tools';
+type Page = SettingsPage;
 const PAGE_KEY = 'studio.settingsPage';
 
 function readPage(): Page {
@@ -393,7 +393,7 @@ function ToolsPage() {
 export function SettingsDialog() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const [page, setPageState] = useState<Page>(readPage);
+  const [page, setPageState] = useState<Page>(() => studio.state.settingsPage ?? readPage());
   const setPage = (p: Page) => {
     setPageState(p);
     try {

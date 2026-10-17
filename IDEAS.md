@@ -150,3 +150,9 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 - After a turn that leaves new compile errors, tell the assistant (as code examples do) so it fixes them before the author sees a broken preview.
 - A "Figure style" page in Settings (or the This book page): pick the palette and line width, preview a sample figure, and write figures/figure-style.typ.
 - "Restyle all figures": convert existing cetz.canvas/diagram figures to the shared wrappers in one task, with each figure's before/after in What changed.
+
+## Menus
+
+- Grey out menu-bar items that can't act (no book open, nothing to fix, assistant not running) by updating them from the page.
+- Assistant → Mode (Write, Plan, Options, Figures) as checkable items, in step with the composer's mode menu.
+- Help → Keyboard Shortcuts: one page listing every shortcut, chords (⌘K …) included, generated from the menus and key handlers.

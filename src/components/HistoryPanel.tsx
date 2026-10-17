@@ -47,7 +47,6 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
         onContextMenu={onContextMenu(() => [
           { label: 'What Changed', action: () => void studio.history.showChanges(v) },
           !latest && { label: 'Compare with Now', action: () => void studio.history.compareWithNow(v) },
-          { label: open ? 'Hide Files' : 'Show Files', action: () => void studio.history.toggle(v.id) },
           'separator',
           v.kind === 'agent' && !!v.parent && { label: 'Undo These Changes…', enabled: !busy, action: () => void studio.history.undoVersion(v) },
           !latest && { label: 'Restore This Version…', enabled: !busy, action: () => void studio.history.restoreVersion(v) },

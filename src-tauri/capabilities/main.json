@@ -19,6 +19,7 @@
     "allow-native-geometry",
     "allow-set-ui-zoom",
     "allow-selftest-finish",
+    "allow-menu-outline",
     "allow-app-logs",
     "allow-workspace-open",
     "allow-workspace-list",

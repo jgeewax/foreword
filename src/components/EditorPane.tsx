@@ -97,24 +97,22 @@ export function EditorPane() {
         pos && path && model && studio.state.settings.markAiEdits
           ? editMarks(studio.aiEditsFor(path), model.getValue()).find((m) => m.from <= pos.lineNumber && pos.lineNumber <= m.to)
           : undefined;
+      // What's under the pointer first, then the selection, then editing. File- and
+      // book-level commands live in the menu bar and the tab's menu.
       void showContextMenu([
         error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
         mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         'separator',
-        { label: hasSelection ? 'Ask the Assistant About This' : 'Ask the Assistant Here', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
-        hasSelection && { label: 'Get Three Versions…', action: () => void studio.optionsForSelection() },
+        hasSelection && { label: 'Ask the Assistant About This', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
         hasSelection && { label: 'Explain This', action: () => void studio.explainSelection() },
+        hasSelection && { label: 'Three Versions to Pick From…', action: () => void studio.optionsForSelection() },
         hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
         'separator',
         'cut',
         'copy',
         'paste',
         'separator',
-        'selectAll',
-        'separator',
-        { label: 'Show in Preview', action: () => void studio.syncPreviewToCursor() },
-        !!path && { label: 'History of This File', action: () => void studio.showFileHistory(path) },
-        { label: 'Typst Basics', action: () => studio.openGuide() },
+        !!path && { label: 'Show in Preview', action: () => void studio.syncPreviewToCursor() },
       ]);
     });
     // The assistant's marks: lines it changed and lines it read, in the gutter.
@@ -372,13 +370,12 @@ export function EditorPane() {
                 { label: 'Close', accelerator: 'CmdOrCtrl+W', action: () => void studio.closeTab(t) },
                 { label: 'Close Others', accelerator: 'CmdOrCtrl+Alt+T', enabled: tabs.length > 1, action: () => void studio.closeOtherTabs(t) },
                 { label: 'Close Tabs to the Right', enabled: i < tabs.length - 1, action: () => void studio.closeTabs(tabs.slice(i + 1)) },
-                { label: 'Close Saved  (⌘K U)', enabled: tabs.some((x) => !dirty[x]), action: () => void studio.closeSavedTabs() },
-                { label: 'Close All  (⌘K W)', action: () => void studio.closeAllTabs() },
-                { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', action: () => void studio.reopenClosedTab() },
+                { label: 'Close Saved', enabled: tabs.some((x) => !dirty[x]), action: () => void studio.closeSavedTabs() },
+                { label: 'Close All', action: () => void studio.closeAllTabs() },
                 'separator',
+                { label: 'History of This File', action: () => void studio.showFileHistory(t) },
                 { label: 'Reveal in Finder', action: () => void studio.reveal(t) },
                 { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(t), 'Path copied') },
-                { label: 'Copy Relative Path', action: () => studio.copy(t, 'Path copied') },
               ];
             })}
             onMouseDown={(e) => {

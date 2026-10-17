@@ -10,6 +10,7 @@ fn main() {
             "webview_frames",
             "native_geometry",
             "selftest_finish",
+            "menu_outline",
             "app_logs",
             "workspace_open",
             "workspace_list",

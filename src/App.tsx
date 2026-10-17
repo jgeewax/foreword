@@ -53,6 +53,8 @@ function Workbench() {
       }),
     [],
   );
+  // The menu bar's View → Toggle Sidebar / Preview / Assistant.
+  useEffect(() => studio.events.on('toggle-pane', (pane) => toggle(pane)), []);
   useEffect(
     () =>
       studio.events.on('show-explorer', () => {

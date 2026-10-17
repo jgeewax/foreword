@@ -1,0 +1,257 @@
+//! The menu bar. Each menu is about one thing: files (File), editing text
+//! (Edit), the window's panes (View), making the book (Book), the writing
+//! assistant (Assistant). The app's own items forward their id to the page
+//! (`COMMANDS`), which acts on it in `studio.menuCommand`.
+//!
+//! Shortcuts the page also handles (⌘O, ⌘P, ⌘S, ⌘B, ⌘I…) are shown here too:
+//! when the page takes a key press it calls preventDefault, which stops the
+//! menu's key equivalent, so a press isn't applied twice. When the preview has
+//! focus the page doesn't see the press, and the menu acts.
+
+use tauri::{
+    AppHandle, Runtime,
+    menu::{
+        AboutMetadata, HELP_SUBMENU_ID, Menu, MenuItem, PredefinedMenuItem, Submenu,
+        WINDOW_SUBMENU_ID,
+    },
+};
+
+/// Menu ids the page acts on (everything here except "close-window").
+pub const COMMANDS: &[&str] = &[
+    "settings",
+    // File
+    "new-book",
+    "new-chapter",
+    "new-file",
+    "open-book",
+    "go-to-file",
+    "save",
+    "close-tab",
+    "reopen-tab",
+    // Edit
+    "find",
+    "replace",
+    "add-comment",
+    // View
+    "toggle-sidebar",
+    "toggle-preview",
+    "toggle-assistant",
+    "show-files",
+    "show-review",
+    "show-history",
+    "show-in-preview",
+    "zoom-in",
+    "zoom-out",
+    "zoom-reset",
+    // Book
+    "export-pdf",
+    "open-pdf",
+    "print-mixam",
+    "design-cover",
+    "style-guide",
+    "name-version",
+    "setup-code",
+    "add-makefile",
+    "book-settings",
+    // Assistant
+    "new-task",
+    "task-done",
+    "ask-selection",
+    "fix-comments",
+    "stop",
+    "permissions",
+    // Window
+    "prev-tab",
+    "next-tab",
+    // Help
+    "typst-guide",
+];
+
+pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let item = |id: &str, text: &str, accelerator: Option<&str>| {
+        MenuItem::with_id(handle, id, text, true, accelerator)
+    };
+    let sep = || PredefinedMenuItem::separator(handle);
+    // "Typst Studio", not the crate's name ("typst-studio"), in About, Hide and Quit.
+    let name = handle
+        .config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| handle.package_info().name.clone());
+    let about = AboutMetadata {
+        name: Some(name.clone()),
+        version: Some(handle.package_info().version.to_string()),
+        ..Default::default()
+    };
+
+    let app = Submenu::with_items(
+        handle,
+        &name,
+        true,
+        &[
+            &PredefinedMenuItem::about(handle, Some(&format!("About {name}")), Some(about))?,
+            &sep()?,
+            &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
+            &sep()?,
+            &PredefinedMenuItem::services(handle, None)?,
+            &sep()?,
+            &PredefinedMenuItem::hide(handle, Some(&format!("Hide {name}")))?,
+            &PredefinedMenuItem::hide_others(handle, None)?,
+            &PredefinedMenuItem::show_all(handle, None)?,
+            &sep()?,
+            &PredefinedMenuItem::quit(handle, Some(&format!("Quit {name}")))?,
+        ],
+    )?;
+
+    let file = Submenu::with_items(
+        handle,
+        "File",
+        true,
+        &[
+            &item("new-book", "New Book…", Some("CmdOrCtrl+Shift+N"))?,
+            &item("new-chapter", "New Chapter…", Some("CmdOrCtrl+Alt+N"))?,
+            &item("new-file", "New File…", Some("CmdOrCtrl+N"))?,
+            &sep()?,
+            &item("open-book", "Open Book…", Some("CmdOrCtrl+O"))?,
+            &item("go-to-file", "Go to File…", Some("CmdOrCtrl+P"))?,
+            &sep()?,
+            &item("save", "Save", Some("CmdOrCtrl+S"))?,
+            &sep()?,
+            // ⌘W closes the tab, as in Safari and VS Code; the window gets ⇧⌘W.
+            &item("close-tab", "Close Tab", Some("CmdOrCtrl+W"))?,
+            &item("reopen-tab", "Reopen Closed Tab", Some("CmdOrCtrl+Shift+T"))?,
+            &item("close-window", "Close Window", Some("CmdOrCtrl+Shift+W"))?,
+        ],
+    )?;
+
+    let edit = Submenu::with_items(
+        handle,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(handle, None)?,
+            &PredefinedMenuItem::redo(handle, None)?,
+            &sep()?,
+            &PredefinedMenuItem::cut(handle, None)?,
+            &PredefinedMenuItem::copy(handle, None)?,
+            &PredefinedMenuItem::paste(handle, None)?,
+            &PredefinedMenuItem::select_all(handle, None)?,
+            &sep()?,
+            &item("find", "Find…", Some("CmdOrCtrl+F"))?,
+            &item("replace", "Find and Replace…", Some("CmdOrCtrl+Alt+F"))?,
+            &sep()?,
+            &item("add-comment", "Add Comment…", Some("CmdOrCtrl+Alt+M"))?,
+        ],
+    )?;
+
+    let view = Submenu::with_items(
+        handle,
+        "View",
+        true,
+        &[
+            &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?,
+            &item("toggle-preview", "Toggle Preview", Some("CmdOrCtrl+Alt+P"))?,
+            &item(
+                "toggle-assistant",
+                "Toggle Assistant",
+                Some("CmdOrCtrl+Alt+B"),
+            )?,
+            &sep()?,
+            &item("show-files", "Files", None)?,
+            &item("show-review", "Review", None)?,
+            &item("show-history", "History", None)?,
+            &sep()?,
+            &item("show-in-preview", "Show in Preview", None)?,
+            &sep()?,
+            &item("zoom-in", "Zoom In", Some("CmdOrCtrl+="))?,
+            &item("zoom-out", "Zoom Out", Some("CmdOrCtrl+-"))?,
+            &item("zoom-reset", "Actual Size", Some("CmdOrCtrl+0"))?,
+            &sep()?,
+            &PredefinedMenuItem::fullscreen(handle, None)?,
+        ],
+    )?;
+
+    let book = Submenu::with_items(
+        handle,
+        "Book",
+        true,
+        &[
+            &item("export-pdf", "Export PDF…", Some("CmdOrCtrl+Shift+E"))?,
+            &item("open-pdf", "Open Exported PDF", Some("CmdOrCtrl+Alt+E"))?,
+            &item("print-mixam", "Print with Mixam…", None)?,
+            &sep()?,
+            &item("design-cover", "Design Cover…", None)?,
+            &item("style-guide", "Writing Style Guide", None)?,
+            &item("name-version", "Name This Version…", None)?,
+            &sep()?,
+            &item("setup-code", "Runnable Code Examples…", None)?,
+            &item("add-makefile", "Add a Makefile…", None)?,
+            &sep()?,
+            &item("book-settings", "Book Settings…", None)?,
+        ],
+    )?;
+
+    let assistant = Submenu::with_items(
+        handle,
+        "Assistant",
+        true,
+        &[
+            &item("new-task", "New Task", None)?,
+            &item("task-done", "Task Done", None)?,
+            &sep()?,
+            &item("ask-selection", "Ask About Selection", Some("CmdOrCtrl+I"))?,
+            &item("fix-comments", "Fix Review Comments", None)?,
+            &item("stop", "Stop", None)?,
+            &sep()?,
+            &item("permissions", "Permissions…", None)?,
+        ],
+    )?;
+
+    let window = Submenu::with_id_and_items(
+        handle,
+        WINDOW_SUBMENU_ID,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(handle, None)?,
+            &PredefinedMenuItem::maximize(handle, None)?,
+            &sep()?,
+            &item("prev-tab", "Show Previous Tab", Some("Ctrl+Shift+Tab"))?,
+            &item("next-tab", "Show Next Tab", Some("Ctrl+Tab"))?,
+        ],
+    )?;
+
+    let help = Submenu::with_id_and_items(
+        handle,
+        HELP_SUBMENU_ID,
+        "Help",
+        true,
+        &[&item("typst-guide", "Typst Basics", None)?],
+    )?;
+
+    Menu::with_items(
+        handle,
+        &[&app, &file, &edit, &view, &book, &assistant, &window, &help],
+    )
+}
+
+/// The menu bar as text, for the self-test: each menu's title and items.
+pub fn outline<R: Runtime>(menu: &Menu<R>) -> tauri::Result<Vec<(String, Vec<String>)>> {
+    let mut out = Vec::new();
+    for top in menu.items()? {
+        let Some(sub) = top.as_submenu() else {
+            continue;
+        };
+        let mut items = Vec::new();
+        for i in sub.items()? {
+            if let Some(m) = i.as_menuitem() {
+                items.push(format!("{}={}", m.id().as_ref(), m.text()?));
+            } else if let Some(p) = i.as_predefined_menuitem() {
+                let text = p.text()?;
+                items.push(if text.is_empty() { "---".into() } else { text });
+            }
+        }
+        out.push((sub.text()?, items));
+    }
+    Ok(out)
+}

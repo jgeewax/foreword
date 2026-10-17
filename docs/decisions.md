@@ -277,18 +277,25 @@ pane top (off by 0 pt).
 ### Context menus
 
 - Native macOS menus through Tauri's menu API (`core:menu:default` allows
-  `popup`), not HTML imitations:
-  - **Editor:** Fix This Error (when on one), Ask the Assistant, Get Three
-    Versions, Explain This, Cut/Copy/Paste/Select All, Show in Preview, Typst
-    Basics.
-  - **Tabs:** Close, Close Others, Close Tabs to the Right, Close All, Reveal
-    in Finder, Copy Path, Copy Relative Path.
-  - **Files:** Open, Use as Main File, Reveal in Finder, Copy Path (the empty
-    area: Refresh, Reveal Book Folder).
-  - **History rows:** Show Changes, Undo These Changes, Restore This Version.
+  `popup`), not HTML imitations. Each holds only what's about the thing under
+  the pointer; book- and app-level commands are in the menu bar (see "The menu
+  bar, rethought"):
+  - **Editor:** what's under the pointer first (Fix This Error, What the
+    Assistant Changed Here); with a selection, Ask the Assistant About This,
+    Explain This, Three Versions to Pick From, Add Comment. Then Cut, Copy,
+    Paste, and Show in Preview.
+  - **Tabs:** Close, Close Others, Close Tabs to the Right, Close Saved, Close
+    All; History of This File, Reveal in Finder, Copy Path.
+  - **Files:** Open; New Chapter (in chapters), New File, New Folder; Rename,
+    Duplicate, Move to Trash; Use as Main File, History of This File; Reveal
+    in Finder, Copy Path, Copy Relative Path. The empty area: New Chapter,
+    New File, New Folder, Refresh, Reveal Book Folder.
+  - **History rows:** What Changed, Compare with Now, Undo These Changes,
+    Restore This Version.
   - **Chat items:** Copy, Copy Message.
   - **Text fields:** the usual editing commands.
-  - **Preview:** Copy, Show the Text Here, Export PDF, Restart Preview.
+  - **Preview:** Copy, Show the Text Here, Export PDF, Restart Preview (on
+    the cover: Show the Book, Update Cover from Book, Export Cover).
 - WebKit's own menu is suppressed everywhere. Its "Reload" would wipe the app
   state or break the preview. Option-right-click keeps it in dev builds.
 - Monaco's HTML menu is off (`contextmenu: false`). Its Cut/Copy/Paste are the
@@ -302,6 +309,55 @@ pane top (off by 0 pt).
   They run outside a DOM gesture, where WebKit can refuse `navigator.clipboard`.
 - Native popups are modal, so the self-test records each pane's menu instead of
   showing it, then runs actions directly.
+
+### The menu bar, rethought
+
+- **Before:** the default macOS menus, with everything the app added pushed
+  into File: new book, chapter and file; cover, export, open PDF and print;
+  then the tab commands. Meanwhile Open, Go to File, Find, the panes, History,
+  Review and the assistant were missing. The right-click menus repeated book
+  commands (cover, Makefile, runnable code, print) and spelled chords into
+  labels ("Close All  (⌘K W)").
+- **Now:** one menu per subject, built in full in `src-tauri/src/menu.rs`
+  rather than patched into the default:
+  - **Typst Studio:** About, Settings… (⌘,), Services, Hide, Quit (named
+    "Typst Studio", not the crate's name).
+  - **File:**
+    - New Book / Chapter / File;
+    - Open Book… (⌘O), Go to File… (⌘P);
+    - Save (⌘S);
+    - Close Tab (⌘W), Reopen Closed Tab, Close Window (⇧⌘W).
+  - **Edit:** Undo…Select All; Find (⌘F), Find and Replace (⌥⌘F); Add
+    Comment (⌥⌘M).
+  - **View:**
+    - Toggle Sidebar (⌘B), Preview (⌥⌘P), Assistant (⌥⌘B);
+    - Files, Review, History;
+    - Show in Preview;
+    - zoom; Full Screen.
+  - **Book:**
+    - Export PDF (⇧⌘E), Open Exported PDF (⌥⌘E), Print with Mixam;
+    - Design Cover, Writing Style Guide, Name This Version;
+    - Runnable Code Examples, Add a Makefile;
+    - Book Settings.
+  - **Assistant:** New Task, Task Done; Ask About Selection (⌘I), Fix
+    Review Comments, Stop; Permissions.
+  - **Window:** Minimize, Zoom, previous and next tab. **Help:** Typst
+    Basics. These two use Tauri's window and help ids, so macOS treats them
+    as its own (window list, Help search).
+- Items forward their id; `studio.menuCommands` maps each id to what it does.
+  Without a book open, items that need one do nothing (a static menu bar
+  can't grey them out).
+- **Shortcuts the page also handles** (⌘O, ⌘P, ⌘S, ⌘B, ⌘I, ⌘F in the
+  editor) are on the items too, so they're discoverable. The page calls
+  preventDefault on a press, which stops the menu's key equivalent, so a
+  press isn't applied twice. With the preview focused, the menu acts.
+- Verified (self-test `menubar`):
+  - Every app item has a handler and every handler an item; the menu bar is
+    read back from the running app (`menu_outline`, self-test only).
+  - Go to File, Book Settings (opens on This book), Find, Toggle Preview
+    (hides, then shows), Review, and Name This Version (asks, cancelled)
+    work.
+  - Self-test `menus` checks the trimmed context menus.
 
 ### Figures mode
 
@@ -877,7 +933,7 @@ pane top (off by 0 pt).
 
 ### Export PDF asks where to save
 
-- **Export PDF…** (⇧⌘E, the toolbar, the File menu) opens the macOS Save
+- **Export PDF…** (⇧⌘E, the toolbar, the Book menu) opens the macOS Save
   dialog. For each book it starts where that book was last saved. The first
   time it suggests Documents/<title>.pdf, with the title from `#let title` or
   `#set document(title: …)`.
@@ -889,7 +945,7 @@ pane top (off by 0 pt).
 - The message says where the PDF went (the folder shortened in the middle when
   long) and has **Open** and **Show in Finder**. `open_pdf` and `reveal_pdf`
   only act on existing `.pdf` files.
-- **Open Exported PDF** (⌥⌘E; File menu, the preview's header and its menu)
+- **Open Exported PDF** (⌥⌘E; Book menu, the preview's header)
   opens the book's latest PDF in the PDF viewer. It looks where the book was
   last exported, then in the export folder, then next to the main file. With
   none, it offers Export PDF…. PDFs in the file tree open in the viewer too,

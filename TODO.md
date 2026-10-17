@@ -122,7 +122,7 @@
 
 - [x] im confused where change istory is stored? is this living in a git repository? can i work backwards ? see deltas? that seems like a good idea, no?
 
-- [ ] the menu system seems crowded and silly. we need to rethink and revamp the menus.
+- [x] the menu system seems crowded and silly. we need to rethink and revamp the menus.
 
 - [x] after asking a question, i have no way to resolve teh task and mark it as done... is there a way to do this im missing? if not we need to make sure thats doable?
 

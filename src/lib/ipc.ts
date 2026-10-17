@@ -38,6 +38,8 @@ export type AgentResponse = { status: number; body: any };
 export const ipc = {
   toolsStatus: () => invoke<ToolsStatus>('tools_status'),
   launchOptions: () => invoke<LaunchOptions>('launch_options'),
+  /** The menu bar as [title, items ("id=Label", or a predefined item's label, "---")] (self-test only). */
+  menuOutline: () => invoke<[string, string[]][]>('menu_outline'),
   uiLog: (line: string) => invoke<void>('ui_log', { line }).catch(() => {}),
   selftestFinish: (result: unknown) => invoke<void>('selftest_finish', { result }),
   logs: (source?: string) => invoke<{ source: string; line: string }[]>('app_logs', { source }),

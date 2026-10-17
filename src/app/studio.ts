@@ -133,6 +133,8 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 /** Identifies a selection for "leave it out" (same place and same text). */
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
+export type SettingsPage = 'general' | 'assistant' | 'permissions' | 'book' | 'tools';
+
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };
 
 /** Where a picked option goes: the passage as it stands in the buffer (1-based positions). */
@@ -197,6 +199,8 @@ export type StudioState = {
   zoom: number;
   settings: AppSettings;
   settingsOpen: boolean;
+  /** The Settings page to open at (null: the one last shown). */
+  settingsPage: SettingsPage | null;
   newBookOpen: boolean;
   /** "Typst basics": in the right-hand pane (or a dialog on the welcome screen). */
   guideOpen: boolean;
@@ -285,6 +289,7 @@ const initialState: StudioState = {
   zoom: 1,
   settings: loadSettings(),
   settingsOpen: false,
+  settingsPage: null,
   newBookOpen: false,
   guideOpen: false,
   prompt: null,
@@ -344,7 +349,14 @@ function writeJson(key: string, value: unknown) {
 
 export class Studio {
   readonly store = new Store<StudioState>(initialState);
-  readonly events = new Emitter<{ 'focus-composer': []; 'focus-editor': []; 'fill-composer': [text: string]; 'show-agent-pane': []; 'show-explorer': [] }>();
+  readonly events = new Emitter<{
+    'focus-composer': [];
+    'focus-editor': [];
+    'fill-composer': [text: string];
+    'show-agent-pane': [];
+    'show-explorer': [];
+    'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
+  }>();
   readonly perf = new PerfTracker();
   readonly typst = new TypstService();
   docs: Documents | null = null;
@@ -451,23 +463,7 @@ export class Studio {
         this.syncPreviewVisibility();
       }
     });
-    void listen<string>('menu', (e) => {
-      if (e.payload === 'settings') return this.openSettings();
-      if (e.payload === 'export-pdf') return void this.exportPdf();
-      if (e.payload === 'new-book') return this.openNewBook();
-      if (e.payload === 'new-chapter') return void this.newChapter();
-      if (e.payload === 'new-file') return void this.newFile();
-      if (e.payload === 'design-cover') return this.openCoverDialog();
-      if (e.payload === 'print-mixam') return this.openPrint();
-      if (e.payload === 'open-pdf') return void this.openExportedPdf();
-      if (e.payload === 'close-tab') return this.tabCommand('close');
-      if (e.payload === 'reopen-tab') return this.tabCommand('reopen');
-      if (e.payload === 'next-tab') return this.tabCommand('next');
-      if (e.payload === 'prev-tab') return this.tabCommand('prev');
-      if (e.payload === 'typst-guide') return this.openGuide();
-      const action = ({ 'zoom-in': 'in', 'zoom-out': 'out', 'zoom-reset': 'reset' } as const)[e.payload as 'zoom-in'];
-      if (action) void this.zoom(action, 'menu');
-    });
+    void listen<string>('menu', (e) => void this.menuCommand(e.payload));
     void listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
@@ -482,6 +478,103 @@ export class Studio {
 
   get state() {
     return this.store.get();
+  }
+
+  /** What each item of the menu bar does (src-tauri/src/menu.rs lists the ids). */
+  readonly menuCommands: Record<string, () => unknown> = {
+    settings: () => this.openSettings(),
+    // File
+    'new-book': () => this.openNewBook(),
+    'new-chapter': () => this.newChapter(),
+    'new-file': () => this.newFile(),
+    'open-book': () => this.chooseWorkspace(),
+    'go-to-file': () => this.openQuickOpen(),
+    save: () => this.save(),
+    'close-tab': () => this.tabCommand('close'),
+    'reopen-tab': () => this.tabCommand('reopen'),
+    // Edit
+    find: () => this.editorAction('actions.find'),
+    replace: () => this.editorAction('editor.action.startFindReplaceAction'),
+    'add-comment': () => this.addComment(),
+    // View
+    'toggle-sidebar': () => this.events.emit('toggle-pane', 'explorer'),
+    'toggle-preview': () => this.events.emit('toggle-pane', 'preview'),
+    'toggle-assistant': () => this.events.emit('toggle-pane', 'agent'),
+    'show-files': () => this.revealSidebar('files'),
+    'show-review': () => this.showReview(),
+    'show-history': () => this.revealSidebar(this.state.settings.historyPlacement === 'below' ? 'files' : 'history'),
+    'show-in-preview': () => this.syncPreviewToCursor(),
+    'zoom-in': () => this.zoom('in', 'menu'),
+    'zoom-out': () => this.zoom('out', 'menu'),
+    'zoom-reset': () => this.zoom('reset', 'menu'),
+    // Book
+    'export-pdf': () => this.exportPdf(),
+    'open-pdf': () => this.openExportedPdf(),
+    'print-mixam': () => this.openPrint(),
+    'design-cover': () => this.openCoverDialog(),
+    'style-guide': () => this.openStyleGuide(),
+    'name-version': () => this.nameVersion(),
+    'setup-code': () => this.openCodeExamples(),
+    'add-makefile': () => (this.state.workspace?.files.includes('Makefile') ? this.openFile('Makefile') : this.addMakefile()),
+    'book-settings': () => this.openSettings('book'),
+    // Assistant
+    'new-task': () => this.newSession(),
+    'task-done': () => this.finishTask(),
+    'ask-selection': () => this.attachSelection(),
+    'fix-comments': () => this.runSlash('/fix'),
+    stop: () => this.cancel(),
+    permissions: () => this.openSettings('permissions'),
+    // Window, Help
+    'prev-tab': () => this.tabCommand('prev'),
+    'next-tab': () => this.tabCommand('next'),
+    'typst-guide': () => this.openGuide(),
+  };
+
+  /** Commands that need a book open do nothing without one (the menu bar can't grey them out). */
+  private static readonly WITHOUT_A_BOOK = new Set(['settings', 'new-book', 'open-book', 'zoom-in', 'zoom-out', 'zoom-reset', 'typst-guide', 'toggle-sidebar', 'toggle-preview', 'toggle-assistant']);
+
+  async menuCommand(id: string) {
+    if (!this.state.workspace && !Studio.WITHOUT_A_BOOK.has(id)) return;
+    try {
+      await this.menuCommands[id]?.();
+    } catch (e) {
+      this.toast(errorMessage(e), 'error');
+    }
+  }
+
+  /** A sidebar view, showing the sidebar if it was hidden. */
+  private revealSidebar(view: StudioState['sidebar']) {
+    this.events.emit('show-explorer');
+    this.showSidebar(view);
+  }
+
+  /** Run one of the editor's own actions (Find, Replace) from the menu bar. */
+  private editorAction(id: string) {
+    const editor = this.editor;
+    if (!editor) return;
+    editor.focus();
+    void editor.getAction(id)?.run();
+  }
+
+  /** The writing style guide, created from the template if there isn't one. */
+  async openStyleGuide() {
+    if (this.state.styleGuide.exists) await this.openFile(STYLE_GUIDE_FILE);
+    else await this.createStyleGuideFromTemplate();
+  }
+
+  /** Name the current version (as History's "Name this version…" does). */
+  async nameVersion() {
+    if (this.state.history.status !== 'ready') return;
+    const name = await this.prompt({ title: 'Name this version', label: 'Name', placeholder: 'e.g. Draft 2 sent to editor', okLabel: 'Save' });
+    if (!name?.trim()) return;
+    await this.history.saveNamed(name.trim());
+    this.revealSidebar(this.state.settings.historyPlacement === 'below' ? 'files' : 'history');
+  }
+
+  /** Runnable code examples: set them up if needed, and show the Code view. */
+  async openCodeExamples() {
+    if (!this.state.code.setUp) await this.code.setUp();
+    this.revealSidebar('code');
   }
 
   // ---- startup / workspace ----------------------------------------------------
@@ -1098,12 +1191,8 @@ export class Studio {
             { label: 'Update Cover from Book', action: () => void this.updateCoverFromBook() },
             { label: 'Export Cover', action: () => void this.exportCover(), enabled: !this.state.exporting },
           ]
-        : [
-            { label: this.hasCover() ? 'Show the Cover' : 'Design a Cover…', action: () => this.openCoverDialog() },
-            { label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
-            { label: 'Open Exported PDF', accelerator: 'CmdOrCtrl+Alt+E', action: () => void this.openExportedPdf() },
-            { label: 'Print with Mixam…', action: () => this.openPrint() },
-          ]),
+        : [{ label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting }]),
+      'separator',
       { label: 'Restart Preview', action: () => void this.restartTypst() },
     ]);
   }
@@ -3207,8 +3296,9 @@ export class Studio {
 
   // ---- settings -------------------------------------------------------------------
 
-  openSettings() {
-    this.store.set({ settingsOpen: true });
+  /** Settings, at `page` if given (else the one last shown). */
+  openSettings(page?: SettingsPage) {
+    this.store.set({ settingsOpen: true, settingsPage: page ?? null });
     this.syncPreviewVisibility();
   }
 
