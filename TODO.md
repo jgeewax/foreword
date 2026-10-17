@@ -108,7 +108,7 @@
 
 - [x] when looking at what changed, the zindexs are wrong. preview shows up ONTOP of the what changed modal
 
-- [ ] cmd k , w should kill all tabs, but it doesnt.
+- [x] cmd k , w should kill all tabs, but it doesnt.
 
 - [ ] can we make comments be grouped by file?
 

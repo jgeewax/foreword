@@ -2226,6 +2226,19 @@ async function tabChecks() {
   await press('KeyK', { meta: true });
   await press('KeyW');
   out.closeAll = studio.state.tabs.length;
+  // ⌘K ⌘W with the editor focused (as you'd press it while writing): all tabs close.
+  for (const f of files) await studio.openFile(f);
+  studio.editor?.focus();
+  await sleep(150);
+  const inEditor = document.activeElement as HTMLElement;
+  const pressIn = async (code: string, mods: { meta?: boolean } = {}) => {
+    inEditor.dispatchEvent(new KeyboardEvent('keydown', { key: code.replace(/^Key/, '').toLowerCase(), code, metaKey: !!mods.meta, bubbles: true, cancelable: true }));
+    await sleep(350);
+  };
+  out.focusInEditor = !!inEditor.closest('.monaco-editor');
+  await pressIn('KeyK', { meta: true });
+  await pressIn('KeyW', { meta: true });
+  out.closeAllFromEditor = studio.state.tabs.length;
   // A press arriving twice (key event, then menu) runs once.
   for (const f of files) await studio.openFile(f);
   studio.showTabAt(0);

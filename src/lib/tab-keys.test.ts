@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordCommand, isChordStart, tabKeyCommand } from './tab-keys';
+import { chordCommand, editorChordAction, isChordStart, tabKeyCommand } from './tab-keys';
 
 const key = (code: string, mods: Partial<{ meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }> = {}, k = code.replace(/^Key/, '').toLowerCase()) => ({
   key: k,
@@ -41,5 +41,12 @@ describe('tab shortcuts', () => {
     expect(chordCommand(key('KeyP'))).toBe('copy-path');
     expect(chordCommand(key('KeyR'))).toBe('reveal');
     expect(chordCommand(key('KeyX'))).toBeNull();
+  });
+
+  it('passes the editor’s own ⌘K chords on to it', () => {
+    expect(editorChordAction(key('KeyC', { meta: true }))).toBe('editor.action.addCommentLine');
+    expect(editorChordAction(key('Digit0', { meta: true }, '0'))).toBe('editor.foldAll');
+    expect(editorChordAction(key('KeyW', { meta: true }))).toBeNull();
+    expect(editorChordAction(key('KeyC'))).toBeNull();
   });
 });

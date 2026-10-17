@@ -823,6 +823,13 @@ pane top (off by 0 pt).
   and the next key within 1.5 s.
 - A press can reach both the page and the native menu (as zoom found), so the
   same tab command within 300 ms runs once.
+- **Fix:** with the editor focused, ⌘K ⌘W closed only one tab. Monaco ran
+  ⌘K chords there, but the window handler caught the second key as a lone ⌘W.
+  Every ⌘K chord is now read in one place, editor included. The editor's own
+  ⌘K chords are passed on as its actions: ⌘K ⌘C / ⌘U to comment and
+  uncomment, ⌘K ⌘0 / ⌘J and ⌘K ⌘[ / ⌘] to fold and unfold, ⌘K ⌘L to toggle a
+  fold, ⌘K ⌘X to trim whitespace, ⌘K ⌘F to format the selection. Tested with
+  the keys sent to the editor.
 
 ### Showing that the assistant is working
 

@@ -74,14 +74,6 @@ export function EditorPane() {
       contextmenu: false,
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void studio.save());
-    // VS Code's ⌘K tab chords (outside the editor, App handles them).
-    const chord = (key: number, command: Parameters<typeof studio.tabCommand>[0]) =>
-      editor.addCommand(monaco.KeyMod.chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, key), () => studio.tabCommand(command));
-    chord(monaco.KeyCode.KeyW, 'close-all');
-    chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, 'close-all');
-    chord(monaco.KeyCode.KeyU, 'close-saved');
-    chord(monaco.KeyCode.KeyP, 'copy-path');
-    chord(monaco.KeyCode.KeyR, 'reveal');
     editor.addAction({
       id: 'studio.askAgent',
       label: 'Ask Agent About Selection',

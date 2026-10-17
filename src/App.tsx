@@ -14,7 +14,7 @@ import { PrintDialog } from './components/PrintDialog';
 import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
-import { chordCommand, isChordStart, tabKeyCommand } from './lib/tab-keys';
+import { chordCommand, editorChordAction, isChordStart, tabKeyCommand } from './lib/tab-keys';
 import { zoomActionForKey } from './lib/zoom';
 
 const notifyLayout = () => {
@@ -125,21 +125,25 @@ export function App() {
     // native View-menu shortcut from applying the same press twice.
     let chordUntil = 0;
     const onZoomKey = (e: KeyboardEvent) => {
-      // Tab shortcuts (see lib/tab-keys.ts). In the editor, Monaco runs the ⌘K chords (with its own).
+      // Tab shortcuts (see lib/tab-keys.ts). Every ⌘K chord is read here, in the editor too
+      // (so the ⌘W of ⌘K ⌘W isn't taken for "close tab"); the editor's own go on to it.
       if (studio.state.workspace) {
         const inEditor = !!(e.target as HTMLElement | null)?.closest?.('.monaco-editor');
         if (chordUntil > performance.now() && !['Meta', 'Shift', 'Alt', 'Control'].includes(e.key)) {
           chordUntil = 0;
-          const chord = chordCommand(e);
-          if (chord) {
-            e.preventDefault();
-            e.stopPropagation();
-            studio.tabCommand(chord);
-            return;
-          }
-        }
-        if (!inEditor && isChordStart(e)) {
           e.preventDefault();
+          e.stopPropagation();
+          const chord = chordCommand(e);
+          if (chord) studio.tabCommand(chord);
+          else {
+            const action = inEditor ? editorChordAction(e) : null;
+            if (action) studio.editor?.trigger('keyboard', action, null);
+          }
+          return;
+        }
+        if (isChordStart(e)) {
+          e.preventDefault();
+          e.stopPropagation();
           chordUntil = performance.now() + 1500;
           return;
         }

@@ -50,3 +50,23 @@ export function tabKeyCommand(e: KeyLike): TabCommand | null {
 }
 
 export const commandId = (c: TabCommand) => (typeof c === 'string' ? c : `at:${c.at}`);
+
+/**
+ * The editor's own ⌘K chords (Monaco's actions), for when ⌘K is taken here: all ⌘K
+ * chords go through one place, so ⌘K ⌘W can't be read as a lone ⌘W.
+ */
+export function editorChordAction(e: KeyLike): string | null {
+  if (!only(e, { meta: true })) return null;
+  const map: Record<string, string> = {
+    KeyC: 'editor.action.addCommentLine',
+    KeyU: 'editor.action.removeCommentLine',
+    Digit0: 'editor.foldAll',
+    KeyJ: 'editor.unfoldAll',
+    BracketLeft: 'editor.foldRecursively',
+    BracketRight: 'editor.unfoldRecursively',
+    KeyL: 'editor.toggleFold',
+    KeyX: 'editor.action.trimTrailingWhitespace',
+    KeyF: 'editor.action.formatSelection',
+  };
+  return map[e.code] ?? null;
+}
