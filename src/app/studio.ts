@@ -24,6 +24,7 @@ import { loadSettings, saveSettings, type AppSettings } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
+import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import type { AgentAdapter, AgentEvent, FilePatch, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
@@ -83,6 +84,8 @@ export type StudioState = {
   /** `.typst-studio.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
   exporting: boolean;
+  /** WRITING_STYLE.md: whether it exists, and whether the user dismissed the setup prompt. */
+  styleGuide: { exists: boolean; chars: number; dismissed: boolean };
 };
 
 const initialState: StudioState = {
@@ -118,6 +121,7 @@ const initialState: StudioState = {
   settingsOpen: false,
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
+  styleGuide: { exists: false, chars: 0, dismissed: false },
 };
 
 const LAST_WORKSPACE = 'studio.lastWorkspace';
@@ -160,6 +164,7 @@ export class Studio {
   private unsubscribeAgent: (() => void) | null = null;
   /** Errors already shown for the current turn (OpenCode reports a failure more than once). */
   private turnErrors = new Set<string>();
+  private styleGuideText: string | null = null;
   private syncTimer: number | undefined;
   /** Cursor moves caused by a preview click must not bounce back to the preview. */
   private suppressSyncUntil = 0;
@@ -266,6 +271,7 @@ export class Studio {
     this.store.set({ workspace: info, opening: null, tabs: [], active: null });
 
     await this.loadProjectSettings();
+    await this.loadStyleGuide();
     void this.startTypst();
     void this.startAgent();
 
@@ -299,7 +305,9 @@ export class Studio {
       preview: { status: 'off' },
       agent: initialState.agent,
       project: initialState.project,
+      styleGuide: initialState.styleGuide,
     });
+    this.styleGuideText = null;
   }
 
   async refreshFiles() {
@@ -320,6 +328,7 @@ export class Studio {
       void this.docs?.diskChanged(batch);
       void this.refreshFiles();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
+      if (batch.includes(STYLE_GUIDE_FILE)) void this.loadStyleGuide({ updateSession: true });
     }, 120);
   }
 
@@ -735,6 +744,7 @@ export class Studio {
     });
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
+      if (this.styleGuideText?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText));
     } catch (e) {
       // Still usable without them, but the agent will behave like a coding assistant: say so.
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't set the writing-assistant instructions: ${errorMessage(e)}` });
@@ -974,6 +984,69 @@ export class Studio {
     } finally {
       this.store.set({ exporting: false });
     }
+  }
+
+  // ---- writing style guide (WRITING_STYLE.md) --------------------------------------
+
+  private styleDismissKey() {
+    return `studio.styleGuideDismissed:${this.state.workspace?.root ?? ''}`;
+  }
+
+  /** Read WRITING_STYLE.md; with `updateSession`, push the new text to the running conversation. */
+  async loadStyleGuide({ updateSession = false } = {}) {
+    let text: string | null = null;
+    try {
+      text = (await ipc.fsRead(STYLE_GUIDE_FILE)).text;
+    } catch {}
+    const changed = text !== this.styleGuideText;
+    this.styleGuideText = text;
+    const dismissed = (() => {
+      try {
+        return localStorage.getItem(this.styleDismissKey()) === '1';
+      } catch {
+        return false;
+      }
+    })();
+    this.store.set({ styleGuide: { exists: text !== null, chars: text?.length ?? 0, dismissed } });
+    const { sessionId } = this.state.agent;
+    if (!updateSession || !changed || !sessionId || !this.agent) return;
+    try {
+      if (text?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(text));
+      else await this.agent.removeInstructions(sessionId, STYLE_INSTRUCTIONS_KEY);
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: text?.trim() ? `Using the updated ${STYLE_GUIDE_FILE}.` : `${STYLE_GUIDE_FILE} was removed; no style guide in use.` });
+    } catch (e) {
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't update the style guide for this conversation: ${errorMessage(e)}` });
+    }
+  }
+
+  /** Create WRITING_STYLE.md from the template and open it. */
+  async createStyleGuideFromTemplate() {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    try {
+      await ipc.fsWrite(STYLE_GUIDE_FILE, styleGuideTemplate(ws.name), null);
+    } catch (e) {
+      if (!(isCmdError(e) && e.kind === 'conflict')) {
+        this.toast(`Couldn't create ${STYLE_GUIDE_FILE}: ${errorMessage(e)}`, 'error');
+        return;
+      }
+      // It appeared meanwhile: just open it.
+    }
+    await this.loadStyleGuide({ updateSession: true });
+    await this.refreshFiles();
+    await this.openFile(STYLE_GUIDE_FILE);
+  }
+
+  /** Ask the agent to read the manuscript, ask a few questions, and write the guide. */
+  async draftStyleGuide() {
+    return this.send(draftStyleGuidePrompt());
+  }
+
+  dismissStyleGuidePrompt() {
+    try {
+      localStorage.setItem(this.styleDismissKey(), '1');
+    } catch {}
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, dismissed: true } }));
   }
 
   // ---- zoom -----------------------------------------------------------------------

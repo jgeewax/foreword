@@ -134,6 +134,10 @@ export class OpenCodeAdapter implements AgentAdapter {
     await call('PUT', `/api/experimental/session/${sessionId}/instructions/entries/${encodeURIComponent(key)}`, { value: text });
   }
 
+  async removeInstructions(sessionId: string, key: string) {
+    await call('DELETE', `/api/experimental/session/${sessionId}/instructions/entries/${encodeURIComponent(key)}`);
+  }
+
   async getInstructions(sessionId: string) {
     return (await call('GET', `/api/experimental/session/${sessionId}/instructions/entries`)).data ?? [];
   }

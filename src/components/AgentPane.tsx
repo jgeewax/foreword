@@ -153,6 +153,38 @@ function EditPolicyToggle() {
   );
 }
 
+function StyleGuideBar() {
+  const guide = useStore(studio.store, (s) => s.styleGuide);
+  const ready = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
+  if (guide.exists) {
+    return (
+      <div className="style-bar">
+        <span className="muted">Style guide</span>
+        <button className="link" title="Every message follows this guide. Click to edit it." onClick={() => void studio.openFile('WRITING_STYLE.md')}>
+          WRITING_STYLE.md
+        </button>
+      </div>
+    );
+  }
+  if (guide.dismissed) return null;
+  return (
+    <div className="style-bar setup">
+      <div>
+        <strong>No writing style guide yet.</strong> A short guide (voice, tone, terminology, formatting) keeps every edit sounding like your book.
+      </div>
+      <div className="style-actions">
+        <button className="primary" disabled={!ready} title="The agent reads your chapters, asks a few questions, then writes WRITING_STYLE.md" onClick={() => void studio.draftStyleGuide()}>
+          Draft from my chapters
+        </button>
+        <button onClick={() => void studio.createStyleGuideFromTemplate()}>Start from a template</button>
+        <button className="link" onClick={() => studio.dismissStyleGuidePrompt()}>
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AgentPane() {
   const agent = useStore(studio.store, (s) => s.agent);
   const listRef = useRef<HTMLDivElement>(null);
@@ -188,6 +220,7 @@ export function AgentPane() {
           </button>
         )}
       </div>
+      <StyleGuideBar />
       <div
         className="transcript"
         ref={listRef}

@@ -190,6 +190,73 @@ async function projectSettingsChecks() {
   return out;
 }
 
+/** Ask the agent something and return its last reply (no tools expected). */
+async function askAgent(text: string): Promise<string> {
+  await studio.send(text);
+  await sleep(1000);
+  await waitFor(() => !studio.state.agent.running, 120000, text).catch(() => {});
+  const replies = studio.state.agent.items.filter((i) => i.kind === 'assistant');
+  return replies.length ? (replies[replies.length - 1] as { text: string }).text : '';
+}
+
+/** Writing style guide (TODO #10). Writes WRITING_STYLE.md: scratch book only. */
+async function styleGuideChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  out.initial = { exists: studio.state.styleGuide.exists, setupBarShown: !!document.querySelector('.style-bar.setup') };
+  try {
+    out.snapshotSetup = await ipc.previewSnapshot('style-setup', 'main');
+  } catch (e) {
+    out.snapshotSetup = errorMessage(e);
+  }
+
+  await studio.createStyleGuideFromTemplate();
+  await sleep(500);
+  out.fromTemplate = {
+    exists: studio.state.styleGuide.exists,
+    openedInEditor: studio.state.active === 'WRITING_STYLE.md',
+    firstLine: studio.editor?.getModel()?.getLineContent(1),
+    barShowsFile: document.querySelector('.style-bar .link')?.textContent,
+  };
+
+  // The user fills in the guide; the agent follows it.
+  const write = async (codeword: string) => {
+    const cur = await ipc.fsRead('WRITING_STYLE.md');
+    const text = cur.text.replace(/## Words and spelling\n[^#]*/, `## Words and spelling\nAlways use British spelling. In this book the reader is always addressed by the codeword "${codeword}".\n\n`);
+    await ipc.fsWrite('WRITING_STYLE.md', text, cur.hash);
+  };
+  await write('Sparrow');
+  await sleep(1500);
+  studio.newSession();
+  const q = 'Without using any tools: according to my writing style guide, what codeword is the reader addressed by? Reply with just the word.';
+  out.firstAnswer = await askAgent(q);
+  const sid = studio.state.agent.sessionId!;
+  out.instructionKeys = (await studio.agent!.getInstructions(sid)).map((e) => e.key);
+
+  // Change the guide mid-conversation: the session picks it up.
+  await write('Heron');
+  await sleep(2500);
+  out.updateNotice = studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as any).text).pop();
+  out.secondAnswer = await askAgent(q);
+
+  // Drafting from the manuscript: reads chapters, asks questions, changes no chapter.
+  const chapterHash = await ipc.fsHash('chapters/ch2-eigenvalues.typ');
+  studio.newSession();
+  const from = studio.state.agent.items.length;
+  await studio.draftStyleGuide();
+  await sleep(1000);
+  await waitFor(() => !studio.state.agent.running, 180000, 'draft').catch(() => {});
+  const items = studio.state.agent.items.slice(from);
+  const reply = items.filter((i) => i.kind === 'assistant').map((i) => (i as any).text).join('\n');
+  out.draft = {
+    tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} ${(i as any).summary}`),
+    asksQuestions: (reply.match(/\?/g) ?? []).length,
+    replyStart: reply.slice(0, 400),
+    chapterUnchanged: (await ipc.fsHash('chapters/ch2-eigenvalues.typ')) === chapterHash,
+  };
+  return out;
+}
+
 /**
  * Edit setting (TODO #7). Makes real edits, so it only runs with
  * TYPST_STUDIO_SELFTEST_EDITS=1 against a scratch copy of a book.
@@ -504,6 +571,8 @@ export async function runSelftest(launch: LaunchOptions) {
       result.projectSettings = await projectSettingsChecks();
     }
     if (launch.selftestEdits && launch.selftestAgent) {
+      log('style guide');
+      result.styleGuide = await styleGuideChecks();
       log('edit policy');
       result.editPolicy = await editPolicyChecks();
     }

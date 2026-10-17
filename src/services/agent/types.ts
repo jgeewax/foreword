@@ -51,6 +51,7 @@ export interface AgentAdapter {
   /** Add (or replace) a named instruction block in the session's system context. */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;
   getInstructions(sessionId: string): Promise<{ key: string; value: unknown }[]>;
+  removeInstructions(sessionId: string, key: string): Promise<void>;
   switchModel(sessionId: string, model: ModelRef): Promise<void>;
   /** Resolves when the backend has accepted the message (not when the turn ends). */
   send(sessionId: string, message: string, context: { selection: SourceSelection; stale: boolean }[]): Promise<void>;
