@@ -11,7 +11,7 @@
 use tauri::{
     AppHandle, Runtime,
     menu::{
-        AboutMetadata, HELP_SUBMENU_ID, Menu, MenuItem, PredefinedMenuItem, Submenu,
+        HELP_SUBMENU_ID, Menu, MenuItem, PredefinedMenuItem, Submenu,
         WINDOW_SUBMENU_ID,
     },
 };
@@ -19,6 +19,7 @@ use tauri::{
 /// Menu ids the page acts on (everything here except "new-window" and
 /// "close-window", which the app handles itself).
 pub const COMMANDS: &[&str] = &[
+    "about",
     "settings",
     "check-updates",
     // File
@@ -85,18 +86,13 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .product_name
         .clone()
         .unwrap_or_else(|| handle.package_info().name.clone());
-    let about = AboutMetadata {
-        name: Some(name.clone()),
-        version: Some(handle.package_info().version.to_string()),
-        ..Default::default()
-    };
-
     let app = Submenu::with_items(
         handle,
         &name,
         true,
         &[
-            &PredefinedMenuItem::about(handle, Some(&format!("About {name}")), Some(about))?,
+            // The app's own About (src/components/AboutDialog.tsx), not the standard panel.
+            &item("about", &format!("About {name}"), None)?,
             &item("check-updates", "Check for Updates…", None)?,
             &sep()?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,

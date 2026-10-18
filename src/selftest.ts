@@ -4403,6 +4403,26 @@ async function antigravityChecks() {
   return out;
 }
 
+/** About Typst Studio: from the menu's id, what it says, and Esc closes it. */
+async function aboutChecks() {
+  const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
+  await studio.menuCommand('about');
+  await sleep(400);
+  const text = (sel: string) => document.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const out: Record<string, unknown> = {
+    title: text('.about-dialog h1'),
+    version: text('.about-version'),
+    made: text('.about-made'),
+    links: [...document.querySelectorAll('.about-links button')].map((b) => b.textContent),
+    fine: text('.about-fine'),
+    snapshot: await snap('about'),
+  };
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  out.escCloses = await waitFor(() => !document.querySelector('.about-dialog'), 5000, 'about closed').then(() => true, () => false);
+  still.remove();
+  return out;
+}
+
 /** Settings' ✕: its icon in the middle of the box its hover shades, at several sizes of everything. */
 async function closeButtonChecks() {
   const out: Record<string, unknown> = {};
@@ -5509,7 +5529,8 @@ export async function runSelftest(launch: LaunchOptions) {
     const ws = await waitFor(() => studio.state.workspace, 30000, 'workspace');
     log(`workspace ${ws.root}`);
     result.workspace = ws.root;
-    await waitFor(() => ['ready', 'error'].includes(studio.state.preview.status), 60000, 'preview');
+    // A window behind others may never paint its preview; groups that don't need it run anyway.
+    await waitFor(() => ['ready', 'error'].includes(studio.state.preview.status), 60000, 'preview').catch(() => log('preview not ready; going on'));
     result.preview = { ...studio.state.preview, readyAtMs: Math.round(performance.now()) };
     log(`preview ${studio.state.preview.status}`);
     if (studio.state.preview.status === 'error') throw new Error(`preview: ${studio.state.preview.error}`);
@@ -5647,6 +5668,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('defaults')) result.defaults = await explicitDefaultsChecks();
     if (launch.selftestEdits && want('filespage')) result.filespage = await filesPageChecks();
     if (want('closebutton')) result.closebutton = await closeButtonChecks();
+    if (want('about')) result.about = await aboutChecks();
     // Downloads Antigravity's connector (113 MB): only when asked for, into TYPST_STUDIO_ASSISTANTS_DIR.
     if (only?.includes('antigravity')) result.antigravity = await antigravityChecks();
     // A release build with TYPST_STUDIO_UPDATE_URL at a local feed: it installs over itself.

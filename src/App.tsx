@@ -13,6 +13,7 @@ import { QuickOpen } from './components/QuickOpen';
 import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { UpdateDialog } from './components/UpdateDialog';
+import { AboutDialog } from './components/AboutDialog';
 import { useStore } from './lib/store';
 import { chordCommand, editorChordAction, isChordStart, tabKeyCommand } from './lib/tab-keys';
 import { zoomActionForKey } from './lib/zoom';
@@ -242,6 +243,7 @@ export function App() {
   }, [workspace]);
   const settingsOpen = useStore(studio.store, (s) => s.settingsOpen);
   const updateDialog = useStore(studio.store, (s) => s.updateDialog);
+  const aboutOpen = useStore(studio.store, (s) => s.aboutOpen);
   const newBookOpen = useStore(studio.store, (s) => s.newBookOpen);
   const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
   const printOpen = useStore(studio.store, (s) => s.print.open);
@@ -265,6 +267,7 @@ export function App() {
       {printOpen && <PrintDialog />}
       {quickOpen && <QuickOpen />}
       {updateDialog && <UpdateDialog />}
+      {aboutOpen && <AboutDialog />}
       <PromptDialog />
     </>
   );

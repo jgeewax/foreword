@@ -236,6 +236,8 @@ export type StudioState = {
   /** Typst Studio's update (the same in every window), and whether its dialog is open. */
   update: UpdateState | null;
   updateDialog: boolean;
+  /** About Typst Studio (the app menu's first item). */
+  aboutOpen: boolean;
   /** The Settings page to open at (null: the one last shown). */
   settingsPage: SettingsPage | null;
   newBookOpen: boolean;
@@ -335,6 +337,7 @@ const initialState: StudioState = {
   settingsOpen: false,
   update: null,
   updateDialog: false,
+  aboutOpen: false,
   settingsPage: null,
   newBookOpen: false,
   newBookTab: 'book',
@@ -572,6 +575,7 @@ export class Studio {
   /** What each item of the menu bar does (src-tauri/src/menu.rs lists the ids). */
   readonly menuCommands: Record<string, () => unknown> = {
     settings: () => this.openSettings(),
+    about: () => this.openAbout(),
     'check-updates': () => this.checkForUpdates({ dialog: true }),
     // File
     'new-book': () => this.openNewBook(),
@@ -2549,7 +2553,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.updateDialog || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || !!s.quickOpen;
+    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || !!s.quickOpen;
   }
 
   private syncPreviewVisibility() {
@@ -2696,6 +2700,14 @@ export class Studio {
 
   closeUpdateDialog() {
     this.store.set({ updateDialog: false });
+  }
+
+  openAbout() {
+    this.store.set({ aboutOpen: true });
+  }
+
+  closeAbout() {
+    this.store.set({ aboutOpen: false });
   }
 
   /** Download, install and restart, with the dialog showing each step. */

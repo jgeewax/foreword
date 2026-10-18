@@ -63,7 +63,11 @@ jobs:
           prev=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
           {
             echo 'body<<__NOTES__'
-            git log --no-merges --format='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME" | grep -v -E '^- (TODO|Version )' | head -40
+            if [ -z "$prev" ]; then
+              echo 'The first release of Typst Studio.'
+            else
+              git log --no-merges --format='- %s' "$prev..$GITHUB_REF_NAME" | grep -v -E '^- (TODO|Version )' | head -40
+            fi
             echo '__NOTES__'
           } >> "$GITHUB_OUTPUT"
 
@@ -127,6 +131,8 @@ jobs:
           # The latest release (not a prerelease) is the one the app's update feed points at.
           prerelease: false
           includeUpdaterJson: true
+          # Names without the version, so releases/latest/download/Typst-Studio_aarch64.dmg is always the newest (the website links to it).
+          assetNamePattern: Typst-Studio_[arch][ext]
 
       - name: Keep the DMG with the run
         uses: actions/upload-artifact@v4

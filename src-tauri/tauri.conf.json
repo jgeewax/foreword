@@ -31,7 +31,9 @@
     "category": "Productivity",
     "resources": {
       "../samples/": "samples/"
-    }
+    },
+    "copyright": "© 2026 JJ Geewax",
+    "publisher": "JJ Geewax"
   },
   "plugins": {
     "updater": {
