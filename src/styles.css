@@ -336,7 +336,8 @@ button.tool-label:hover { color: var(--accent); text-decoration-color: currentCo
 .permission-command { margin-top: 4px; }
 .permission-command summary { font-size: 11px; color: var(--muted); cursor: default; }
 .permission-command summary:hover { color: var(--fg); }
-.tool-status { flex: none; width: 12px; display: inline-flex; justify-content: center; }
+/* A step's mark (✓, the spinner, the live glyph below it) sits in one 16px column, its words 6px after. */
+.tool-status { flex: none; width: 16px; display: inline-flex; justify-content: center; }
 .tool-spinner { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--border); border-top-color: var(--accent); animation: spin 0.75s linear infinite; align-self: center; }
 .tool-summary { font-family: "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
@@ -760,11 +761,11 @@ button.switch:active:not(:disabled) { transform: none; }
 
 /* The chat's live progress line, and the model's reasoning. */
 .activity { animation: rise-in 0.18s ease-out; }
-.activity-line { display: flex; align-items: center; gap: 8px; padding: 6px 2px 2px; font-size: 12.5px; }
+.activity-line { display: flex; align-items: center; gap: 6px; padding: 6px 2px 2px 0; font-size: 12.5px; }
 /* Each new phrase rises in, rather than just swapping. */
 .activity-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; animation: shimmer 1.8s linear infinite, phrase-in 0.35s ease-out; }
 @keyframes phrase-in { from { opacity: 0; transform: translateY(3px); } }
-.activity-tip { margin: 3px 2px 0 24px; font-size: 11.5px; line-height: 1.4; color: var(--muted); animation: appear 0.6s ease-out; }
+.activity-tip { margin: 3px 2px 0 22px; font-size: 11.5px; line-height: 1.4; color: var(--muted); animation: appear 0.6s ease-out; }
 .activity-tip::before { content: "Tip · "; font-weight: 600; }
 
 /* The assistant's moving pictures (ActivityGlyph), 16px, in the accent colour. */
@@ -794,7 +795,9 @@ svg.glyph { overflow: visible; }
 @keyframes sand-in { 0% { transform: scaleY(0); } 70%, 100% { transform: scaleY(1); } }
 /* Waiting on you. */
 .glyph-pulse { width: 8px; height: 8px; margin: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
-.thinking-head .glyph { width: 13px; height: 13px; vertical-align: -2px; margin-right: 6px; }
+.thinking-head .glyph { vertical-align: -4px; margin-right: 6px; }
+/* The sparkle's big star sits left of its box's middle (the small ones are to its right): in the steps' column, the star is what lines up with the ✓s. */
+.activity-line > .glyph-sparkle, .thinking-head .glyph-sparkle { translate: 1.33px 0; }
 .agent-status .glyph { width: 13px; height: 13px; }
 .activity-time { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .thinking { font-size: 12px; color: var(--muted); animation: rise-in 0.18s ease-out; }
