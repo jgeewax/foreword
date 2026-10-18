@@ -166,6 +166,6 @@
 
 - [x] pointer icon should become hand with finger for file tabs.
 
-- [ ] file tabs should have file type icon like vs code
+- [x] file tabs should have file type icon like vs code
 
 - [ ] git diffs and history diffs show up as a modal. i want them both to show up like regular files as a tab. if width allows, side by side. if not , inline diffs. just like vs code.

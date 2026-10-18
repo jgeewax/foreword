@@ -176,6 +176,7 @@ button.indicator:hover { background: var(--bg-3); }
 .tab { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 12px; border-right: 1px solid var(--border); white-space: nowrap; color: var(--muted); }
 /* Tabs are the one place the pointer is a hand: they're clicked to switch, like links. */
 .tab, .tab-close { cursor: pointer; }
+.tab .file-icon { margin: 0 2px 0 -2px; }
 .tab.active { background: var(--bg); color: var(--fg); box-shadow: inset 0 -2px var(--accent); }
 .tab-close { background: none; border: none; width: 18px; height: 18px; padding: 0; border-radius: 4px; display: grid; place-items: center; }
 .tab-close .dot, .tab-close .x { grid-area: 1 / 1; display: grid; place-items: center; }
@@ -187,6 +188,16 @@ button.indicator:hover { background: var(--bg-3); }
 .tab-close.dirty .dot { visibility: visible; }
 .tab:hover .tab-close.dirty .dot { visibility: hidden; }
 .tab-close:hover { background: var(--bg-3); }
+/* File-type icons, in VS Code's (Seti) colours. */
+.file-icon { flex: none; width: 16px; height: 16px; display: inline-grid; place-items: center; font: 700 13px/1 -apple-system, sans-serif; color: var(--muted); }
+.file-icon.ft-typ { color: #239dad; font-size: 15px; }
+.file-icon.ft-pdf { color: #cc3e44; }
+.file-icon.ft-md { color: #519aba; }
+.file-icon.ft-json { color: #cbcb41; font-size: 10.5px; letter-spacing: -0.5px; }
+.file-icon.ft-bib { color: #e37933; font-size: 12px; }
+.file-icon.ft-csv { color: #8dc149; font-weight: 400; }
+.file-icon.ft-image { color: #a074c4; }
+.file-icon.ft-conf { font-weight: 400; }
 .editor-host { flex: 1; min-height: 0; }
 .editor-pane .empty-hint { position: absolute; inset: 60px 0 auto; pointer-events: none; }
 .banner { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); }

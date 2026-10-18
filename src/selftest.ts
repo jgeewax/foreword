@@ -2919,6 +2919,9 @@ async function tabChecks() {
   // The pointer is a hand over a tab and its ×.
   const tab = document.querySelector('.tab:not(.active)');
   out.pointer = { tab: tab && getComputedStyle(tab).cursor, close: tab && getComputedStyle(tab.querySelector('.tab-close')!).cursor };
+  // Each tab has its file type's icon, before the name.
+  out.icons = Object.fromEntries([...document.querySelectorAll<HTMLElement>('.tab')].map((t) => [t.title, t.firstElementChild?.className]));
+  out.iconsShot = await snap('tabs-icons');
   const press = async (code: string, mods: { meta?: boolean; ctrl?: boolean; alt?: boolean; shift?: boolean } = {}, key = code.replace(/^(Key|Digit)/, '').toLowerCase()) => {
     document.body.dispatchEvent(
       new KeyboardEvent('keydown', { key, code, metaKey: !!mods.meta, ctrlKey: !!mods.ctrl, altKey: !!mods.alt, shiftKey: !!mods.shift, bubbles: true, cancelable: true }),

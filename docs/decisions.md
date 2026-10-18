@@ -1282,6 +1282,11 @@ pane top (off by 0 pt).
 - **The pointer is a hand over a tab** and its ×. Everywhere else it stays
   the arrow, as in Mac apps. Verified (self-test `tabs`): both are
   `cursor: pointer`.
+- **Each tab has its file type's icon** before the name, in VS Code's (Seti)
+  colours: Typst a teal t, PDF red, Markdown blue, BibTeX an orange @, JSON
+  yellow braces, images purple, others a plain page. It's the same `FileIcon`
+  as Source Control's rows. Verified (self-test `tabs`): four chapters' tabs
+  each start with the Typst icon.
 
 ### Showing that the assistant is working
 

@@ -8,7 +8,7 @@ import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
-import { Icon } from './icons';
+import { FileIcon, Icon } from './icons';
 import { useStore } from '../lib/store';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -414,6 +414,7 @@ export function EditorPane() {
               else studio.activate(t);
             }}
           >
+            <FileIcon path={t} />
             <span className="tab-name">{basename(t)}</span>
             <button
               className={`tab-close${dirty[t] ? ' dirty' : ''}`}

@@ -100,6 +100,38 @@ const PATHS: Record<string, ReactNode> = {
   ),
 };
 
+/** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, images. */
+export function FileIcon({ path }: { path: string }) {
+  const ext = path.includes('.') ? path.slice(path.lastIndexOf('.') + 1).toLowerCase() : '';
+  const glyph: Record<string, [kind: string, text: string]> = { typ: ['typ', 't'], json: ['json', '{}'], md: ['md', '↓'], bib: ['bib', '@'], csv: ['csv', '▦'], toml: ['conf', '⚙'], yaml: ['conf', '⚙'], yml: ['conf', '⚙'] };
+  if (glyph[ext]) {
+    const [kind, text] = glyph[ext];
+    return (
+      <span className={`file-icon ft-${kind}`} aria-hidden>
+        {text}
+      </span>
+    );
+  }
+  const kind = ext === 'pdf' ? 'pdf' : /^(png|jpe?g|gif|svg|webp)$/.test(ext) ? 'image' : 'file';
+  return (
+    <span className={`file-icon ft-${kind}`} aria-hidden>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+        {kind === 'image' ? (
+          <>
+            <rect x="2" y="3" width="12" height="10" rx="1.5" />
+            <path d="M2.5 11.5l3.5-3.5 3 3 1.5-1.5 3 3" />
+          </>
+        ) : (
+          <>
+            <path d="M4 1.75h5l3.25 3.25v9.25H4z" />
+            {kind === 'pdf' ? <path d="M6 9.5h4.25M6 11.75h4.25M6 7.25h2" /> : <path d="M9 1.75V5h3.25" />}
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 export type IconName = keyof typeof PATHS;
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
