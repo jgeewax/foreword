@@ -154,7 +154,9 @@ const samplesRoot = new URL('../samples/', import.meta.url).pathname;
 for (const id of readdirSync(samplesRoot).filter((n) => statSync(join(samplesRoot, n)).isDirectory())) {
   const work = mkdtempSync(join(tmpdir(), `typst-sample-${id}-`));
   cpSync(join(samplesRoot, id), work, { recursive: true });
-  const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', '--root', '.', 'main.typ', 'out.pdf'], { cwd: work, encoding: 'utf8' });
+  // Its own fonts, as the app passes them to Tinymist.
+  const fonts = (JSON.parse(readFileSync(join(work, '.typst-studio.json'), 'utf8')).fontPaths ?? []).flatMap((p) => ['--font-path', p]);
+  const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', '--root', '.', ...fonts, 'main.typ', 'out.pdf'], { cwd: work, encoding: 'utf8' });
   const output = `${run.stdout}${run.stderr}`.trim();
   if (run.status !== 0 || /warning/i.test(output)) {
     failed++;
@@ -163,7 +165,7 @@ for (const id of readdirSync(samplesRoot).filter((n) => statSync(join(samplesRoo
     // Page objects, not /Pages or /PageLabel.
     const pages = (readFileSync(join(work, 'out.pdf'), 'latin1').match(/\/Type\s*\/Page(?![A-Za-z])/g) ?? []).length;
     console.log(`ok   sample ${id} (${pages} pages)`);
-    if (pngDir) execFileSync('typst', ['compile', '--root', '.', '--format', 'png', '--ppi', '40', 'main.typ', join(pngDir, `sample-${id}-{0p}.png`)], { cwd: work });
+    if (pngDir) execFileSync('typst', ['compile', '--root', '.', ...fonts, '--format', 'png', '--ppi', '40', 'main.typ', join(pngDir, `sample-${id}-{0p}.png`)], { cwd: work });
   }
   rmSync(work, { recursive: true, force: true });
 }

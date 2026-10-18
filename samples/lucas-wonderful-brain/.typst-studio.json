@@ -1,0 +1,7 @@
+{
+  "entryPoint": "main.typ",
+  "outputDir": "export",
+  "fontPaths": [
+    "fonts"
+  ]
+}

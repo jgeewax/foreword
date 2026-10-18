@@ -248,8 +248,8 @@ export const TEMPLATES: BookTemplate[] = [
   {
     id: 'picture-book',
     name: "Children's picture book",
-    description: 'A short illustrated story: a cover, one picture and a line or two of text per page.',
-    details: 'Large rounded type · full-page pictures',
+    description: 'A short illustrated story: pictures across the page or a spread, a line or two of words set on each, and sound words drawn in.',
+    details: 'Large rounded type · full-bleed pictures and spreads',
     sizes: PICTURE_BOOK_SIZES,
     defaultSize: PICTURE_BOOK_SIZES.indexOf(PICTURE_BOOK.square85),
     firstFile: 'story.typ',
@@ -258,7 +258,9 @@ export const TEMPLATES: BookTemplate[] = [
       'Voice and tone': 'e.g. playful and rhythmic; repetition children can join in on.',
       'Point of view and tense': 'e.g. third person, past tense.',
       'Sentences and paragraphs': 'e.g. at most two short sentences per page; words a five-year-old knows.',
-      'Formatting in Typst': `- One \`#story-page(picture: "illustrations/...")[...]\` per page.
+      'Formatting in Typst': `- One \`#story-page(picture: "illustrations/...")[...]\` per page; \`at: top\` when the picture's open space is at the top.
+- A wide picture over two pages: \`#spread(picture: ..., left: words(at: top)[...], right: words[...])\`, starting on a left-hand (even) page.
+- Sound words on the picture, not in the text: \`sounds: sound("splash!", x: 30%, y: 60%)\`.
 - A backslash \`\\\` at the end of a line where the reader should pause.
 - About 32 pages in total, like a printed picture book.`,
     },

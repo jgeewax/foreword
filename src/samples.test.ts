@@ -19,9 +19,12 @@ describe('sample books', () => {
       expect(file(s.id, 'main.typ'), 'main.typ').toBeDefined();
       expect(file(s.id, s.firstFile), s.firstFile).toBeDefined();
       expect(file(s.id, 'WRITING_STYLE.md')).toMatch(/^# Writing style: /);
-      expect(JSON.parse(file(s.id, '.typst-studio.json'))).toEqual({ entryPoint: 'main.typ', outputDir: 'export' });
+      // A sample may bring its own fonts, in folders the Makefile passes to typst too.
+      const { fontPaths = [], ...settings } = JSON.parse(file(s.id, '.typst-studio.json'));
+      expect(settings).toEqual({ entryPoint: 'main.typ', outputDir: 'export' });
       expect(file(s.id, '.gitignore')).toContain('export/');
       expect(file(s.id, 'Makefile')).toMatch(/^pdf:$/m);
+      for (const f of fontPaths) expect(file(s.id, 'Makefile')).toContain(`--font-path "${f}"`);
       // Its look is the template's, unchanged, so it shows what the template makes.
       if (s.template) expect(file(s.id, 'style.typ') === styles[`/src/templates/${s.template}/style.typ`], 'style.typ is the template’s').toBe(true);
       if (file(s.id, 'code.typ')) expect(file(s.id, 'code.typ') === Object.values(codeHelper)[0], 'code.typ is the app’s').toBe(true);

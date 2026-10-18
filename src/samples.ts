@@ -58,12 +58,12 @@ export const SAMPLES: Sample[] = [
     firstFile: 'chapters/01-first-steps.typ',
   },
   {
-    id: 'peter-rabbit',
-    name: 'The Tale of Peter Rabbit',
+    id: 'lucas-wonderful-brain',
+    name: "Luca's Wonderful Brain",
     kind: 'Children’s picture book',
     template: 'picture-book',
-    description: 'Potter’s tale with her own illustrations: a picture and a line or two on every page.',
-    source: 'Beatrix Potter, 1902 · public domain',
+    description: 'A family’s picture book about autism: watercolours across every page and spread, the words set on them, and sound words drawn in.',
+    source: 'JJ Geewax, 2026 · all rights reserved',
     firstFile: 'story.typ',
   },
   {

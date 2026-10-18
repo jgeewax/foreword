@@ -2574,6 +2574,51 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   focus without choosing, the chat's Sign in… link; the settings file never
   written, OpenCode back after.
 
+### Picture books: pictures across the page, and Luca's Wonderful Brain
+
+- **Asked for:** "the childrens book example is kinda crappy because it
+  doesnt use images the way id hoped", with JJ Geewax's own book (*Luca's
+  Wonderful Brain*, © 2026, all rights reserved) to use instead. Peter
+  Rabbit's pages were a vignette on white with a line under it; real picture
+  books run the picture to the edge and set the words on it.
+- **The picture-book template does what that book does** (its own Typst,
+  driven by YAML, rewritten as functions an author calls):
+  - `#story-page(picture:, at: top)[...]`: the picture fills the page and
+    reaches into `page.bleed`; the words sit on a soft paper-coloured panel
+    that hugs them, at the top or bottom of the safe area (0.375in from the
+    edges, 0.6in from the binding, which side depending on the page).
+  - `#spread(picture:, left:, right:)`: one picture over a left and a right
+    page, each half reaching past the fold by the bleed, as printers ask.
+    It refuses to start on a right-hand page, with the page number and what
+    to do.
+  - `#words(at: top + right)[...]` for more words on a picture (two boxes on
+    one half of a spread); `sound("rub!", x:, y:, angle:, size:)` for sound
+    words drawn on the picture, outlined in white.
+  - `#vignette-page`, `#title-page`, `#the-end(picture:)`: a picture on
+    white, fitted to the room left and faded at its edges. Also
+    `#copyright-page` (as the other templates) and `#dedication`.
+  - `book.with(font:, title-font:, accent:, page-numbers:)`; numbers sit in
+    the outside bottom corner, never on the title, copyright or dedication
+    pages.
+- **The sample** (`samples/lucas-wonderful-brain`) is the printed book page
+  for page: 28 pages at 8.5 in square, 3 spreads, 3 pages with sound words, a
+  favourites list in two columns. The pictures are the chosen versions,
+  1400 px a page and 2760 px a spread at JPEG quality 75 (4.9 MB in all; the
+  print files are 2625 px). Its fonts, Andika and Sniglet (OFL, licences
+  beside them), come in `fonts/` with `fontPaths`, so the sample test now
+  allows `fontPaths` and checks the Makefile passes them, and
+  `check-templates` compiles samples with them. Not carried over: the book's
+  private notes, placeholder ISBN, and art-generation tooling.
+- Peter Rabbit is gone (samples are one of each kind), and the README shows
+  the new sample.
+- Verified: unit tests; `check-templates` (the template at 5.5 × 8.5 in with
+  the escaped title, and the sample, with no warnings); the sample through
+  the print wrapper with 0.125in bleed, rendered with its bleed: every
+  picture reaches the media box, and the halves of each spread match pixel
+  for pixel across the fold; self-tests `samples` (the card, opened at
+  story.typ, 28 pages, 0 errors, 0 warnings, 22 pictures, a change kept on
+  reopening) and `print` (a new picture book passes, with no edge warning).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

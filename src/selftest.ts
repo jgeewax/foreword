@@ -4838,7 +4838,7 @@ async function bundleChecks() {
   }
   const original = studio.state.workspace!.root;
   const parent = `${original.slice(0, original.lastIndexOf('/'))}/bundle-samples-${Date.now().toString(36)}`;
-  await studio.openSample('peter-rabbit', parent);
+  await studio.openSample('lucas-wonderful-brain', parent);
   await waitFor(() => studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 1, 60000, 'compile').catch(() => {});
   out.sample = { root: studio.state.workspace?.root.slice(parent.length), pages: studio.state.compile.pages, pictures: studio.state.workspace?.files.filter((f) => f.endsWith('.jpg')).length };
   await studio.openWorkspace(original);
@@ -5242,7 +5242,7 @@ async function sampleChecks() {
   out.snapshotDialog = await snap('samples-dialog');
   studio.closeNewBook();
   const opened: Record<string, unknown> = (out.opened = {});
-  for (const id of ['peter-rabbit', 'jekyll-and-hyde', 'counting-words']) {
+  for (const id of ['lucas-wonderful-brain', 'jekyll-and-hyde', 'counting-words']) {
     const t = clock();
     await studio.openSample(id, parent);
     await waitFor(() => studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 1, 60000, 'compile').catch(() => {});
@@ -5261,12 +5261,12 @@ async function sampleChecks() {
     };
   }
   // Again: the same copy, with the author's change kept.
-  await studio.openSample('peter-rabbit', parent);
+  await studio.openSample('lucas-wonderful-brain', parent);
   const first = (await ipc.fsRead('story.typ')).text;
   const changed = `// The author's note.\n${first}`;
   await ipc.fsWrite('story.typ', changed, (await ipc.fsRead('story.typ')).hash);
   await studio.openSample('jekyll-and-hyde', parent);
-  await studio.openSample('peter-rabbit', parent);
+  await studio.openSample('lucas-wonderful-brain', parent);
   out.reopened = { root: studio.state.workspace?.root.slice(parent.length), changeKept: (await ipc.fsRead('story.typ')).text === changed };
   await studio.openWorkspace(original);
   out.back = studio.state.workspace?.root === original;

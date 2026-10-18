@@ -93,8 +93,8 @@ And when you're stuck, it gets you moving: an outline for the next chapter, a ro
 </td>
 <td width="50%" valign="top">
 
-<img src="docs/images/peter.webp" alt="The Tale of Peter Rabbit as a picture book: each page's text and picture in the source, and the title page with Beatrix Potter's illustration in the preview.">
-<sub><i>The Tale of Peter Rabbit, laid out as a picture book: one page per picture.</i></sub>
+<img src="docs/images/luca.webp" alt="Luca's Wonderful Brain as a picture book: a page's picture, words and three sound words in the source, and the watercolour page with the words and the sound words set on it in the preview.">
+<sub><i>Luca's Wonderful Brain, a picture book: words and sound words set on full-page watercolours.</i></sub>
 
 </td>
 </tr>
@@ -153,7 +153,7 @@ Each conversation is its own task, and several can run at once. Settings ▸ Ass
 ## Everything else a book needs
 
 - **Templates for any book.** A novel, non-fiction, a textbook, a programming book or a picture book, at the page sizes printers use in the US, the UK and Europe, and Asia. Papers start from IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS or APA.
-- **Sample books to try.** Open a finished one and try the assistant on it: *Jekyll and Hyde*, *Calculus Made Easy*, *The Elements of Style*, *The Tale of Peter Rabbit*, *Attention Is All You Need*, and *Counting Words*, whose Python examples run.
+- **Sample books to try.** Open a finished one and try the assistant on it: *Jekyll and Hyde*, *Calculus Made Easy*, *The Elements of Style*, *Luca's Wonderful Brain*, *Attention Is All You Need*, and *Counting Words*, whose Python examples run.
 - **Code that runs.** Examples in Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell run from the book, with their real output set beneath and checked against what you expect.
 - **Covers and printing.** Design a print cover with the spine worked out from the page count, check the files against the printer's rules, and order through Mixam.
 - **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. The assistant can draft it from your chapters.
