@@ -1195,8 +1195,8 @@ section), the page starts at the window's top and the offset is measured.
 - **Typst basics** (`src/help/typst-basics.json`): plain-language explanations
   with examples, covering paragraphs, emphasis, quotes and dashes, escaping,
   headings, lists, chapter files, footnotes, citations, figures, quotations,
-  math, what red squiggles mean, and shortcuts. It opens in the right-hand pane,
-  so the editor and preview stay visible, from the activity bar's ? icon or
+  math, what red squiggles mean, and shortcuts. It opens in its own tab beside
+  the files (see "Tabs, as VS Code's"), from the activity bar's ? icon or
   Help → Typst Basics. On the welcome screen it's a dialog. Markup patterns get
   "Insert", an undoable edit at the cursor; block examples get their own
   paragraph. The content is JSON so `npm run check-templates` also compiles

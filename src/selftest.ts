@@ -3621,7 +3621,7 @@ async function chromeChecks() {
     { name: 'settings', open: () => studio.openSettings('general'), close: () => studio.closeSettings(), parts: { header: '.settings .modal-header', close: '.settings .modal-close', nav: '.settings-nav button', label: '.settings-content .settings-label' } },
     { name: 'quickOpen', open: () => studio.openQuickOpen(), close: () => studio.closeQuickOpen(), parts: { input: '.quick-open input', row: '.quick-open-row' } },
     { name: 'newBook', open: () => studio.openNewBook(), close: () => studio.closeNewBook(), parts: { header: '.new-book .modal-header', name: '.template-name' } },
-    { name: 'guide', open: () => studio.openGuide(), close: () => studio.closeGuide(), parts: { header: '.guide-header' } },
+    { name: 'guide', open: () => studio.openGuide(), close: () => studio.closeGuide(), parts: { title: '.guide-title' } },
   ];
   const at: Record<number, Record<string, Record<string, unknown>>> = {};
   const zoomed = new Set<string>();
@@ -3668,6 +3668,72 @@ async function chromeChecks() {
     }
   }
   return { ok: notFollowing.length === 0 && zoomed.size === 0, notFollowing, cssZoomed: [...zoomed], missing, at67: at[0.67], at100: at[1], at150: at[1.5] };
+}
+
+/**
+ * What changed and the side-by-side diff at 67% and 100%: the dialog, its
+ * header and its text all follow the zoom, like every other surface.
+ * Read-only: opens the book's first commit (if it has Git) and its first version.
+ */
+async function changesZoomChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.zoom;
+  await waitFor(() => studio.state.git.status === 'ready', 10000, 'git').catch(() => {});
+  await waitFor(() => studio.state.history.status === 'ready' && studio.state.history.versions.length > 0, 30000, 'history').catch(() => {});
+  // Points on screen.
+  const onScreen = (sel: string) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r ? { w: Math.round(r.width * studio.state.zoom), h: Math.round(r.height * studio.state.zoom * 10) / 10 } : null;
+  };
+  // What changed is a tab now (lines in the diff editor, or words).
+  const measure = () => ({
+    tab: onScreen('.changes-tab'),
+    header: onScreen('.changes-header'),
+    textLine: onScreen('.change-text .change-body') ?? onScreen('.diff-editor .view-line'),
+    font: getComputedStyle(document.querySelector('.change-text, .diff-editor .view-line') ?? document.body).fontFamily,
+  });
+  for (const zoom of [0.67, 1]) {
+    await studio.setZoom(zoom, { persist: false, write: false });
+    await sleep(500);
+    const key = `at${Math.round(zoom * 100)}`;
+    const at: Record<string, unknown> = (out[key] = {});
+    const first = studio.state.git.log.at(-1);
+    if (first) {
+      await studio.git.showCommit(first);
+      await waitFor(() => !!studio.state.git.view?.files, 10000, 'commit diff');
+      await sleep(400);
+      at.git = { ...measure(), snapshot: await snap(`changeszoom-git-${key}`) };
+      studio.git.closeView();
+      await sleep(200);
+    }
+    const versions = studio.state.history.versions;
+    const oldest = versions.at(-1);
+    if (oldest) {
+      await studio.history.showChanges(oldest);
+      await waitFor(() => studio.state.history.changes?.files, 15000, 'changes');
+      await sleep(400);
+      at.history = { ...measure(), snapshot: await snap(`changeszoom-history-${key}`) };
+      const file = studio.state.history.changes?.files?.find((f) => f.diff);
+      if (file) {
+        await studio.history.showDiff(oldest, file.path);
+        await waitFor(() => document.querySelector('.changes-tab .view-line'), 10000, 'side by side').catch(() => {});
+        await sleep(500);
+        at.sideBySide = {
+          tab: onScreen('.changes-tab'),
+          header: onScreen('.changes-header'),
+          line: onScreen('.changes-tab .modified .view-line'),
+          cssZoomed: getComputedStyle(document.querySelector('.changes-tab') ?? document.body).zoom,
+          snapshot: await snap(`changeszoom-diff-${key}`),
+        };
+        studio.history.closeDiff();
+        await sleep(200);
+      }
+      studio.history.closeChanges();
+      await sleep(200);
+    }
+  }
+  await studio.setZoom(saved, { persist: false, write: false });
+  return out;
 }
 
 /**
@@ -4957,6 +5023,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
     if (want('palette')) result.palette = await paletteChecks(launch.selftestEdits);
     if (want('chrome')) result.chrome = await chromeChecks();
+    if (want('changeszoom')) result.changeszoom = await changesZoomChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
