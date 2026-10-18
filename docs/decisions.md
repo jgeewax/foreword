@@ -2393,6 +2393,40 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   starts it with npx and shows the sign-in message and Start again in
   Settings, with an empty model list; back on OpenCode afterwards.
 
+### Codex as the assistant
+
+- **The same route,** through `@agentclientprotocol/codex-acp` (pinned 2.2.2;
+  `codex-acp` if it's installed), signed in with `codex login`
+  (ChatGPT or an API key). Recorded with this Mac's ChatGPT login.
+- **Its modes decide whether it asks.** Codex has Read-only, Workspace
+  access, Auto review (its default, which asks almost nothing) and Full
+  access. The app picks the one that lets its own rules decide:
+  - edits allowed (Edit freely): Workspace access. Codex edits the book
+    without asking and asks about the rest;
+  - otherwise, and in Plan and Options: Read-only, where it asks before
+    changing anything. Once it got round its own read-only sandbox with
+    `python3 -c …` writing the file, so the card asked about a command.
+  Claude Code's "default" asks before changes, and the rules answer.
+- **Plan** is Codex's `collaboration_mode` option, not a session mode, and
+  the adapter sets that. `/compact` is used wherever the agent lists it.
+- **Codex's own shapes:**
+  - command output streams in `_meta.terminal_output_delta`, not in the
+    result, and is collected per tool call;
+  - some commands arrive quoted (`"\"python3 -c …\""`);
+  - searches are described only in their titles ("Search for 'x' in …");
+  - reads are shell commands with no line range, so their lines aren't
+    marked;
+  - it names a conversation by its first message, which would be the app's
+    instructions, so such a title is dropped (the app's own title stays).
+- Its models come from the same `model` option (6.1 Sol, 6 Astra, 6 Luna…),
+  plus a reasoning-effort option the app doesn't show yet.
+- Verified: `__fixtures__/acp-codex.jsonl` (recorded; the account and the
+  author's own commands removed) in unit tests. Self-test `acp-codex` with
+  real turns on 6 Luna: a read; an edit asked about (by its patch tool this
+  time), allowed, the chapter changed; a queued message; Stop with Resume;
+  the conversation rebuilt after a switch. After a restart, Codex's replay
+  leaves out the stopped turn's partial reply.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

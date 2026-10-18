@@ -280,6 +280,7 @@ const ASSISTANT_CHOICES: { id: AssistantId; label: string; detail: string }[] = 
   { id: 'opencode', label: 'OpenCode', detail: 'any model you’ve set up in OpenCode: OpenAI, Anthropic, Google, local models' },
   { id: 'claude', label: 'Claude Code', detail: 'Anthropic’s Claude, with your Claude subscription or API key' },
   { id: 'gemini', label: 'Gemini CLI', detail: 'Google’s Gemini, with your Google account or a Gemini API key' },
+  { id: 'codex', label: 'Codex', detail: 'OpenAI’s models, with your ChatGPT account or an OpenAI API key' },
 ];
 
 function AssistantPage() {
@@ -297,8 +298,9 @@ function AssistantPage() {
             <Radio key={a.id} name="assistant" value={a.id} current={settings.assistant} onChange={(v) => studio.updateSettings({ assistant: v })} label={a.label} detail={a.detail} />
           ))}
           <p className="settings-help">
-            Claude Code and Gemini CLI use your own account: sign in once in Terminal (<code>{SIGN_IN.claude.command}</code>, or <code>{SIGN_IN.gemini.command}</code>). Typst Studio
-            talks to them over the Agent Client Protocol, through programs Node.js runs (the first start downloads them). Changing the assistant starts a new conversation.
+            Claude Code, Gemini CLI and Codex use your own account: sign in once in Terminal (<code>{SIGN_IN.claude.command}</code>, <code>{SIGN_IN.gemini.command}</code> or{' '}
+            <code>{SIGN_IN.codex.command}</code>). Typst Studio talks to them over the Agent Client Protocol, through programs Node.js runs (the first start downloads them).
+            Changing the assistant starts a new conversation.
           </p>
           {status === 'error' && error && (
             <div className="settings-help bad assistant-error">

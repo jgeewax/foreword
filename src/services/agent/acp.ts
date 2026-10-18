@@ -7,7 +7,7 @@
 // queued while a turn runs.
 import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
-import { appTool, decide, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
+import { appTool, conversationTitle, decide, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
 import { formatAuthorEdits } from './author-edits';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
 import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
@@ -68,6 +68,12 @@ type Session = {
   asking: Map<string, { rpcId: number | string; options: { optionId: string; kind: string }[]; ask: { action: string; resources: string[]; patches: FilePatch[] } }>;
   /** Each tool call as the agent has described it so far (updates add to it), and as the app's tool. */
   tools: Map<string, { call: AcpToolCall; name: string; input: Record<string, unknown> }>;
+  /** Command output streamed as it runs (Codex's `terminal_output_delta`), by tool call. */
+  output: Map<string, string>;
+  /** The session mode now (the agent's own: Claude Code's "default", Codex's "read-only"…). */
+  mode: string;
+  /** Slash commands the agent offers (available_commands_update). */
+  commands: string[];
   title: string;
   /** Replaying (session/load): updates fill the transcript but aren't live events. */
   replaying: boolean;
@@ -200,6 +206,9 @@ export class AcpAdapter implements AgentAdapter {
       queue: [],
       asking: new Map(),
       tools: new Map(),
+      output: new Map(),
+      mode: String(res?.modes?.currentModeId ?? ''),
+      commands: [],
       title: '',
       replaying: false,
     };
@@ -236,19 +245,47 @@ export class AcpAdapter implements AgentAdapter {
     const s = warm ?? (await this.newSession());
     Object.assign(s, { permissions, readOnly, allowCommands });
     if (model && model.providerID === this.kind) await this.switchModel(s.id, model).catch(() => {});
+    await this.applyMode(s).catch(() => {});
     if (agent === 'plan') await this.switchAgent(s.id, 'plan').catch(() => {});
     return s.id;
   }
 
   async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, allowCommands: string[] = []) {
-    Object.assign(this.session(sessionId), { permissions, readOnly, allowCommands });
+    const s = this.session(sessionId);
+    Object.assign(s, { permissions, readOnly, allowCommands });
+    await this.applyMode(s);
   }
 
-  /** Plan: the agent's own plan mode, when it has one (its read-only rules apply either way). */
+  /**
+   * The agent's own mode that lets the app's permission rules decide: Claude
+   * Code's "default" asks before changes, and the rules answer. Codex asks
+   * only in "read-only"; with edits allowed, "workspace-write" lets it edit the
+   * book without asking (and still asks about the rest).
+   */
+  private async applyMode(s: Session) {
+    let mode = '';
+    if (s.modes.includes('default')) mode = s.mode === 'plan' ? 'plan' : 'default';
+    else if (s.modes.includes('read-only') && s.modes.includes('workspace-write')) mode = s.readOnly || s.permissions.edit !== 'allow' ? 'read-only' : 'workspace-write';
+    if (mode && mode !== s.mode) {
+      await this.request('session/set_mode', { sessionId: s.id, modeId: mode });
+      s.mode = mode;
+    }
+  }
+
+  /** Plan: the agent's own planning, when it has it (Claude Code's plan mode, Codex's plan collaboration mode); the read-only rules apply either way. */
   async switchAgent(sessionId: string, agent: 'build' | 'plan') {
     const s = this.session(sessionId);
-    const mode = agent === 'plan' ? 'plan' : s.modes.includes('default') ? 'default' : s.modes[0];
-    if (mode && s.modes.includes(mode)) await this.request('session/set_mode', { sessionId, modeId: mode });
+    const collaboration = s.config.find((o) => o.id === 'collaboration_mode' && optionValues(o).some((v) => v.value === 'plan'));
+    if (collaboration) {
+      const res = await this.request('session/set_config_option', { sessionId, configId: collaboration.id, value: agent === 'plan' ? 'plan' : 'default' });
+      if (Array.isArray(res?.configOptions)) s.config = res.configOptions;
+      return;
+    }
+    if (!s.modes.includes('plan')) return;
+    const mode = agent === 'plan' ? 'plan' : 'default';
+    if (mode === s.mode) return;
+    await this.request('session/set_mode', { sessionId, modeId: mode });
+    s.mode = mode;
   }
 
   async setInstructions(sessionId: string, key: string, text: string) {
@@ -284,7 +321,7 @@ export class AcpAdapter implements AgentAdapter {
     const res = await this.request('session/list', { cwd: this.root });
     return ((res?.sessions ?? []) as any[]).slice(0, limit).map((s) => ({
       id: String(s.sessionId),
-      title: String(s.title ?? this.sessions.get(s.sessionId)?.title ?? ''),
+      title: conversationTitle(String(s.title ?? '')) || this.sessions.get(s.sessionId)?.title || '',
       updated: s.updatedAt ? Date.parse(s.updatedAt) : 0,
       tokens: null,
     }));
@@ -312,9 +349,10 @@ export class AcpAdapter implements AgentAdapter {
   }
 
   async compact(sessionId: string) {
-    // Claude Code compacts on its /compact command; ACP has no request for it.
-    if (this.kind !== 'claude') throw new AcpError(`${ACP_NAMES[this.kind]} can’t compact a conversation.`);
-    await this.prompt(this.session(sessionId), '/compact', { record: false, command: true });
+    // Claude Code and Codex compact on their /compact command; ACP has no request for it.
+    const s = this.session(sessionId);
+    if (!s.commands.includes('compact')) throw new AcpError(`${ACP_NAMES[this.kind]} can’t compact a conversation.`);
+    await this.prompt(s, '/compact', { record: false, command: true });
     await waitFor(() => !this.sessions.get(sessionId)?.running);
   }
 
@@ -474,7 +512,9 @@ export class AcpAdapter implements AgentAdapter {
         const tool = { call, ...appTool(call) };
         s.tools.set(update.toolCallId, tool);
         const status = update.status === 'completed' ? 'completed' : update.status === 'failed' ? 'failed' : 'running';
-        const output = status === 'running' ? undefined : toolOutput(update.rawOutput !== undefined || update.content ? update : call, tool.name);
+        const delta = update._meta?.terminal_output_delta?.data;
+        if (typeof delta === 'string') s.output.set(update.toolCallId, (s.output.get(update.toolCallId) ?? '') + delta);
+        const output = status === 'running' ? undefined : toolOutput(update.rawOutput !== undefined || update.content ? update : call, tool.name) || s.output.get(update.toolCallId) || '';
         s.transcript.tool(replyId, call.toolCallId, tool.name, tool.input, status, output);
         if (!live) break;
         if (!known) this.emit({ type: 'tool-started', sessionId, callId: update.toolCallId, name: tool.name });
@@ -487,14 +527,22 @@ export class AcpAdapter implements AgentAdapter {
         if (typeof u.used === 'number' && u.used > 0) s.transcript.setTokens(replyId, u.used);
         if (live && u.cost?.amount != null) this.emit({ type: 'usage', sessionId, inputTokens: u.used ?? 0, outputTokens: 0, cost: u.cost.amount });
         break;
-      case 'session_info_update':
-        if (typeof u.title === 'string' && u.title) {
-          s.title = u.title;
-          if (live) this.emit({ type: 'session-renamed', sessionId, title: u.title });
+      case 'session_info_update': {
+        const title = typeof u.title === 'string' ? conversationTitle(u.title) : '';
+        if (title) {
+          s.title = title;
+          if (live) this.emit({ type: 'session-renamed', sessionId, title });
         }
         break;
+      }
       case 'config_option_update':
         if (Array.isArray(u.configOptions)) s.config = u.configOptions;
+        break;
+      case 'current_mode_update':
+        if (typeof u.currentModeId === 'string') s.mode = u.currentModeId;
+        break;
+      case 'available_commands_update':
+        if (Array.isArray(u.availableCommands)) s.commands = u.availableCommands.map((c: any) => String(c.name));
         break;
     }
   }

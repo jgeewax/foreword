@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { contextTokens, itemsFromContext } from '../../app/tasks';
 import { readOf } from '../../app/ai-marks';
 import recorded from './__fixtures__/acp-claude.jsonl?raw';
+import recordedCodex from './__fixtures__/acp-codex.jsonl?raw';
 import { AcpAdapter, stripInstructions, type AcpTransport } from './acp';
-import { appTool, decide, permissionAsk, toolOutput, type AcpToolCall } from './acp-events';
+import { appTool, conversationTitle, decide, permissionAsk, toolOutput, type AcpToolCall } from './acp-events';
 import { PRESETS, sessionRules } from './permissions';
 import type { AgentEvent } from './types';
 
@@ -173,5 +174,82 @@ describe('AcpAdapter', () => {
       { jsonrpc: '2.0', id: 7, result: { outcome: { outcome: 'cancelled' } } },
       { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } },
     ]);
+  });
+});
+
+// Codex's ACP program in its read-only mode, recorded: it looks around with
+// shell commands, searches, then asks to run a command that writes the file.
+const codex = recordedCodex
+  .trim()
+  .split('\n')
+  .map((l) => JSON.parse(l));
+
+describe('Codex', () => {
+  const codexCalls = new Map<string, AcpToolCall>();
+  for (const m of codex.filter((m) => m.method === 'session/update' && m.params.update.sessionUpdate.startsWith('tool_call')))
+    codexCalls.set(m.params.update.toolCallId, { ...codexCalls.get(m.params.update.toolCallId), ...m.params.update });
+  const request = codex.find((m) => m.method === 'session/request_permission');
+
+  it('its tools: commands, searches by their titles, its quoted commands', () => {
+    const [first, , , search] = [...codexCalls.values()];
+    expect(appTool(first)).toEqual({ name: 'bash', input: { command: "pwd && rg --files -g AGENTS.md -g ch1-vectors.typ -g '!node_modules' -g '!vendor' ." } });
+    expect(appTool(search)).toEqual({ name: 'grep', input: { pattern: 'Two vectors are orthogonal' } });
+    const ask = permissionAsk(request.params.toolCall, ROOT);
+    expect(ask.action).toBe('shell');
+    expect(ask.resources[0]).toMatch(/^python3 -c 'from pathlib import Path; p = Path\("chapters\/ch1-vectors.typ"\)/);
+    expect(decide(ask.action, ask.resources, sessionRules(PRESETS.edit.permissions))).toBe('ask');
+  });
+
+  it('a title that is only the instructions sent first isn’t used', () => {
+    expect(conversationTitle('<typst-studio-instructions>\n# Typst Studio: writing assistant…')).toBe('');
+    expect(conversationTitle('<typst-studio-instructions>\nx\n</typst-studio-instructions>\n\nTighten chapter 2')).toBe('Tighten chapter 2');
+    expect(conversationTitle('Tighten chapter 2')).toBe('Tighten chapter 2');
+  });
+
+  it('asks in read-only unless edits are allowed; command output streams into the tool’s result', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage) => {
+        deliver = onMessage;
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        const reply = m.method === 'initialize' || m.method === 'session/new' ? codex.find((r) => r.id === m.id && r.result) : m.method ? { jsonrpc: '2.0', id: m.id, result: {} } : null;
+        if (reply && m.id !== undefined && m.method !== 'session/prompt') queueMicrotask(() => deliver({ ...reply, id: m.id }));
+      },
+      stop: async () => {},
+    };
+    const adapter = new AcpAdapter(ROOT, 'codex', transport);
+    const events: AgentEvent[] = [];
+    adapter.subscribe((e) => events.push(e));
+    await adapter.start();
+    expect((await adapter.listModels()).map((m) => m.id)).toContain('gpt-6.1-sol');
+    const sessionId = await adapter.createSession(null, { permissions: PRESETS.ask.permissions });
+    expect(sent.find((m) => m.method === 'session/set_mode')?.params).toEqual({ sessionId, modeId: 'read-only' });
+    await adapter.setPermissions(sessionId, PRESETS.edit.permissions);
+    expect(sent.filter((m) => m.method === 'session/set_mode').at(-1).params.modeId).toBe('workspace-write');
+    await adapter.switchAgent(sessionId, 'plan');
+    expect(sent.at(-1)).toMatchObject({ method: 'session/set_config_option', params: { configId: 'collaboration_mode', value: 'plan' } });
+    await adapter.switchAgent(sessionId, 'build');
+
+    await adapter.send(sessionId, 'Change it.', []);
+    const prompt = sent.at(-1);
+    for (const m of codex.filter((m) => m.method)) deliver(m);
+    const end = codex.find((m) => m.result?.stopReason);
+    deliver({ ...end, id: prompt.id });
+    await Promise.resolve();
+    const search = [...codexCalls.values()][3];
+    expect(events.find((e) => e.type === 'tool-succeeded' && e.callId === search.toolCallId)).toMatchObject({ output: expect.stringContaining('29:Two vectors are orthogonal') });
+    expect(events.find((e) => e.type === 'permission-asked')).toMatchObject({ action: 'shell' });
+    expect(events.find((e) => e.type === 'session-renamed')).toMatchObject({ title: expect.stringMatching(/^In chapters\/ch1-vectors.typ change/) });
+    const compacting = adapter.compact(sessionId);
+    await Promise.resolve();
+    const compact = sent.at(-1);
+    expect(compact.params.prompt[0].text).toBe('/compact');
+    deliver({ ...end, id: compact.id });
+    await compacting;
+    expect(await adapter.isRunning(sessionId)).toBe(false);
   });
 });

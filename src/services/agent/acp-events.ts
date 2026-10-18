@@ -41,6 +41,25 @@ export function optionValues(option: AcpConfigOption): { value: string; name: st
 
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
 
+/** Codex sends some commands as a quoted string ("\"python3 -c …\""). */
+function unquote(command: string | undefined): string | undefined {
+  if (!command || !/^".*"$/s.test(command)) return command;
+  try {
+    const inner = JSON.parse(command);
+    return typeof inner === 'string' ? inner : command;
+  } catch {
+    return command;
+  }
+}
+
+/** A conversation's title, unless it's only the start of the instructions the app sent first (Codex names a conversation by its first message). */
+export function conversationTitle(title: string): string {
+  const open = '<typst-studio-instructions>';
+  if (!title.startsWith(open)) return title;
+  const end = title.indexOf('</typst-studio-instructions>');
+  return end < 0 ? '' : title.slice(end + '</typst-studio-instructions>'.length).trim();
+}
+
 /**
  * A tool call as one of the app's own tools (OpenCode's names and inputs),
  * which the chat describes in words: Claude Code's tools by name, Gemini CLI's
@@ -51,7 +70,7 @@ export function appTool(call: AcpToolCall): { name: string; input: Record<string
   const tool = str(call._meta?.claudeCode?.toolName) ?? call.name ?? '';
   const where = call.locations?.[0]?.path;
   const file = str(raw.file_path) ?? str(raw.absolute_path) ?? str(raw.filePath) ?? str(raw.path) ?? where;
-  const command = Array.isArray(raw.command) ? raw.command.map(String).join(' ') : str(raw.command);
+  const command = Array.isArray(raw.command) ? raw.command.map(String).join(' ') : unquote(str(raw.command));
   switch (tool) {
     case 'Read':
     case 'read_file':
@@ -97,7 +116,8 @@ export function appTool(call: AcpToolCall): { name: string; input: Record<string
     case 'execute':
       return { name: 'bash', input: { command: command ?? call.title ?? '' } };
     case 'search':
-      return { name: 'grep', input: { pattern: raw.pattern ?? raw.query ?? call.title } };
+      // Codex says it in the title: "Search for 'x' in chapter.typ".
+      return { name: 'grep', input: { pattern: raw.pattern ?? raw.query ?? /'([^']+)'/.exec(call.title ?? '')?.[1] ?? call.title } };
     case 'fetch':
       return { name: 'webfetch', input: { url: raw.url ?? call.title } };
   }

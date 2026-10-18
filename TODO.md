@@ -184,7 +184,7 @@
 
 - [x] can we make ti work with claude code CLI as well? and not just opencode? (settings choice)
 
-- [ ] can we make ti work with codex CLI as well? and not just opencode? (settings choice)
+- [x] can we make ti work with codex CLI as well? and not just opencode? (settings choice)
 
 - [ ] what about people who dont have opencode/claude/gemini/codex installed? can we package opencode or something with it so that they could eventually use our own API service?
 

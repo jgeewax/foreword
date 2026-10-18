@@ -4217,7 +4217,7 @@ async function acpChecks(kind: 'claude' | 'gemini' | 'codex') {
       if (/^(permission|turn|inbox|session-renamed|connection)/.test(e.type)) events.push(`${Math.round(clock() - t0)} ms ${e.type} ${JSON.stringify({ ...e, type: undefined, sessionId: undefined, patches: undefined })}`);
     });
     // A small, quick model for the test, when there is one (and choosing it is checked).
-    const small = studio.state.agent.models.find((m) => /haiku|flash|mini/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    const small = studio.state.agent.models.find((m) => /haiku|flash|mini|luna/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
     if (small) await studio.selectModel(small);
     out.chose = studio.state.agent.model;
 
@@ -4231,7 +4231,8 @@ async function acpChecks(kind: 'claude' | 'gemini' | 'codex') {
       while (clock() - t1 < ms && !done()) {
         const card = items().find((i) => i.kind === 'permission' && i.state === 'pending');
         if (card?.kind === 'permission') {
-          const decision = card.action === 'edit' ? 'once' : 'reject';
+          // Codex in its read-only mode changes files with a command (python3 -c …).
+          const decision = card.action === 'edit' || (card.action === 'shell' && card.resources.join(' ').includes('chapters/')) ? 'once' : 'reject';
           asked.push(`${card.action} ${card.resources.join(' ')} → ${decision}`);
           if (decision === 'once' && !out.snapshotCard) out.snapshotCard = await snap(`acp-${kind}-permission`);
           await studio.replyPermission(card.id, decision);
@@ -4262,7 +4263,7 @@ async function acpChecks(kind: 'claude' | 'gemini' | 'codex') {
     t = clock();
     void studio.send(`In ${file}, change the sentence "The two eigenvectors are orthogonal." to "The two eigenvectors are perpendicular." with your edit tool. Then reply with just: done.`);
     await sleep(1000);
-    const editCard = () => items().find((i) => i.kind === 'permission' && i.state === 'pending' && i.action === 'edit');
+    const editCard = () => items().find((i) => i.kind === 'permission' && i.state === 'pending' && (i.action === 'edit' || (i.action === 'shell' && i.resources.join(' ').includes(file))));
     await answerCards(() => !!editCard() || idle());
     const card = editCard();
     if (card?.kind === 'permission') {
