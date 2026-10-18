@@ -33,7 +33,10 @@
       "../samples/": "samples/"
     },
     "copyright": "© 2026 JJ Geewax",
-    "publisher": "JJ Geewax"
+    "publisher": "JJ Geewax",
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
   },
   "plugins": {
     "updater": {

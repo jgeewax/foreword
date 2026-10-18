@@ -13,6 +13,8 @@ A Mac app for writing books, papers and picture books in [Typst](https://typst.a
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)
 ![Status](https://img.shields.io/badge/status-early%20development-e0a040)
 
+**[Download for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** · [Website](https://jgeewax.github.io/typststudio/) · [Releases](https://github.com/jgeewax/typststudio/releases)
+
 <br>
 
 <img src="docs/images/calculus.webp" alt="Typst Studio with Calculus Made Easy open: the book's files on the left, a chapter's Typst source with a passage selected, the typeset pages with their equations, and the assistant explaining why a term can be dropped." width="100%">
@@ -121,7 +123,7 @@ Each conversation is its own task, and several can run at once. Settings ▸ Ass
 
 ## Download
 
-Each version tag (`v0.1.0`) builds a DMG for Macs with Apple Silicon and attaches it to a [release](https://github.com/jgeewax/typststudio/releases). Open it and drag Typst Studio to Applications. It carries Tinymist and OpenCode, so it needs nothing else installed. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
+**[Download Typst Studio for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/typststudio/releases). Open it and drag Typst Studio to Applications. It carries Tinymist and OpenCode, so it needs nothing else installed. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
 
 The app isn't notarized yet, so the first time macOS may ask: open System Settings ▸ Privacy & Security and click **Open Anyway**. A copy fetched with `gh release download` opens without asking.
 
