@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="">
+
 # Typst Studio
 
 **Write books in plain text. Watch them become books.**
