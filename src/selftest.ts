@@ -2916,6 +2916,9 @@ async function tabChecks() {
   const saved = { tabs: [...studio.state.tabs], active: studio.state.active };
   const files = (studio.state.workspace?.files ?? []).filter((f) => /\.(typ|md|bib)$/.test(f)).slice(0, 4);
   for (const f of files) await studio.openFile(f);
+  // The pointer is a hand over a tab and its ×.
+  const tab = document.querySelector('.tab:not(.active)');
+  out.pointer = { tab: tab && getComputedStyle(tab).cursor, close: tab && getComputedStyle(tab.querySelector('.tab-close')!).cursor };
   const press = async (code: string, mods: { meta?: boolean; ctrl?: boolean; alt?: boolean; shift?: boolean } = {}, key = code.replace(/^(Key|Digit)/, '').toLowerCase()) => {
     document.body.dispatchEvent(
       new KeyboardEvent('keydown', { key, code, metaKey: !!mods.meta, ctrlKey: !!mods.ctrl, altKey: !!mods.alt, shiftKey: !!mods.shift, bubbles: true, cancelable: true }),

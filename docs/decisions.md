@@ -1277,6 +1277,12 @@ pane top (off by 0 pt).
   fold, ⌘K ⌘X to trim whitespace, ⌘K ⌘F to format the selection. Tested with
   the keys sent to the editor.
 
+### Tabs, as VS Code's
+
+- **The pointer is a hand over a tab** and its ×. Everywhere else it stays
+  the arrow, as in Mac apps. Verified (self-test `tabs`): both are
+  `cursor: pointer`.
+
 ### Showing that the assistant is working
 
 - **Live events** (recorded from OpenCode 2.0.20 with a real turn, through a

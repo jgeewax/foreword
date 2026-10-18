@@ -164,7 +164,7 @@
 
 - [ ] typst basics shouldnt show up overtop of AI panel, it should be a new tab that we can close like a file
 
-- [ ] pointer icon should become hand with finger for file tabs.
+- [x] pointer icon should become hand with finger for file tabs.
 
 - [ ] file tabs should have file type icon like vs code
 
