@@ -12,7 +12,8 @@
     "app": "tauri dev",
     "app:build": "node scripts/bundle-opencode.mjs && node scripts/bundle-tinymist.mjs && tauri build --config src-tauri/tauri.bundle.json",
     "stress-book": "node scripts/gen-stress-book.mjs",
-    "check-templates": "node scripts/check-templates.mjs"
+    "check-templates": "node scripts/check-templates.mjs",
+    "icons": "tauri icon src-tauri/icons/app-icon.svg && rm -rf src-tauri/icons/android src-tauri/icons/ios src-tauri/icons/64x64.png"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
