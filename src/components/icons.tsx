@@ -118,6 +118,8 @@ const PATHS: Record<string, ReactNode> = {
   chevronRight: <path d="M9.5 6l6 6-6 6" />,
   chevronDown: <path d="M6 9.5l6 6 6-6" />,
   shield: <path d="M12 3.2l7 2.8v5.2c0 4.3-2.9 7.7-7 9.6-4.1-1.9-7-5.3-7-9.6V6z" />,
+  arrowUp: <path d="M12 19V5.5M6 11.5l6-6 6 6" />,
+  stop: <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />,
   book: (
     <>
       <path d="M5 5.5A2 2 0 0 1 7 3.5h12v14H7a2 2 0 0 0-2 2z" />

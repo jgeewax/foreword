@@ -1562,8 +1562,9 @@ section), the page starts at the window's top and the offset is measured.
   delivery, `DELETE` takes it back, and `session.inbox.delivered` reports
   delivery. All read from the server's OpenAPI file.
 - **In the app:**
-  - While it works, the composer stays usable. ⏎ (or the Queue button) queues;
-    ⌥⏎ or Send now steers. Stop still interrupts the turn.
+  - While it works, the composer stays usable. ⏎ (or the ↑ button) queues;
+    ⌥⏎ steers, as does Send now on a queued message. Stop (■) still
+    interrupts the turn.
   - Queued messages wait above the composer (Queued / Next step) with Send now,
     Edit (takes it back into the composer) and ✕.
   - On delivery each one moves into the conversation where it arrived. A
@@ -1574,6 +1575,23 @@ section), the page starts at the window's top and the offset is measured.
   - A queued message waited, then ran and was answered.
   - A steered one was delivered mid-turn and answered in it.
   - A taken-back one never reached the conversation.
+
+### The message box, one quiet box
+
+- Modelled on Claude Code's input: the text and a row of controls share one
+  rounded box. The box starts at two lines and grows as you type, up to 40 % of
+  the window.
+- **The controls are borderless until hovered:**
+  - the mode, a tinted pill in its colour;
+  - the model, muted, cut short with … when there's no room;
+  - permissions, a shield in the preset's colour, with its name only when the
+    row is wide enough (a container query), never clipped;
+  - `/`, which opens the commands, shown while the box is empty;
+  - a round send button (↑). While the assistant works, ■ stops it and ↑
+    queues. After a stop, Resume.
+- **No help line under the box.** It repeated what the selection card already
+  shows, and the keys are in the buttons' tooltips.
+- The row zooms with the text above it (see "Zoom applies to everything").
 
 ### The settings file, and commands allowed without asking
 

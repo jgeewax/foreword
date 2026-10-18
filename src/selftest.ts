@@ -3037,6 +3037,7 @@ async function chromeChecks() {
         editorLine: '.editor-host .view-line',
         statusbar: '.statusbar',
         chatControls: '.composer-controls',
+        send: '.composer-controls .send-button',
       },
     },
     { name: 'modelList', open: () => document.querySelector<HTMLButtonElement>('.composer-controls .model-trigger')?.click(), close: dismiss, parts: { search: '.model-search', option: '.model-option' } },
@@ -3504,7 +3505,7 @@ async function settingsChecks() {
       await sleep(50);
       r[name] = sent.length - n;
     }
-    r.hint = (document.querySelector('.composer-hint')?.textContent ?? '') as unknown as number;
+    r.hint = (document.querySelector('.composer-controls .send-button')?.getAttribute('title') ?? '') as unknown as number;
     return r;
   };
   out.enterMode = await trial('enter');

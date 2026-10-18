@@ -493,7 +493,6 @@ function ModeMenu() {
       >
         <span className="mode-icon">{current.icon}</span>
         {current.label}
-        <span className="model-trigger-chevron">▾</span>
       </button>
       {open && (
         <div className="mode-popover" role="menu">
@@ -648,6 +647,16 @@ function Composer() {
     setText('');
     if (!(await studio.send(message, { delivery }))) setText(message);
   };
+  // The box grows with what's typed, up to a cap (then it scrolls).
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+  // The keys live in the buttons' tooltips, not in a line of help under the box.
+  const keys = sendHint(sendKey);
+  const queueKeys = `${keys.split(' · ')[0].replace('send', 'queue')} · ⌥⏎ send now`;
 
   return (
     <div className="composer">
@@ -691,79 +700,93 @@ function Composer() {
           ))}
         </div>
       )}
-      <textarea
-        ref={inputRef}
-        value={text}
-        rows={3}
-        placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (showSlash) {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-              e.preventDefault();
-              setHighlight((h) => (h + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
-              return;
-            }
-            if ((e.key === 'Tab' || e.key === 'Enter') && !e.shiftKey) {
-              e.preventDefault();
-              pickSlash(matches[Math.min(highlight, matches.length - 1)].name);
-              return;
-            }
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              setSlashDismissed(text);
-              return;
-            }
-          }
-          const action = composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey);
-          if (action) {
+      <div
+        className="composer-box"
+        onMouseDown={(e) => {
+          // A click in the box's empty space (not on a control) is a click in the text.
+          const t = e.target as HTMLElement;
+          if (t === e.currentTarget || t.classList.contains('composer-controls') || t.classList.contains('spacer')) {
             e.preventDefault();
-            void send(action === 'send-now' ? 'steer' : 'queue');
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            studio.events.emit('focus-editor');
-          } else if (e.key === 'Tab' && e.shiftKey && !running) {
-            e.preventDefault();
-            void studio.setMode(nextMode(mode));
+            inputRef.current?.focus();
           }
         }}
-      />
-      <div className="composer-controls">
-        <ModeMenu />
-        <ModelPicker placement="up" />
-        <PermissionsMenu />
-        <span className="spacer" />
-        {running ? (
-          <>
-            <button title="Stop the assistant now" onClick={() => void studio.cancel()}>
-              Stop
+      >
+        <textarea
+          ref={inputRef}
+          value={text}
+          rows={2}
+          placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (showSlash) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlight((h) => (h + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+                return;
+              }
+              if ((e.key === 'Tab' || e.key === 'Enter') && !e.shiftKey) {
+                e.preventDefault();
+                pickSlash(matches[Math.min(highlight, matches.length - 1)].name);
+                return;
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setSlashDismissed(text);
+                return;
+              }
+            }
+            const action = composerKeyAction({ ...e, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, sendKey);
+            if (action) {
+              e.preventDefault();
+              void send(action === 'send-now' ? 'steer' : 'queue');
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              studio.events.emit('focus-editor');
+            } else if (e.key === 'Tab' && e.shiftKey && !running) {
+              e.preventDefault();
+              void studio.setMode(nextMode(mode));
+            }
+          }}
+        />
+        <div className="composer-controls">
+          <ModeMenu />
+          <ModelPicker placement="up" />
+          <PermissionsMenu />
+          <span className="spacer" />
+          {!text && (
+            <button
+              className="composer-slash"
+              aria-label="Commands"
+              title="Commands (type /)"
+              onClick={() => {
+                setText('/');
+                inputRef.current?.focus();
+              }}
+            >
+              /
             </button>
-            {text.trim() && (
-              <>
-                <button title="The assistant reads it at its next step (⌥⏎)" onClick={() => void send('steer')}>
-                  Send now
+          )}
+          {running ? (
+            <>
+              <button className="send-button stop" aria-label="Stop" title="Stop the assistant now" onClick={() => void studio.cancel()}>
+                <Icon name="stop" size={14} />
+              </button>
+              {text.trim() && (
+                <button className="send-button primary" aria-label="Queue" title={`Queue: sent when the assistant finishes · ${queueKeys}`} onClick={() => void send('queue')}>
+                  <Icon name="arrowUp" size={15} />
                 </button>
-                <button className="primary" title="Sent when the assistant finishes" onClick={() => void send('queue')}>
-                  Queue
-                </button>
-              </>
-            )}
-          </>
-        ) : (
-          <button
-            className="primary"
-            disabled={!ready || (!text.trim() && !canResume)}
-            title={canResume ? 'Carry on where it stopped, with the model chosen now (⏎)' : undefined}
-            onClick={() => void send()}
-          >
-            {canResume ? 'Resume' : 'Send'}
-          </button>
-        )}
-      </div>
-      <div className="composer-hint" title="Change in Settings (⌘,)">
-        {running
-          ? `While it works: ${sendHint(sendKey).split(' · ')[0].replace('send', 'queue')} · ⌥⏎ send now`
-          : `/ for commands · Selected text goes with your message · ${sendHint(sendKey)}`}
+              )}
+            </>
+          ) : canResume ? (
+            <button className="send-button primary resume" disabled={!ready} title="Carry on where it stopped, with the model chosen now (⏎)" onClick={() => void send()}>
+              Resume
+            </button>
+          ) : (
+            <button className="send-button primary" aria-label="Send" disabled={!ready || !text.trim()} title={`Send · ${keys}`} onClick={() => void send()}>
+              <Icon name="arrowUp" size={15} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
+import { Icon } from './icons';
 import { PERMISSION_ITEMS, presetOf, PRESETS, type Level, type PresetId } from '../services/agent/permissions';
 
 const LEVEL_LABELS: [Level, string][] = [
@@ -87,12 +88,12 @@ export function PermissionsMenu() {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Permissions: ${preset === 'custom' ? 'Custom' : PRESETS[preset].label}`}
-        title="What the assistant may do"
+        title={`What the assistant may do: ${preset === 'custom' ? 'Custom' : PRESETS[preset].label}`}
         onClick={() => setOpen((o) => !o)}
       >
-        <span aria-hidden>{preset === 'edit' ? '✎' : preset === 'readonly' ? '◌' : '🔒︎'}</span>
-        {preset === 'custom' ? 'Custom' : PRESETS[preset].label}
-        <span className="model-trigger-chevron">▾</span>
+        <Icon name="shield" size={14} />
+        {/* Hidden when the chat is narrow; the shield's colour still tells. */}
+        <span className="perm-trigger-label">{preset === 'custom' ? 'Custom' : PRESETS[preset].label}</span>
       </button>
       {open && (
         <div className="perm-popover" role="dialog" aria-label="Permissions">
