@@ -359,6 +359,7 @@ export class Studio {
     'focus-composer': [];
     'focus-editor': [];
     'fill-composer': [text: string];
+    'find-in-settings': [];
     'show-agent-pane': [];
     'show-explorer': [];
     'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
@@ -512,7 +513,7 @@ export class Studio {
     'close-tab': () => this.tabCommand('close'),
     'reopen-tab': () => this.tabCommand('reopen'),
     // Edit
-    find: () => this.editorAction('actions.find'),
+    find: () => (this.state.settingsOpen ? this.events.emit('find-in-settings') : this.editorAction('actions.find')),
     replace: () => this.editorAction('editor.action.startFindReplaceAction'),
     'add-comment': () => this.addComment(),
     // View

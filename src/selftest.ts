@@ -3251,6 +3251,8 @@ async function settingsChecks() {
   await sleep(500);
   out.previewHiddenWhileOpen = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
   out.dialogShown = !!document.querySelector('.modal.settings');
+  const search = document.querySelector<HTMLInputElement>('.settings-search input')!;
+  out.searchFocusedOnOpen = document.activeElement === search;
   const box = document.querySelector('.modal.settings')?.getBoundingClientRect();
   out.size = box && `${Math.round(box.width)}×${Math.round(box.height)}`;
   // Every page, with a picture.
@@ -3265,6 +3267,29 @@ async function settingsChecks() {
     };
   }
   tabs[0]?.click();
+  // Search: what matches on every page, the words highlighted; Esc clears it, then closes.
+  const setSearch = async (value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, value);
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(300);
+  };
+  const results = async (name: string) => ({
+    found: document.querySelector('.settings-found')?.textContent,
+    pages: Object.fromEntries([...document.querySelectorAll('.settings-nav button:not(:disabled)')].map((b) => [b.firstChild?.nextSibling?.textContent, b.querySelector('.settings-count')?.textContent])),
+    sections: [...document.querySelectorAll<HTMLElement>('.settings-content .settings-section:not([hidden])')].map((s) => s.querySelector('h2')?.textContent),
+    parts: [...document.querySelectorAll<HTMLElement>('.settings-content .settings-section:not([hidden]) > :not(h2):not([hidden])')].map((p) => p.textContent?.slice(0, 40)),
+    marked: [...document.querySelectorAll('.settings-mark')].length,
+    none: document.querySelector('.settings-none')?.textContent ?? null,
+    snapshot: await snap(`settings-search-${name}`),
+  });
+  out.search = {} as Record<string, unknown>;
+  for (const q of ['font', 'enter send', 'ALLOW python', 'zzzz']) {
+    await setSearch(q);
+    (out.search as Record<string, unknown>)[q] = await results(q.split(' ')[0].toLowerCase());
+  }
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(200);
+  out.escClearsSearch = { value: search.value, stillOpen: !!document.querySelector('.modal.settings'), pageShown: document.querySelector('.settings-nav button.active')?.textContent, marked: document.querySelectorAll('.settings-mark').length };
   studio.closeSettings();
   await sleep(500);
   out.previewHiddenAfterClose = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;

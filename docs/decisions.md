@@ -1474,6 +1474,33 @@ pane top (off by 0 pt).
   toolbar's settings icon, now full size. The last section shown is
   remembered.
 
+### Search in Settings
+
+- **A search box at the top, as VS Code's "Search settings".** It has the
+  cursor when Settings opens, and ⌘F goes back to it.
+- **Typing shows every page at once,** each under its name, with only what
+  matches:
+  - a setting matches when its text, with its page's and section's names, has
+    every word of the search, in any order;
+  - a section's opening help stays with any match in it;
+  - the words are marked, and the sidebar shows each page's count (a click
+    scrolls to it);
+  - nothing matching says so.
+- **Esc clears the search,** then closes Settings.
+- **It searches what's drawn,** not a list kept beside the pages, so a new
+  setting is found without being registered. A page that redraws (a setting
+  changed) is filtered again.
+- **The marks are boxes behind the words.** WebKit (macOS 26) takes ranges for
+  the CSS Custom Highlight API (`CSS.highlights`) but doesn't paint them, or
+  paints them on other text.
+- Verified (self-test `settings`, and screen captures for the marks):
+  - the search box had the cursor when Settings opened;
+  - "font" showed Extra font folders, on This book only (1 setting, 3 marks);
+  - "enter send" showed the send key, on General;
+  - "ALLOW python" showed the commands section's help, on Permissions;
+  - "zzzz" said nothing matches;
+  - Esc cleared the search and left General showing.
+
 ### Commands that only look never ask
 
 - **How OpenCode checks shell commands** (verified live in 2.0.20):

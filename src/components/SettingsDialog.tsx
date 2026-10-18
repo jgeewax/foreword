@@ -1,8 +1,9 @@
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { PROJECT_FILE } from '../app/project-settings';
 import { studio, type SettingsPage } from '../app/studio';
 import { useStore } from '../lib/store';
+import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
@@ -411,9 +412,75 @@ function ToolsPage() {
   );
 }
 
+/**
+ * Show only what matches a search, as VS Code's settings search does. Every page
+ * is shown (see SettingsDialog), and each section keeps the parts whose text, with
+ * the page's and the section's names, has every word. A section's opening help
+ * stays with any match in it. Returns the number of matching parts on each page,
+ * and where the words are in what's shown.
+ */
+function filterSettings(root: HTMLElement, words: string[]) {
+  const counts: Record<string, number> = {};
+  const marks: Range[] = [];
+  const mark = (el: Element | null) => {
+    if (!el) return;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      for (const [start, end] of wordSpans(node.data, words)) {
+        const range = new Range();
+        range.setStart(node, start);
+        range.setEnd(node, end);
+        marks.push(range);
+      }
+    }
+  };
+  for (const page of root.querySelectorAll<HTMLElement>('.settings-page')) {
+    const title = page.querySelector('.settings-page-title');
+    let hits = 0;
+    for (const section of page.querySelectorAll<HTMLElement>('.settings-section')) {
+      const heading = section.querySelector(':scope > h2');
+      const parts = [...section.children].filter((c): c is HTMLElement => c !== heading && c instanceof HTMLElement);
+      const found = parts.map((p) => hasWords(`${title?.textContent} ${heading?.textContent} ${p.textContent}`, words));
+      const any = found.includes(true);
+      parts.forEach((p, i) => {
+        p.hidden = !(found[i] || (any && p.matches('p.settings-help')));
+        if (!p.hidden) mark(p);
+      });
+      section.hidden = !any;
+      if (any) mark(heading);
+      hits += found.filter(Boolean).length;
+    }
+    page.hidden = !hits;
+    if (hits) mark(title);
+    counts[page.dataset.page!] = hits;
+  }
+  return { counts, marks };
+}
+
+/**
+ * Boxes behind the matched words, in `scroller`'s content coordinates (so they
+ * scroll with it). WebKit's CSS Custom Highlight API registers ranges here but
+ * doesn't paint them, so they're drawn as boxes.
+ */
+function markBoxes(scroller: HTMLElement, ranges: Range[]): [number, number, number, number][] {
+  const at = scroller.getBoundingClientRect();
+  const r = (n: number) => Math.round(n * 10) / 10;
+  return ranges.flatMap((range) =>
+    [...range.getClientRects()].map((b): [number, number, number, number] => [r(b.left - at.left + scroller.scrollLeft), r(b.top - at.top + scroller.scrollTop), r(b.width), r(b.height)]),
+  );
+}
+
 export function SettingsDialog() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [marks, setMarks] = useState<[number, number, number, number][]>([]);
+  const words = searchWords(query);
+  const searching = words.length > 0;
   const [page, setPageState] = useState<Page>(() => studio.state.settingsPage ?? readPage());
   const setPage = (p: Page) => {
     setPageState(p);
@@ -431,21 +498,62 @@ export function SettingsDialog() {
     { id: 'tools', label: 'Tools', icon: 'code' },
   ];
   const current = pages.some((p) => p.id === page) ? page : 'general';
+  const total = pages.reduce((n, p) => n + (counts[p.id] ?? 0), 0);
 
+  const focusSearch = () => {
+    searchRef.current?.focus();
+    searchRef.current?.select();
+  };
+  useEffect(() => studio.events.on('find-in-settings', focusSearch), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        studio.closeSettings();
+        // Esc clears a search first, as in VS Code; then it closes.
+        if (searchRef.current?.value) setQuery('');
+        else studio.closeSettings();
+      } else if (e.metaKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        focusSearch();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // Opening puts the cursor in the search box; picking a page, on its first setting.
+  useEffect(() => searchRef.current?.focus(), []);
+  const shownPage = useRef(current);
   useEffect(() => {
+    if (shownPage.current === current) return;
+    shownPage.current = current;
     const root = dialogRef.current;
     (root?.querySelector<HTMLElement>('.settings-content input:checked') ?? root?.querySelector<HTMLElement>('.settings-content input, .settings-content select, .settings-content button'))?.focus();
   }, [current]);
+  useLayoutEffect(() => {
+    const scroller = contentRef.current;
+    const results = resultsRef.current;
+    if (!scroller || !results || !searching) return;
+    const same = <T,>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b);
+    const apply = () => {
+      const found = filterSettings(results, words);
+      const boxes = markBoxes(scroller, found.marks);
+      setCounts((prev) => (same(prev, found.counts) ? prev : found.counts));
+      setMarks((prev) => (same(prev, boxes) ? prev : boxes));
+    };
+    apply();
+    // A page redraws on its own when a setting changes, and text rewraps when the window does.
+    const observer = new MutationObserver(apply);
+    observer.observe(results, { childList: true, subtree: true, characterData: true });
+    const resized = new ResizeObserver(apply);
+    resized.observe(results);
+    return () => {
+      observer.disconnect();
+      resized.disconnect();
+    };
+  }, [query]);
+
+  const pageContent = (id: Page) =>
+    ({ general: <GeneralPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, book: <ProjectSection />, tools: <ToolsPage /> })[id];
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeSettings()}>
@@ -453,6 +561,11 @@ export function SettingsDialog() {
         <header className="modal-header">
           <h1>Settings</h1>
           <span className="muted settings-shortcut">⌘,</span>
+          <label className="settings-search">
+            <Icon name="search" size={14} />
+            <input ref={searchRef} value={query} placeholder="Search settings" aria-label="Search settings" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
+            {searching && <span className="settings-found">{total === 1 ? '1 setting' : `${total} settings`}</span>}
+          </label>
           <span className="spacer" />
           <button className="icon modal-close" aria-label="Close settings" title="Close (Esc)" onClick={() => studio.closeSettings()}>
             <Icon name="close" size={16} />
@@ -460,19 +573,48 @@ export function SettingsDialog() {
         </header>
         <div className="settings-layout">
           <nav className="settings-nav" role="tablist" aria-orientation="vertical">
-            {pages.map((p) => (
-              <button key={p.id} role="tab" aria-selected={current === p.id} className={current === p.id ? 'active' : ''} onClick={() => setPage(p.id)}>
-                <Icon name={p.icon} size={16} />
-                {p.label}
-              </button>
-            ))}
+            {pages.map((p) =>
+              searching ? (
+                // While searching, every page is shown: its name goes to its matches, with their count.
+                <button
+                  key={p.id}
+                  className={counts[p.id] ? '' : 'no-match'}
+                  disabled={!counts[p.id]}
+                  onClick={() => contentRef.current?.querySelector(`[data-page="${p.id}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+                >
+                  <Icon name={p.icon} size={16} />
+                  {p.label}
+                  <span className="settings-count">{counts[p.id] ?? 0}</span>
+                </button>
+              ) : (
+                <button key={p.id} role="tab" aria-selected={current === p.id} className={current === p.id ? 'active' : ''} onClick={() => setPage(p.id)}>
+                  <Icon name={p.icon} size={16} />
+                  {p.label}
+                </button>
+              ),
+            )}
           </nav>
-          <div className="settings-content" role="tabpanel">
-            {current === 'general' && <GeneralPage />}
-            {current === 'assistant' && <AssistantPage />}
-            {current === 'permissions' && <PermissionsPage />}
-            {current === 'book' && <ProjectSection />}
-            {current === 'tools' && <ToolsPage />}
+          <div className="settings-content" role="tabpanel" ref={contentRef}>
+            {searching ? (
+              <>
+                <div className="settings-marks" aria-hidden>
+                  {marks.map(([left, top, width, height], i) => (
+                    <span key={i} className="settings-mark" style={{ left, top, width, height }} />
+                  ))}
+                </div>
+                <div className="settings-results" ref={resultsRef}>
+                  {pages.map((p) => (
+                    <div key={p.id} className="settings-page" data-page={p.id}>
+                      <h1 className="settings-page-title">{p.label}</h1>
+                      {pageContent(p.id)}
+                    </div>
+                  ))}
+                </div>
+                {total === 0 && <p className="settings-none muted">No settings match “{query.trim()}”.</p>}
+              </>
+            ) : (
+              pageContent(current)
+            )}
           </div>
         </div>
       </div>
