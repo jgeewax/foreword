@@ -1,3 +1,4 @@
+import { clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix } from '../app/activity';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
@@ -325,31 +326,48 @@ function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
   );
 }
 
-/** The model's reasoning: its last lines while it streams, then folded to "Thought for 4 s". */
+/** A clock that ticks while `on`, for a live time. */
+function useNow(on: boolean, every = 250) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!on) return;
+    const t = window.setInterval(() => setNow(Date.now()), every);
+    return () => window.clearInterval(t);
+  }, [on, every]);
+  return now;
+}
+
+/**
+ * The model's reasoning: its last lines while it streams, then folded to
+ * "Waited 12 s · Thought for 4 s". Waiting (the model saying nothing yet:
+ * queued, loading, or reasoning it doesn't show) and thinking (its reasoning
+ * streaming in) are timed apart, so a slow start doesn't count as thought.
+ */
 function Thinking({ item }: { item: Extract<ChatItem, { kind: 'thinking' }> }) {
   const [open, setOpen] = useState(false);
+  const now = useNow(!item.done, 1000);
   if (!item.done) {
     return (
       <div className="thinking live">
-        <div className="thinking-head shimmer">Thinking…</div>
+        <div className="thinking-head">
+          {waitedPrefix(item)}
+          <span className="shimmer">Thinking…</span> <span className="thinking-time">{clockTime(thinkingSoFar(item, now))}</span>
+        </div>
         <div className="thinking-tail">
           <div>{item.text}</div>
         </div>
       </div>
     );
   }
-  const secs = item.ended && item.started ? Math.max(1, Math.round((item.ended - item.started) / 1000)) : null;
   return (
     <div className="thinking">
       <button className="thinking-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {secs ? `Thought for ${secs} s` : 'Thought'} <span aria-hidden>{open ? '▾' : '▸'}</span>
+        {thoughtHeading(item)} <span aria-hidden>{open ? '▾' : '▸'}</span>
       </button>
       {open && <div className="thinking-text">{item.text}</div>}
     </div>
   );
 }
-
-const clockTime = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
 
 /** While a turn runs: what it's doing now, animated, with the time so far. */
 function ActivityLine() {
@@ -360,32 +378,32 @@ function ActivityLine() {
     const last = s.agent.items[s.agent.items.length - 1];
     return last?.kind === 'thinking' && !last.done;
   });
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!running) return;
-    const t = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(t);
-  }, [running]);
+  const now = useNow(running);
   if (!running || !activity || (thinkingShown && activity.phase === 'thinking')) return null;
-  const elapsed = Math.max(0, Math.floor((now - activity.since) / 1000));
+  // This step's own time (how long it's been waiting, or thinking, or on this
+  // tool), and the turn's when it has had other steps before.
+  const { step, total } = stepTimes(activity, now);
   const wait = activity.retryAt ? Math.max(0, Math.ceil((activity.retryAt - now) / 1000)) : 0;
   const label =
     activity.phase === 'sending'
       ? 'Sending…'
-      : activity.phase === 'thinking'
-        ? 'Thinking…'
-        : activity.phase === 'tool'
-          ? `${activity.label ?? 'Working'}…`
-          : activity.phase === 'writing'
-            ? 'Writing…'
-            : activity.phase === 'asking'
-              ? 'Waiting for your answer'
-              : `The model is busy. Trying again${wait ? ` in ${wait} s` : ' now'}${activity.attempt ? ` (attempt ${activity.attempt})` : ''}`;
+      : activity.phase === 'waiting'
+        ? 'Waiting for the model…'
+        : activity.phase === 'thinking'
+          ? 'Thinking…'
+          : activity.phase === 'tool'
+            ? `${activity.label ?? 'Working'}…`
+            : activity.phase === 'writing'
+              ? 'Writing…'
+              : activity.phase === 'asking'
+                ? 'Waiting for your answer'
+                : `The model is busy. Trying again${wait ? ` in ${wait} s` : ' now'}${activity.attempt ? ` (attempt ${activity.attempt})` : ''}`;
   return (
     <div className={`activity-line phase-${activity.phase}`} role="status" aria-live="polite" title={activity.reason}>
       <span className="activity-spinner" aria-hidden />
       <span className="activity-label shimmer">{label}</span>
-      <span className="activity-time">{clockTime(elapsed)}</span>
+      <span className="activity-time">{clockTime(step)}</span>
+      {total > step && <span className="activity-total" title="Since you sent it">{clockTime(total)} in all</span>}
     </div>
   );
 }

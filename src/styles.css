@@ -695,6 +695,9 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .activity-time { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .thinking { font-size: 12px; color: var(--muted); animation: rise-in 0.18s ease-out; }
 .thinking-head { background: none; border: none; padding: 0; color: var(--muted); font-size: 12px; }
+.thinking-time, .activity-total { font-variant-numeric: tabular-nums; }
+.activity-total { color: var(--muted); opacity: 0.75; font-size: 11px; white-space: nowrap; }
+.activity-total::before { content: '·'; margin-right: 8px; }
 button.thinking-head:hover { color: var(--fg); }
 .thinking-text { margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); white-space: pre-wrap; line-height: 1.45; }
 /* While it streams, only the last few lines, fading out at the top. */

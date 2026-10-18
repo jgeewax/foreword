@@ -2130,23 +2130,33 @@ async function thinkingChecks() {
   shots.push(await snap('thinking-3'));
   // Reasoning, in the shape OpenCode sends it (the model above may or may not have reasoned).
   const emit = (e: Record<string, unknown>) => (studio as unknown as { onAgentEvent(e: unknown): void }).onAgentEvent({ sessionId: studio.state.agent.sessionId, ...e });
+  // The model says nothing for 2 s (waiting), reasons for 2 s (thinking), then
+  // takes another 1.5 s to close it: only the middle is thought.
   emit({ type: 'turn-started' });
   emit({ type: 'step-started' });
+  await sleep(1200);
+  const waiting = document.querySelector('.activity-line')?.textContent;
+  shots.push(await snap('thinking-waiting'));
+  await sleep(800);
   const words = 'The author wants a short summary. I should read main.typ first to see which chapters it includes, then skim the first chapter, and answer in two sentences without changing anything.'.split(' ');
-  for (const w of words) emit({ type: 'reasoning-delta', messageId: 'selftest', ordinal: 0, delta: `${w} ` });
-  await sleep(400);
+  for (const [i, w] of words.entries()) {
+    emit({ type: 'reasoning-delta', messageId: 'selftest', ordinal: 0, delta: `${w} ` });
+    if (i < words.length - 1) await sleep(2000 / words.length);
+  }
+  await sleep(300);
   const live = { head: document.querySelector('.thinking.live .thinking-head')?.textContent, tail: document.querySelector('.thinking-tail')?.textContent?.slice(-40) };
   shots.push(await snap('thinking-live'));
-  await sleep(1100);
+  await sleep(1200);
   emit({ type: 'reasoning-ended', messageId: 'selftest', ordinal: 0, text: words.join(' ') });
   emit({ type: 'turn-finished', outcome: 'succeeded' });
   await sleep(500);
   const thinking = studio.state.agent.items.filter((i) => i.kind === 'thinking');
   return {
+    waiting,
     live,
     reply: reply.slice(0, 160),
     phases,
-    thinking: thinking.map((t) => (t.kind === 'thinking' ? { done: t.done, seconds: t.ended && Math.round((t.ended - t.started) / 1000), text: t.text.slice(0, 80) } : null)),
+    thinking: thinking.map((t) => (t.kind === 'thinking' ? { done: t.done, waited: t.waited, thought: t.ended && t.ended - t.started, text: t.text.slice(0, 80) } : null)),
     folded: [...document.querySelectorAll('.thinking .thinking-head')].map((e) => e.textContent),
     toolRows: [...document.querySelectorAll('.tool summary')].map((e) => e.textContent),
     lineGone: !document.querySelector('.activity-line'),

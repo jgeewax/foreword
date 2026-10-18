@@ -2471,14 +2471,14 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   they're saved:
   - **Typst Studio** (General, Assistant, Permissions, Tools), for every book,
     in `~/.typst-studio/settings.json`;
-  - **This book · <name>** (Files, Assistant), in the book's
+  - **This book · *its name*** (Files, Assistant), in the book's
     `.typst-studio.json`, so they travel with it. Files has the main file, the
     Typst root, the PDF folder and the font folders. Assistant has the
     writing style guide, the commands allowed in this book only, and trust in
     its code examples.
 - **Each page starts by saying where it's saved:** "For every book. Saved in
   ~/.typst-studio/settings.json…" with Open in text editor (and the file's
-  problem, if it can't be read), or "For <book> only. Saved in
+  problem, if it can't be read), or "For *the book* only. Saved in
   .typst-studio.json in the book's folder…" with Open the file. This
   replaces the Settings file section on General.
 - Search still shows every page of both groups, a book's pages titled "This
@@ -2491,6 +2491,36 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   banner and the cursor on its first setting; "font" finds Extra font
   folders on Files (1 setting), "ALLOW python" the commands for every book on
   Permissions, "enter send" the send key on General.
+
+### Waiting, apart from thinking
+
+- **Asked for:** "thinking needs to be thinking time not waiting time. split
+  them and show both in chat ui". The progress line said "Thinking…" from the
+  moment a turn began, and after every tool, while the model hadn't said
+  anything yet; its time ran from Send. A thinking block's "Thought for" ran
+  until its end event, which can come well after its last words.
+- **A new step, waiting:** "Waiting for the model…" is the progress line
+  whenever the model has said nothing yet: after Send, a new step, a tool's
+  result, an answered question, and after one thinking block before the next
+  thing. The model may be queued, loading, or reasoning it doesn't show; the
+  app can't tell those apart, so it doesn't call it thinking. "Thinking…" now
+  means its reasoning is streaming in.
+- **Each step has its own time:** the progress line's time is how long this
+  step has run ("Waiting for the model… 12 s"), followed, when the turn had
+  steps before it, by the turn's ("· 1:05 in all", tooltip "Since you sent
+  it"). Sending and then waiting for the first words count as one wait.
+- **Thinking blocks show both:** live, "Waited 12 s · Thinking… 3 s", the
+  thinking time ticking from its first words; done, "Waited 12 s · Thought
+  for 4 s", thinking timed from its first words to its last. A wait under a
+  second isn't mentioned. Reasoning that comes all at once says "Thought",
+  with no time, since how long it took isn't known.
+- Saved conversations still show "Thought for 4 s" from the reasoning parts'
+  own times: what came before a part isn't timed.
+- The timing is in `src/app/activity.ts`, with unit tests.
+- Verified: unit tests (9) for the step clocks, the wait before thinking, and
+  the headings. The `thinking` self-test now waits 2 s, streams thought for
+  2 s and closes it 1.5 s later; it didn't run here, with the screen locked
+  (WebKit throttles the window, and the preview never started).
 
 ### Open questions
 

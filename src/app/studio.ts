@@ -29,6 +29,7 @@ import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
 import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
+import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
 import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
@@ -82,11 +83,17 @@ export type BackgroundTask = {
 /** A message sent while the assistant works: `id` is OpenCode's inbox id once it has one. */
 export type QueuedMessage = { id: string; text: string; attachments: string[]; delivery: Delivery; sending: boolean };
 
-/** A running turn's progress: sending, thinking, using a tool, writing, or waiting to retry a busy model. */
+/**
+ * A running turn's progress: sending, waiting for the model (it has said
+ * nothing yet), thinking (its reasoning streams), using a tool, writing, or
+ * waiting to retry a busy model.
+ */
 export type Activity = {
-  phase: 'sending' | 'thinking' | 'tool' | 'writing' | 'retrying' | 'asking';
-  /** When the turn started (ms), for the elapsed time. */
+  phase: 'sending' | 'waiting' | 'thinking' | 'tool' | 'writing' | 'retrying' | 'asking';
+  /** When the turn started (ms). */
   since: number;
+  /** When this phase started (ms), for its own time: waiting and thinking are timed apart. */
+  phaseSince?: number;
   /** For a tool: what it's doing ("Reading chapters/ch1.typ"). */
   label?: string;
   /** For a retry: when (ms since 1970), which attempt, and why. */
@@ -110,7 +117,17 @@ export type ChatItem =
       callId?: string;
     }
   /** The model's reasoning, as it streams (shown faintly, then folded to "Thought for 4 s"). */
-  | { kind: 'thinking'; id: string; text: string; done: boolean; started: number; ended?: number }
+  | {
+      kind: 'thinking';
+      id: string;
+      text: string;
+      done: boolean;
+      /** When its first words came (ms); `ended`, when its last did. */
+      started: number;
+      ended?: number;
+      /** How long the model said nothing before it (ms): waiting, not thinking. */
+      waited?: number;
+    }
   | {
       kind: 'tool';
       id: string;
@@ -2552,7 +2569,7 @@ export class Studio {
     if (wasRunning && !this.state.agent.running) {
       // The turn is over: no progress line, and no thinking left open.
       this.store.set((s) => ({
-        agent: { ...s.agent, activity: null, items: s.agent.items.map((it) => (it.kind === 'thinking' && !it.done ? { ...it, done: true, ended: Date.now() } : it)) },
+        agent: { ...s.agent, activity: null, items: s.agent.items.map((it) => (it.kind === 'thinking' && !it.done ? { ...it, done: true, ended: it.ended ?? Date.now() } : it)) },
       }));
       void this.afterReviewTurn();
       void this.loadTasks();
@@ -2571,9 +2588,9 @@ export class Studio {
   }
 
   /** What the running turn is doing now (keeps the turn's start time). */
-  private setActivity(next: Omit<Activity, 'since'>) {
+  private setActivity(next: Omit<Activity, 'since' | 'phaseSince'>) {
     if (!this.state.agent.running) return;
-    this.setAgent((a) => ({ activity: { since: a.activity?.since ?? Date.now(), ...next } }));
+    this.setAgent((a) => ({ activity: nextActivity(a.activity, next, Date.now()) }));
   }
 
   /** Start OpenCode again (another program was chosen for it); after the turn, if the assistant is working. */
@@ -2871,7 +2888,7 @@ export class Studio {
             attachments: [],
             queued: [],
             running,
-            activity: running ? { phase: 'thinking', since: bg?.since ?? Date.now() } : null,
+            activity: running ? { phase: 'waiting', since: bg?.since ?? Date.now() } : null,
             background,
             stopped: false,
           },
@@ -3139,7 +3156,7 @@ export class Studio {
     try {
       await this.agent.replyForm(sessionId, formId, answer);
       this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'answered' } : it));
-      this.setActivity({ phase: 'thinking' });
+      this.setActivity({ phase: 'waiting' });
     } catch (e) {
       this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'pending' } : it));
       this.toast(`Couldn't send the answer: ${errorMessage(e)}`, 'error');
@@ -3477,7 +3494,7 @@ export class Studio {
     switch (e.type) {
       case 'turn-started':
         // Also when a queued message starts the next turn by itself.
-        this.setAgent((a) => ({ running: true, activity: a.activity ?? { phase: 'thinking', since: Date.now() } }));
+        this.setAgent((a) => ({ running: true, activity: a.activity ?? { phase: 'waiting', since: Date.now(), phaseSince: Date.now() } }));
         break;
       case 'turn-finished':
         this.setAgent({ running: false, stopped: e.outcome === 'failed' || e.outcome === 'interrupted' });
@@ -3489,7 +3506,7 @@ export class Studio {
         }
         break;
       case 'step-started':
-        this.setActivity({ phase: 'thinking' });
+        this.setActivity({ phase: 'waiting' });
         break;
       case 'inbox-delivered':
         this.queuedDelivered(e.inboxId);
@@ -3501,20 +3518,22 @@ export class Studio {
         this.updateItem(e.formId, (it) =>
           it.kind === 'question' && (it.state === 'pending' || it.state === 'sending') ? { ...it, state: e.outcome === 'answered' ? 'answered' : 'dismissed' } : it,
         );
-        if (this.state.agent.activity?.phase === 'asking') this.setActivity({ phase: 'thinking' });
+        if (this.state.agent.activity?.phase === 'asking') this.setActivity({ phase: 'waiting' });
         break;
       case 'step-finished':
         void this.checkTurnEnded(1500);
         break;
       case 'reasoning-delta': {
         const id = `${e.messageId}:r${e.ordinal}`;
+        const now = Date.now();
+        const waited = waitedFor(this.state.agent.activity, now);
         this.setActivity({ phase: 'thinking' });
         this.setAgent((a) => {
           const idx = a.items.findIndex((it) => it.id === id);
-          if (idx < 0) return { items: [...a.items, { kind: 'thinking', id, text: e.delta, done: false, started: Date.now() }] };
+          if (idx < 0) return { items: [...a.items, { kind: 'thinking', id, text: e.delta, done: false, started: now, ended: now, waited }] };
           const items = a.items.slice();
           const it = items[idx] as Extract<ChatItem, { kind: 'thinking' }>;
-          items[idx] = { ...it, text: it.text + e.delta };
+          items[idx] = { ...it, text: it.text + e.delta, ended: now };
           return { items };
         });
         break;
@@ -3522,11 +3541,17 @@ export class Studio {
       case 'reasoning-ended': {
         const id = `${e.messageId}:r${e.ordinal}`;
         const now = Date.now();
+        // Reasoning that came all at once: how long it took is unknown, the wait before it isn't.
+        const waited = waitedFor(this.state.agent.activity, now);
+        // Done thinking (that it showed), not yet saying anything else: a new wait.
+        const phase = this.state.agent.activity?.phase;
+        const shown = e.text.trim() || this.state.agent.items.some((it) => it.id === id);
+        if (shown && this.state.agent.running && (phase === 'thinking' || phase === 'waiting')) this.setAgent((a) => ({ activity: a.activity && { ...a.activity, phase: 'waiting', phaseSince: now } }));
         this.setAgent((a) =>
           a.items.some((it) => it.id === id)
-            ? { items: a.items.map((it) => (it.id === id && it.kind === 'thinking' ? { ...it, text: e.text || it.text, done: true, ended: now } : it)) }
+            ? { items: a.items.map((it) => (it.id === id && it.kind === 'thinking' ? { ...it, text: e.text || it.text, done: true, ended: it.ended ?? now } : it)) }
             : e.text.trim()
-              ? { items: [...a.items, { kind: 'thinking', id, text: e.text, done: true, started: now, ended: now }] }
+              ? { items: [...a.items, { kind: 'thinking', id, text: e.text, done: true, started: now, ended: now, waited }] }
               : {},
         );
         break;
@@ -3573,7 +3598,7 @@ export class Studio {
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, input: e.input, summary: summarizeToolInput(e.input) } : it));
         break;
       case 'tool-succeeded': {
-        this.setActivity({ phase: 'thinking' });
+        this.setActivity({ phase: 'waiting' });
         const call = this.toolCalls.get(e.callId);
         this.toolCalls.delete(e.callId);
         const read = call && this.state.workspace ? readOf(this.state.workspace.root, call.name, call.input, e.output) : null;
@@ -3593,7 +3618,7 @@ export class Studio {
         break;
       }
       case 'tool-failed':
-        this.setActivity({ phase: 'thinking' });
+        this.setActivity({ phase: 'waiting' });
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, status: 'failed', detail: e.error } : it));
         break;
       case 'permission-asked':
@@ -3615,7 +3640,7 @@ export class Studio {
         );
         if (this.state.agent.activity?.phase === 'asking' && this.activityBeforeAsking) {
           const { since: _since, ...before } = this.activityBeforeAsking;
-          this.setActivity(e.reply === 'reject' ? { phase: 'thinking' } : before);
+          this.setActivity(e.reply === 'reject' ? { phase: 'waiting' } : before);
         }
         this.activityBeforeAsking = null;
         break;
@@ -4112,7 +4137,7 @@ function needsRestart(a: ProjectSettings, b: ProjectSettings): boolean {
 export function activityText(a: Activity | null): string {
   if (!a) return '';
   if (a.phase === 'tool') return a.label ?? 'Working';
-  return { sending: 'Sending…', thinking: 'Thinking…', writing: 'Writing…', retrying: 'The model is busy, trying again', asking: 'Waiting for your answer', tool: '' }[a.phase];
+  return { sending: 'Sending…', waiting: 'Waiting for the model…', thinking: 'Thinking…', writing: 'Writing…', retrying: 'The model is busy, trying again', asking: 'Waiting for your answer', tool: '' }[a.phase];
 }
 
 function summarizeToolInput(input: unknown): string {
