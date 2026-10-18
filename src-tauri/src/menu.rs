@@ -32,6 +32,7 @@ pub const COMMANDS: &[&str] = &[
     // Edit
     "find",
     "replace",
+    "format-document",
     "add-comment",
     // View
     "toggle-sidebar",
@@ -143,6 +144,8 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             &item("find", "Find…", Some("CmdOrCtrl+F"))?,
             &item("replace", "Find and Replace…", Some("CmdOrCtrl+Alt+F"))?,
+            &sep()?,
+            &item("format-document", "Format Document", Some("Shift+Alt+F"))?,
             &sep()?,
             &item("add-comment", "Add Comment…", Some("CmdOrCtrl+Alt+M"))?,
         ],

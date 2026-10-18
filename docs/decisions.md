@@ -1962,6 +1962,51 @@ to the user's window) would have terminated the first instance's OpenCode.
 Files of instances that are still running are left alone. `tauri dev` restarts
 the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 
+### Formatting: typstyle through Tinymist, on save
+
+- **Same formatter as VS Code.** Tinymist's `textDocument/formatting` with
+  `formatterMode: "typstyle"` and its 120-column default, which is what VS
+  Code's Typst extension runs. A book formatted here doesn't change when someone
+  opens it there. No formatter of our own and no new dependency.
+- **What typstyle does (Tinymist 0.15.8):** spacing in code (`#let f(x, y) = x + y`,
+  `(a: 1, b: 2)`), indentation, long calls and tables broken one argument or row
+  per line, trailing whitespace, list markers, sorted imports, and `&` / `&&`
+  columns lined up in multi-line equations (`f(x) & = 0       && "otherwise"`).
+  It leaves runs of spaces in prose, blank lines and line breaks alone (prose
+  wrap stays off). It returns null for a syntax error and `[]` when there's
+  nothing to change. Errors like an unknown variable don't stop it.
+- **Format on save** (Settings ▸ General ▸ Editor, on by default; `formatOnSave`
+  in the settings file) applies to the author's own saves: ⌘S, File ▸ Save,
+  and "Keep my version". Saves the app makes itself don't format: before the
+  assistant runs or an export, Duplicate, and edits from moving files, adding a
+  chapter or marking a TODO done. The save waits up to 1.5 s
+  (VS Code: 750 ms), then saves the text as it is. typstyle takes ~8 ms on a
+  9,600-line file. With a syntax error the file is saved as written.
+- **Format Document** (⇧⌥F, Edit menu, the editor's menu) works whether or not
+  format on save is on, and says so when a syntax error stops it.
+- **The cursor stays put.** Tinymist sends one edit from the first change to the
+  last, which would move the cursor and scroll position. The edits are cut down
+  first, as VS Code does: a line diff, then character diffs within changed lines
+  that pair up (`smallEdits`, src/editor/text-edit.ts). They're applied as one
+  undo step, so ⌘Z takes off only the formatting. If the text changes while the
+  formatter works, its edits are dropped.
+- **Diff cost:** this Myers diff keeps O(D²) memory. Reformatting a messy
+  9,600-line file at once (7,800 changed lines) took 474 MB. `diff()` now takes
+  `maxEdits`, and past it the changed middle becomes one replacement: 2,000
+  changed lines (16 MB at most), 500 changes within a line.
+- **Code examples survive.** typstyle indents a raw block inside `#run(...)`
+  when it splits the call. Typst and `src/code/cells.ts` both remove common
+  indentation, so the code and its hash are the same.
+- Self-test `format` (edits, scratch book): ⌘S formats the equation and `#let`
+  without touching the rest of the chapter (16 ms save). The cursor keeps its
+  place, ⌘Z undoes only the formatting, and the setting off saves as typed.
+  Format Document took 2 ms. A syntax error shows a toast on Format Document and
+  is saved as written. The editor's menu, the Edit menu and Settings all offer it.
+- **Not yet:** several book templates aren't typstyle-clean (continuation
+  lines in content blocks, `#run(...)` on one line, import order), so a new
+  book's first ⌘S tidies those files. Formatting the templates needs care with
+  their `{{placeholders}}`.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

@@ -1,6 +1,6 @@
 // TypstService: LSP client for the single Tinymist process (diagnostics +
 // live preview from unsaved buffers). Transport is the Rust stdio bridge.
-import type { LspContentChange, LspDiagnostic } from '../editor/lsp-convert';
+import type { LspContentChange, LspDiagnostic, LspTextEdit } from '../editor/lsp-convert';
 import { relativeToUri } from '../editor/lsp-convert';
 import { Channel, ipc } from '../lib/ipc';
 import { Emitter } from '../lib/store';
@@ -11,6 +11,9 @@ const CONFIG = {
   semanticTokens: 'disable',
   // Preview follows keystrokes; partial rendering keeps big books fast (SPEC §3).
   preview: { refresh: 'onType', partialRendering: true },
+  // Format Document and format on save: typstyle, as VS Code's Typst extension (and its defaults).
+  formatterMode: 'typstyle',
+  formatterPrintWidth: 120,
 };
 
 type Config = typeof CONFIG & { outputPath?: string; fontPaths?: string[]; rootPath?: string };
@@ -114,6 +117,16 @@ export class TypstService extends Emitter<Events> {
 
   didClose(uri: string) {
     this.notify('textDocument/didClose', { textDocument: { uri } });
+  }
+
+  /**
+   * typstyle's edits for an open document, against the text Tinymist has now:
+   * spacing, indentation, `&` columns in equations. `[]` when it's already
+   * formatted; null when typstyle can't parse it (a syntax error).
+   */
+  async format(uri: string): Promise<LspTextEdit[] | null> {
+    if (!this.running) return null;
+    return (await this.request('textDocument/formatting', { textDocument: { uri }, options: { tabSize: 2, insertSpaces: true } })) ?? null;
   }
 
   /**

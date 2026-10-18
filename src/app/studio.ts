@@ -527,6 +527,7 @@ export class Studio {
     // Edit
     find: () => (this.state.settingsOpen ? this.events.emit('find-in-settings') : this.editorAction('actions.find')),
     replace: () => this.editorAction('editor.action.startFindReplaceAction'),
+    'format-document': () => this.formatDocument(),
     'add-comment': () => this.addComment(),
     // View
     'toggle-sidebar': () => this.events.emit('toggle-pane', 'explorer'),
@@ -897,7 +898,7 @@ export class Studio {
     let copy = `${stem} copy${ext}`;
     for (let i = 2; files.has(copy); i++) copy = `${stem} copy ${i}${ext}`;
     try {
-      if (this.state.dirty[path]) await this.save(path);
+      if (this.state.dirty[path]) await this.save(path, { format: false });
       await ipc.fsCopy(path, copy);
       await this.refreshFiles();
       await this.openFile(copy);
@@ -2325,14 +2326,25 @@ export class Studio {
     editor.focus();
   }
 
-  async save(path = this.state.active, opts?: { overwrite?: boolean }) {
+  /** Save a file (⌘S): a Typst file is formatted first if Format on save is on. */
+  async save(path = this.state.active, opts?: { overwrite?: boolean; format?: boolean }) {
     if (!path || !this.docs) return;
     try {
-      await this.docs.save(path, opts);
+      await this.docs.save(path, { format: this.state.settings.formatOnSave, ...opts });
       this.history.scheduleSave();
     } catch (e) {
       this.toast(`Not saved: ${errorMessage(e)}`, 'error');
     }
+  }
+
+  /** Format Document (⇧⌥F): the open Typst file, with typstyle, whether or not Format on save is on. Undoable. */
+  async formatDocument(path = this.state.active) {
+    if (!path || !this.docs) return;
+    if (!path.endsWith('.typ')) return this.toast('Only Typst files can be formatted.', 'error');
+    const outcome = await this.docs.format(path);
+    if (outcome === 'syntax-error') this.toast(`Not formatted: ${path} has a syntax error. Fix it, then format again.`, 'error');
+    else if (outcome === 'timeout') this.toast('Not formatted: Tinymist didn’t answer in time.', 'error');
+    else if (outcome === 'unavailable') this.toast('Not formatted: Tinymist isn’t running.', 'error');
   }
 
   async reloadFromDisk(path: string) {

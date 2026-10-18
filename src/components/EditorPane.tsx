@@ -106,6 +106,12 @@ export function EditorPane() {
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void studio.save());
     editor.addAction({
+      id: 'studio.formatDocument',
+      label: 'Format Document',
+      keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
+      run: () => void studio.formatDocument(),
+    });
+    editor.addAction({
       id: 'studio.askAgent',
       label: 'Ask Agent About Selection',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
@@ -142,6 +148,7 @@ export function EditorPane() {
         'copy',
         'paste',
         'separator',
+        !!path?.endsWith('.typ') && { label: 'Format Document', accelerator: 'Shift+Alt+F', action: () => void studio.formatDocument() },
         !!path && { label: 'Show in Preview', action: () => void studio.syncPreviewToCursor() },
       ]);
     });

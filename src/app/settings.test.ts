@@ -63,9 +63,13 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [] });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [], formatOnSave: true });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
+    store.set('studio.settings', '{"formatOnSave":false}');
+    expect(loadSettings().formatOnSave).toBe(false);
+    store.set('studio.settings', '{"formatOnSave":"no"}');
+    expect(loadSettings().formatOnSave).toBe(true);
     store.set('studio.settings', 'not json');
     expect(loadSettings().sendKey).toBe('enter');
   });

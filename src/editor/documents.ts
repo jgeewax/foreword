@@ -3,9 +3,19 @@
 // conflict-checked; external changes reload clean buffers and flag dirty ones.
 import { ipc, isCmdError } from '../lib/ipc';
 import type { TypstService } from '../services/typst';
-import { relativeToUri, toLspChanges, toMarker, type LspDiagnostic } from './lsp-convert';
+import { applyLspEdits, relativeToUri, toLspChanges, toMarker, type LspDiagnostic } from './lsp-convert';
 import { languageFor, monaco } from './monaco';
-import { minimalEdit } from './text-edit';
+import { minimalEdit, smallEdits } from './text-edit';
+
+/** How long a save waits for the formatter before saving the text as it is (VS Code: 750 ms). */
+export const FORMAT_TIMEOUT_MS = 1500;
+
+/**
+ * What formatting did: `syntax-error` when typstyle can't parse the file,
+ * `changed` when the text changed while it worked (so its edits were dropped),
+ * `unavailable` for files that aren't Typst or when Tinymist isn't running.
+ */
+export type FormatOutcome = 'formatted' | 'unchanged' | 'syntax-error' | 'changed' | 'timeout' | 'unavailable';
 
 export type Doc = {
   path: string;
@@ -96,12 +106,49 @@ export class Documents {
   }
 
   /**
-   * Write the buffer to disk if the file is still the version we loaded.
-   * `overwrite` is the explicit "keep my version" conflict resolution.
+   * Format a Typst buffer with Tinymist's typstyle, as one undoable step. Its
+   * edits are cut down to what changed, so the cursor stays put. Nothing
+   * happens if the text changes while the formatter works.
    */
-  async save(path: string, { overwrite = false } = {}) {
+  async format(path: string, timeoutMs = FORMAT_TIMEOUT_MS): Promise<FormatOutcome> {
+    const doc = this.docs.get(path);
+    if (!doc?.isTypst || !doc.lspOpen || !this.typst.running) return 'unavailable';
+    const { model } = doc;
+    const version = model.getVersionId();
+    const before = model.getValue();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<'timeout'>((resolve) => (timer = setTimeout(() => resolve('timeout'), timeoutMs)));
+    const edits = await Promise.race([this.typst.format(doc.uri), timeout])
+      .catch(() => 'unavailable' as const)
+      .finally(() => clearTimeout(timer));
+    if (edits === 'timeout' || edits === 'unavailable') return edits;
+    if (edits === null) return 'syntax-error';
+    if (model.isDisposed() || model.getVersionId() !== version) return 'changed';
+    const changes = smallEdits(before, applyLspEdits(before, edits));
+    if (!changes.length) return 'unchanged';
+    model.pushStackElement();
+    model.pushEditOperations(
+      [],
+      changes.map((c) => ({ range: monaco.Range.fromPositions(model.getPositionAt(c.start), model.getPositionAt(c.end)), text: c.text })),
+      () => null,
+    );
+    model.pushStackElement();
+    return 'formatted';
+  }
+
+  /**
+   * Write the buffer to disk if the file is still the version we loaded.
+   * `overwrite` is the explicit "keep my version" conflict resolution;
+   * `format` formats a Typst file first (format on save).
+   */
+  async save(path: string, { overwrite = false, format = false } = {}) {
     const doc = this.docs.get(path);
     if (!doc) return;
+    if (format) {
+      const outcome = await this.format(path);
+      if (outcome === 'timeout') void ipc.uiLog(`format on save: no answer from Tinymist in ${FORMAT_TIMEOUT_MS} ms; ${path} saved unformatted`);
+      if (doc.model.isDisposed()) return;
+    }
     const text = doc.model.getValue();
     const altVersion = doc.model.getAlternativeVersionId();
     const expected = overwrite ? await ipc.fsHash(path) : doc.diskHash;

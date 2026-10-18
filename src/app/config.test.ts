@@ -11,8 +11,8 @@ describe('the settings file', () => {
     expect(c.settings.allowCommands).toEqual(['python3', 'uv run']);
     expect(c.zoom).toBe(1.25);
     expect(c.settings.permissions).toEqual(PRESETS.ask.permissions);
-    const text = serializeConfig(c.raw, { ...c.settings, markAiReads: false }, 1.25);
-    expect(JSON.parse(text)).toMatchObject({ sendKey: 'mod-enter', markAiReads: false, zoom: 1.25, myNote: 'hi', allowCommands: ['python3', 'uv run'] });
+    const text = serializeConfig(c.raw, { ...c.settings, markAiReads: false, formatOnSave: false }, 1.25);
+    expect(JSON.parse(text)).toMatchObject({ sendKey: 'mod-enter', markAiReads: false, formatOnSave: false, zoom: 1.25, myNote: 'hi', allowCommands: ['python3', 'uv run'] });
     expect(text.endsWith('}\n')).toBe(true);
   });
 

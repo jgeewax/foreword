@@ -2571,6 +2571,116 @@ async function commentTagChecks() {
 }
 
 /**
+ * Format on save and Format Document (typstyle, through Tinymist): an equation
+ * and a #let are saved formatted, the rest of the chapter untouched and the
+ * cursor kept; ⌘Z undoes the formatting; with the setting off a save leaves the
+ * text alone; a syntax error is saved as written. Edits a chapter: scratch book
+ * only; puts it back. The setting is changed in memory only (the author's app
+ * shares the stored settings).
+ */
+async function formatChecks() {
+  const out: Record<string, unknown> = {};
+  const path = 'chapters/ch1-vectors.typ';
+  await studio.openFile(path);
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
+  await waitFor(() => studio.typst.running, 30000, 'tinymist');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = await ipc.fsRead(path);
+  const setting = studio.state.settings.formatOnSave;
+  const formatOnSave = (on: boolean) => studio.store.set((s) => ({ settings: { ...s.settings, formatOnSave: on } }));
+  const disk = async () => (await ipc.fsRead(path)).text;
+  const cursorText = () => {
+    const p = editor.getPosition()!;
+    return model.getLineContent(p.lineNumber).slice(0, p.column - 1);
+  };
+  try {
+    const end = model.getFullModelRange().getEndPosition();
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: '\n$\n  a&=b+c \\\n  cc+dd&=e && "if" x > 0 \\\n  f&=g && "otherwise"\n$\n#let f(x,y)=x+y\n' }]);
+    const typed = model.getValue();
+    // The cursor just after "cc+dd": that line gains spaces before and after it.
+    const eqLine = model.getLinesContent().findIndex((l) => l.includes('cc+dd&=')) + 1;
+    editor.setPosition({ lineNumber: eqLine, column: model.getLineContent(eqLine).indexOf('&=') + 1 });
+
+    // ⌘S (File ▸ Save) with Format on save on.
+    formatOnSave(true);
+    let t = clock();
+    await studio.menuCommand('save');
+    const saveMs = Math.round(clock() - t);
+    const saved = await disk();
+    const formatted = ['$', '      a & =b+c \\', '  cc+dd & =e   && "if" x > 0 \\', '      f & =g   && "otherwise"', '$', '#let f(x, y) = x + y', ''].join('\n');
+    out.formatOnSave = {
+      saveMs,
+      equationAligned: saved.endsWith(formatted),
+      restOfChapterUntouched: saved.startsWith(original.text),
+      bufferIsDisk: model.getValue() === saved,
+      dirty: !!studio.state.dirty[path],
+      cursorStillAfter: cursorText(),
+      tail: saved.slice(saved.length - formatted.length - 20),
+    };
+
+    // ⌘Z: the formatting alone comes off; the file is now unsaved.
+    await model.undo();
+    out.undo = { backToTyped: model.getValue() === typed, dirty: !!studio.state.dirty[path] };
+
+    // Off: saved as typed.
+    formatOnSave(false);
+    await studio.menuCommand('save');
+    out.settingOff = { savedAsTyped: (await disk()) === typed, dirty: !!studio.state.dirty[path] };
+    formatOnSave(true);
+
+    // Format Document (⇧⌥F) with the cursor in an unchanged paragraph: it doesn't move.
+    const prose = model.getLinesContent().findIndex((l) => l.startsWith('A vector in')) + 1;
+    editor.setPosition({ lineNumber: prose, column: 10 });
+    editor.focus();
+    t = clock();
+    await studio.menuCommand('format-document');
+    out.formatDocument = {
+      ms: Math.round(clock() - t),
+      formatted: model.getValue().endsWith(formatted) && model.getValue().startsWith(original.text),
+      cursor: editor.getPosition()?.toString(),
+      cursorExpected: `(${prose},10)`,
+      dirty: !!studio.state.dirty[path],
+      viaKey: editor.getAction('studio.formatDocument')?.label,
+    };
+
+    // A syntax error: Format Document says so; a save keeps the text as written.
+    const broken = model.getFullModelRange().getEndPosition();
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(broken), text: '#let broken = (x,y\n' }]);
+    studio.store.set({ toast: null });
+    await studio.formatDocument();
+    out.syntaxError = { toast: studio.state.toast?.text ?? null };
+    await studio.menuCommand('save');
+    out.syntaxError = { ...(out.syntaxError as object), savedAsWritten: (await disk()) === model.getValue(), stillThere: (await disk()).includes('#let broken = (x,y') };
+
+    // Where it's offered: the editor's menu, the Edit menu, Settings.
+    let last: Exclude<MenuEntry, null | false | undefined>[] = [];
+    menuRecorder.record = (entries) => (last = entries);
+    const p = editor.getScrolledVisiblePosition({ lineNumber: prose, column: 4 })!;
+    const host = editor.getDomNode()!.getBoundingClientRect();
+    editor.revealLineInCenter(prose);
+    await sleep(200);
+    const q = editor.getScrolledVisiblePosition({ lineNumber: prose, column: 4 }) ?? p;
+    document.elementFromPoint(host.left + q.left, host.top + q.top + 5)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: host.left + q.left, clientY: host.top + q.top + 5, button: 2 }));
+    await sleep(250);
+    menuRecorder.record = undefined;
+    out.contextMenu = last.map((e) => (typeof e === 'string' ? `[${e}]` : `${e.label}${'accelerator' in e && e.accelerator ? ` (${e.accelerator})` : ''}`));
+    out.editMenu = (await ipc.menuOutline()).find(([title]) => title === 'Edit')?.[1];
+    studio.openSettings('general');
+    await sleep(400);
+    const box = [...document.querySelectorAll<HTMLLabelElement>('.settings-option')].find((l) => l.textContent?.includes('Format on save'));
+    out.settings = { label: box?.textContent ?? null, checked: box?.querySelector('input')?.checked ?? null, snapshot: await snap('settings-format-on-save') };
+    studio.closeSettings();
+  } finally {
+    formatOnSave(setting);
+    await ipc.fsWrite(path, original.text, await ipc.fsHash(path));
+    await studio.reloadFromDisk(path);
+    out.restored = model.getValue() === original.text && !studio.state.dirty[path];
+  }
+  return out;
+}
+
+/**
  * Typing doesn't flash the preview: while typing, at most one jump per pause and
  * no visible ripple; an arrow key still gets one visible ripple. (The chapter is
  * put back by undo.)
@@ -3948,6 +4058,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && want('difftabs')) result.difftabs = await diffTabChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
+    if (launch.selftestEdits && want('format')) result.format = await formatChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();

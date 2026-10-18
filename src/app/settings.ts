@@ -19,6 +19,8 @@ export type AppSettings = {
   markAiReads: boolean;
   /** Commands the assistant may run without asking, in every book (e.g. "python3"), besides those that only look. */
   allowCommands: string[];
+  /** Format Typst files (typstyle, through Tinymist) when the author saves them. */
+  formatOnSave: boolean;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -28,6 +30,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markAiEdits: true,
   markAiReads: true,
   allowCommands: [],
+  formatOnSave: true,
 };
 
 const KEY = 'studio.settings';
@@ -68,6 +71,7 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (typeof raw.markAiEdits === 'boolean') out.markAiEdits = raw.markAiEdits;
   if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
   if (Array.isArray(raw.allowCommands)) out.allowCommands = sanitizeCommands(raw.allowCommands);
+  if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
   return out;
 }
 

@@ -41,6 +41,15 @@ export function applyLspChanges(text: string, changes: readonly LspContentChange
   return text;
 }
 
+/** A server's edit (formatting): unlike `contentChanges`, every range is in the original text. */
+export type LspTextEdit = { range: LspRange; newText: string };
+
+export function applyLspEdits(text: string, edits: readonly LspTextEdit[]): string {
+  const at = edits.map((e) => ({ start: offsetAt(text, e.range.start), end: offsetAt(text, e.range.end), text: e.newText })).sort((a, b) => b.start - a.start);
+  for (const e of at) text = text.slice(0, e.start) + e.text + text.slice(e.end);
+  return text;
+}
+
 export type LspDiagnostic = { range: LspRange; message: string; severity?: number; source?: string };
 export type MarkerSeverityLevel = 'error' | 'warning' | 'info' | 'hint';
 export type Marker = MonacoRange & { message: string; severity: MarkerSeverityLevel; source?: string };

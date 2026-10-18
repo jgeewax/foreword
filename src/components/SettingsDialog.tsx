@@ -209,6 +209,21 @@ function GeneralPage() {
           <p className="settings-help">While the assistant works, the same key queues a message; ⌥⏎ sends it to the assistant right away.</p>
         </div>
       </Section>
+      <Section title="Editor">
+        <div className="settings-field">
+          <label className="settings-option">
+            <input type="checkbox" checked={settings.formatOnSave} onChange={(e) => studio.updateSettings({ formatOnSave: e.target.checked })} />
+            <span>
+              Format on save
+              <span className="muted"> — tidy spacing and indentation in Typst files, and line up &amp; and &amp;&amp; in equations</span>
+            </span>
+          </label>
+          <p className="settings-help">
+            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there. Prose and line breaks stay as you wrote them. Format Document (⇧⌥F) formats
+            the open file either way; ⌘Z undoes it.
+          </p>
+        </div>
+      </Section>
       <SettingsFileSection />
       <Section title="Layout">
         <div className="settings-field">

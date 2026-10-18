@@ -41,6 +41,21 @@ describe('diff', () => {
     }
   });
 
+  it('gives up on the shortest script past maxEdits, still walking both sides correctly', () => {
+    let seed = 11;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed % n;
+    };
+    for (let t = 0; t < 200; t++) {
+      const a = Array.from({ length: rand(14) }, () => 'abcd'[rand(4)]);
+      const b = Array.from({ length: rand(14) }, () => 'abcd'[rand(4)]);
+      check(a, b, diff(a, b, Object.is, rand(4)));
+    }
+    // Unchanged ends stay matched; the middle becomes one delete and one insert.
+    expect(diff([...'xabcy'], [...'xbcay'], Object.is, 1).map((r) => r.type)).toEqual(['equal', 'delete', 'insert', 'equal']);
+  });
+
   it('handles empty sides and identical input', () => {
     expect(diff([], ['x'])).toEqual([{ type: 'insert', a: 0, b: 0, n: 1 }]);
     expect(diff(['x', 'y'], [])).toEqual([{ type: 'delete', a: 0, b: 0, n: 2 }]);

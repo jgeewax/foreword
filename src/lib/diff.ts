@@ -5,8 +5,12 @@
 
 export type Run = { type: 'equal' | 'delete' | 'insert'; a: number; b: number; n: number };
 
-/** Runs covering both sequences in order: `a` indexes into `before`, `b` into `after`. */
-export function diff<T>(before: readonly T[], after: readonly T[], eq: (x: T, y: T) => boolean = Object.is): Run[] {
+/**
+ * Runs covering both sequences in order: `a` indexes into `before`, `b` into `after`.
+ * Past `maxEdits` differences (time O(n·D), memory O(D²)) the rest of the changed
+ * middle is one delete and one insert: still correct, just not the shortest.
+ */
+export function diff<T>(before: readonly T[], after: readonly T[], eq: (x: T, y: T) => boolean = Object.is, maxEdits = Infinity): Run[] {
   // Common prefix and suffix first: most edits touch a small part of a file.
   let start = 0;
   while (start < before.length && start < after.length && eq(before[start], after[start])) start++;
@@ -24,7 +28,7 @@ export function diff<T>(before: readonly T[], after: readonly T[], eq: (x: T, y:
     else runs.push({ type, a, b, n });
   };
   push('equal', 0, 0, start);
-  middle(before, after, start, endA, start, endB, eq, push);
+  middle(before, after, start, endA, start, endB, eq, push, maxEdits);
   push('equal', endA, endB, before.length - endA);
   return runs;
 }
@@ -38,12 +42,13 @@ function middle<T>(
   b1: number,
   eq: (x: T, y: T) => boolean,
   push: (type: Run['type'], a: number, b: number, n: number) => void,
+  maxEdits: number,
 ) {
   const N = a1 - a0;
   const M = b1 - b0;
   if (N === 0) return push('insert', a0, b0, M);
   if (M === 0) return push('delete', a0, b0, N);
-  const max = N + M;
+  const max = Math.min(N + M, maxEdits);
   const offset = max + 1;
   const v = new Int32Array(2 * max + 3);
   // Before step d, only diagonals -d..d matter: keep just that band (memory O(D²), not O(D·(N+M))).
@@ -64,6 +69,11 @@ function middle<T>(
         break;
       }
     }
+  }
+  if (found < 0) {
+    push('delete', a0, b0, N);
+    push('insert', a1, b0, M);
+    return;
   }
   // Walk the trace back from (N, M) to (0, 0), then emit forwards.
   const steps: Run[] = [];

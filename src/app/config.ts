@@ -40,6 +40,7 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     historyPlacement: settings.historyPlacement,
     markAiEdits: settings.markAiEdits,
     markAiReads: settings.markAiReads,
+    formatOnSave: settings.formatOnSave,
     zoom: Math.round(zoom * 100) / 100,
     permissions: settings.permissions,
     allowCommands: settings.allowCommands,
