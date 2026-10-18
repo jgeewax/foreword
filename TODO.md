@@ -196,7 +196,7 @@
 
 - [x] explore ayakaleaf pro (overleaf clone) for inspiration on ideas
 
-- [ ] make a public-facing website in a gh-pages branch
+- [x] make a public-facing website in a gh-pages branch
 
 - [ ] use gh to create a repository and push remotely to github. jgeewax/typststudio
 
