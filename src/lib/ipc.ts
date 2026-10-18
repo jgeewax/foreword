@@ -38,6 +38,20 @@ export type ToolCopy = { path: string; version: string | null; source: string };
 /** What a typed or pasted path for a tool holds: its version, or why it can't be used. */
 export type ToolProbe = { path: string; version: string | null; problem: string | null };
 export type ToolsStatus = { tinymist: ToolInfo; opencode: ToolInfo; git: ToolInfo };
+/** How an assistant would run on this Mac (Settings ▸ Assistant). */
+export type AssistantSetup = {
+  /** Its own program, if it's installed (for OpenCode, the copy in use). */
+  program: string | null;
+  /** Otherwise the npm package npx runs, downloaded the first time; null without Node.js. */
+  package: string | null;
+  /** What signs in to it, typed in Terminal; null: nothing can run it. */
+  signIn: string | null;
+  /** Signed in, where that can be told without starting it (null: unknown). */
+  signedIn: boolean | null;
+  /** The account in words: "Claude Max", "ChatGPT", "an API key". */
+  account: string | null;
+};
+export type AssistantsSetup = { node: boolean; opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup };
 export type LaunchOptions = {
   workspace: string | null;
   sampleBook: string | null;
@@ -161,6 +175,10 @@ export const ipc = {
   acpStart: (kind: string, onMessage: Channel<any>) => invoke<{ program: string; args: string[] }>('acp_start', { kind, onMessage }),
   acpSend: (line: string) => invoke<void>('acp_send', { line }),
   acpStop: () => invoke<void>('acp_stop'),
+  /** Each assistant's program, sign-in and account on this Mac. */
+  assistantsStatus: () => invoke<AssistantsSetup>('assistants_status'),
+  /** Open Terminal on the assistant's sign-in command. */
+  assistantSignIn: (kind: string) => invoke<void>('assistant_sign_in', { kind }),
 
   historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
   historyReveal: () => invoke<void>('history_reveal'),

@@ -51,7 +51,7 @@ import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsF
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
-import { AcpAdapter } from '../services/agent/acp';
+import { AcpAdapter, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
@@ -193,6 +193,8 @@ export type StudioState = {
   agent: {
     status: 'off' | 'starting' | 'ready' | 'error';
     error?: string;
+    /** It didn't start because it isn't signed in (Settings ▸ Assistant signs in). */
+    signedOut?: boolean;
     connection: 'open' | 'lost' | 'unknown';
     models: ModelInfo[];
     model: ModelRef | null;
@@ -2614,7 +2616,7 @@ export class Studio {
     const switched = this.agentKind !== which;
     this.agentKind = which;
     this.agent = agent;
-    this.setAgent({ status: 'starting', error: undefined, background: {}, ...(switched ? { models: [], model: null } : {}) });
+    this.setAgent({ status: 'starting', error: undefined, signedOut: false, background: {}, ...(switched ? { models: [], model: null } : {}) });
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = agent.subscribe((e) => this.onAgentEvent(e));
     window.clearInterval(this.backgroundPoll);
@@ -2625,7 +2627,7 @@ export class Studio {
       await this.loadModels();
       void this.loadTasks();
     } catch (e) {
-      this.setAgent({ status: 'error', error: errorMessage(e) });
+      this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e) });
     }
   }
 

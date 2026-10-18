@@ -3,7 +3,7 @@ import { contextTokens, itemsFromContext } from '../../app/tasks';
 import { readOf } from '../../app/ai-marks';
 import recorded from './__fixtures__/acp-claude.jsonl?raw';
 import recordedCodex from './__fixtures__/acp-codex.jsonl?raw';
-import { AcpAdapter, stripInstructions, type AcpTransport } from './acp';
+import { AcpAdapter, isSignedOut, stripInstructions, type AcpTransport } from './acp';
 import { appTool, conversationTitle, decide, permissionAsk, toolOutput, type AcpToolCall } from './acp-events';
 import { PRESETS, sessionRules } from './permissions';
 import type { AgentEvent } from './types';
@@ -154,7 +154,10 @@ describe('AcpAdapter', () => {
       stop: async () => {},
     };
     const start = new AcpAdapter(ROOT, 'gemini', transport).start();
-    await expect(start).rejects.toThrow('Gemini CLI isn’t signed in (“Gemini API key is missing or not configured.”). In Terminal, run npx @google/gemini-cli (or gemini), choose Log in with Google, then quit it; then start it again.');
+    await expect(start).rejects.toThrow(
+      'Gemini CLI isn’t signed in (“Gemini API key is missing or not configured.”). Sign in from Settings ▸ Assistant, or in Terminal run gemini (or npx @google/gemini-cli) and choose Use Gemini API Key, with a paid key; then start it again.',
+    );
+    await expect(start).rejects.toSatisfy(isSignedOut);
   });
 
   it('answers by the rules without asking, and cancels what’s open on Stop', async () => {

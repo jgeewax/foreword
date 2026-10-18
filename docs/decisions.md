@@ -2522,6 +2522,58 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   2 s and closes it 1.5 s later; it didn't run here, with the screen locked
   (WebKit throttles the window, and the preview never started).
 
+### Settings ▸ Assistant, as cards
+
+- **Asked for:** "the settings UI for choosing claude/codex/opencode/gemini is
+  bad … make it really elegant". It was four radio buttons with long dashes,
+  a paragraph naming three sign-in commands, ACP and Node.js at once, an
+  error line under all of them, and a Model section that only said where the
+  model is changed.
+- **A card for each assistant** (`src/components/AssistantSettings.tsx`), two
+  to a row: a mark (a glyph on a tile of its own colour, not the maker's
+  logo), the name and maker, the account it runs on, and a status line. The
+  chosen card has the accent border and a check. Arrows move between the
+  cards; Space, Enter or a click chooses, since choosing starts the program.
+- **The status lines say what's true on this Mac** (`assistants_status` in
+  `acp.rs`): for the chosen one, how it is now (Running · Opus 5.5,
+  Starting…, Not signed in, Needs Node.js, Didn't start); for the others,
+  how they'd run (Signed in with Claude Max, Signed in with ChatGPT,
+  Installed · 2.0.20, Downloads the first time). Signed in comes from
+  `claude auth status --json`, Codex's `auth.json` (its `auth_mode` only),
+  Gemini's Google credentials or an API key in its `.env`; otherwise it's
+  unknown until a start shows it. A start that fails with ACP's
+  `auth_required` sets `agent.signedOut`, and a running one is signed in.
+- **One panel for the chosen one:** a sentence for how it is, with Start
+  again; what to do when something's wrong; then Model (the chat's model
+  picker, working here too), Account (or OpenCode's Providers) and Program
+  (installed, with its path; run by npx, with the package; or Node.js
+  missing).
+- **Sign in in Terminal:** a button opens Terminal on the exact command for
+  this Mac (`claude auth login`, `codex login`, `gemini`, `opencode auth
+  login`; the npx form when the program isn't installed), through a
+  `.command` file that says what to do there. Back in Typst Studio, the
+  assistant starts again by itself. The command is shown with Copy too. The
+  chat's status line, signed out, says just "*Name* isn't signed in." with
+  Sign in… (to this page) and Retry.
+- **Gemini CLI or Antigravity CLI?** Google stopped serving Gemini CLI for
+  personal Google logins on 2026-06-18; Antigravity CLI (`agy`) replaced it
+  for them. Gemini CLI still works with a paid Gemini API key or a Gemini
+  Code Assist Standard or Enterprise account, and its card and panel say
+  so. `agy` doesn't speak ACP (only community bridges wrap it), so it isn't
+  offered.
+- Not done: the marks section's checkboxes stay as they were (the TODO about
+  checkboxes in Settings is its own change). The Sign in in Terminal button
+  wasn't clicked here: the script is unit-tested, and opening a `.command`
+  file is how Terminal runs one.
+- Verified: Rust unit tests for the account parsing and the script's
+  quoting; self-test `assistantpage` (asked for by name, since it starts
+  Claude Code and Gemini CLI): OpenCode running with its model, Claude Code
+  chosen by its card (running, Opus 5.5, signed in with Claude Max), Gemini
+  chosen (not signed in, the sign-in step and its npx command), the others'
+  cards (Signed in with ChatGPT, Downloads the first time), arrows moving
+  focus without choosing, the chat's Sign in… link; the settings file never
+  written, OpenCode back after.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

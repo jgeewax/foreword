@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-assistant-sign-in"
+description = "Enables the assistant_sign_in command without any pre-configured scope."
+commands.allow = ["assistant_sign_in"]
+
+[[permission]]
+identifier = "deny-assistant-sign-in"
+description = "Denies the assistant_sign_in command without any pre-configured scope."
+commands.deny = ["assistant_sign_in"]

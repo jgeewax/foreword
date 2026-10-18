@@ -9,8 +9,8 @@ import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
-import { SIGN_IN } from '../services/agent/acp';
-import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type AssistantId, type ToolName } from '../app/settings';
+import { AssistantPage } from './AssistantSettings';
+import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -320,67 +320,6 @@ function GeneralPage() {
             <button onClick={() => void studio.zoom('reset', 'key')}>Actual size</button>
           </div>
           <p className="settings-help">⌘= and ⌘− too, ⌘0 for actual size. Everything in the window follows it except the preview, whose pages always fit the pane.</p>
-        </div>
-      </Section>
-    </>
-  );
-}
-
-const ASSISTANT_CHOICES: { id: AssistantId; label: string; detail: string }[] = [
-  { id: 'opencode', label: 'OpenCode', detail: 'any model you’ve set up in OpenCode: OpenAI, Anthropic, Google, local models' },
-  { id: 'claude', label: 'Claude Code', detail: 'Anthropic’s Claude, with your Claude subscription or API key' },
-  { id: 'gemini', label: 'Gemini CLI', detail: 'Google’s Gemini, with your Google account or a Gemini API key' },
-  { id: 'codex', label: 'Codex', detail: 'OpenAI’s models, with your ChatGPT account or an OpenAI API key' },
-];
-
-function AssistantPage() {
-  const settings = useStore(studio.store, (s) => s.settings);
-  const model = useStore(studio.store, (s) => s.agent.model);
-  const status = useStore(studio.store, (s) => s.agent.status);
-  const error = useStore(studio.store, (s) => s.agent.error);
-  return (
-    <>
-      <Section title="Which assistant">
-        <div className="settings-field">
-          {ASSISTANT_CHOICES.map((a) => (
-            <Radio key={a.id} name="assistant" value={a.id} current={settings.assistant} onChange={(v) => studio.updateSettings({ assistant: v })} label={a.label} detail={a.detail} />
-          ))}
-          <p className="settings-help">
-            Claude Code, Gemini CLI and Codex use your own account: sign in once in Terminal (<code>{SIGN_IN.claude.command}</code>, <code>{SIGN_IN.gemini.command}</code> or{' '}
-            <code>{SIGN_IN.codex.command}</code>). Typst Studio talks to them over the Agent Client Protocol, through programs Node.js runs (the first start downloads them).
-            Changing the assistant starts a new conversation.
-          </p>
-          {status === 'error' && error && (
-            <div className="settings-help bad assistant-error">
-              <span>It didn’t start: {error}</span>
-              <button className="small" onClick={() => void studio.restartAgent()}>
-                Start again
-              </button>
-            </div>
-          )}
-        </div>
-      </Section>
-      <Section title="Model">
-        <p className="settings-help">
-          Now: <strong>{model ? `${model.id} (${model.providerID})` : 'the assistant’s default'}</strong>. Change it under the chat’s message box; each conversation remembers its own.
-        </p>
-      </Section>
-      <Section title="The assistant’s marks in the editor">
-        <div className="settings-field">
-          <label className="settings-option">
-            <input type="checkbox" checked={settings.markAiEdits} onChange={(e) => studio.updateSettings({ markAiEdits: e.target.checked })} />
-            <span>
-              Lines the assistant changed <span className="ai-swatch edit" />
-              <span className="muted"> — until you rewrite them; hover the line number for what was there before</span>
-            </span>
-          </label>
-          <label className="settings-option">
-            <input type="checkbox" checked={settings.markAiReads} onChange={(e) => studio.updateSettings({ markAiReads: e.target.checked })} />
-            <span>
-              Lines the assistant read <span className="ai-swatch read" />
-              <span className="muted"> — in the current conversation</span>
-            </span>
-          </label>
         </div>
       </Section>
     </>
@@ -844,7 +783,10 @@ export function SettingsDialog() {
     shownPage.current = current;
     const root = dialogRef.current;
     // The page's first setting, not the line saying where it's saved.
-    (root?.querySelector<HTMLElement>('.settings-section input:checked') ?? root?.querySelector<HTMLElement>('.settings-section input, .settings-section select, .settings-section button'))?.focus();
+    (
+      root?.querySelector<HTMLElement>('.settings-section input:checked, .settings-section [role="radio"][aria-checked="true"]') ??
+      root?.querySelector<HTMLElement>('.settings-section input, .settings-section select, .settings-section button')
+    )?.focus();
   }, [current]);
   useLayoutEffect(() => {
     const scroller = contentRef.current;
@@ -870,7 +812,7 @@ export function SettingsDialog() {
   }, [query]);
 
   const pageContent = (id: Page) =>
-    ({ general: <GeneralPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage />, book: <ProjectSection />, 'book-assistant': <BookAssistantPage /> })[id];
+    ({ general: <GeneralPage />, assistant: <AssistantPage goToTools={() => (setQuery(''), setPage('tools'))} />, permissions: <PermissionsPage />, tools: <ToolsPage />, book: <ProjectSection />, 'book-assistant': <BookAssistantPage /> })[id];
   const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (

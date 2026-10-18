@@ -70,6 +70,8 @@
     "allow-acp-start",
     "allow-acp-send",
     "allow-acp-stop",
+    "allow-assistants-status",
+    "allow-assistant-sign-in",
     "allow-history-init",
     "allow-git-status",
     "allow-git-file",

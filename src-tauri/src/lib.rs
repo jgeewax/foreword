@@ -602,6 +602,8 @@ pub fn run() {
             acp::acp_start,
             acp::acp_send,
             acp::acp_stop,
+            acp::assistants_status,
+            acp::assistant_sign_in,
             history::history_init,
             git::git_status,
             git::git_file,

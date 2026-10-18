@@ -62,6 +62,8 @@ fn main() {
             "acp_start",
             "acp_send",
             "acp_stop",
+            "assistants_status",
+            "assistant_sign_in",
             "history_init",
             "git_status",
             "git_file",

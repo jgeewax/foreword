@@ -972,12 +972,18 @@ export function AgentPane() {
             {agent.status === 'starting' && `Starting the assistant (${assistantName})…`}
             {agent.status === 'off' && 'The assistant is off.'}
             {agent.status === 'error' && (
-              <span className="bad">
-                {assistantName}: {agent.error}
+              // Signed out, Settings says how to sign in (Sign in…).
+              <span className="bad" title={agent.signedOut ? agent.error : undefined}>
+                {agent.signedOut ? `${assistantName} isn’t signed in.` : `${assistantName}: ${agent.error}`}
               </span>
             )}
             {agent.status === 'ready' && agent.connection === 'lost' && <span className="bad">Reconnecting to the assistant…</span>}
             <span className="spacer" />
+            {agent.status === 'error' && agent.signedOut && (
+              <button className="link" onClick={() => studio.openSettings('assistant')}>
+                Sign in…
+              </button>
+            )}
             {agent.status === 'error' && (
               <button className="link" onClick={() => void studio.startAgent()}>
                 Retry

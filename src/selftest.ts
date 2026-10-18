@@ -4281,6 +4281,69 @@ async function bundleChecks() {
 }
 
 /**
+ * Settings ▸ Assistant, through the page: OpenCode running, then Claude Code
+ * and Gemini CLI chosen by clicking their cards (Gemini isn't signed in on
+ * this Mac, so its panel says how to sign in, and so does the chat). Arrows
+ * move between the cards without choosing. The settings file is never
+ * written (the author's app reads it when it comes to the front); the
+ * assistant is put back after.
+ */
+async function assistantPageChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.settings.assistant;
+  const update = studio.updateSettings.bind(studio);
+  studio.updateSettings = (patch, opts) => update(patch, { ...opts, write: false });
+  const settle = () => waitFor(() => ['ready', 'error'].includes(studio.state.agent.status), 180000, 'agent').catch(() => {});
+  const page = () => ({
+    chosen: document.querySelector<HTMLElement>('.assistant-card[aria-checked="true"]')?.dataset.assistant,
+    cards: [...document.querySelectorAll<HTMLElement>('.assistant-card')].map((c) => `${c.dataset.assistant}: ${c.querySelector('.assistant-status')?.textContent}`),
+    headline: document.querySelector('.assistant-now-title')?.textContent,
+    rows: [...document.querySelectorAll('.assistant-row-label')].map((l) => `${l.textContent}: ${l.nextElementSibling?.textContent}`),
+    fix: document.querySelector('.assistant-fix')?.textContent ?? null,
+    error: document.querySelector('.assistant-error')?.textContent ?? null,
+  });
+  const choose = async (id: string) => {
+    document.querySelector<HTMLElement>(`.assistant-card[data-assistant="${id}"]`)?.click();
+    await sleep(300);
+    await settle();
+    // Its setup is checked again once it has started.
+    await sleep(2000);
+  };
+  try {
+    studio.openSettings('assistant');
+    await settle();
+    await sleep(2000);
+    out.first = { assistant: studio.state.settings.assistant, ...page(), snapshot: await snap('assistant-first') };
+    // Settings opens in its search box; Tab order reaches the chosen card first.
+    document.querySelector<HTMLElement>('.assistant-card[aria-checked="true"]')?.focus();
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await sleep(100);
+    out.arrow = { focused: (document.activeElement as HTMLElement | null)?.dataset.assistant, chosen: studio.state.settings.assistant };
+    await choose('claude');
+    out.claude = { status: studio.state.agent.status, ...page(), snapshot: await snap('assistant-claude') };
+    await choose('gemini');
+    out.gemini = { status: studio.state.agent.status, signedOut: studio.state.agent.signedOut, ...page(), snapshot: await snap('assistant-gemini') };
+    studio.closeSettings();
+    await sleep(300);
+    out.chat = {
+      status: document.querySelector('.agent-status')?.textContent,
+      signInLink: [...document.querySelectorAll('.agent-status button')].some((b) => b.textContent === 'Sign in…'),
+    };
+  } finally {
+    delete (studio as { updateSettings?: unknown }).updateSettings;
+    studio.closeSettings();
+    if (studio.state.settings.assistant !== saved) {
+      studio.updateSettings({ assistant: saved }, { write: false });
+      // Until it has started again, not the last one's failure.
+      await waitFor(() => studio.state.agent.status === 'starting', 5000, 'restart').catch(() => {});
+      await settle();
+    }
+    out.back = { assistant: studio.state.settings.assistant, status: studio.state.agent.status, error: studio.state.agent.error ?? null };
+  }
+  return out;
+}
+
+/**
  * An assistant over ACP (Settings ▸ Assistant), with real turns: `kind`
  * starts in this book and lists its models; a turn that reads (its lines
  * marked, its words in the chat); an edit it asks about, allowed from the
@@ -4307,9 +4370,11 @@ async function acpChecks(kind: 'claude' | 'gemini' | 'codex') {
       studio.openSettings('assistant');
       await sleep(500);
       out.settings = {
-        error: document.querySelector('.assistant-error span')?.textContent,
-        startAgain: !!document.querySelector('.assistant-error button'),
-        chosen: (document.querySelector('.settings-content input[name="assistant"]:checked') as HTMLInputElement | null)?.value,
+        headline: document.querySelector('.assistant-now-title')?.textContent,
+        error: document.querySelector('.assistant-error')?.textContent ?? null,
+        signIn: !!document.querySelector('.assistant-fix button.primary'),
+        startAgain: !!document.querySelector('.assistant-restart'),
+        chosen: (document.querySelector('.settings-content .assistant-card[aria-checked="true"]') as HTMLElement | null)?.dataset.assistant,
         snapshot: await snap(`acp-${kind}-settings`),
       };
       studio.closeSettings();
@@ -4941,6 +5006,11 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('settings')) {
       log('settings checks');
       result.settingsChecks = await settingsChecks();
+    }
+    // It starts Claude Code and Gemini CLI: only when asked for.
+    if (only?.includes('assistantpage')) {
+      log('assistant page');
+      result.assistantPage = await assistantPageChecks();
     }
     if (want('models')) {
       log('model picker checks');

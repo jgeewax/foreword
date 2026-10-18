@@ -179,6 +179,13 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   edit: <path d="M4.5 19.5l1-4.2L15.8 5a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L8.7 18.5zM13.8 7l3.2 3.2" />,
+  // Settings ▸ Assistant: sign in, in Terminal.
+  terminal: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M7 9.5l2.5 2.5L7 14.5M12 15h5" />
+    </>
+  ),
 };
 
 /** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, images. */

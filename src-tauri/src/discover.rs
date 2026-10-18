@@ -13,7 +13,7 @@ use std::{
 
 use serde::Serialize;
 
-fn home() -> Option<PathBuf> {
+pub fn home() -> Option<PathBuf> {
     env::var_os("HOME").map(PathBuf::from)
 }
 
@@ -89,6 +89,11 @@ pub fn find(name: &str, env_var: &str) -> Option<PathBuf> {
     {
         return Some(p);
     }
+    on_path(name)
+}
+
+/// `name` on the search path.
+pub fn on_path(name: &str) -> Option<PathBuf> {
     env::split_paths(&search_path())
         .map(|d| d.join(name))
         .find(|p| is_executable(p))
@@ -311,8 +316,14 @@ pub struct ToolInfo {
 /// `bin --version`'s output (stdout, then stderr), or None if it fails or
 /// takes more than 3 seconds (a program chosen by mistake may wait for input).
 fn version_output(bin: &Path) -> Option<String> {
+    output(bin, &["--version"])
+}
+
+/// What `bin args…` prints (stdout, then stderr), or None if it can't run or
+/// takes more than 3 seconds.
+pub fn output(bin: &Path, args: &[&str]) -> Option<String> {
     let mut child = Command::new(bin)
-        .arg("--version")
+        .args(args)
         .env("PATH", search_path())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

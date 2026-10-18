@@ -16,15 +16,23 @@ export type AcpKind = 'claude' | 'gemini' | 'codex';
 
 export const ACP_NAMES: Record<AcpKind, string> = { claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex' };
 
-/** How to sign in, once, in Terminal (each program keeps its login). */
-export const SIGN_IN: Record<AcpKind, { command: string; how: string }> = {
-  claude: { command: 'claude', how: 'run claude, and sign in with /login' },
-  gemini: { command: 'npx @google/gemini-cli', how: 'run npx @google/gemini-cli (or gemini), choose Log in with Google, then quit it' },
-  codex: { command: 'npx @openai/codex login', how: 'run npx @openai/codex login (or codex login), and sign in with ChatGPT' },
+/**
+ * How to sign in, once, in Terminal (each program keeps its login). Settings ▸
+ * Assistant has the exact command for this Mac, and opens Terminal on it.
+ * Gemini CLI no longer serves personal Google logins (June 2026): a paid API
+ * key, or a Gemini Code Assist work account.
+ */
+export const SIGN_IN: Record<AcpKind, string> = {
+  claude: 'run claude auth login (or npx @anthropic-ai/claude-code auth login)',
+  gemini: 'run gemini (or npx @google/gemini-cli) and choose Use Gemini API Key, with a paid key',
+  codex: 'run codex login (or npx @openai/codex login)',
 };
 
 /** ACP's "sign in first" error (`auth_required`). */
 const AUTH_REQUIRED = -32000;
+
+/** The assistant couldn't start because it isn't signed in. */
+export const isSignedOut = (e: unknown) => e instanceof AcpError && e.code === AUTH_REQUIRED;
 
 /** Instructions go before the author's message, inside these, and are taken out again when a conversation is replayed. */
 const INSTRUCTIONS_OPEN = '<typst-studio-instructions>';
@@ -114,8 +122,10 @@ export class AcpAdapter implements AgentAdapter {
     try {
       this.warm = Promise.resolve(await this.newSession());
     } catch (e) {
-      if (e instanceof AcpError && e.code === AUTH_REQUIRED) {
-        throw new AcpError(`${ACP_NAMES[this.kind]} isn’t signed in (“${e.message}”). In Terminal, ${SIGN_IN[this.kind].how}; then start it again.`);
+      if (isSignedOut(e)) {
+        const signedOut = new AcpError(`${ACP_NAMES[this.kind]} isn’t signed in (“${(e as Error).message}”). Sign in from Settings ▸ Assistant, or in Terminal ${SIGN_IN[this.kind]}; then start it again.`);
+        signedOut.code = AUTH_REQUIRED;
+        throw signedOut;
       }
       throw e;
     }
