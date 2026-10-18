@@ -66,7 +66,7 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
         <div className="history-detail">
           {open.changes === null && <div className="muted">Loading…</div>}
           {open.changes?.map((c) => (
-            <div key={c.path} className="history-file" role="button" tabIndex={0} title="Show what changed" onClick={() => void studio.history.showChanges(v)}>
+            <div key={c.path} className="history-file" role="button" tabIndex={0} title="What changed in this file, in its own tab" onClick={() => void studio.history.showDiff(v, c.path)}>
               <span className={`status-${c.status}`}>{c.status === 'A' ? 'new' : c.status === 'D' ? 'deleted' : ''}</span>
               <span className="history-path">{c.path}</span>
               {c.added !== null && (

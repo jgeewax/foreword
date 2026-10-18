@@ -31,7 +31,7 @@ import { parseConfig, serializeConfig } from './config';
 import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
-import { fileTabs, GUIDE_TAB, isViewTab } from './view-tabs';
+import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
@@ -377,7 +377,10 @@ export class Studio {
   editor: monaco.editor.IStandaloneCodeEditor | null = null;
   readonly git = new SourceControl({
     get: () => this.state.git,
-    set: (patch) => this.store.set((s) => ({ git: { ...s.git, ...patch } })),
+    set: (patch) => {
+      this.store.set((s) => ({ git: { ...s.git, ...patch } }));
+      if ('view' in patch) this.followChanges(GIT_TAB, patch.view, patch.view?.files === null);
+    },
     report: (text, tone) => this.toast(text, tone),
   });
   private gitTimer: number | undefined;
@@ -392,7 +395,8 @@ export class Studio {
     get: () => this.state.history,
     set: (patch) => {
       this.store.set((s) => ({ history: { ...s.history, ...patch } }));
-
+      if ('changes' in patch) this.followChanges(HISTORY_TAB, patch.changes, patch.changes?.files === null);
+      if ('diff' in patch) this.followChanges(HISTORY_FILE_TAB, patch.diff, true);
     },
     docs: () => this.docs,
     agentRunning: () => this.state.agent.running,
@@ -2084,8 +2088,26 @@ export class Studio {
     const tabs = this.state.tabs.filter((t) => t !== key);
     const front = this.state.viewTab === key;
     this.store.set({ tabs, ...(front ? { viewTab: null } : {}), ...(key === GUIDE_TAB ? { guideOpen: false } : {}) });
+    // What it showed goes too.
+    if (key === HISTORY_TAB) this.history.closeChanges();
+    if (key === HISTORY_FILE_TAB) this.history.closeDiff();
+    if (key === GIT_TAB) this.git.closeView();
     const next = tabs[tabs.length - 1];
     if (front && next) this.activate(next);
+  }
+
+  /**
+   * History's and Source Control's "what changed" each show in a tab, as VS
+   * Code's diff editors (and, like its preview tab, the next one shown takes
+   * the same tab): opened, or brought to the front, when something new is
+   * shown (`fresh`), and closed when it's cleared.
+   */
+  private followChanges(key: string, shown: unknown, fresh: boolean) {
+    if (!shown) {
+      if (this.state.tabs.includes(key)) this.closeViewTab(key);
+    } else if (fresh || !this.state.tabs.includes(key)) {
+      this.openViewTab(key);
+    }
   }
 
   async closeTab(path: string) {
@@ -2378,7 +2400,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.newBookOpen || !!s.history.diff || !!s.history.changes || !!s.git.view || !!s.prompt || s.coverDialogOpen || s.print.open || s.quickOpen;
+    return s.settingsOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || s.quickOpen;
   }
 
   private syncPreviewVisibility() {

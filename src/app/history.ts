@@ -22,6 +22,9 @@ export type ChangedFile = {
   path: string;
   status: FileChange['status'];
   diff: ProseDiff | null;
+  /** The text before and after (null: the file didn't exist), for the side-by-side diff. */
+  before?: string | null;
+  after?: string | null;
   /** Not shown as text (binary, not UTF-8, …). */
   note?: string;
 };
@@ -277,7 +280,7 @@ export class History {
           if (c.added === null) return { path: c.path, status: c.status, diff: null, note: 'not a text file' };
           try {
             const [before, after] = await Promise.all([from ? ipc.historyFile(from, c.path) : Promise.resolve(null), ipc.historyFile(to, c.path)]);
-            return { path: c.path, status: c.status, diff: proseDiff(before, after) };
+            return { path: c.path, status: c.status, diff: proseDiff(before, after), before, after };
           } catch (e) {
             return { path: c.path, status: c.status, diff: null, note: errorMessage(e) };
           }

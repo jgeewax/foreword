@@ -1311,6 +1311,59 @@ pane top (off by 0 pt).
     × closed it, and only the three files were saved as open tabs. The tab
     shortcuts (self-test `tabs`) work as before.
 
+### What changed, in tabs: side by side or inline (as VS Code's diffs)
+
+- **History's and Source Control's diffs are tabs now, not dialogs.** That
+  covers what a version changed (or everything since it), one file of a
+  version, uncommitted changes and a commit. Each sits beside the files with
+  its own icon and name, so the preview and the chat stay usable beside it.
+  - As in VS Code's preview tab, the next one of a kind takes the same tab
+    and comes to the front.
+  - Closing the tab clears what it showed. Restoring a version closes it, as
+    the dialog did.
+  - The buttons that were in the dialog's footer are in a bar at the top of
+    the tab: ◀ Older / Newer ▶ (⌥← / ⌥→ while the tab is in front and nothing
+    is being typed in), Undo these changes, Restore this version.
+- **Each file is Monaco's diff editor** (`DiffEditor`), as in VS Code:
+  - side by side when the diff is wider than VS Code's breakpoint (900px),
+    inline when it isn't, switching as the pane is resized. In the default
+    layout the editor pane is narrower than that, so it's inline until the
+    sidebar or the preview is hidden (or the zoom is lowered);
+  - unchanged stretches are folded ("20 hidden lines"), wrapped like the
+    editor;
+  - each is as tall as its content, so a version's files scroll as one page,
+    under sticky file headers (file icon, path, +/− words, Open, Restore
+    file).
+- **Lines or Words** (the bar's switch, remembered): Words is the
+  word-by-word view the dialog had ("History: what changed from one version
+  to the next"), with formulas drawn and line links. Lines is the default,
+  since the diffs were asked for as VS Code shows them. In Words, a file's
+  Side by side opens it in its own tab.
+- **Clicking a file under a version in History** opens that file's diff (as
+  VS Code's Timeline does). "What changed" still opens the whole version.
+- **Monaco 0.57 bug, worked around:** going inline turns off wrapping on the
+  (hidden) original side. Going side by side again resets only one of the two
+  overrides, so long lines on the left ran off the edge. `DiffEditor` resets
+  the other one whenever it's side by side.
+- **Not done:** a new file's diff starts with a removed empty line, since
+  Monaco's original side can't have no lines at all.
+- Verified:
+  - Self-test `difftabs` (scratch book): an edit to a chapter, then What
+    changed, opened a tab ("Diff tab check") in front, with the preview still
+    shown. At the default layout (637px) the diff was inline. With the
+    sidebar hidden it was 906px, still inline (the diff itself is under
+    900px). At 50 % zoom (1370px) it was side by side, both sides wrapped
+    (screen capture). It went back to inline after.
+  - In `difftabs`, Words showed ", in plain words," added. The file's diff
+    opened in a second tab. Going to the file and back worked, and the next
+    version took the first tab. ⌘W and the × each closed their tab and
+    cleared what it showed.
+  - Self-test `changes`: the word-by-word view (Words) in its tab, Older and
+    Newer, and Compare with now, as before.
+  - Self-test `git` (scratch repository): Not committed yet opened as a tab
+    with both files, inline (screen capture). Staging, commits, push and pull
+    worked as before.
+
 ### Showing that the assistant is working
 
 - **Live events** (recorded from OpenCode 2.0.20 with a real turn, through a

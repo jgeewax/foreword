@@ -137,7 +137,7 @@ export class SourceControl {
       files.slice(0, VIEW_LIMIT).map(async (f): Promise<ChangedFile> => {
         try {
           const [before, after] = await texts(f);
-          return { path: f.path, status: asChange(f.status), diff: proseDiff(before, after) };
+          return { path: f.path, status: asChange(f.status), diff: proseDiff(before, after), before, after };
         } catch (e) {
           return { path: f.path, status: asChange(f.status), diff: null, note: errorMessage(e) };
         }

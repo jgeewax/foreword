@@ -406,22 +406,29 @@ async function historyChecks(withAgent: boolean) {
   await waitFor(() => hs().open?.changes != null, 10000, 'changes').catch(() => {});
   await sleep(200);
   out.panel = { rows: document.querySelectorAll('.history-row').length, files: [...document.querySelectorAll('.history-file .history-path')].map((e) => e.textContent) };
-  // A file opens "what changed"; Side by side opens Monaco's diff over it.
+  // A file opens its diff in a tab, in Monaco's diff editor.
   (document.querySelector('.history-file') as HTMLElement | null)?.click();
-  await waitFor(() => hs().changes?.files, 10000, 'what changed').catch(() => {});
-  await sleep(200);
-  out.whatChanged = { files: hs().changes?.files?.map((f) => f.path), added: document.querySelector('.change-body ins')?.textContent };
-  [...document.querySelectorAll<HTMLButtonElement>('.change-file button')].find((b) => b.textContent === 'Side by side')?.click();
   await waitFor(() => !!hs().diff, 10000, 'diff').catch(() => {});
   await sleep(1200);
   out.diff = {
     open: !!hs().diff,
+    tab: studio.state.viewTab,
     path: hs().diff?.path,
     beforeIsOriginal: hs().diff?.before === original,
     afterIsEdited: hs().diff?.after === edited,
-    monacoDiff: !!document.querySelector('.history-diff .monaco-diff-editor'),
-    insertedLines: document.querySelectorAll('.history-diff .line-insert, .history-diff .char-insert').length,
+    monacoDiff: !!document.querySelector('.changes-tab .monaco-diff-editor'),
+    insertedLines: document.querySelectorAll('.changes-tab .line-insert, .changes-tab .char-insert').length,
   };
+  // What changed in the whole version, in its tab: lines, or words.
+  await h.showChanges(hs().versions[0]);
+  await waitFor(() => hs().changes?.files, 10000, 'what changed').catch(() => {});
+  await sleep(800);
+  const switchTo = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.changes-mode button')].find((b) => b.textContent === label)?.click();
+  const diffEditors = document.querySelectorAll('.changes-tab .monaco-diff-editor').length;
+  switchTo('Words');
+  await sleep(200);
+  out.whatChanged = { tab: studio.state.viewTab, files: hs().changes?.files?.map((f) => f.path), diffEditors, added: document.querySelector('.change-body ins')?.textContent };
+  switchTo('Lines');
   try {
     out.snapshotDiff = await ipc.previewSnapshot('history-diff', 'main');
   } catch (e) {
@@ -1008,8 +1015,12 @@ async function changesChecks() {
   }
 
   studio.showSidebar('history');
+  // Word by word (the tab's Words), as the author can choose; Lines is the default.
+  const mode = localStorage.getItem('studio.changesMode');
+  localStorage.setItem('studio.changesMode', 'words');
   await studio.history.showChanges(versions[0]);
   await waitFor(() => hs().changes?.files, 15000, 'changes');
+  out.tab = { viewTab: studio.state.viewTab, name: document.querySelector('.tab.active .tab-name')?.textContent };
   const view = (v = hs().changes!) => ({
     title: v.version.label,
     mode: v.mode,
@@ -1028,7 +1039,7 @@ async function changesChecks() {
   out.dom = {
     ins: [...document.querySelectorAll('.change-body ins')].map((e) => e.textContent),
     del: [...document.querySelectorAll('.change-body del')].map((e) => e.textContent),
-    newer: (document.querySelector('.history-changes .modal-header button:last-of-type') as HTMLButtonElement | null)?.textContent,
+    newer: [...document.querySelectorAll<HTMLButtonElement>('.changes-header button')].find((b) => b.textContent?.includes('Newer'))?.textContent,
   };
   // Older: the named version (no files), then the first edit.
   await studio.history.stepChanges(1);
@@ -1048,8 +1059,90 @@ async function changesChecks() {
   studio.history.closeChanges();
   await sleep(400);
   out.previewShownAfterClose = !(await hidden());
+  if (mode === null) localStorage.removeItem('studio.changesMode');
+  else localStorage.setItem('studio.changesMode', mode);
   await studio.openWorkspace(original);
   studio.showSidebar(sidebar);
+  return out;
+}
+
+/**
+ * What changed, in tabs beside the files: History's version and one file of
+ * it, each in Monaco's diff editor, side by side when the pane is wider than
+ * VS Code's 900px and inline when not; the next one shown takes the same tab,
+ * and closing the tab clears it. Edits a chapter on disk (and puts it back):
+ * scratch book only.
+ */
+async function diffTabChecks() {
+  const out: Record<string, unknown> = {};
+  const hs = () => studio.state.history;
+  await waitFor(() => hs().status === 'ready', 30000, 'history');
+  // Hiding the sidebar changes the pane layout, which is saved for every window: put it back after.
+  const layoutKey = 'react-resizable-panels:studio-panes';
+  const layout = localStorage.getItem(layoutKey);
+  const file = 'chapters/ch1-vectors.typ';
+  const { text, hash } = await ipc.fsRead(file);
+  await ipc.fsWrite(file, text.replace(/^A vector in/m, 'A vector, in plain words, in'), hash);
+  await sleep(300);
+  await studio.history.checkpoint('save', 'Diff tab check');
+  const version = hs().versions[0];
+  const tabs = () => [...document.querySelectorAll('.tab')].map((t) => `${t.querySelector('.tab-name')?.textContent}${t.classList.contains('active') ? ' (front)' : ''}`);
+  const shape = () => ({
+    editors: document.querySelectorAll('.changes-tab .monaco-diff-editor').length,
+    sideBySide: document.querySelectorAll('.changes-tab .monaco-diff-editor.side-by-side').length,
+    paneWidth: Math.round(document.querySelector('.editor-pane')!.getBoundingClientRect().width),
+    height: Math.round(document.querySelector('.diff-editor')?.getBoundingClientRect().height ?? 0),
+    inserted: document.querySelectorAll('.changes-tab .char-insert, .changes-tab .line-insert').length,
+  });
+  const previewHidden = async () => (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+  await studio.openFile(file);
+  await studio.history.showChanges(version);
+  await waitFor(() => hs().changes?.files, 15000, 'changes');
+  await sleep(1200);
+  out.version = { label: version.label, tabs: tabs(), viewTab: studio.state.viewTab, files: hs().changes?.files?.map((f) => f.path), narrow: shape(), previewHidden: await previewHidden(), snapshot: await snap('difftab-narrow') };
+  // Wider than the breakpoint (the sidebar hidden, ⌘B, and zoomed out): side by side.
+  const zoom = studio.state.zoom;
+  studio.events.emit('toggle-pane', 'explorer');
+  await sleep(800);
+  out.sidebarHidden = shape();
+  await studio.setZoom(0.5, { persist: false, write: false });
+  await sleep(1500);
+  out.wide = { ...shape(), snapshot: await snap('difftab-wide') };
+  await studio.setZoom(zoom, { persist: false, write: false });
+  studio.events.emit('toggle-pane', 'explorer');
+  await sleep(1500);
+  out.narrowAgain = shape();
+  // Words: the passages, with the changed words marked.
+  const switchTo = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.changes-mode button')].find((b) => b.textContent === label)?.click();
+  switchTo('Words');
+  await sleep(300);
+  out.words = { ins: [...document.querySelectorAll('.change-body ins')].map((e) => e.textContent), editors: shape().editors, snapshot: await snap('difftab-words') };
+  switchTo('Lines');
+  await sleep(300);
+  // One file of it, in a tab of its own beside.
+  await studio.history.showDiff(version, file);
+  await sleep(1200);
+  out.file = { tabs: tabs(), viewTab: studio.state.viewTab, ...shape() };
+  // To the file and back: still there. The next version shown takes the same tab, in front.
+  studio.activate(file);
+  await sleep(200);
+  out.backToFile = { viewTab: studio.state.viewTab, editorShown: !document.querySelector<HTMLElement>('.editor-host')?.hidden };
+  await studio.history.showChanges(hs().versions[1]);
+  await waitFor(() => hs().changes?.files, 15000, 'older');
+  await sleep(300);
+  out.replaced = { tabs: tabs(), label: hs().changes?.version.label };
+  // ⌘W on it, and the other's ×: each clears what it showed.
+  await sleep(350);
+  studio.tabCommand('close');
+  await sleep(200);
+  studio.activate('view:history-file');
+  await sleep(200);
+  document.querySelector<HTMLButtonElement>('.tab.active .tab-close')?.click();
+  await sleep(300);
+  out.closed = { tabs: tabs(), changes: !!hs().changes, diff: !!hs().diff, front: studio.state.viewTab ?? studio.state.active };
+  const now = await ipc.fsRead(file);
+  await ipc.fsWrite(file, text, now.hash);
+  if (layout) localStorage.setItem(layoutKey, layout);
   return out;
 }
 
@@ -3596,6 +3689,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('git')) result.git = await gitChecks();
     if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();
+    if (launch.selftestEdits && want('difftabs')) result.difftabs = await diffTabChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();

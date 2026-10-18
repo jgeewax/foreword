@@ -8,7 +8,10 @@ import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
-import { GUIDE_TAB, isViewTab } from '../app/view-tabs';
+import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
+import { GitChanges } from './GitChanges';
+import { HistoryChanges } from './HistoryChanges';
+import { HistoryDiff } from './HistoryDiff';
 import { FileIcon, Icon, type IconName } from './icons';
 import { TypstGuide } from './TypstGuide';
 import { useStore } from '../lib/store';
@@ -53,10 +56,20 @@ function Measured({ onHeight, children }: { onHeight: (h: number) => void; child
   );
 }
 
-/** A tab that isn't a file: its name and icon. */
-function viewTabLabel(key: string): { name: string; icon: IconName } {
-  if (key === GUIDE_TAB) return { name: 'Typst basics', icon: 'help' };
-  return { name: key, icon: 'page' };
+/** A tab that isn't a file: its name, icon and tooltip. */
+function useViewTabLabel(): (key: string) => { name: string; icon: IconName; title: string } {
+  const changes = useStore(studio.store, (s) => s.history.changes);
+  const diff = useStore(studio.store, (s) => s.history.diff);
+  const git = useStore(studio.store, (s) => s.git.view);
+  return (key) => {
+    if (key === HISTORY_TAB && changes) {
+      const name = changes.mode === 'now' ? `Since “${changes.version.label}”` : changes.version.label;
+      return { name, icon: 'history', title: `What changed: ${name}` };
+    }
+    if (key === HISTORY_FILE_TAB && diff) return { name: `${basename(diff.path)} (${diff.version.label})`, icon: 'history', title: `${diff.path}: what changed in “${diff.version.label}”` };
+    if (key === GIT_TAB && git) return { name: git.title, icon: 'branch', title: `${git.title} · ${git.subtitle}` };
+    return { name: 'Typst basics', icon: 'help', title: 'Typst basics' };
+  };
 }
 
 export function EditorPane() {
@@ -68,6 +81,7 @@ export function EditorPane() {
   const hostRef = useRef<HTMLDivElement>(null);
   // The tab in front: a file's (the editor), or one that isn't a file, shown in the editor's place.
   const front = viewTab ?? active;
+  const viewTabLabel = useViewTabLabel();
 
   useEffect(() => {
     const editor = monaco.editor.create(hostRef.current!, {
@@ -408,7 +422,7 @@ export function EditorPane() {
               role="tab"
               aria-selected={t === front}
               className={`tab${t === front ? ' active' : ''}`}
-              title={view ? view.name : t}
+              title={view ? view.title : t}
               onContextMenu={onContextMenu(() => {
                 const i = tabs.indexOf(t);
                 return [
@@ -461,6 +475,9 @@ export function EditorPane() {
       {/* Hidden, not unmounted, behind a tab that isn't a file: it keeps its place in the file. */}
       <div className="editor-host" ref={hostRef} hidden={!!viewTab} />
       {viewTab === GUIDE_TAB && <TypstGuide />}
+      {viewTab === HISTORY_TAB && <HistoryChanges />}
+      {viewTab === HISTORY_FILE_TAB && <HistoryDiff />}
+      {viewTab === GIT_TAB && <GitChanges />}
       {!front && <div className="empty-hint">Open a file from the explorer.</div>}
     </section>
   );

@@ -7,12 +7,9 @@ import { EditorPane } from './components/EditorPane';
 import { ActivityBar, Explorer, type View } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { CoverDialog } from './components/CoverDialog';
-import { HistoryChanges } from './components/HistoryChanges';
-import { HistoryDiff } from './components/HistoryDiff';
 import { NewBookDialog } from './components/NewBookDialog';
 import { PrintDialog } from './components/PrintDialog';
 import { QuickOpen } from './components/QuickOpen';
-import { GitChanges } from './components/GitChanges';
 import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useStore } from './lib/store';
@@ -240,7 +237,6 @@ export function App() {
   const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
   const printOpen = useStore(studio.store, (s) => s.print.open);
   const quickOpen = useStore(studio.store, (s) => s.quickOpen);
-  const gitView = useStore(studio.store, (s) => !!s.git.view);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}
@@ -249,10 +245,7 @@ export function App() {
       {coverDialogOpen && <CoverDialog />}
       {printOpen && <PrintDialog />}
       {quickOpen && <QuickOpen />}
-      {gitView && <GitChanges />}
       <PromptDialog />
-      <HistoryChanges />
-      <HistoryDiff />
     </>
   );
 }
