@@ -144,6 +144,14 @@ impl WindowState {
     }
 }
 
+/// Settings ▸ Tools: what a typed or pasted path for a tool holds.
+#[tauri::command]
+async fn tool_probe(tool: String, path: String) -> CmdResult<discover::Probe> {
+    let tool = discover::Tool::parse(&tool)
+        .ok_or_else(|| CmdError::Invalid(format!("unknown tool {tool}")))?;
+    Ok(discover::probe(tool, &path))
+}
+
 #[derive(Serialize)]
 struct ToolsStatus {
     tinymist: discover::ToolInfo,
@@ -528,6 +536,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             tools_status,
+            tool_probe,
             launch_options,
             ui_log,
             set_ui_zoom,
@@ -554,6 +563,7 @@ pub fn run() {
             files::fs_copy,
             files::fs_trash,
             clipboard::clipboard_write,
+            clipboard::clipboard_read,
             print::pdf_info,
             export::export_copy,
             config::config_read,

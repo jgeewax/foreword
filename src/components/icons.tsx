@@ -170,6 +170,15 @@ const PATHS: Record<string, ReactNode> = {
   ),
   // A heading, in the path bar: an outline's lines, each further in.
   heading: <path d="M4 6.5h16M8 12h12M12 17.5h8" />,
+  // Settings ▸ Tools: choose a file, paste a path, type one.
+  folder: <path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v9.3A1.5 1.5 0 0 1 19 19.5H5a1.5 1.5 0 0 1-1.5-1.5z" />,
+  paste: (
+    <>
+      <path d="M8.5 5H6.5A1.5 1.5 0 0 0 5 6.5v12A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 17.5 5h-2" />
+      <rect x="8.5" y="3.5" width="7" height="3.5" rx="1" />
+    </>
+  ),
+  edit: <path d="M4.5 19.5l1-4.2L15.8 5a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L8.7 18.5zM13.8 7l3.2 3.2" />,
 };
 
 /** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, images. */

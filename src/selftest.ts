@@ -4176,11 +4176,12 @@ async function modelPickerChecks() {
 }
 
 /**
- * Settings ▸ Tools: choosing the program for each tool. Tinymist from VS Code's
- * extension (typed with ~), a path with nothing there (the automatic one runs,
- * with a warning), then Automatic again; Git at /usr/bin/git; OpenCode at its own
- * path. Each change reaches the settings file and restarts what runs the tool.
- * Ends with every tool automatic again.
+ * Settings ▸ Tools: every copy of each tool found on this Mac, in a list to
+ * pick from; a typed path checked as it's typed (nothing there, a folder, the
+ * wrong program, the right one); a pasted path (the clipboard is put back);
+ * Automatic again; Search again; Esc closing only the list. Each change
+ * reaches the settings file and restarts what runs the tool. Ends with every
+ * tool automatic.
  */
 async function toolPathChecks() {
   const out: Record<string, unknown> = {};
@@ -4192,86 +4193,129 @@ async function toolPathChecks() {
     await waitFor(() => studio.state.agent.status === 'ready' && studio.state.preview.status === 'ready', 60000, 'restarted').catch(() => {});
   }
   studio.openSettings('tools');
-  await sleep(500);
-  const input = (label: string) => document.querySelector<HTMLInputElement>(`.settings-content input[aria-label="${label} program"]`);
-  const row = (label: string) => input(label)?.closest('.tool-status-row');
-  const enter = async (label: string, value: string) => {
-    const el = input(label)!;
-    el.focus();
+  await waitFor(() => studio.state.tools?.tinymist.copies, 15000, 'copies').catch(() => {});
+  await sleep(400);
+  const card = (label: string) => [...document.querySelectorAll<HTMLElement>('.tool-card')].find((c) => c.querySelector('.settings-label')?.textContent === label)!;
+  const trigger = (label: string) => card(label).querySelector<HTMLButtonElement>('.tool-trigger')!;
+  const options = (label: string) => [...card(label).querySelectorAll<HTMLElement>('.tool-option')];
+  const openList = async (label: string) => {
+    if (!card(label).querySelector('.tool-list')) trigger(label).click();
+    await sleep(150);
+  };
+  const pick = async (label: string, match: (text: string) => boolean) => {
+    await openList(label);
+    const row = options(label).find((o) => match(o.textContent ?? ''));
+    row?.click();
+    return !!row;
+  };
+  const typeIn = async (label: string, value: string) => {
+    const el = card(label).querySelector<HTMLInputElement>('.tool-typing input')!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value);
     el.dispatchEvent(new Event('input', { bubbles: true }));
-    await sleep(50);
-    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await waitFor(() => !/Checking/.test(card(label).querySelector('.tool-probe')?.textContent ?? 'Checking'), 5000, 'probe').catch(() => {});
+    await sleep(350);
+    return { says: card(label).querySelector('.tool-probe')?.textContent, useEnabled: !card(label).querySelector<HTMLButtonElement>('.tool-typing button.primary')?.disabled };
   };
-  const automatic = async (label: string) => {
-    [...(row(label)?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Automatic')?.click();
-  };
+  const shown = (label: string) => trigger(label).textContent;
   const file = async () => JSON.parse((await ipc.configRead()).text ?? '{}').toolPaths;
-  const shown = (label: string) => ({
-    inUse: row(label)?.querySelector('.tool-in-use')?.textContent,
-    warning: row(label)?.querySelector('.settings-help.bad')?.textContent ?? null,
-    automaticButton: [...(row(label)?.querySelectorAll('button') ?? [])].some((b) => b.textContent === 'Automatic'),
-  });
-  const previewBack = () => waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 30000, 'preview').catch(() => 'timed out');
-  // What happened when, for the record.
   const t0 = performance.now();
   const timeline: string[] = (out.timeline = []);
   let last = '';
   const offTimeline = studio.store.subscribe(() => {
-    const s = studio.state;
-    const now = `preview ${s.preview.status} · tinymist ${studio.typst.bin.split('/').slice(-3).join('/')} · agent ${s.agent.status} · paths ${JSON.stringify(s.settings.toolPaths)}`;
+    const st = studio.state;
+    const now = `preview ${st.preview.status} · tinymist ${studio.typst.bin.split('/').slice(-3).join('/')} · agent ${st.agent.status} · paths ${JSON.stringify(st.settings.toolPaths)}`;
     if (now !== last) timeline.push(`${Math.round(performance.now() - t0)} ms: ${(last = now)}`);
   });
   const mark = (step: string) => timeline.push(`${Math.round(performance.now() - t0)} ms: — ${step}`);
-  out.before = { tinymist: shown('Tinymist'), opencode: shown('OpenCode'), git: shown('Git'), bin: studio.typst.bin };
 
-  // Tinymist from VS Code's extension, typed with ~.
-  const vscode = '~/.vscode/extensions/myriad-dreamin.tinymist-0.15.10-darwin-arm64/out/tinymist';
-  mark('Tinymist: VS Code’s');
-  await enter('Tinymist', vscode);
-  await waitFor(() => studio.state.tools?.tinymist.fromSettings && studio.typst.bin.includes('.vscode'), 20000, 'tinymist chosen').catch(() => {});
-  out.tinymistChosen = { status: studio.state.tools?.tinymist, row: shown('Tinymist'), file: await file(), previewBack: await previewBack(), bin: studio.typst.bin };
-  out.snapshotChosen = await snap('tools-chosen');
+  out.found = Object.fromEntries((['tinymist', 'opencode', 'git'] as const).map((t) => [t, studio.state.tools?.[t].copies?.map((c) => `${c.version} · ${c.source} · ${c.path}`)]));
+  out.shownBefore = { tinymist: shown('Tinymist'), opencode: shown('OpenCode'), git: shown('Git') };
 
-  // Nothing at that path: the automatic one runs, and the page says so.
-  mark('Tinymist: nothing there');
-  await enter('Tinymist', '/nowhere/tinymist');
-  await waitFor(() => studio.state.tools?.tinymist.configured === '/nowhere/tinymist' && studio.typst.bin === studio.state.tools.tinymist.automatic, 20000, 'bad path').catch(() => {});
-  out.tinymistMissing = { status: studio.state.tools?.tinymist, row: shown('Tinymist'), previewBack: await previewBack(), bin: studio.typst.bin };
-  out.snapshotMissing = await snap('tools-missing');
+  // Tinymist: VS Code's copy, from the list.
+  mark('Tinymist: VS Code’s copy from the list');
+  await openList('Tinymist');
+  out.tinymistList = options('Tinymist').map((o) => `${o.getAttribute('aria-selected') === 'true' ? '✓ ' : ''}${o.textContent}`);
+  out.snapshotList = await snap('tools-list');
+  // Esc closes the list, not Settings.
+  trigger('Tinymist').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(150);
+  out.escClosesListOnly = { listOpen: !!card('Tinymist').querySelector('.tool-list'), settingsOpen: studio.state.settingsOpen };
+  out.pickedVsCode = await pick('Tinymist', (t) => t.includes('VS Code') && t.includes('0.15.10'));
+  await waitFor(() => studio.typst.bin.includes('.vscode') && studio.state.preview.status === 'ready', 20000, 'vs code tinymist').catch(() => {});
+  out.tinymistVsCode = { bin: studio.typst.bin, shown: shown('Tinymist'), file: await file(), preview: studio.state.preview.status };
+
+  // Type a path: what's there is checked as it's typed.
+  mark('Tinymist: typed paths');
+  await pick('Tinymist', (t) => t.includes('Type a path'));
+  await sleep(150);
+  out.typed = {
+    nothing: await typeIn('Tinymist', '/nowhere/tinymist'),
+    folder: await typeIn('Tinymist', '/usr'),
+    wrongProgram: await typeIn('Tinymist', '/usr/bin/git'),
+    relative: await typeIn('Tinymist', 'bin/tinymist'),
+    homebrew: await typeIn('Tinymist', '/opt/homebrew/bin/tinymist'),
+  };
+  out.snapshotTyping = await snap('tools-typing');
+  card('Tinymist').querySelector<HTMLInputElement>('.tool-typing input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await waitFor(() => studio.state.settings.toolPaths.tinymist === '/opt/homebrew/bin/tinymist' && !studio.typst.bin.includes('.vscode'), 20000, 'typed').catch(() => {});
+  out.tinymistTyped = { bin: studio.typst.bin, shown: shown('Tinymist'), boxClosed: !card('Tinymist').querySelector('.tool-typing'), file: await file() };
+
+  // Paste a path (quoted, with ~), then put the clipboard back.
+  const clipboard = await ipc.clipboardRead().catch(() => null);
+  if (clipboard !== null) {
+    mark('Tinymist: pasted path');
+    await ipc.clipboardWrite('"~/.vscode/extensions/myriad-dreamin.tinymist-0.15.10-darwin-arm64/out/tinymist"');
+    await pick('Tinymist', (t) => t.includes('Paste a path'));
+    await waitFor(() => studio.typst.bin.includes('.vscode'), 20000, 'pasted').catch(() => {});
+    out.tinymistPasted = { bin: studio.typst.bin, setting: studio.state.settings.toolPaths.tinymist, shown: shown('Tinymist') };
+    await ipc.clipboardWrite(clipboard);
+    out.clipboardRestored = (await ipc.clipboardRead().catch(() => null)) === clipboard;
+  } else out.tinymistPasted = 'skipped: the clipboard holds no text, and the test would replace it';
+
   mark('Tinymist: automatic');
-  await automatic('Tinymist');
-  await waitFor(() => !studio.state.settings.toolPaths.tinymist && !studio.state.tools?.tinymist.configured, 10000, 'automatic').catch(() => {});
-  out.tinymistAutomatic = { status: studio.state.tools?.tinymist, row: shown('Tinymist'), file: await file(), previewBack: await previewBack(), bin: studio.typst.bin };
+  await pick('Tinymist', (t) => t.startsWith('Automatic'));
+  await waitFor(() => !studio.state.settings.toolPaths.tinymist && studio.typst.bin === studio.state.tools?.tinymist.automatic && studio.state.preview.status === 'ready', 20000, 'automatic').catch(() => {});
+  out.tinymistAutomatic = { bin: studio.typst.bin, shown: shown('Tinymist'), file: await file() };
 
-  // Git.
+  // Git: the last copy found (Command Line Tools or Xcode when they're there), then Automatic.
   mark('Git');
-  await enter('Git', '/usr/bin/git');
-  await waitFor(() => studio.state.tools?.git.fromSettings, 10000, 'git chosen').catch(() => {});
-  await sleep(500);
-  out.git = { status: studio.state.tools?.git, history: studio.state.history.status, gitStatus: studio.state.git.status, row: shown('Git') };
-  await automatic('Git');
-  await waitFor(() => !studio.state.tools?.git.configured, 10000, 'git automatic').catch(() => {});
+  const gits = studio.state.tools?.git.copies ?? [];
+  const otherGit = gits.at(-1);
+  if (otherGit) {
+    await pick('Git', (t) => t.includes(otherGit.path.replace(/^\/Users\/[^/]+/, '~')));
+    await waitFor(() => studio.state.tools?.git.fromSettings, 10000, 'git chosen').catch(() => {});
+    await sleep(500);
+    out.git = { chose: otherGit.path, status: studio.state.tools?.git.path, version: studio.state.tools?.git.version, history: studio.state.history.status, sourceControl: studio.state.git.status, shown: shown('Git') };
+    await pick('Git', (t) => t.startsWith('Automatic'));
+    await waitFor(() => !studio.state.tools?.git.configured, 10000, 'git automatic').catch(() => {});
+  }
 
-  // OpenCode at its own path: the assistant starts again with it.
-  const opencode = studio.state.tools?.opencode.path;
+  // OpenCode: its own copy, then Automatic; the assistant starts again each time.
+  const opencode = studio.state.tools?.opencode.copies?.[0];
   if (opencode) {
+    mark('OpenCode');
     const seen: string[] = [];
     const off = studio.store.subscribe(() => {
       if (seen.at(-1) !== studio.state.agent.status) seen.push(studio.state.agent.status);
     });
-    mark('OpenCode');
-    await enter('OpenCode', opencode);
-    const starts = () => seen.filter((s) => s === 'starting').length;
+    const starts = () => seen.filter((x) => x === 'starting').length;
+    await pick('OpenCode', (t) => t.includes(opencode.source) && !t.startsWith('Automatic'));
     await waitFor(() => studio.state.tools?.opencode.fromSettings && starts() === 1 && studio.state.agent.status === 'ready', 60000, 'opencode restarted').catch(() => {});
-    out.opencode = { status: studio.state.tools?.opencode, agent: studio.state.agent.status, seen: [...seen], file: await file() };
+    out.opencode = { fromSettings: studio.state.tools?.opencode.fromSettings, shown: shown('OpenCode'), seen: [...seen] };
     mark('OpenCode: automatic');
-    await automatic('OpenCode');
+    await pick('OpenCode', (t) => t.startsWith('Automatic'));
     await waitFor(() => !studio.state.tools?.opencode.configured && starts() === 2 && studio.state.agent.status === 'ready', 60000, 'opencode automatic').catch(() => {});
     off();
-    out.opencodeAutomatic = { status: studio.state.tools?.opencode, agent: studio.state.agent.status, seen };
+    out.opencodeAutomatic = { agent: studio.state.agent.status, seen };
   }
-  out.after = { settings: studio.state.settings.toolPaths, file: await file() };
+
+  // Search again.
+  const search = document.querySelector<HTMLButtonElement>('.tools-search')!;
+  search.click();
+  await sleep(30);
+  out.searchAgain = { during: search.textContent, after: await waitFor(() => !search.disabled && search.textContent, 15000, 'search').catch(() => 'timed out') };
+  out.after = { settings: studio.state.settings.toolPaths, file: await file(), shown: { tinymist: shown('Tinymist'), opencode: shown('OpenCode'), git: shown('Git') } };
+  out.snapshotAfter = await snap('tools-after');
   offTimeline();
   studio.closeSettings();
   return out;

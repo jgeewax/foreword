@@ -42,4 +42,14 @@ describe('paths for messages', () => {
     expect(shortPath('/Users/ada/Library/Mobile Documents/com~apple~CloudDocs/Books/Drafts')).toBe('~/…/Books/Drafts');
     expect(shortPath('/Volumes/Backup')).toBe('/Volumes/Backup');
   });
+
+  it('reads a pasted path: quotes, file URLs and Terminal escapes', async () => {
+    const { pastedPath } = await import('./paths');
+    expect(pastedPath('  /opt/homebrew/bin/tinymist \n')).toBe('/opt/homebrew/bin/tinymist');
+    expect(pastedPath('"/Applications/My Tools/git"')).toBe('/Applications/My Tools/git');
+    expect(pastedPath("'~/bin/opencode'")).toBe('~/bin/opencode');
+    expect(pastedPath('file:///Users/ada/My%20Tools/tinymist')).toBe('/Users/ada/My Tools/tinymist');
+    expect(pastedPath('/Users/ada/My\\ Tools/tinymist')).toBe('/Users/ada/My Tools/tinymist');
+    expect(pastedPath('/a/b\n/c/d')).toBe('/a/b');
+  });
 });

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tool-probe"
+description = "Enables the tool_probe command without any pre-configured scope."
+commands.allow = ["tool_probe"]
+
+[[permission]]
+identifier = "deny-tool-probe"
+description = "Denies the tool_probe command without any pre-configured scope."
+commands.deny = ["tool_probe"]

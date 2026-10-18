@@ -7,7 +7,8 @@ use std::{
     ffi::OsString,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    time::{Duration, Instant},
 };
 
 use serde::Serialize;
@@ -67,7 +68,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    /// Its key under `toolPaths` in the settings file.
+    /// Its key under `toolPaths` in the settings file, and its program's name.
     fn key(self) -> &'static str {
         match self {
             Tool::Tinymist => "tinymist",
@@ -76,32 +77,122 @@ impl Tool {
         }
     }
 
-    /// Found without the settings: `$ENV_VAR`, the search path and, for
-    /// Tinymist, the binary bundled with the VS Code extension.
-    fn automatic(self) -> Option<PathBuf> {
+    fn env_var(self) -> &'static str {
         match self {
-            Tool::Tinymist => find("tinymist", "TINYMIST_PATH").or_else(vscode_tinymist),
-            Tool::OpenCode => find("opencode", "OPENCODE_PATH"),
-            Tool::Git => find("git", "TYPST_STUDIO_GIT"),
+            Tool::Tinymist => "TINYMIST_PATH",
+            Tool::OpenCode => "OPENCODE_PATH",
+            Tool::Git => "TYPST_STUDIO_GIT",
         }
+    }
+
+    pub fn parse(key: &str) -> Option<Tool> {
+        [Tool::Tinymist, Tool::OpenCode, Tool::Git]
+            .into_iter()
+            .find(|t| t.key() == key)
+    }
+
+    /// Found without the settings: the first of its copies.
+    fn automatic(self) -> Option<PathBuf> {
+        copies(self).into_iter().next().map(|c| c.0)
     }
 }
 
-fn vscode_tinymist() -> Option<PathBuf> {
-    let ext = home()?.join(".vscode/extensions");
-    let mut candidates: Vec<PathBuf> = std::fs::read_dir(ext)
-        .ok()?
-        .flatten()
-        .filter(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .starts_with("myriad-dreamin.tinymist-")
-        })
-        .map(|e| e.path().join("out/tinymist"))
-        .filter(|p| is_executable(p))
-        .collect();
-    candidates.sort();
-    candidates.pop()
+/// Where a copy was found, in words.
+fn source_of(dir: &Path) -> String {
+    let home = home().unwrap_or_default();
+    let d = dir.to_string_lossy();
+    match () {
+        _ if d.starts_with("/opt/homebrew/") || d.starts_with("/usr/local/") => "Homebrew".into(),
+        _ if dir == Path::new("/usr/bin") => "macOS".into(),
+        _ if dir == home.join(".cargo/bin") => "Cargo".into(),
+        _ if dir == home.join(".opencode/bin") => "OpenCode's installer".into(),
+        _ if dir == home.join(".bun/bin") => "Bun".into(),
+        _ => match dir.strip_prefix(&home) {
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => d.into_owned(),
+        },
+    }
+}
+
+/// Editors that bundle Tinymist in their Typst extension.
+const EDITOR_EXTENSIONS: &[(&str, &str)] = &[
+    (".vscode/extensions", "VS Code"),
+    (".vscode-insiders/extensions", "VS Code Insiders"),
+    (".cursor/extensions", "Cursor"),
+    (".windsurf/extensions", "Windsurf"),
+    (".vscode-oss/extensions", "VSCodium"),
+];
+
+/// Tinymist in editors' Typst extensions, newest first.
+fn editor_tinymists() -> Vec<(PathBuf, String)> {
+    let Some(home) = home() else { return vec![] };
+    let mut found = vec![];
+    for (dir, editor) in EDITOR_EXTENSIONS {
+        let Ok(entries) = std::fs::read_dir(home.join(dir)) else {
+            continue;
+        };
+        let mut here: Vec<PathBuf> = entries
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("myriad-dreamin.tinymist-")
+            })
+            .map(|e| e.path().join("out/tinymist"))
+            .filter(|p| is_executable(p))
+            .collect();
+        here.sort();
+        found.extend(
+            here.into_iter()
+                .rev()
+                .map(|p| (p, format!("{editor}'s Typst extension"))),
+        );
+    }
+    found
+}
+
+/// Every copy of `tool` on this Mac, each once, in the order the automatic
+/// choice takes them: `$ENV_VAR`, the search path, then other known places.
+pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
+    let mut all = vec![];
+    if let Some(p) = env::var_os(tool.env_var()).map(PathBuf::from)
+        && is_executable(&p)
+    {
+        all.push((p, tool.env_var().to_string()));
+    }
+    for dir in env::split_paths(&search_path()) {
+        let p = dir.join(tool.key());
+        if is_executable(&p) {
+            all.push((p, source_of(&dir)));
+        }
+    }
+    match tool {
+        Tool::Tinymist => all.extend(editor_tinymists()),
+        Tool::Git => {
+            for (p, source) in [
+                (
+                    "/Library/Developer/CommandLineTools/usr/bin/git",
+                    "Command Line Tools",
+                ),
+                (
+                    "/Applications/Xcode.app/Contents/Developer/usr/bin/git",
+                    "Xcode",
+                ),
+                (
+                    "/Applications/GitHub Desktop.app/Contents/Resources/app/git/bin/git",
+                    "GitHub Desktop",
+                ),
+            ] {
+                if is_executable(Path::new(p)) {
+                    all.push((PathBuf::from(p), source.to_string()));
+                }
+            }
+        }
+        Tool::OpenCode => {}
+    }
+    let mut seen = HashSet::new();
+    all.retain(|(p, _)| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())));
+    all
 }
 
 /// The path the author chose for `tool` (`toolPaths` in the settings file),
@@ -113,7 +204,12 @@ fn configured(tool: Tool) -> Option<PathBuf> {
 
 fn configured_in(settings: &str, tool: Tool) -> Option<PathBuf> {
     let value: serde_json::Value = serde_json::from_str(settings).ok()?;
-    let raw = value.get("toolPaths")?.get(tool.key())?.as_str()?.trim();
+    expand(value.get("toolPaths")?.get(tool.key())?.as_str()?)
+}
+
+/// A path as typed: trimmed, `~/` for the home folder.
+fn expand(raw: &str) -> Option<PathBuf> {
+    let raw = raw.trim();
     match raw.strip_prefix("~/") {
         _ if raw.is_empty() => None,
         Some(rest) => Some(home()?.join(rest)),
@@ -141,6 +237,15 @@ pub fn find_git() -> Option<PathBuf> {
     locate(Tool::Git)
 }
 
+/// One copy of a tool found on this Mac.
+#[derive(Serialize)]
+pub struct Copy {
+    pub path: String,
+    pub version: Option<String>,
+    /// Where it was found, in words ("Homebrew", "VS Code's Typst extension").
+    pub source: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolInfo {
@@ -153,15 +258,44 @@ pub struct ToolInfo {
     pub from_settings: bool,
     /// What would be used without a choice.
     pub automatic: Option<String>,
+    /// Every copy found, the automatic one first.
+    pub copies: Vec<Copy>,
+}
+
+/// `bin --version`'s output (stdout, then stderr), or None if it fails or
+/// takes more than 3 seconds (a program chosen by mistake may wait for input).
+fn version_output(bin: &Path) -> Option<String> {
+    let mut child = Command::new(bin)
+        .arg("--version")
+        .env("PATH", search_path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let out = child.wait_with_output().ok()?;
+    Some(format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    ))
 }
 
 fn version_of(bin: &Path) -> Option<String> {
-    let out = Command::new(bin)
-        .arg("--version")
-        .env("PATH", search_path())
-        .output()
-        .ok()?;
-    clean_version(&String::from_utf8_lossy(&out.stdout))
+    version_output(bin)
+        .and_then(|text| clean_version(&text))
         // Homebrew's tinymist doesn't know its own version; its Cellar path does.
         .or_else(|| bin.canonicalize().ok().and_then(|p| cellar_version(&p)))
 }
@@ -190,18 +324,87 @@ fn cellar_version(path: &Path) -> Option<String> {
 }
 
 pub fn tool_info(tool: Tool) -> ToolInfo {
+    let text = |p: &Path| p.to_string_lossy().into_owned();
+    let copies: Vec<Copy> = copies(tool)
+        .into_iter()
+        .map(|(p, source)| Copy {
+            version: version_of(&p),
+            path: text(&p),
+            source,
+        })
+        .collect();
     let configured = configured(tool);
-    let automatic = tool.automatic();
     let chosen = configured.clone().filter(|p| is_executable(p));
     let from_settings = chosen.is_some();
-    let bin = chosen.or_else(|| automatic.clone());
-    let text = |p: PathBuf| p.to_string_lossy().into_owned();
+    let automatic = copies.first();
+    let (path, version) = match &chosen {
+        Some(p) => (Some(text(p)), version_of(p)),
+        None => (
+            automatic.map(|c| c.path.clone()),
+            automatic.and_then(|c| c.version.clone()),
+        ),
+    };
     ToolInfo {
-        version: bin.as_deref().and_then(version_of),
-        path: bin.map(text),
-        configured: configured.map(text),
+        path,
+        version,
+        configured: configured.as_deref().map(text),
         from_settings,
-        automatic: automatic.map(text),
+        automatic: automatic.map(|c| c.path.clone()),
+        copies,
+    }
+}
+
+/// What a path typed or pasted for `tool` holds: its version if it's that
+/// program, or why it can't be used.
+#[derive(Serialize)]
+pub struct Probe {
+    /// The path with `~` expanded.
+    pub path: String,
+    pub version: Option<String>,
+    pub problem: Option<String>,
+}
+
+pub fn probe(tool: Tool, raw: &str) -> Probe {
+    let Some(p) = expand(raw) else {
+        return Probe {
+            path: String::new(),
+            version: None,
+            problem: Some("No path".into()),
+        };
+    };
+    let problem = |text: &str| Probe {
+        path: p.to_string_lossy().into_owned(),
+        version: None,
+        problem: Some(text.into()),
+    };
+    if !p.is_absolute() {
+        return problem("Give the whole path, starting with / or ~/");
+    }
+    let Ok(meta) = p.metadata() else {
+        return problem("There's nothing at this path");
+    };
+    if p.extension().is_some_and(|e| e == "app") {
+        return problem("That's an app; choose the program inside it");
+    }
+    if meta.is_dir() {
+        return problem("That's a folder, not a program");
+    }
+    if !is_executable(&p) {
+        return problem("That file isn't a program (it can't be run)");
+    }
+    let said = version_output(&p).unwrap_or_default();
+    if !said.to_lowercase().contains(tool.key()) {
+        let first = said.lines().map(str::trim).find(|l| !l.is_empty());
+        return problem(&match first {
+            Some(line) => format!("That isn't {}: it says “{line}”", tool.key()),
+            None => format!("That doesn't seem to be {}", tool.key()),
+        });
+    }
+    Probe {
+        path: p.to_string_lossy().into_owned(),
+        version: clean_version(&said)
+            .or_else(|| p.canonicalize().ok().and_then(|c| cellar_version(&c))),
+        problem: None,
     }
 }
 
@@ -239,6 +442,48 @@ mod tests {
             Some("0.15.8")
         );
         assert_eq!(cellar_version(Path::new("/usr/local/bin/tinymist")), None);
+    }
+
+    #[test]
+    fn copies_are_listed_once_each_and_probed() {
+        // git is on every Mac this runs on (/usr/bin/git at least).
+        let all = copies(Tool::Git);
+        assert!(!all.is_empty());
+        let mut canonical: Vec<_> = all.iter().map(|(p, _)| p.canonicalize().unwrap()).collect();
+        canonical.dedup();
+        assert_eq!(canonical.len(), all.len());
+        assert_eq!(Tool::Git.automatic(), Some(all[0].0.clone()));
+        let git = probe(Tool::Git, &all[0].0.to_string_lossy());
+        assert!(
+            git.problem.is_none() && git.version.is_some(),
+            "{:?}",
+            git.problem
+        );
+        // git isn't tinymist; a folder, nothing and a non-program aren't programs.
+        assert!(
+            probe(Tool::Tinymist, &all[0].0.to_string_lossy())
+                .problem
+                .unwrap()
+                .starts_with("That isn't tinymist")
+        );
+        assert_eq!(
+            probe(Tool::Git, "/usr").problem.as_deref(),
+            Some("That's a folder, not a program")
+        );
+        assert_eq!(
+            probe(Tool::Git, "/nowhere/git").problem.as_deref(),
+            Some("There's nothing at this path")
+        );
+        assert_eq!(
+            probe(Tool::Git, "/etc/hosts").problem.as_deref(),
+            Some("That file isn't a program (it can't be run)")
+        );
+        assert_eq!(
+            probe(Tool::Git, "bin/git").problem.as_deref(),
+            Some("Give the whole path, starting with / or ~/")
+        );
+        assert_eq!(source_of(Path::new("/opt/homebrew/bin")), "Homebrew");
+        assert_eq!(source_of(&home().unwrap().join("tools/bin")), "~/tools/bin");
     }
 
     #[test]

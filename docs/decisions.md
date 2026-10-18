@@ -2210,6 +2210,49 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Automatic). It ends with every tool automatic. Rust unit test: paths read
   from the settings file, with `~`, empty and malformed values.
 
+### The Tools page: every copy found, and every way to pick one
+
+- **Asked for by the author** after the first version (a path box): a button to
+  search again, a list to choose from, a file chooser, a text box, the
+  clipboard, "really elegant and useful".
+- **Every copy, not just the first.** For each tool the Rust side lists every
+  copy on this Mac, once each (by real path), in the order Automatic takes
+  them, with its version and where it came from:
+  - the environment variable, then each folder on the search path ("Homebrew",
+    "macOS" for `/usr/bin`, "Cargo", "OpenCode's installer", "Bun", or the
+    folder);
+  - Tinymist in VS Code's, VS Code Insiders', Cursor's, Windsurf's and
+    VSCodium's Typst extensions, newest first;
+  - Git from the Command Line Tools, Xcode and GitHub Desktop.
+  Automatic is simply the first of them.
+- **A card per tool:** a dot (found or not), the name and what it's for, and
+  one picker showing the choice (Automatic or Your choice), version, source
+  and path. Its list has Automatic (saying which copy that is), "Found on this
+  Mac", then Choose a file…, Paste a path and Type a path…, with arrow keys,
+  Enter, and Esc closing only the list.
+- **A typed path is checked as it's typed** (`tool_probe`, 200 ms after the
+  last key): there's nothing there, it's a folder, an app, not a program, not
+  a whole path, or not this tool (its `--version` is shown: "That isn't
+  tinymist: it says “git version 2.50.1”"); otherwise "Tinymist 0.15.10 —
+  ready to use", and only then is Use enabled. `--version` runs with no input
+  and is stopped after 3 s, so a wrong program can't hang the page.
+- **Paste** reads the clipboard in Rust (`clipboard_read`): a file copied in
+  Finder gives its path. Quotes, `file://` URLs and Terminal's backslashes
+  before spaces are removed. A good path is used at once; otherwise it opens in the box with
+  what's wrong. The same goes for a file from Choose….
+- **Search again** looks again (after installing something); the page also
+  looks each time it opens. A missing tool shows its install command with
+  Copy.
+- Verified (self-test `tools`, the Rust side in a scratch build): 3 copies of
+  Tinymist (Homebrew 0.15.8, VS Code's 0.15.8 and 0.15.10) and 3 of Git
+  (macOS, Command Line Tools, Xcode) listed; VS Code's 0.15.10 picked from the
+  list ran the preview; the five bad and good typed paths gave the messages
+  above with Use off and on; Enter used the good one; a quoted `~` path pasted
+  from the clipboard was used (the author's clipboard was put back); Xcode's
+  Git ran History and Source Control; OpenCode restarted for its copy and for
+  Automatic; Esc closed only the list; Search again. Rust tests for the list
+  and the probe.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

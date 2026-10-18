@@ -782,14 +782,43 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .settings-results { position: relative; }
 .command-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .command-chip { padding: 1px 6px; border-radius: 4px; background: var(--bg-2); border: 1px solid var(--border); font-size: 11.5px; }
-.tool-status-row { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.tool-status-row:last-child { border-bottom: none; }
-.tool-status-row code { font-size: 11px; color: var(--muted); }
-.tool-in-use { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 2px; }
-.tool-in-use .muted { font-size: 11.5px; }
-.tool-path { margin-top: 6px; }
-.tool-path .settings-input { flex: 1; min-width: 0; font: 11.5px "SF Mono", Menlo, monospace; }
-.tool-path button { flex: none; }
+/* Settings ▸ Tools: a card per tool, with a picker of the copies found and other ways to choose. */
+.tools-intro { display: flex; align-items: flex-start; gap: 16px; }
+.tools-intro .settings-help { flex: 1; margin-top: 0; }
+.tools-search { flex: none; display: inline-flex; align-items: center; gap: 5px; }
+.tool-card { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.tool-card:last-child { border-bottom: none; }
+.tool-card code { font-size: 11px; }
+.tool-card-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; margin-bottom: 7px; }
+.tool-card-head .settings-help { margin: 0; }
+.tool-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.tool-dot.ok { background: var(--good); }
+.tool-dot.bad { background: var(--bad); }
+.tool-picker { position: relative; }
+.tool-trigger { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px 6px 6px; border-radius: 7px; background: var(--bg-2); text-align: left; }
+.tool-choice { flex: none; padding: 1px 7px; border-radius: 9px; background: var(--bg-3); color: var(--muted); font-size: 11px; font-weight: 600; }
+.tool-version { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tool-source { flex: none; color: var(--muted); }
+.tool-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 11px "SF Mono", Menlo, monospace; }
+.tool-trigger > .icon-svg { flex: none; margin-left: auto; color: var(--muted); }
+.tool-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; max-height: 330px; overflow-y: auto; padding: 4px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); animation: pop-in 0.12s ease-out; }
+.tool-list-section { padding: 7px 12px 3px 30px; color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.tool-list-divider { height: 1px; margin: 4px 0; background: var(--border); }
+.tool-option { display: flex; align-items: flex-start; gap: 4px; padding: 5px 12px 5px 10px; }
+.tool-option.highlighted { background: var(--sel); }
+.tool-option-check { flex: none; width: 16px; padding-top: 1px; color: var(--accent); }
+.tool-option-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tool-action .tool-option-body { flex-direction: row; align-items: center; gap: 7px; }
+.tool-action .icon-svg { color: var(--muted); }
+.tool-option-title { font-weight: 500; }
+.tool-option-detail { color: var(--muted); font-size: 11.5px; }
+.tool-option-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 11px "SF Mono", Menlo, monospace; }
+.tool-typing { margin-top: 8px; }
+.tool-typing .settings-input { flex: 1; min-width: 0; font: 11.5px "SF Mono", Menlo, monospace; }
+.tool-typing button { flex: none; }
+.tool-probe { margin-top: 4px; color: var(--muted); font-size: 11.5px; }
+.tool-probe.ok { color: var(--good); }
+.tool-probe.bad { color: var(--bad); }
 .command-chip.editable { display: inline-flex; align-items: center; gap: 2px; padding-right: 0; }
 .command-chip.editable button { padding: 0 5px; }
 .command-list { display: flex; flex-direction: column; gap: 6px; }

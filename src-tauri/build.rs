@@ -4,6 +4,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "tools_status",
+            "tool_probe",
             "launch_options",
             "ui_log",
             "set_ui_zoom",
@@ -30,6 +31,7 @@ fn main() {
             "fs_copy",
             "fs_trash",
             "clipboard_write",
+            "clipboard_read",
             "pdf_info",
             "export_copy",
             "config_read",

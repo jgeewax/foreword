@@ -30,7 +30,13 @@ export type ToolInfo = {
   fromSettings?: boolean;
   /** What would be used without a choice. */
   automatic?: string | null;
+  /** Every copy found on this Mac, the automatic one first. */
+  copies?: ToolCopy[];
 };
+/** One copy of a tool; `source` says where it was found ("Homebrew", "VS Code's Typst extension"). */
+export type ToolCopy = { path: string; version: string | null; source: string };
+/** What a typed or pasted path for a tool holds: its version, or why it can't be used. */
+export type ToolProbe = { path: string; version: string | null; problem: string | null };
 export type ToolsStatus = { tinymist: ToolInfo; opencode: ToolInfo; git: ToolInfo };
 export type LaunchOptions = {
   workspace: string | null;
@@ -56,6 +62,7 @@ export type AgentResponse = { status: number; body: any };
 
 export const ipc = {
   toolsStatus: () => invoke<ToolsStatus>('tools_status'),
+  toolProbe: (tool: string, path: string) => invoke<ToolProbe>('tool_probe', { tool, path }),
   launchOptions: () => invoke<LaunchOptions>('launch_options'),
   /** A new window, without a book. */
   windowNew: () => invoke<string>('window_new'),
@@ -99,6 +106,8 @@ export const ipc = {
       timeoutMs: timeoutMs ?? null,
     }),
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
+  /** The clipboard's text, or a file's path if one was copied in Finder. */
+  clipboardRead: () => invoke<string | null>('clipboard_read'),
   /** Page count and page boxes of a PDF in the workspace (for the print checks). */
   pdfInfo: (path: string) => invoke<PdfInfo>('pdf_info', { path }),
   /** The settings file (~/.typst-studio/settings.json): its text, or null when there's none yet. */
