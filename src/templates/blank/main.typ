@@ -6,7 +6,8 @@
 #let author = "{{author}}"
 
 #set document(title: title, author: author)
-#set page(width: {{width}}, height: {{height}}, margin: (x: 18mm, y: 20mm), numbering: "1")
+// Typst's own margins, which grow and shrink with the page. To set them: margin: (x: 2cm, y: 2.5cm).
+#set page(width: {{width}}, height: {{height}}, numbering: "1")
 #set text(font: "Libertinus Serif", size: 11pt, lang: "en")
 #set par(justify: true, first-line-indent: 1.2em, spacing: 0.65em)
 #show heading.where(level: 1): it => {

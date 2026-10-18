@@ -8,10 +8,12 @@
 
 #let book(title: "", author: "", width: 7.5in, height: 9.25in, body) = {
   set document(title: title, author: author)
+  // The margins below are for 7.5 × 9.25 in; on other sizes they grow or shrink with the page.
+  let (x, y) = (width / 7.5in, height / 9.25in)
   set page(
     width: width,
     height: height,
-    margin: (inside: 1in, outside: 0.8in, top: 0.9in, bottom: 0.9in),
+    margin: (inside: 1in * x, outside: 0.8in * x, top: 0.9in * y, bottom: 0.9in * y),
     header: context {
       if not in-body.get() { return }
       let here-page = here().page()

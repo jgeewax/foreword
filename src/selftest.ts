@@ -4176,6 +4176,45 @@ async function modelPickerChecks() {
 }
 
 /**
+ * New Book's page sizes: grouped by region (the US, the UK, continental
+ * Europe, ISO, Japan, China, Korea), each template with its own list and
+ * default. Read-only: the dialog is closed without creating anything.
+ */
+async function bookSizeChecks() {
+  const out: Record<string, unknown> = {};
+  studio.openNewBook();
+  await sleep(400);
+  const select = () => document.querySelector<HTMLSelectElement>('.new-book select[aria-label="Page size"]');
+  const read = () => {
+    const el = select();
+    return {
+      groups: [...(el?.querySelectorAll('optgroup') ?? [])].map((g) => `${g.label} (${g.querySelectorAll('option').length})`),
+      options: el?.options.length,
+      selected: el?.selectedOptions[0]?.textContent,
+    };
+  };
+  for (const name of ['Novel', 'Textbook', "Children's picture book", 'Blank']) {
+    [...document.querySelectorAll<HTMLButtonElement>('.new-book .template-card')].find((b) => b.querySelector('.template-name')?.textContent === name)?.click();
+    await sleep(200);
+    out[name] = read();
+  }
+  // Picking a size from another group.
+  [...document.querySelectorAll<HTMLButtonElement>('.new-book .template-card')].find((b) => b.querySelector('.template-name')?.textContent === 'Novel')?.click();
+  await sleep(200);
+  const el = select();
+  const shiroku = [...(el?.options ?? [])].find((o) => o.textContent?.startsWith('Shiroku-ban'));
+  if (el && shiroku) {
+    el.value = shiroku.value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await sleep(200);
+  out.picked = { selected: select()?.selectedOptions[0]?.textContent, group: (select()?.selectedOptions[0]?.parentElement as HTMLOptGroupElement | null)?.label };
+  out.snapshot = await snap('book-sizes');
+  studio.closeNewBook();
+  return out;
+}
+
+/**
  * The editor's text size: 12px on 18px lines by default (VS Code's on macOS),
  * and Settings ▸ General ▸ Text size changes the editor and What changed's
  * words. Pictures at 75% and 100% to compare with the chrome. The setting is
@@ -4525,6 +4564,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
+    if (want('booksizes')) result.booksizes = await bookSizeChecks();
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();

@@ -2137,6 +2137,45 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   formulas on the old book either: What changed opens on Lines now, and the
   test still looks for the Words view's formulas.
 
+### Page sizes for the US, Europe and Asia
+
+- **New Book lists the common trim sizes, grouped by where they're used**
+  (`src/templates/index.ts`):
+  - United States: mass-market 4.25 × 6.87, 5 × 8, 5.25 × 8, Digest 5.5 × 8.5,
+    US Trade 6 × 9, Royal 6.14 × 9.21, Executive 7 × 10, 7.5 × 9.25, 8 × 10,
+    US Letter; picture-book squares and landscapes.
+  - UK: A-format 110 × 178, B-format 129 × 198, Demy 138 × 216, Royal
+    156 × 234, Crown quarto 189 × 246 mm, a 210 mm square.
+  - Continental Europe: 13.5 × 21.5 and 17 × 24 cm.
+  - ISO: A6, A5, B5, A4 (and A4 landscape for picture books).
+  - Japan: bunko 105 × 148, shinsho 103 × 182, shiroku-ban 127 × 188, JIS B6
+    128 × 182, kiku-ban 150 × 220, JIS B5 182 × 257 mm.
+  - China: 32 kai 130 × 184, large 32 kai 140 × 203, 16 kai 185 × 260, large
+    16 kai 210 × 285 mm.
+  - Korea: 4·6판 127 × 188, 국판 148 × 210, 신국판 152 × 225, 크라운판
+    176 × 248, 4·6배판 188 × 257 mm.
+- **Each template offers what suits it:** prose (novel, non-fiction) the small
+  and middle sizes (24); textbooks and programming books the large ones (17);
+  the picture book squares, landscapes and big portraits (9); Blank all of
+  them (43). The defaults are unchanged (6 × 9, 7.5 × 9.25, 8.5 square, A5).
+  The picker groups them by region (`<optgroup>`), with Custom… at the end.
+- **Checked against printers' and publishers' lists:** the UK sizes, the US
+  ones (Royal 6.14 × 9.21 in is the UK's 156 × 234 mm), and Japan's bunko,
+  shinsho and B6. Kiku-ban, the Chinese kai, the Korean sizes and the two
+  continental ones are the commonly quoted trims; printers' differ by a few
+  millimetres, which the dialog says.
+- **Margins follow the page.** The templates had fixed margins: a novel's
+  1.6 in of side margins left a 4.25 in mass-market page 2.65 in of text. They
+  now scale from each template's default size (novel and non-fiction from
+  6 × 9 in, textbook and programming from 7.5 × 9.25 in), so the default looks
+  exactly as before. Blank uses Typst's own margins (2.5/21 of the shorter
+  side), which follow the page too: 17.6 mm at A5, where it had 18 × 20 mm.
+- Verified: every template compiled at every size it offers (134
+  combinations), no errors or warnings, with pictures of the smallest, largest
+  and default sizes; unit tests on the lists and the grouping; self-test
+  `booksizes` reads the grouped list for four templates and picks a Japanese
+  size.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

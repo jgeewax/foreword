@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AUTHOR_KEY, NEW_BOOK_PARENT, studio } from '../app/studio';
 import { errorMessage } from '../lib/ipc';
 import { tildePath as tilde } from '../lib/paths';
-import { bookFolderName, PAPER_TEMPLATES, TEMPLATES, typstLength } from '../templates';
+import { bookFolderName, PAPER_TEMPLATES, sizesByRegion, TEMPLATES, typstLength } from '../templates';
 
 const stored = (key: string) => {
   try {
@@ -133,10 +133,14 @@ export function NewBookDialog() {
             <span>Page size</span>
             <div className="field-row">
               <select value={sizeIndex} aria-label="Page size" onChange={(e) => setSizeIndex(Number(e.target.value))}>
-                {chosen.sizes.map((s, i) => (
-                  <option key={s.label} value={i}>
-                    {s.label}
-                  </option>
+                {sizesByRegion(chosen.sizes).map(([region, sizes]) => (
+                  <optgroup key={region} label={region}>
+                    {sizes.map(({ size: s, index }) => (
+                      <option key={s.label} value={index}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
                 <option value={-1}>Custom…</option>
               </select>
@@ -153,7 +157,7 @@ export function NewBookDialog() {
                 </span>
               )}
             </div>
-            <span className="field-note">You can change it later in main.typ. Printers list the sizes they offer as "trim sizes".</span>
+            <span className="field-note">You can change it later in main.typ. Printers list the sizes they offer as "trim sizes"; names and exact sizes vary a little between them.</span>
           </div>
           )}
           <label className="field">

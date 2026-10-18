@@ -174,7 +174,7 @@
 
 - [x] should we git ignore the sample book? or not? if so, add to .gitignore. fi not, clean the sample book up to be something more realistic. definitely add the pdf's to gitignore though.
 
-- [ ] add more book sizes (royal, etc). we shoudl have all the common ones for USA, Asia, and Europe.
+- [x] add more book sizes (royal, etc). we shoudl have all the common ones for USA, Asia, and Europe.
 
 - [ ] settings for tools doesnt allow any configuration. what if we want to change which tinymist/opencode/git to use?
 

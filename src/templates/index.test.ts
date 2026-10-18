@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength, typstString } from './index';
+import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, REGIONS, sizesByRegion, TEMPLATES, templateFiles, typstLength, typstString } from './index';
 
 const info = { title: 'The "Quiet" Harbour \\ Part One', author: 'Ada Example', year: '2026' };
 
@@ -42,6 +42,37 @@ describe('page sizes', () => {
       const main = templateFiles(t, { ...info, size: { width: '5.5in', height: '210mm' } }).find((f) => f.path === 'main.typ')!.text;
       expect(main, t.id).toMatch(/width: 5\.5in, height: 210mm/);
     }
+  });
+
+  it('lists each size once, as valid lengths, with the default among them', () => {
+    for (const t of TEMPLATES) {
+      expect(t.sizes[t.defaultSize], t.id).toBeDefined();
+      expect(new Set(t.sizes.map((s) => s.label)).size, t.id).toBe(t.sizes.length);
+      for (const s of t.sizes) {
+        expect([typstLength(s.width), typstLength(s.height)], s.label).toEqual([s.width, s.height]);
+        expect(REGIONS, s.label).toContain(s.region);
+      }
+    }
+  });
+
+  it('has the common sizes of the US, the UK and Europe, and Asia', () => {
+    const novel = TEMPLATES.find((t) => t.id === 'novel')!;
+    expect(novel.sizes[novel.defaultSize].label).toBe('US Trade (6 × 9 in)');
+    expect(new Set(novel.sizes.map((s) => s.region))).toEqual(new Set(REGIONS));
+    const labels = novel.sizes.map((s) => s.label);
+    for (const name of ['Mass-market', 'Digest', 'B-format', 'Demy', 'Royal (156 × 234 mm)', 'A5', 'Bunko', 'Shiroku-ban', '32 kai', '신국판'])
+      expect(labels.some((l) => l.includes(name)), name).toBe(true);
+    const textbook = TEMPLATES.find((t) => t.id === 'textbook')!;
+    expect(textbook.sizes[textbook.defaultSize].label).toBe('7.5 × 9.25 in');
+    expect(textbook.sizes.map((s) => s.label)).toEqual(expect.arrayContaining(['Crown quarto (189 × 246 mm)', 'A4 (210 × 297 mm)', 'B5 (JIS, 182 × 257 mm)']));
+  });
+
+  it('groups sizes by region in list order, keeping each one’s index', () => {
+    const blank = TEMPLATES.find((t) => t.id === 'blank')!;
+    const groups = sizesByRegion(blank.sizes);
+    expect(groups.map(([region]) => region)).toEqual(REGIONS);
+    expect(groups.flatMap(([, sizes]) => sizes.map((s) => s.index))).toEqual(blank.sizes.map((_, i) => i));
+    for (const [region, sizes] of groups) for (const { size, index } of sizes) expect([size.region, blank.sizes[index]]).toEqual([region, size]);
   });
 
   it('accepts only plain positive lengths', () => {

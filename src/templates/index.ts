@@ -10,17 +10,151 @@ import { makefile } from './makefile';
 
 const RAW = import.meta.glob('./*/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
-/** A page (trim) size; width and height are Typst lengths like "6in" or "148mm". */
-export type PageSize = { label: string; width: string; height: string };
+/** Where a size is used, to group the list. */
+export type SizeRegion = 'United States' | 'UK' | 'Continental Europe' | 'ISO (international)' | 'Japan' | 'China' | 'Korea';
 
-const BOOK_SIZES: PageSize[] = [
-  { label: '5 × 8 in', width: '5in', height: '8in' },
-  { label: '5.25 × 8 in', width: '5.25in', height: '8in' },
-  { label: '5.5 × 8.5 in', width: '5.5in', height: '8.5in' },
-  { label: '6 × 9 in', width: '6in', height: '9in' },
-  { label: 'A5 (148 × 210 mm)', width: '148mm', height: '210mm' },
-  { label: 'B-format (129 × 198 mm)', width: '129mm', height: '198mm' },
+/** The order the groups are shown in. */
+export const REGIONS: SizeRegion[] = ['United States', 'UK', 'Continental Europe', 'ISO (international)', 'Japan', 'China', 'Korea'];
+
+/** A page (trim) size; width and height are Typst lengths like "6in" or "148mm". */
+export type PageSize = { label: string; width: string; height: string; region: SizeRegion };
+
+const size = (region: SizeRegion, label: string, width: string, height: string): PageSize => ({ label, width, height, region });
+
+// Common trim sizes. Names and exact sizes vary a little between printers
+// (the Japanese, Chinese and Korean ones by a few millimetres).
+const US = {
+  massMarket: size('United States', 'Mass-market paperback (4.25 × 6.87 in)', '4.25in', '6.87in'),
+  fiveByEight: size('United States', '5 × 8 in', '5in', '8in'),
+  fiveQuarter: size('United States', '5.25 × 8 in', '5.25in', '8in'),
+  digest: size('United States', 'Digest (5.5 × 8.5 in)', '5.5in', '8.5in'),
+  trade: size('United States', 'US Trade (6 × 9 in)', '6in', '9in'),
+  royal: size('United States', 'Royal (6.14 × 9.21 in)', '6.14in', '9.21in'),
+  executive: size('United States', 'Executive (7 × 10 in)', '7in', '10in'),
+  textbook: size('United States', '7.5 × 9.25 in', '7.5in', '9.25in'),
+  eightByTen: size('United States', '8 × 10 in', '8in', '10in'),
+  letter: size('United States', 'US Letter (8.5 × 11 in)', '8.5in', '11in'),
+};
+const UK = {
+  aFormat: size('UK', 'A-format paperback (110 × 178 mm)', '110mm', '178mm'),
+  bFormat: size('UK', 'B-format paperback (129 × 198 mm)', '129mm', '198mm'),
+  demy: size('UK', 'Demy (138 × 216 mm)', '138mm', '216mm'),
+  royal: size('UK', 'Royal (156 × 234 mm)', '156mm', '234mm'),
+  crownQuarto: size('UK', 'Crown quarto (189 × 246 mm)', '189mm', '246mm'),
+};
+const EUROPE = {
+  novel: size('Continental Europe', '13.5 × 21.5 cm', '135mm', '215mm'),
+  large: size('Continental Europe', '17 × 24 cm', '170mm', '240mm'),
+};
+const ISO = {
+  a6: size('ISO (international)', 'A6 (105 × 148 mm)', '105mm', '148mm'),
+  a5: size('ISO (international)', 'A5 (148 × 210 mm)', '148mm', '210mm'),
+  b5: size('ISO (international)', 'B5 (176 × 250 mm)', '176mm', '250mm'),
+  a4: size('ISO (international)', 'A4 (210 × 297 mm)', '210mm', '297mm'),
+};
+const JAPAN = {
+  bunko: size('Japan', 'Bunko 文庫 (105 × 148 mm)', '105mm', '148mm'),
+  shinsho: size('Japan', 'Shinsho 新書 (103 × 182 mm)', '103mm', '182mm'),
+  shiroku: size('Japan', 'Shiroku-ban 四六判 (127 × 188 mm)', '127mm', '188mm'),
+  b6: size('Japan', 'B6 (JIS, 128 × 182 mm)', '128mm', '182mm'),
+  kiku: size('Japan', 'Kiku-ban 菊判 (150 × 220 mm)', '150mm', '220mm'),
+  b5: size('Japan', 'B5 (JIS, 182 × 257 mm)', '182mm', '257mm'),
+};
+const CHINA = {
+  k32: size('China', '32 kai 32开 (130 × 184 mm)', '130mm', '184mm'),
+  k32Large: size('China', 'Large 32 kai 大32开 (140 × 203 mm)', '140mm', '203mm'),
+  k16: size('China', '16 kai 16开 (185 × 260 mm)', '185mm', '260mm'),
+  k16Large: size('China', 'Large 16 kai 大16开 (210 × 285 mm)', '210mm', '285mm'),
+};
+const KOREA = {
+  sayuk: size('Korea', 'Sayuk-pan 4·6판 (127 × 188 mm)', '127mm', '188mm'),
+  guk: size('Korea', 'Guk-pan 국판 (148 × 210 mm)', '148mm', '210mm'),
+  singuk: size('Korea', 'Singuk-pan 신국판 (152 × 225 mm)', '152mm', '225mm'),
+  crown: size('Korea', 'Crown-pan 크라운판 (176 × 248 mm)', '176mm', '248mm'),
+  sayukBae: size('Korea', 'Sayuk-baepan 4·6배판 (188 × 257 mm)', '188mm', '257mm'),
+};
+const PICTURE_BOOK = {
+  square8: size('United States', '8 × 8 in square', '8in', '8in'),
+  square85: size('United States', '8.5 × 8.5 in square', '8.5in', '8.5in'),
+  landscape10: size('United States', '10 × 8 in landscape', '10in', '8in'),
+  portrait8: size('United States', '8 × 10 in portrait', '8in', '10in'),
+  landscape11: size('United States', '11 × 8.5 in landscape', '11in', '8.5in'),
+  square210: size('UK', '210 × 210 mm square', '210mm', '210mm'),
+  a4Landscape: size('ISO (international)', 'A4 landscape (297 × 210 mm)', '297mm', '210mm'),
+};
+
+/** Novels and other prose. */
+const TRADE_SIZES: PageSize[] = [
+  US.massMarket,
+  US.fiveByEight,
+  US.fiveQuarter,
+  US.digest,
+  US.trade,
+  US.royal,
+  UK.aFormat,
+  UK.bFormat,
+  UK.demy,
+  UK.royal,
+  EUROPE.novel,
+  EUROPE.large,
+  ISO.a6,
+  ISO.a5,
+  JAPAN.bunko,
+  JAPAN.shinsho,
+  JAPAN.shiroku,
+  JAPAN.b6,
+  JAPAN.kiku,
+  CHINA.k32,
+  CHINA.k32Large,
+  KOREA.sayuk,
+  KOREA.guk,
+  KOREA.singuk,
 ];
+
+/** Textbooks and technical books: bigger pages, for equations, figures and code. */
+const LARGE_SIZES: PageSize[] = [
+  US.trade,
+  US.executive,
+  US.textbook,
+  US.eightByTen,
+  US.letter,
+  UK.royal,
+  UK.crownQuarto,
+  EUROPE.large,
+  ISO.b5,
+  ISO.a4,
+  JAPAN.kiku,
+  JAPAN.b5,
+  CHINA.k16,
+  CHINA.k16Large,
+  KOREA.singuk,
+  KOREA.crown,
+  KOREA.sayukBae,
+];
+
+const PICTURE_BOOK_SIZES: PageSize[] = [
+  PICTURE_BOOK.square8,
+  PICTURE_BOOK.square85,
+  PICTURE_BOOK.landscape10,
+  PICTURE_BOOK.portrait8,
+  PICTURE_BOOK.landscape11,
+  US.letter,
+  PICTURE_BOOK.square210,
+  ISO.a4,
+  PICTURE_BOOK.a4Landscape,
+];
+
+/** Every size once, for the blank template. */
+const ALL_SIZES: PageSize[] = [...new Set([...TRADE_SIZES, ...LARGE_SIZES, ...PICTURE_BOOK_SIZES])].sort(
+  (a, b) => REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region),
+);
+
+/** The sizes in groups by region, in the order they're listed, each with its index in `sizes`. */
+export function sizesByRegion(sizes: PageSize[]): [SizeRegion, { size: PageSize; index: number }[]][] {
+  const groups = new Map<SizeRegion, { size: PageSize; index: number }[]>();
+  sizes.forEach((s, index) => groups.set(s.region, [...(groups.get(s.region) ?? []), { size: s, index }]));
+  return [...groups];
+}
 
 export type BookTemplate = {
   id: string;
@@ -44,8 +178,8 @@ export const TEMPLATES: BookTemplate[] = [
     name: 'Novel',
     description: 'Fiction in chapters, with scene breaks, a title page and running headers.',
     details: 'Libertinus Serif · running headers',
-    sizes: BOOK_SIZES,
-    defaultSize: 3,
+    sizes: TRADE_SIZES,
+    defaultSize: TRADE_SIZES.indexOf(US.trade),
     firstFile: 'chapters/01-chapter-one.typ',
     styleHints: {
       Audience: 'Genre and readers, e.g. a literary mystery for adults; readers of Tana French.',
@@ -62,8 +196,8 @@ export const TEMPLATES: BookTemplate[] = [
     name: 'Non-fiction',
     description: 'Ideas and advice: contents, an introduction, sections, footnotes, sources and boxed asides.',
     details: 'Libertinus Serif · citations',
-    sizes: BOOK_SIZES,
-    defaultSize: 3,
+    sizes: TRADE_SIZES,
+    defaultSize: TRADE_SIZES.indexOf(US.trade),
     firstFile: 'chapters/01-first-chapter.typ',
     styleHints: {
       Audience: 'Who is this for, what do they already know, and what problem brings them to the book?',
@@ -79,13 +213,8 @@ export const TEMPLATES: BookTemplate[] = [
     name: 'Textbook',
     description: 'Teaching material: numbered sections, equations, figures, definitions, examples and exercises.',
     details: 'New Computer Modern · math',
-    sizes: [
-      { label: '7 × 10 in', width: '7in', height: '10in' },
-      { label: '7.5 × 9.25 in', width: '7.5in', height: '9.25in' },
-      { label: 'US Letter (8.5 × 11 in)', width: '8.5in', height: '11in' },
-      { label: 'A4 (210 × 297 mm)', width: '210mm', height: '297mm' },
-    ],
-    defaultSize: 1,
+    sizes: LARGE_SIZES,
+    defaultSize: LARGE_SIZES.indexOf(US.textbook),
     firstFile: 'chapters/01-getting-started.typ',
     styleHints: {
       Audience: 'Course and level, e.g. first-year undergraduates who know algebra but not calculus.',
@@ -103,13 +232,8 @@ export const TEMPLATES: BookTemplate[] = [
     name: 'Programming book',
     description: 'A technical book whose code examples run, show their real output, and can check it.',
     details: 'New Computer Modern · runnable Python examples',
-    sizes: [
-      { label: '7 × 10 in', width: '7in', height: '10in' },
-      { label: '7.5 × 9.25 in', width: '7.5in', height: '9.25in' },
-      { label: 'US Letter (8.5 × 11 in)', width: '8.5in', height: '11in' },
-      { label: 'A4 (210 × 297 mm)', width: '210mm', height: '297mm' },
-    ],
-    defaultSize: 1,
+    sizes: LARGE_SIZES,
+    defaultSize: LARGE_SIZES.indexOf(US.textbook),
     firstFile: 'chapters/01-first-steps.typ',
     code: true,
     styleHints: {
@@ -126,13 +250,8 @@ export const TEMPLATES: BookTemplate[] = [
     name: "Children's picture book",
     description: 'A short illustrated story: a cover, one picture and a line or two of text per page.',
     details: 'Large rounded type · full-page pictures',
-    sizes: [
-      { label: '8 × 8 in square', width: '8in', height: '8in' },
-      { label: '8.5 × 8.5 in square', width: '8.5in', height: '8.5in' },
-      { label: '10 × 8 in landscape', width: '10in', height: '8in' },
-      { label: '8 × 10 in portrait', width: '8in', height: '10in' },
-    ],
-    defaultSize: 1,
+    sizes: PICTURE_BOOK_SIZES,
+    defaultSize: PICTURE_BOOK_SIZES.indexOf(PICTURE_BOOK.square85),
     firstFile: 'story.typ',
     styleHints: {
       Audience: 'Reading age and who reads it aloud, e.g. read aloud to ages 3–6 by a parent.',
@@ -149,13 +268,8 @@ export const TEMPLATES: BookTemplate[] = [
     name: 'Blank',
     description: 'A title page and one chapter. Everything else is up to you.',
     details: 'Libertinus Serif',
-    sizes: [
-      { label: 'A5 (148 × 210 mm)', width: '148mm', height: '210mm' },
-      { label: 'A4 (210 × 297 mm)', width: '210mm', height: '297mm' },
-      { label: 'US Letter (8.5 × 11 in)', width: '8.5in', height: '11in' },
-      { label: '6 × 9 in', width: '6in', height: '9in' },
-    ],
-    defaultSize: 0,
+    sizes: ALL_SIZES,
+    defaultSize: ALL_SIZES.indexOf(ISO.a5),
     firstFile: 'chapters/01-chapter.typ',
     styleHints: {},
   },

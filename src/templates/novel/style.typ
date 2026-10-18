@@ -7,11 +7,13 @@
 
 #let book(title: "", author: "", width: 6in, height: 9in, body) = {
   set document(title: title, author: author)
+  // The margins below are for 6 × 9 in; on other sizes they grow or shrink with the page.
+  let (x, y) = (width / 6in, height / 9in)
   set page(
     // Wider margin on the binding side.
     width: width,
     height: height,
-    margin: (inside: 0.9in, outside: 0.7in, top: 0.85in, bottom: 0.9in),
+    margin: (inside: 0.9in * x, outside: 0.7in * x, top: 0.85in * y, bottom: 0.9in * y),
     header: context {
       if not in-story.get() { return }
       let here-page = here().page()
