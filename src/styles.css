@@ -593,8 +593,12 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .history-empty { padding: 12px; }
 .history-list { overflow-y: auto; flex: 1; padding-bottom: 12px; }
 .history-day { position: sticky; top: 0; background: var(--bg-2); padding: 6px 8px 3px; font-size: 11px; font-weight: 600; color: var(--muted); }
-.history-row { display: flex; gap: 6px; align-items: flex-start; padding: 4px 8px; cursor: default; }
+/* A version folds out, as a folder in the file tree: a chevron that turns, and its files under a guide line. */
+.history-row { display: flex; gap: 4px; align-items: flex-start; padding: 4px 8px 4px 4px; cursor: default; }
 .history-row:hover { background: var(--bg-3); }
+.history-row:hover .twisty { color: var(--fg); }
+.history-row:focus-visible, .history-file:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.history-row .twisty { margin-top: 1px; }
 .history-item.open > .history-row { background: var(--sel); }
 .history-icon { width: 14px; flex: none; text-align: center; color: var(--muted); }
 .kind-agent .history-icon { color: var(--accent); }
@@ -605,11 +609,19 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .history-meta { font-size: 11px; color: var(--muted); }
 .add-n { color: var(--good); }
 .del-n { color: var(--bad); }
-.history-detail { padding: 2px 8px 8px 28px; display: flex; flex-direction: column; gap: 1px; }
-.history-file { display: flex; gap: 6px; align-items: baseline; padding: 2px 4px; border-radius: 4px; font-size: 12px; cursor: default; }
+.history-detail { margin: 0 8px 4px 11px; padding: 3px 0 6px 10px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; animation: appear 0.12s ease-out; }
+.history-item.open > .history-detail { border-left-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.history-loading { padding: 2px 4px; font-size: 12px; }
+.history-file { display: flex; gap: 6px; align-items: center; padding: 2px 4px; border-radius: 4px; font-size: 12px; cursor: default; }
 .history-file:hover { background: var(--bg-3); }
+.history-file .file-icon { flex: none; }
 .history-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; }
-.history-file .status-A, .history-file .status-D { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+.history-folder { color: var(--muted); font-size: 10.5px; }
+.history-status { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+/* Shown on hover: a click opens the file's changes in a tab. */
+.history-open { flex: none; display: grid; place-items: center; color: var(--muted); opacity: 0; transition: opacity 0.1s; }
+.history-file:hover .history-open, .history-file:focus-visible .history-open { opacity: 1; }
+.history-file:hover .history-open { color: var(--fg); }
 .history-counts { font-size: 11px; white-space: nowrap; }
 .history-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .settings-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 16px 0 8px; }

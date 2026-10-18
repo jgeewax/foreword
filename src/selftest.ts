@@ -3908,6 +3908,58 @@ async function historyAboutChecks() {
 }
 
 /**
+ * History's versions fold out as the file tree's folders do: a chevron that
+ * turns, aria-expanded, a guide line under the open one, and files that show
+ * they open in a tab. ⏎ folds a row too. Saves a file once (scratch book only).
+ */
+async function historyRowsChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.history.status === 'ready', 30000, 'history');
+  // A version with a file in it: one save of the open chapter.
+  const path = studio.state.active!;
+  const cur = await ipc.fsRead(path);
+  await ipc.fsWrite(path, `${cur.text}\n// history rows\n`, cur.hash);
+  await studio.history.checkpoint();
+  await waitFor(() => studio.state.history.versions.some((v) => v.kind === 'save'), 15000, 'the saved version');
+  await sleep(1500);
+  const sidebar = studio.state.sidebar;
+  if (!document.querySelector('.history-list')) {
+    studio.showSidebar('history');
+    await sleep(400);
+  }
+  const label = studio.state.history.versions.find((v) => v.kind === 'save')!.label;
+  const row = () => [...document.querySelectorAll<HTMLElement>('.history-item .history-row')].find((r) => r.textContent?.includes(label));
+  const state = () => ({
+    expanded: row()?.getAttribute('aria-expanded'),
+    twisty: !!row()?.querySelector('.twisty svg'),
+    turned: !!row()?.querySelector('.twisty.open'),
+    files: [...document.querySelectorAll('.history-detail .history-file')].map((f) => ({ icon: !!f.querySelector('.file-icon'), opens: !!f.querySelector('.history-open svg'), title: f.getAttribute('title') })),
+    guide: getComputedStyle(document.querySelector('.history-detail') ?? document.body).borderLeftStyle,
+  });
+  out.closed = state();
+  // A window behind others doesn't run transitions: the chevron would be photographed mid-turn.
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  row()?.click();
+  await waitFor(() => document.querySelector('.history-detail .history-file'), 5000, 'files').catch(() => {});
+  out.open = state();
+  out.snapshot = await snap('history-rows');
+  still.remove();
+  row()?.focus();
+  row()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(200);
+  out.enterFolds = state().expanded;
+  row()?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  await sleep(200);
+  out.spaceUnfolds = state().expanded;
+  row()?.click();
+  await sleep(100);
+  studio.showSidebar(sidebar);
+  return out;
+}
+
+/**
  * Every surface follows the zoom: at 67%, 100% and 150%, each part's height on
  * screen is the zoom times its height at 100% (parts are one line, so the
  * narrower page at 150% doesn't rewrap them), and nothing sets CSS zoom. Opens
@@ -6129,6 +6181,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('changeszoom')) result.changeszoom = await changesZoomChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
+    if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();

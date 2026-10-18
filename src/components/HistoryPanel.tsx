@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { studio } from '../app/studio';
 import type { Version } from '../lib/ipc';
 import { onContextMenu } from '../lib/context-menu';
 import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
+import { FileIcon, Icon } from './icons';
+
+/** ⏎ or space on a row that acts as a button. */
+const onActivate = (run: () => void) => (e: KeyboardEvent) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  run();
+};
 
 const KIND: Record<string, { icon: string; title: string }> = {
   opened: { icon: '○', title: 'Opened in Typst Studio' },
@@ -37,14 +45,19 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
   const open = useStore(studio.store, (s) => (s.history.open?.id === v.id ? s.history.open : null));
   const busy = useStore(studio.store, (s) => s.history.busy);
   const kind = KIND[v.kind] ?? { icon: '•', title: v.kind };
+  const toggle = () => void studio.history.toggle(v.id);
   return (
     <div className={`history-item kind-${v.kind}${open ? ' open' : ''}`}>
+      {/* A chevron, as the file tree's folders: the row folds out to the files it changed. */}
       <div
         className="history-row"
         role="button"
         tabIndex={0}
+        aria-expanded={!!open}
         aria-label={`${kind.title}: ${v.label}`}
-        onClick={() => void studio.history.toggle(v.id)}
+        title={open ? 'Fold it up again' : v.files ? 'Show the files it changed, and what you can do with this version' : 'Show what you can do with this version'}
+        onClick={toggle}
+        onKeyDown={onActivate(toggle)}
         onContextMenu={onContextMenu(() => [
           { label: 'What Changed', action: () => void studio.history.showChanges(v) },
           !latest && { label: 'Compare with Now', action: () => void studio.history.compareWithNow(v) },
@@ -53,11 +66,14 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
           !latest && { label: 'Restore This Version…', enabled: !busy, action: () => void studio.history.restoreVersion(v) },
         ])}
       >
-        <span className="history-icon">{kind.icon}</span>
+        <span className={`twisty${open ? ' open' : ''}`}>
+          <Icon name="chevronRight" size={16} />
+        </span>
+        <span className="history-icon" title={kind.title}>
+          {kind.icon}
+        </span>
         <span className="history-main">
-          <span className="history-label" title={v.label}>
-            {v.label}
-          </span>
+          <span className="history-label">{v.label}</span>
           <span className="history-meta">
             {timeLabel(v.time)} · <Stats v={v} />
           </span>
@@ -65,18 +81,31 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
       </div>
       {open && (
         <div className="history-detail">
-          {open.changes === null && <div className="muted">Loading…</div>}
-          {open.changes?.map((c) => (
-            <div key={c.path} className="history-file" role="button" tabIndex={0} title="What changed in this file, in its own tab" onClick={() => void studio.history.showDiff(v, c.path)}>
-              <span className={`status-${c.status}`}>{c.status === 'A' ? 'new' : c.status === 'D' ? 'deleted' : ''}</span>
-              <span className="history-path">{c.path}</span>
-              {c.added !== null && (
-                <span className="history-counts">
-                  <span className="add-n">+{c.added}</span> <span className="del-n">−{c.deleted}</span>
+          {open.changes === null && <div className="muted history-loading">Finding the files it changed…</div>}
+          {open.changes?.map((c) => {
+            const show = () => void studio.history.showDiff(v, c.path);
+            const slash = c.path.lastIndexOf('/');
+            return (
+              <div key={c.path} className="history-file" role="button" tabIndex={0} title={`What changed in ${c.path}, in its own tab`} onClick={show} onKeyDown={onActivate(show)}>
+                <FileIcon path={c.path} />
+                {/* The name first, then its folder (as Source Control): a narrow pane cuts the folder, not the name. */}
+                <span className="history-path">
+                  {c.path.slice(slash + 1)}
+                  {slash > 0 && <span className="history-folder"> {c.path.slice(0, slash)}</span>}
                 </span>
-              )}
-            </div>
-          ))}
+                {c.status !== 'M' && <span className={`history-status status-${c.status}`}>{c.status === 'A' ? 'new' : c.status === 'D' ? 'deleted' : ''}</span>}
+                {c.added !== null && (
+                  <span className="history-counts">
+                    <span className="add-n">+{c.added}</span> <span className="del-n">−{c.deleted}</span>
+                  </span>
+                )}
+                {/* What a click does: the changes open in a tab. */}
+                <span className="history-open" aria-hidden>
+                  <Icon name="openChanges" size={14} />
+                </span>
+              </div>
+            );
+          })}
           <div className="history-buttons">
             <button className="primary" onClick={() => void studio.history.showChanges(v)}>
               What changed
@@ -130,8 +159,8 @@ function HistoryAbout() {
             . History never touches your own Git repository, if the book has one: that's Source Control, where you commit, pull and push yourself.
           </p>
           <p>
-            <b>Going back:</b> click a version to see what changed in it, line by line. <b>◀ Older</b> and <b>Newer ▶</b> step through the versions one at a time; <b>Compare with
-            Now</b> shows everything since. You can undo just what the assistant changed, or put the whole book back as it was. Restoring adds a new version, so you can always go
+            <b>Going back:</b> click a version (<b>›</b>) to fold out the files it changed, then a file, or <b>What changed</b>, to see the changes line by line in a tab.{' '}
+            <b>◀ Older</b> and <b>Newer ▶</b> there step through the versions one at a time; <b>Compare with now</b> shows everything since. You can undo just what the assistant changed, or put the whole book back as it was. Restoring adds a new version, so you can always go
             forward again.
           </p>
           <p>
