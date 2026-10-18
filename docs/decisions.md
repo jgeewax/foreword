@@ -1502,14 +1502,19 @@ section), the page starts at the window's top and the offset is measured.
 
 ### Starting and finishing tasks from the header
 
-- The assistant's header has a labelled **New task** button (blue, never
-  smaller than at 100%) where the small ＋ was. The task menu still has it.
+- The assistant's header has a labelled **New task** button (never smaller
+  than at 100%) where the small ＋ was. It looks like Done, not blue, and it's
+  hidden on a blank conversation, which already is a new task.
 - **Done** shows whenever the conversation has a reply and isn't running. It
   doesn't wait for the assistant's "Is this task done?" check, which only comes
   when the reply ends with the marker; a question answered in passing never
   had one. It marks the task done, saves a named version, and starts a new
-  task. Its message offers "Open it again". The task menu has **Mark done**
-  too.
+  task. Its message offers "Open it again".
+- **The task menu is for switching.** On a blank conversation the header used
+  to say "New task" three times: the menu's label, the blue button, and the
+  menu's first action. The menu no longer repeats New task, Mark done or the
+  context meter, which the header has. Compact is at its foot, and a blank
+  conversation's label is greyed out.
 - Titles fall back to the first message until OpenCode names the conversation.
 - Verified with a real model (self-test `questions`): after an answered
   question, Done marked the task done and started a new conversation.

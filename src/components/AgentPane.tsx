@@ -935,14 +935,17 @@ export function AgentPane() {
               Done
             </button>
           )}
-          <button
-            className="header-button new-task"
-            title={agent.running ? 'Start a new task (this one carries on in the background)' : 'Start a new task (a new conversation)'}
-            onClick={() => studio.newSession()}
-          >
-            <Icon name="plus" size={14} />
-            New task
-          </button>
+          {/* A blank conversation already is a new task: nothing to start. */}
+          {(agent.sessionId || agent.items.length > 0) && (
+            <button
+              className="header-button new-task"
+              title={agent.running ? 'Start a new task (this one carries on in the background)' : 'Start a new task (a new conversation)'}
+              onClick={() => studio.newSession()}
+            >
+              <Icon name="plus" size={14} />
+              New task
+            </button>
+          )}
         </header>
         {(agent.status !== 'ready' || agent.connection === 'lost') && (
           <div className="agent-status">

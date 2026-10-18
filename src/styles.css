@@ -417,7 +417,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .task-trigger-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-done-badge { font-size: 10px; font-weight: 600; color: var(--good); border: 1px solid var(--good); border-radius: 8px; padding: 0 5px; }
 .task-popover { position: absolute; top: calc(100% + 4px); left: 0; width: min(380px, 80vw); max-height: 60vh; overflow-y: auto; z-index: 50; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); padding: 6px 0; }
-.task-popover-actions { display: flex; gap: 6px; align-items: center; padding: 4px 10px 8px; border-bottom: 1px solid var(--border); }
+.task-popover-footer { display: flex; gap: 8px; align-items: center; margin-top: 6px; padding: 8px 10px 2px; border-top: 1px solid var(--border); font-size: 11px; }
 .task-section { padding: 8px 10px 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .task-row { display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; padding: 4px 10px; }
 .task-row:hover:not(:disabled), .task-row.current { background: var(--sel); }
@@ -805,8 +805,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
 /* The assistant pane's header buttons: labelled and easy to hit. */
 .header-button { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--bg); }
 .header-button .icon-svg { width: 14px; height: 14px; }
-.header-button.new-task { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
-.header-button.new-task:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
 .agent-pane .pane-header { min-height: 30px; height: auto; }
 
 /* Slash commands: the list above the message box. */

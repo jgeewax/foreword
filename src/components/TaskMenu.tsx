@@ -111,7 +111,8 @@ export function TaskMenu() {
   return (
     <div className="task-menu" ref={rootRef}>
       <button className="task-trigger" aria-haspopup="menu" aria-expanded={open} title="Tasks: one conversation per goal" onClick={() => setOpen((o) => !o)}>
-        <span className="task-trigger-title">{agent.sessionId ? (agent.title ?? current?.title ?? 'Task') : 'New task'}</span>
+        {/* A blank conversation's label is a placeholder, greyed out, not a third "New task" button. */}
+        <span className={`task-trigger-title${agent.sessionId ? '' : ' muted'}`}>{agent.sessionId ? (agent.title ?? current?.title ?? 'Task') : 'New task'}</span>
         {current?.status === 'done' && <span className="task-done-badge">done</span>}
         {working > 0 && (
           <span className="task-count busy" title={`${working} other task${working > 1 ? 's' : ''} at work`}>
@@ -126,32 +127,19 @@ export function TaskMenu() {
         <span className="model-trigger-chevron">▾</span>
       </button>
       {open && (
+        // For switching: New task, Done and the context meter are in the header already.
         <div className="task-popover" role="menu">
-          <div className="task-popover-actions">
-            <button
-              className="primary"
-              title={agent.running ? 'This one carries on in the background' : undefined}
-              onClick={() => {
-                setOpen(false);
-                studio.newSession();
-              }}
-            >
-              New task
-            </button>
-            {agent.sessionId && current?.status !== 'done' && (
+          {inProgress.length > 0 && <div className="task-section">In progress</div>}
+          {inProgress.map(row)}
+          {openTasks.length > 0 && <div className="task-section">Open</div>}
+          {openTasks.map(row)}
+          {doneTasks.length > 0 && <div className="task-section">Done</div>}
+          {doneTasks.map(row)}
+          {!agent.tasks.length && <div className="task-empty muted">No conversations yet.</div>}
+          {agent.sessionId && (
+            <div className="task-popover-footer">
               <button
-                disabled={agent.running}
-                title="Mark this task done (a named version in History), and start a new one"
-                onClick={() => {
-                  setOpen(false);
-                  void studio.finishTask();
-                }}
-              >
-                Mark done
-              </button>
-            )}
-            {agent.sessionId && (
-              <button
+                className="small"
                 disabled={agent.running || agent.compacting}
                 title="Summarize this conversation so far to free up the context window"
                 onClick={() => {
@@ -161,17 +149,9 @@ export function TaskMenu() {
               >
                 {agent.compacting ? 'Compacting…' : 'Compact'}
               </button>
-            )}
-            <span className="spacer" />
-            <ContextMeter />
-          </div>
-          {inProgress.length > 0 && <div className="task-section">In progress</div>}
-          {inProgress.map(row)}
-          {openTasks.length > 0 && <div className="task-section">Open</div>}
-          {openTasks.map(row)}
-          {doneTasks.length > 0 && <div className="task-section">Done</div>}
-          {doneTasks.map(row)}
-          {!agent.tasks.length && <div className="task-empty muted">No conversations yet.</div>}
+              <span className="muted">Summarize this conversation to free up room</span>
+            </div>
+          )}
         </div>
       )}
     </div>

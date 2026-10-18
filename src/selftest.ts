@@ -2241,7 +2241,8 @@ async function questionChecks() {
     newConversation: studio.state.agent.sessionId === null,
     marked: studio.state.agent.tasks.find((t) => t.sessionId === answeredSession)?.status,
     toast: studio.state.toast?.text,
-    newTaskButton: !!document.querySelector('.agent-pane .header-button.new-task'),
+    // The new conversation is blank, so the header has no New task button: it already is one.
+    newTaskButtonHidden: !document.querySelector('.agent-pane .header-button.new-task'),
   };
 
   // Dismissed: the model is told, and the turn ends.
