@@ -224,4 +224,4 @@
 
 - [ ] make a really pretty README.md for the github repo
 
-- [ ] in settings modal, X in top right corner isnt centered properly (visible when hovering)
+- [x] in settings modal, X in top right corner isnt centered properly (visible when hovering)

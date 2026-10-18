@@ -518,7 +518,8 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .modal { width: min(560px, calc(100% - 32px)); max-height: calc(100% - 64px); display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); }
 .modal-header h1 { font-size: 14px; margin: 0; }
-.modal-close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 6px; color: var(--muted); }
+/* button.icon's padding would leave less room than the icon, pushing it right of the middle. */
+button.modal-close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 6px; color: var(--muted); }
 .modal-close:hover:not(:disabled) { color: var(--fg); }
 .modal-body { overflow: auto; padding: 4px 16px 16px; }
 .modal-footer { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-top: 1px solid var(--border); }

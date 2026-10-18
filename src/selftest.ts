@@ -4288,6 +4288,39 @@ async function settingControlsChecks() {
   return out;
 }
 
+/** Settings' ✕: its icon in the middle of the box its hover shades, at several sizes of everything. */
+async function closeButtonChecks() {
+  const out: Record<string, unknown> = {};
+  const zoom = studio.state.zoom;
+  const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
+  studio.openSettings('general');
+  await sleep(400);
+  const button = document.querySelector<HTMLButtonElement>('.settings .modal-close')!;
+  const r = (n: number) => Math.round(n * 100) / 100;
+  for (const z of [1, 0.67, 0.8, 1.25]) {
+    await studio.setZoom(z, { persist: false, write: false });
+    await sleep(400);
+    const b = button.getBoundingClientRect();
+    const i = button.querySelector('svg')!.getBoundingClientRect();
+    const cs = getComputedStyle(button);
+    // Shaded as on hover, for the picture.
+    button.style.background = 'var(--bg-3)';
+    out[`at${Math.round(z * 100)}`] = {
+      box: [r(b.left), r(b.top), r(b.width), r(b.height)],
+      icon: [r(i.left), r(i.top), r(i.width), r(i.height)],
+      offCentre: [r(i.left + i.width / 2 - (b.left + b.width / 2)), r(i.top + i.height / 2 - (b.top + b.height / 2))],
+      padding: cs.padding,
+      border: cs.borderWidth,
+      snapshot: await snap(`closebutton-${Math.round(z * 100)}`),
+    };
+    button.style.background = '';
+  }
+  await studio.setZoom(zoom, { persist: false, write: false });
+  studio.closeSettings();
+  still.remove();
+  return out;
+}
+
 /**
  * Settings ▸ This book ▸ Files: a card per setting, menus instead of path
  * boxes; the main file's menu, a typed output folder, and a book's own font
@@ -5498,6 +5531,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('settingcontrols')) result.settingcontrols = await settingControlsChecks();
     if (want('defaults')) result.defaults = await explicitDefaultsChecks();
     if (launch.selftestEdits && want('filespage')) result.filespage = await filesPageChecks();
+    if (want('closebutton')) result.closebutton = await closeButtonChecks();
     // It starts Claude Code: only when asked for.
     if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();
