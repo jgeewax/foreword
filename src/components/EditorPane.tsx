@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CommentCard, CommentComposer } from './CommentCard';
 import { studio } from '../app/studio';
@@ -7,8 +7,10 @@ import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
+import { headings, type Heading } from '../editor/outline';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
+import { Breadcrumbs } from './Breadcrumbs';
 import { GitChanges } from './GitChanges';
 import { HistoryChanges } from './HistoryChanges';
 import { HistoryDiff } from './HistoryDiff';
@@ -82,6 +84,8 @@ export function EditorPane() {
   // The tab in front: a file's (the editor), or one that isn't a file, shown in the editor's place.
   const front = viewTab ?? active;
   const viewTabLabel = useViewTabLabel();
+  // The file's headings, for the path bar.
+  const [outline, setOutline] = useState<Heading[]>([]);
 
   useEffect(() => {
     const editor = monaco.editor.create(hostRef.current!, {
@@ -224,6 +228,18 @@ export function EditorPane() {
       tagTimer = window.setTimeout(paintTags, 120);
     });
     paintTags();
+    // The headings, for the path bar (the cursor's own line comes from the store).
+    const readOutline = () => {
+      const model = editor.getModel();
+      setOutline(model ? headings(model.getLinesContent(), model.getLanguageId()) : []);
+    };
+    let outlineTimer: number | undefined;
+    editor.onDidChangeModel(readOutline);
+    editor.onDidChangeModelContent(() => {
+      clearTimeout(outlineTimer);
+      outlineTimer = window.setTimeout(readOutline, 300);
+    });
+    readOutline();
     // ▶ Run above each code example, with its status.
     const runCommand = monaco.editor.registerCommand('studio.runCodeExample', (_accessor, name: string) => void studio.code.run([name]));
     const lensChanged = new monaco.Emitter<monaco.languages.CodeLensProvider>();
@@ -396,6 +412,7 @@ export function EditorPane() {
       off();
       offAi();
       clearTimeout(aiTimer);
+      clearTimeout(outlineTimer);
       showVersion.dispose();
       offReview();
       clearTimeout(commentTimer);
@@ -465,6 +482,7 @@ export function EditorPane() {
           );
         })}
       </div>
+      {active && !viewTab && <Breadcrumbs path={active} outline={outline} />}
       {conflict && active && !viewTab && (
         <div className="banner warn">
           <span>{conflict}</span>

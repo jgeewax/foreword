@@ -5,7 +5,8 @@ import { Menu } from '@tauri-apps/api/menu';
 import { ipc } from './ipc';
 
 export type MenuEntry =
-  | { label: string; action: () => void; enabled?: boolean; accelerator?: string }
+  | { label: string; action: () => void; enabled?: boolean; accelerator?: string; checked?: boolean }
+  | { label: string; items: MenuEntry[]; enabled?: boolean }
   | 'separator'
   | 'cut'
   | 'copy'
@@ -32,16 +33,22 @@ export function tidyEntries(entries: MenuEntry[]): Exclude<MenuEntry, null | fal
 /** Self-test hook: record menus instead of showing them (a native popup is modal). */
 export const menuRecorder: { record?: (entries: ReturnType<typeof tidyEntries>) => void } = {};
 
+// A lone & marks a mnemonic (and disappears): && is a literal one, as in "Commit & Push".
+const menuItems = (entries: MenuEntry[]): MenuItems =>
+  tidyEntries(entries).map((e) =>
+    typeof e === 'string'
+      ? { item: PREDEFINED[e] }
+      : 'items' in e
+        ? { text: e.label.replaceAll('&', '&&'), enabled: e.enabled ?? true, items: menuItems(e.items) }
+        : { text: e.label.replaceAll('&', '&&'), enabled: e.enabled ?? true, accelerator: e.accelerator, action: () => e.action(), ...(e.checked !== undefined && { checked: e.checked }) },
+  );
+type MenuItems = NonNullable<Parameters<typeof Menu.new>[0]>['items'] & object;
+
 /** Show a native menu at the mouse. */
 export async function showContextMenu(entries: MenuEntry[]) {
   const tidy = tidyEntries(entries);
   if (menuRecorder.record) return menuRecorder.record(tidy);
-  const items = tidy.map((e) =>
-    typeof e === 'string'
-      ? { item: PREDEFINED[e] }
-      : // A lone & marks a mnemonic (and disappears): && is a literal one, as in "Commit & Push".
-        { text: e.label.replaceAll('&', '&&'), enabled: e.enabled ?? true, accelerator: e.accelerator, action: () => e.action() },
-  );
+  const items = menuItems(tidy);
   if (!items.length) return;
   const menu = await Menu.new({ items });
   await menu.popup();

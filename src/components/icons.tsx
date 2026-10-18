@@ -168,6 +168,8 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="8" cy="9" r="1.4" />
     </>
   ),
+  // A heading, in the path bar: an outline's lines, each further in.
+  heading: <path d="M4 6.5h16M8 12h12M12 17.5h8" />,
 };
 
 /** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, images. */

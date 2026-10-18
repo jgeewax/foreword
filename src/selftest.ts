@@ -948,7 +948,7 @@ async function aiEditChecks(withAgent: boolean) {
   menuRecorder.record = undefined;
   out.menu = last.map((e) => (typeof e === 'string' ? `[${e}]` : e.label));
   const item = last.find((e) => typeof e !== 'string' && e.label === 'What the Assistant Changed Here');
-  if (item && typeof item !== 'string') item.action();
+  if (item && typeof item !== 'string' && 'action' in item) item.action();
   await waitFor(() => hs().changes?.files, 10000, 'what changed').catch(() => {});
   out.whatChanged = { title: hs().changes?.version.label, words: hs().changes?.files?.map((f) => [f.path, f.diff?.added, f.diff?.removed]) };
   studio.history.closeChanges();
@@ -1532,7 +1532,7 @@ async function menuChecks() {
     await sleep(250);
     return labels();
   };
-  const action = (label: string) => last.find((e): e is Extract<MenuEntry, { label: string }> => typeof e === 'object' && !!e && e.label === label)?.action;
+  const action = (label: string) => last.find((e): e is Extract<MenuEntry, { action: () => void }> => typeof e === 'object' && !!e && e.label === label)?.action;
 
   // The file tree and an editor, whatever earlier groups left showing.
   studio.showSidebar('files');
@@ -3301,6 +3301,85 @@ async function tabChecks() {
   return out;
 }
 
+/**
+ * The path bar under the tabs (VS Code's breadcrumbs): folders, the file, the
+ * headings the cursor is under; each opens a menu of what's beside it. Menus
+ * are recorded, not shown. Types a heading it undoes; never saves.
+ */
+async function breadcrumbChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { tabs: [...studio.state.tabs], active: studio.state.active };
+  // A chapter in a folder, with sections.
+  let file = '';
+  for (const f of (studio.state.workspace?.files ?? []).filter((f) => /^[^.].*\/.*\.typ$/.test(f))) {
+    if (/^==\s/m.test((await ipc.fsRead(f)).text)) {
+      file = f;
+      break;
+    }
+  }
+  if (!file) return { skipped: 'no chapter with sections' };
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const lines = model.getLinesContent();
+  const crumbs = () => [...document.querySelectorAll('.breadcrumbs .crumb')].map((c) => c.textContent);
+  const at = async (line: number) => {
+    editor.setPosition({ lineNumber: line, column: 1 });
+    await sleep(150);
+    return crumbs();
+  };
+  const second = lines.findIndex((l) => /^==\s/.test(l)) + 1;
+  out.file = file;
+  out.top = await at(1);
+  out.underSection = await at(Math.min(second + 1, lines.length));
+  out.shot = await snap('breadcrumbs');
+  out.height = document.querySelector('.breadcrumbs')?.getBoundingClientRect().height;
+  // Each segment's menu.
+  let last: Exclude<MenuEntry, null | false | undefined>[] = [];
+  menuRecorder.record = (entries) => (last = entries);
+  const show = (es: typeof last): unknown[] =>
+    es.map((e) => (typeof e === 'string' ? `[${e}]` : 'items' in e ? { [e.label]: show(e.items as typeof last) } : `${e.label}${e.checked ? ' ✓' : ''}`));
+  const click = async (i: number) => {
+    last = [];
+    document.querySelectorAll<HTMLButtonElement>('.breadcrumbs .crumb')[i]?.click();
+    await sleep(100);
+    return show(last);
+  };
+  out.folderMenu = await click(0);
+  out.fileMenu = await click(1);
+  out.headingMenu = await click(document.querySelectorAll('.breadcrumbs .crumb').length - 1);
+  // Choosing a heading puts the cursor on it.
+  const pick = last.findLast((e): e is Extract<MenuEntry, { action: () => void }> => typeof e === 'object' && !!e && 'action' in e);
+  pick?.action();
+  await sleep(300);
+  out.picked = { label: pick?.label, file: studio.state.active, cursorLine: editor.getPosition()?.lineNumber, crumbs: crumbs() };
+  menuRecorder.record = undefined;
+  if (studio.state.active !== file) return out;
+  // Typing a heading above the cursor: the bar follows (after a moment).
+  editor.setPosition({ lineNumber: lines.length, column: 1 });
+  editor.executeEdits('selftest', [{ range: new monaco.Range(lines.length, 1, lines.length, 1), text: '== Added by the self-test\n' }]);
+  await sleep(500);
+  out.typedHeading = crumbs();
+  while (model.canUndo()) await model.undo();
+  await sleep(400);
+  out.undone = { crumbs: crumbs(), dirty: !!studio.state.dirty[file] };
+  // A file in the book's folder; none behind a tab that isn't a file.
+  const entry = studio.state.workspace?.entry;
+  if (entry) {
+    await studio.openFile(entry);
+    await sleep(150);
+    out.entry = crumbs().slice(0, 1);
+  }
+  studio.openGuide();
+  await sleep(200);
+  out.behindGuide = document.querySelectorAll('.breadcrumbs').length;
+  studio.closeGuide();
+  await studio.closeAllTabs();
+  for (const t of saved.tabs) await studio.openFile(t);
+  if (saved.active) studio.activate(saved.active);
+  return out;
+}
+
 /** The window as it is: for checking layout by eye (optionally a sidebar tab, e.g. SELFTEST_ONLY=shot). */
 async function shotChecks() {
   await waitFor(() => studio.editor, 15000, 'editor').catch(() => {});
@@ -3854,6 +3933,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
+    if (want('breadcrumbs')) result.breadcrumbs = await breadcrumbChecks();
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
     if (want('chrome')) result.chrome = await chromeChecks();
