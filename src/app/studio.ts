@@ -11,7 +11,7 @@ import { monaco } from '../editor/monaco';
 import { jumpCandidates } from '../editor/preview-sync';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
-import { Channel, errorMessage, ipc, isCmdError, type Bounds, type LaunchOptions, type ToolsStatus, type Version, type WorkspaceInfo } from '../lib/ipc';
+import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
 import {
@@ -51,7 +51,7 @@ import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsF
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
-import { AcpAdapter, isSignedOut } from '../services/agent/acp';
+import { AcpAdapter, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
@@ -195,6 +195,8 @@ export type StudioState = {
     error?: string;
     /** It didn't start because it isn't signed in (Settings ▸ Assistant signs in). */
     signedOut?: boolean;
+    /** Starting with its own sign-in (Antigravity's, with Google): waiting for the author, in the browser. */
+    signingIn?: boolean;
     connection: 'open' | 'lost' | 'unknown';
     models: ModelInfo[];
     model: ModelRef | null;
@@ -269,6 +271,8 @@ export type StudioState = {
   quickOpen: false | 'files' | 'commands';
   /** The settings file: where it is, and why it can't be used (if so). */
   configFile: { path: string; error: string | null } | null;
+  /** An assistant's connector downloading (Antigravity's, from Google), or why it didn't. */
+  assistantDownload: ({ kind: AssistantId; error?: string } & Partial<DownloadProgress>) | null;
   /** Bumped when the assistant's marks change (the editor repaints them). */
   aiMarks: number;
   /** Print with Mixam: the print files and the checks on them. */
@@ -346,6 +350,7 @@ const initialState: StudioState = {
   aiMarks: 0,
   names: NO_NAMES,
   configFile: null,
+  assistantDownload: null,
   quickOpen: false,
   sidebar: 'files',
 };
@@ -2613,29 +2618,58 @@ export class Studio {
     await this.startAgent();
   }
 
-  async startAgent() {
+  /** Start the assistant; `signIn`: with its own sign-in first (an ACP agent's authentication method). */
+  async startAgent({ signIn }: { signIn?: string } = {}) {
     const ws = this.state.workspace;
     if (!ws) return;
-    // OpenCode, or Claude Code, Gemini CLI or Codex over ACP (Settings ▸ Assistant).
+    // OpenCode, or Claude Code, Gemini CLI, Codex or Antigravity over ACP (Settings ▸ Assistant).
     const which = this.state.settings.assistant;
-    const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root) : new AcpAdapter(ws.root, which);
+    const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root) : new AcpAdapter(ws.root, which, undefined, signIn);
     // Another program: its own models (the list fills in once it's started).
     const switched = this.agentKind !== which;
     this.agentKind = which;
     this.agent = agent;
-    this.setAgent({ status: 'starting', error: undefined, signedOut: false, background: {}, ...(switched ? { models: [], model: null } : {}) });
+    this.setAgent({ status: 'starting', error: undefined, signedOut: false, signingIn: !!signIn, background: {}, ...(switched ? { models: [], model: null } : {}) });
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = agent.subscribe((e) => this.onAgentEvent(e));
     window.clearInterval(this.backgroundPoll);
     this.backgroundPoll = window.setInterval(() => void this.pollBackground(), 4000);
     try {
       await agent.start();
-      this.setAgent({ status: 'ready' });
+      // Started again meanwhile (a sign-in given up, another assistant chosen): that start says how it went.
+      if (this.agent !== agent) return;
+      this.setAgent({ status: 'ready', signingIn: false });
       await this.loadModels();
       void this.loadTasks();
     } catch (e) {
-      this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e) });
+      if (this.agent !== agent) return;
+      this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e), signingIn: false });
     }
+  }
+
+  /**
+   * Settings ▸ Assistant: download an assistant's connector (Antigravity's, from
+   * Google), once; then, if it's the assistant, start it. Kept here, not in
+   * Settings, so closing Settings doesn't lose it.
+   */
+  async downloadAssistant(kind: AssistantId) {
+    if (this.state.assistantDownload && !this.state.assistantDownload.error) return;
+    this.store.set({ assistantDownload: { kind, received: 0, total: null } });
+    const progress = new Channel<DownloadProgress>();
+    progress.onmessage = (p) => this.store.set({ assistantDownload: { kind, ...p } });
+    try {
+      await ipc.assistantDownload(kind, progress);
+      this.store.set({ assistantDownload: null });
+      if (this.state.settings.assistant === kind && this.state.workspace) await this.restartAgent();
+    } catch (e) {
+      this.store.set({ assistantDownload: { kind, error: errorMessage(e) } });
+    }
+  }
+
+  /** Settings ▸ Assistant: start Antigravity with its sign-in, a Google account, in the browser. */
+  async signInWithGoogle() {
+    await this.agent?.stop().catch(() => {});
+    await this.startAgent({ signIn: GOOGLE_SIGN_IN });
   }
 
   /**

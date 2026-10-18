@@ -50,7 +50,7 @@ pub struct WindowState {
     /// Writer queue to Tinymist's stdin; separate so `typst_send` can stay synchronous.
     typst_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>,
     agent: tokio::sync::Mutex<Option<agent::AgentServer>>,
-    /// An assistant spoken to over ACP (Claude Code, Gemini CLI, Codex).
+    /// An assistant spoken to over ACP (Claude Code, Gemini CLI, Codex, Antigravity).
     acp: tokio::sync::Mutex<Option<acp::AcpProcess>>,
     /// Serializes history (Git) operations on the snapshot repo.
     history: tokio::sync::Mutex<()>,
@@ -514,6 +514,7 @@ pub fn run() {
         .manage(AppState::default())
         .setup(|app| {
             children::init(app.path().app_data_dir()?);
+            acp::init(app.path().app_data_dir()?);
 
             // SIGTERM/SIGINT/SIGHUP (kill, Ctrl+C on `tauri dev`, logout) go through
             // the normal exit path so helper processes are stopped too.
@@ -604,6 +605,7 @@ pub fn run() {
             acp::acp_stop,
             acp::assistants_status,
             acp::assistant_sign_in,
+            acp::assistant_download,
             history::history_init,
             git::git_status,
             git::git_file,

@@ -72,6 +72,7 @@
     "allow-acp-stop",
     "allow-assistants-status",
     "allow-assistant-sign-in",
+    "allow-assistant-download",
     "allow-history-init",
     "allow-git-status",
     "allow-git-file",

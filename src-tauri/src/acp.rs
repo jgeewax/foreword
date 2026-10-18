@@ -1,9 +1,17 @@
 //! Assistants spoken to over the Agent Client Protocol (ACP): newline-delimited
-//! JSON-RPC on an agent program's stdin and stdout. Claude Code, Gemini CLI and
-//! Codex run this way, each through its ACP program. The frontend speaks the
-//! protocol (src/services/agent/acp.ts); this runs the program in the book's
-//! folder and carries its lines.
-use std::{os::unix::fs::PermissionsExt, path::PathBuf, process::Stdio};
+//! JSON-RPC on an agent program's stdin and stdout. Claude Code, Gemini CLI,
+//! Codex and Antigravity run this way, each through its ACP program. The
+//! frontend speaks the protocol (src/services/agent/acp.ts); this runs the
+//! program in the book's folder and carries its lines.
+use std::{
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::{LazyLock, OnceLock},
+    time::{Duration, Instant},
+};
+
+use futures_util::StreamExt;
 
 use serde::Serialize;
 use tauri::{
@@ -25,6 +33,54 @@ use crate::{
 pub const CLAUDE_ACP: &str = "@agentclientprotocol/claude-agent-acp@0.93.0";
 pub const GEMINI_CLI: &str = "@google/gemini-cli@0.64.0";
 pub const CODEX_ACP: &str = "@agentclientprotocol/codex-acp@2.2.2";
+/// Google's Antigravity connector (the ACP registry's antigravity-acp). It isn't
+/// on npm: Typst Studio downloads Google's build of it, once, when asked.
+pub const ANTIGRAVITY_ACP: &str = "1.4.1";
+/// Google LLC's Apple Developer ID team, which the downloaded programs must be signed by.
+const GOOGLE_TEAM: &str = "EQHXZ8M8AV";
+
+/// Antigravity's download for this Mac, and its size in bytes (as dl.google.com says).
+fn antigravity_download() -> (String, u64) {
+    let (arch, bytes) = match std::env::consts::ARCH {
+        "x86_64" => ("x86_64", 118_349_036),
+        _ => ("arm64", 112_737_434),
+    };
+    (
+        format!(
+            "https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-{ANTIGRAVITY_ACP}-darwin-{arch}.zip"
+        ),
+        bytes,
+    )
+}
+
+static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Where downloaded connectors go: the app's data folder (set at startup).
+pub fn init(data_dir: PathBuf) {
+    let _ = DATA_DIR.set(data_dir);
+}
+
+/// The folder of downloaded connectors (TYPST_STUDIO_ASSISTANTS_DIR, for self-tests).
+fn assistants_dir() -> Option<PathBuf> {
+    std::env::var_os("TYPST_STUDIO_ASSISTANTS_DIR")
+        .map(PathBuf::from)
+        .or_else(|| DATA_DIR.get().map(|d| d.join("assistants")))
+}
+
+fn antigravity_dir() -> Option<PathBuf> {
+    Some(assistants_dir()?.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}")))
+}
+
+/// Antigravity's connector: TYPST_STUDIO_ANTIGRAVITY_ACP, or the copy downloaded.
+fn antigravity_program() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("TYPST_STUDIO_ANTIGRAVITY_ACP").map(PathBuf::from)
+        && discover::is_executable(&p)
+    {
+        return Some(p);
+    }
+    let p = antigravity_dir()?.join("agy_acp_server.par");
+    discover::is_executable(&p).then_some(p)
+}
 
 pub struct AcpProcess {
     child: Child,
@@ -68,6 +124,7 @@ fn own_program(kind: &str) -> Option<PathBuf> {
         "claude" => discover::find("claude-agent-acp", "TYPST_STUDIO_CLAUDE_ACP"),
         "gemini" => discover::find("gemini", "TYPST_STUDIO_GEMINI"),
         "codex" => discover::find("codex-acp", "TYPST_STUDIO_CODEX_ACP"),
+        "antigravity" => antigravity_program(),
         _ => None,
     }
 }
@@ -77,8 +134,19 @@ fn npx() -> Option<PathBuf> {
 }
 
 /// How each assistant is started: its own command if it's installed, otherwise
-/// its npm package through npx (downloaded the first time).
+/// its npm package through npx (downloaded the first time). Antigravity's is
+/// downloaded from Google beforehand, in Settings ▸ Assistant.
 pub fn launch(kind: &str) -> CmdResult<(PathBuf, Vec<String>)> {
+    if kind == "antigravity" {
+        return antigravity_program()
+            .map(|p| (p, vec![]))
+            .ok_or_else(|| {
+                CmdError::Unavailable(
+                    "its connector isn't downloaded yet. Download it from Google in Settings ▸ Assistant."
+                        .into(),
+                )
+            });
+    }
     let package =
         package(kind).ok_or_else(|| CmdError::Invalid(format!("unknown assistant {kind}")))?;
     // Gemini CLI is its own ACP program, with --acp.
@@ -106,6 +174,7 @@ fn name_of(kind: &str) -> Option<&'static str> {
         "claude" => Some("Claude Code"),
         "gemini" => Some("Gemini CLI"),
         "codex" => Some("Codex"),
+        "antigravity" => Some("Antigravity"),
         _ => None,
     }
 }
@@ -215,6 +284,8 @@ pub async fn assistant_sign_in(kind: String) -> CmdResult<()> {
     let sign_in = sign_in(&kind).ok_or_else(|| {
         CmdError::Unavailable(match kind.as_str() {
             "opencode" => "OpenCode isn't installed. In Terminal: brew install opencode".into(),
+            // It signs in over ACP (authenticate): the chat starts it with Google's sign-in.
+            "antigravity" => "Antigravity signs in with Google from Settings ▸ Assistant.".into(),
             _ => format!(
                 "{name} needs Node.js, which isn't installed. In Terminal: brew install node"
             ),
@@ -251,6 +322,16 @@ pub struct Setup {
     signed_in: Option<bool>,
     /// The account, in words: "Claude Max", "ChatGPT", "an API key".
     account: Option<String>,
+    /// What Settings downloads to run it (Antigravity's connector, from Google).
+    download: Option<Download>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Download {
+    url: String,
+    bytes: u64,
+    version: String,
 }
 
 #[derive(Serialize)]
@@ -260,6 +341,7 @@ pub struct Setups {
     claude: Setup,
     gemini: Setup,
     codex: Setup,
+    antigravity: Setup,
 }
 
 /// `claude auth status --json`: `{"loggedIn": true, "subscriptionType": "max", …}`.
@@ -299,6 +381,35 @@ fn codex_account(auth: &str) -> (bool, Option<String>) {
     (true, how)
 }
 
+/// Antigravity's connector saves the sign-in method chosen as `auth.type` in its
+/// settings.json (the login itself is in the keychain), and removes it on
+/// logout. No file, or no method: not signed in. A file it can't read: unknown.
+fn antigravity_account(settings: Option<&str>) -> Option<(bool, Option<String>)> {
+    let Some(text) = settings else {
+        return Some((false, None));
+    };
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let how = v
+        .pointer("/auth/type")
+        .or_else(|| v.get("auth.type"))
+        .and_then(|t| t.as_str())
+        .filter(|t| !t.is_empty());
+    Some(match how {
+        None => (false, None),
+        Some(t) => (
+            true,
+            Some(match t {
+                "oauth-personal" => "a Google account".into(),
+                "oauth-business" => "Gemini Enterprise".into(),
+                "gemini-api-key" => "a Gemini API key".into(),
+                "agent-platform" | "vertex-ai" => "Google Cloud".into(),
+                "gateway" => "an AI gateway".into(),
+                other => other.to_string(),
+            }),
+        ),
+    })
+}
+
 /// Whether an assistant is signed in, where its own command or files say so
 /// without starting it. Unknown (None) otherwise: a start tells.
 fn account(kind: &str) -> Option<(bool, Option<String>)> {
@@ -333,6 +444,16 @@ fn account(kind: &str) -> Option<(bool, Option<String>)> {
             });
             key.then(|| (true, Some("an API key".into())))
         }
+        "antigravity" => {
+            let dir = std::env::var_os("GEMINI_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".gemini"));
+            antigravity_account(
+                std::fs::read_to_string(dir.join("antigravity-acp").join("settings.json"))
+                    .ok()
+                    .as_deref(),
+            )
+        }
         _ => None,
     }
 }
@@ -352,6 +473,14 @@ fn setup(kind: &str, node: bool) -> Setup {
         sign_in: sign_in(kind).map(|s| s.shown),
         signed_in,
         account,
+        download: (kind == "antigravity").then(|| {
+            let (url, bytes) = antigravity_download();
+            Download {
+                url,
+                bytes,
+                version: ANTIGRAVITY_ACP.into(),
+            }
+        }),
     }
 }
 
@@ -366,9 +495,144 @@ pub async fn assistants_status() -> CmdResult<Setups> {
             claude: setup("claude", node),
             gemini: setup("gemini", node),
             codex: setup("codex", node),
+            antigravity: setup("antigravity", node),
         }
     })
     .await?)
+}
+
+/// One download at a time, whichever window asks.
+static DOWNLOADING: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+/// Settings ▸ Assistant: download Antigravity's connector from Google, once.
+/// Progress goes to `on_progress` as `{"received", "total"}` (bytes), then
+/// `"unpacking": true`. Both programs in it must be signed by Google, or
+/// nothing is kept. Returns the connector's path.
+#[tauri::command]
+pub async fn assistant_download(
+    kind: String,
+    on_progress: Channel<serde_json::Value>,
+) -> CmdResult<String> {
+    if kind != "antigravity" {
+        return Err(CmdError::Invalid(format!("{kind} isn't downloaded")));
+    }
+    let _one = DOWNLOADING.lock().await;
+    if let Some(p) = antigravity_program() {
+        return Ok(p.to_string_lossy().into_owned());
+    }
+    let dir = antigravity_dir()
+        .ok_or_else(|| CmdError::Unavailable("there's no folder to download it to".into()))?;
+    let parent = dir
+        .parent()
+        .expect("in the assistants folder")
+        .to_path_buf();
+    tokio::fs::create_dir_all(&parent).await?;
+    let zip = parent.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}.zip.part"));
+    let unpacked = parent.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}.part"));
+    let fetched = fetch_and_unpack(&antigravity_download().0, &zip, &unpacked, &on_progress).await;
+    let _ = tokio::fs::remove_file(&zip).await;
+    if let Err(e) = fetched {
+        let _ = tokio::fs::remove_dir_all(&unpacked).await;
+        return Err(e);
+    }
+    let _ = tokio::fs::remove_dir_all(&dir).await;
+    tokio::fs::rename(&unpacked, &dir).await?;
+    // Other versions' copies won't run again.
+    if let Ok(mut entries) = tokio::fs::read_dir(&parent).await {
+        while let Ok(Some(e)) = entries.next_entry().await {
+            if e.file_name()
+                .to_string_lossy()
+                .starts_with("antigravity-acp-")
+                && e.path() != dir
+            {
+                let _ = tokio::fs::remove_dir_all(e.path()).await;
+            }
+        }
+    }
+    antigravity_program()
+        .map(|p| p.to_string_lossy().into_owned())
+        .ok_or_else(|| {
+            CmdError::Io("the download didn't have Antigravity's connector in it".into())
+        })
+}
+
+async fn fetch_and_unpack(
+    url: &str,
+    zip: &Path,
+    unpacked: &Path,
+    on_progress: &Channel<serde_json::Value>,
+) -> CmdResult<()> {
+    let res = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(30))
+        .build()?
+        .get(url)
+        .send()
+        .await?;
+    if !res.status().is_success() {
+        return Err(CmdError::Unavailable(format!(
+            "{url}: HTTP {}",
+            res.status()
+        )));
+    }
+    let total = res.content_length();
+    let mut file = tokio::fs::File::create(zip).await?;
+    let mut received = 0u64;
+    let mut said = Instant::now();
+    let mut body = res.bytes_stream();
+    while let Some(chunk) = body.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk).await?;
+        received += chunk.len() as u64;
+        if said.elapsed() >= Duration::from_millis(150) {
+            said = Instant::now();
+            let _ = on_progress.send(serde_json::json!({ "received": received, "total": total }));
+        }
+    }
+    file.flush().await?;
+    drop(file);
+    let _ = on_progress
+        .send(serde_json::json!({ "received": received, "total": total, "unpacking": true }));
+    let _ = tokio::fs::remove_dir_all(unpacked).await;
+    let unzipped = Command::new("/usr/bin/ditto")
+        .args(["-x", "-k"])
+        .arg(zip)
+        .arg(unpacked)
+        .status()
+        .await?;
+    if !unzipped.success() {
+        return Err(CmdError::Io("couldn't unpack the download".into()));
+    }
+    for name in ["agy_acp_server.par", "localharness_external"] {
+        if !signed_by_google(&unpacked.join(name)).await {
+            return Err(CmdError::Invalid(format!(
+                "{name} in the download isn't signed by Google, so it wasn't kept"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Whether macOS finds a program intact and signed with Google's Developer ID.
+async fn signed_by_google(path: &Path) -> bool {
+    let intact = Command::new("/usr/bin/codesign")
+        .args(["--verify", "--strict"])
+        .arg(path)
+        .status()
+        .await
+        .is_ok_and(|s| s.success());
+    let team = format!("TeamIdentifier={GOOGLE_TEAM}");
+    let google = Command::new("/usr/bin/codesign")
+        .arg("-dv")
+        .arg(path)
+        .output()
+        .await
+        .is_ok_and(|o| {
+            String::from_utf8_lossy(&o.stderr)
+                .lines()
+                .any(|l| l.trim() == team)
+        });
+    intact && google
 }
 
 /// Start an assistant in the book's folder. Its stdout lines (JSON-RPC
@@ -502,6 +766,25 @@ mod tests {
             (true, Some("an API key".into()))
         );
         assert_eq!(codex_account("{}"), (true, None));
+        // Antigravity: the method its connector saved, or none.
+        assert_eq!(antigravity_account(None), Some((false, None)));
+        assert_eq!(
+            antigravity_account(Some(r#"{"auth": {"type": "oauth-personal"}, "gcp": {}}"#)),
+            Some((true, Some("a Google account".into())))
+        );
+        assert_eq!(
+            antigravity_account(Some(r#"{"auth": {"type": "gemini-api-key"}}"#)),
+            Some((true, Some("a Gemini API key".into())))
+        );
+        assert_eq!(
+            antigravity_account(Some(r#"{"gcp": {"project": "p"}}"#)),
+            Some((false, None))
+        );
+        // Hjson with comments: unknown, a start tells.
+        assert_eq!(
+            antigravity_account(Some("// mine\n{auth: {type: oauth-personal}}")),
+            None
+        );
     }
 
     #[test]
@@ -535,6 +818,16 @@ mod tests {
     fn assistants_run_their_own_program_or_npx() {
         assert!(launch("nobody").is_err());
         assert!(sign_in("nobody").is_none());
+        // Antigravity signs in over ACP, not in Terminal; its download is Google's, for this Mac.
+        assert!(sign_in("antigravity").is_none());
+        let (url, bytes) = antigravity_download();
+        assert!(
+            url.starts_with(
+                "https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-1.4.1-darwin-"
+            ),
+            "{url}"
+        );
+        assert!(bytes > 100_000_000);
         // The shown command never carries a path: it's what the author would type.
         for kind in ["claude", "gemini", "codex"] {
             if let Some(s) = sign_in(kind) {

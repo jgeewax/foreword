@@ -1,5 +1,5 @@
 // Assistants spoken to over the Agent Client Protocol (ACP): Claude Code,
-// Gemini CLI and Codex, each through its ACP program, which the Rust side runs
+// Gemini CLI, Codex and Antigravity, each through its ACP program, which the Rust side runs
 // in the book's folder (acp.rs). JSON-RPC lines both ways. What OpenCode keeps
 // on its server, the app keeps here: each conversation's transcript, its
 // instructions (sent with the next message when they change), its permission
@@ -12,9 +12,9 @@ import { formatAuthorEdits } from './author-edits';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
 import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
 
-export type AcpKind = 'claude' | 'gemini' | 'codex';
+export type AcpKind = 'claude' | 'gemini' | 'codex' | 'antigravity';
 
-export const ACP_NAMES: Record<AcpKind, string> = { claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex' };
+export const ACP_NAMES: Record<AcpKind, string> = { claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex', antigravity: 'Antigravity' };
 
 /**
  * How to sign in, once, in Terminal (each program keeps its login). Settings ▸
@@ -26,7 +26,12 @@ export const SIGN_IN: Record<AcpKind, string> = {
   claude: 'run claude auth login (or npx @anthropic-ai/claude-code auth login)',
   gemini: 'run gemini (or npx @google/gemini-cli) and choose Use Gemini API Key, with a paid key',
   codex: 'run codex login (or npx @openai/codex login)',
+  // Its connector signs in itself (ACP's authenticate): Settings starts it with Google's sign-in.
+  antigravity: 'choose Sign in with Google',
 };
+
+/** Antigravity's sign-in with a Google account (its connector opens Google's page in the browser). */
+export const GOOGLE_SIGN_IN = 'oauth-personal';
 
 /** ACP's "sign in first" error (`auth_required`). */
 const AUTH_REQUIRED = -32000;
@@ -105,6 +110,8 @@ export class AcpAdapter implements AgentAdapter {
     private readonly root: string,
     readonly kind: AcpKind,
     private readonly transport: AcpTransport = tauriTransport,
+    /** Sign in first, with this of the agent's ways (its `authMethods`): it may wait for the author, in the browser. */
+    private readonly signIn?: string,
   ) {}
 
   // ---- the connection ------------------------------------------------------------------
@@ -120,10 +127,15 @@ export class AcpAdapter implements AgentAdapter {
     this.caps = init ?? {};
     // A failure here is the start's failure: signed out, it says how to sign in; otherwise in the agent's own words.
     try {
+      if (this.signIn) await this.request('authenticate', { methodId: this.signIn });
       this.warm = Promise.resolve(await this.newSession());
     } catch (e) {
       if (isSignedOut(e)) {
-        const signedOut = new AcpError(`${ACP_NAMES[this.kind]} isn’t signed in (“${(e as Error).message}”). Sign in from Settings ▸ Assistant, or in Terminal ${SIGN_IN[this.kind]}; then start it again.`);
+        const signedOut = new AcpError(
+          this.kind === 'antigravity'
+            ? 'Antigravity isn’t signed in. Choose Sign in with Google in Settings ▸ Assistant.'
+            : `${ACP_NAMES[this.kind]} isn’t signed in (“${(e as Error).message}”). Sign in from Settings ▸ Assistant, or in Terminal ${SIGN_IN[this.kind]}; then start it again.`,
+        );
         signedOut.code = AUTH_REQUIRED;
         throw signedOut;
       }

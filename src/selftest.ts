@@ -4288,6 +4288,60 @@ async function settingControlsChecks() {
   return out;
 }
 
+/**
+ * Antigravity in Settings ▸ Assistant: its card, Download from Google with
+ * progress, then a start that's signed out with Sign in with Google (not
+ * clicked: that opens the browser). Downloads 113 MB: only when asked for,
+ * with TYPST_STUDIO_ASSISTANTS_DIR set to a scratch folder so the app's own
+ * stays as it was.
+ */
+async function antigravityChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.settings.assistant;
+  const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
+  const card = () => document.querySelector('.assistant-card[data-assistant="antigravity"]');
+  const panel = () => ({ headline: text(document.querySelector('.assistant-now-title')), fix: text(document.querySelector('.assistant-fix')), rows: text(document.querySelector('.assistant-rows')) });
+  studio.openSettings('assistant');
+  await sleep(1500);
+  out.cardBefore = text(card());
+  out.setup = (await ipc.assistantsStatus()).antigravity;
+
+  // Chosen: its connector isn't here yet, so the panel offers the download.
+  studio.switchAssistant('antigravity');
+  await waitFor(() => studio.state.agent.status === 'error', 30000, 'antigravity start').catch(() => {});
+  await sleep(800);
+  out.notDownloaded = { error: studio.state.agent.error, ...panel(), chat: text(document.querySelector('.agent-status')), snapshot: await snap('antigravity-download') };
+
+  [...document.querySelectorAll<HTMLButtonElement>('.assistant-fix button')].find((b) => b.textContent?.includes('Download from Google'))?.click();
+  await waitFor(() => (studio.state.assistantDownload?.received ?? 0) > 20e6, 120000, 'download progress').catch(() => {});
+  out.downloading = { state: studio.state.assistantDownload, bar: document.querySelector('.download-progress')?.getAttribute('aria-valuenow'), text: text(document.querySelector('.download-text')), snapshot: await snap('antigravity-downloading') };
+  const t0 = Date.now();
+  await waitFor(() => !studio.state.assistantDownload || studio.state.assistantDownload.error, 600000, 'download').catch(() => {});
+  out.downloaded = { seconds: Math.round((Date.now() - t0) / 1000), error: studio.state.assistantDownload?.error ?? null, program: (await ipc.assistantsStatus()).antigravity.program };
+
+  // Then it starts, and isn't signed in (no browser opened here).
+  await waitFor(() => studio.state.agent.status === 'error' || studio.state.agent.status === 'ready', 90000, 'antigravity start').catch(() => {});
+  await sleep(1500);
+  out.started = {
+    status: studio.state.agent.status,
+    signedOut: studio.state.agent.signedOut,
+    error: studio.state.agent.error,
+    card: text(card()),
+    ...panel(),
+    chat: text(document.querySelector('.agent-status')),
+    signInButton: [...document.querySelectorAll('.assistant-fix button')].some((b) => b.textContent === 'Sign in with Google'),
+    snapshot: await snap('antigravity-signed-out'),
+  };
+
+  studio.switchAssistant(saved);
+  await sleep(500);
+  studio.closeSettings();
+  still.remove();
+  out.restored = studio.state.settings.assistant;
+  return out;
+}
+
 /** Settings' ✕: its icon in the middle of the box its hover shades, at several sizes of everything. */
 async function closeButtonChecks() {
   const out: Record<string, unknown> = {};
@@ -5532,6 +5586,8 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('defaults')) result.defaults = await explicitDefaultsChecks();
     if (launch.selftestEdits && want('filespage')) result.filespage = await filesPageChecks();
     if (want('closebutton')) result.closebutton = await closeButtonChecks();
+    // Downloads Antigravity's connector (113 MB): only when asked for, into TYPST_STUDIO_ASSISTANTS_DIR.
+    if (only?.includes('antigravity')) result.antigravity = await antigravityChecks();
     // It starts Claude Code: only when asked for.
     if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();

@@ -979,7 +979,7 @@ export function AgentPane() {
         </header>
         {(agent.status !== 'ready' || agent.connection === 'lost') && (
           <div className="agent-status">
-            {agent.status === 'starting' && `Starting the assistant (${assistantName})…`}
+            {agent.status === 'starting' && (agent.signingIn ? `Sign in with Google, in your browser, to start ${assistantName}…` : `Starting the assistant (${assistantName})…`)}
             {agent.status === 'off' && 'The assistant is off.'}
             {agent.status === 'error' && (
               // Signed out, Settings says how to sign in (Sign in…).

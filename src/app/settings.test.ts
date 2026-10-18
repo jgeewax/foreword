@@ -108,6 +108,9 @@ describe('assistantsFor', () => {
     expect(assistantsFor(' Codex ')).toEqual(['codex']);
     expect(assistantsFor('openai')).toEqual(['codex']);
     expect(assistantsFor('Anthropic')).toEqual(['claude']);
+    expect(assistantsFor('anti')).toEqual(['antigravity']);
+    expect(assistantsFor('Google')).toEqual(['antigravity']);
+    expect(assistantsFor('agy')).toEqual(['antigravity']);
   });
 
   it('lists every one a short word fits, and none for nothing', () => {

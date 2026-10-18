@@ -50,8 +50,12 @@ export type AssistantSetup = {
   signedIn: boolean | null;
   /** The account in words: "Claude Max", "ChatGPT", "an API key". */
   account: string | null;
+  /** What Settings downloads to run it: Antigravity's connector, from Google. */
+  download: { url: string; bytes: number; version: string } | null;
 };
-export type AssistantsSetup = { node: boolean; opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup };
+export type AssistantsSetup = { node: boolean; opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup; antigravity: AssistantSetup };
+/** A download's progress, in bytes; `unpacking` once it's all here. */
+export type DownloadProgress = { received: number; total: number | null; unpacking?: boolean };
 export type LaunchOptions = {
   workspace: string | null;
   sampleBook: string | null;
@@ -171,7 +175,7 @@ export const ipc = {
     invoke<AgentResponse>('agent_request', { method, path, body: body ?? null }),
   agentSubscribe: (onEvent: Channel<any>) => invoke<void>('agent_subscribe', { onEvent }),
   agentStop: () => invoke<void>('agent_stop'),
-  /** An assistant over ACP (Claude Code, Gemini CLI, Codex): its JSON-RPC lines arrive on `onMessage`. */
+  /** An assistant over ACP (Claude Code, Gemini CLI, Codex, Antigravity): its JSON-RPC lines arrive on `onMessage`. */
   acpStart: (kind: string, onMessage: Channel<any>) => invoke<{ program: string; args: string[] }>('acp_start', { kind, onMessage }),
   acpSend: (line: string) => invoke<void>('acp_send', { line }),
   acpStop: () => invoke<void>('acp_stop'),
@@ -179,6 +183,8 @@ export const ipc = {
   assistantsStatus: () => invoke<AssistantsSetup>('assistants_status'),
   /** Open Terminal on the assistant's sign-in command. */
   assistantSignIn: (kind: string) => invoke<void>('assistant_sign_in', { kind }),
+  /** Download an assistant's connector (Antigravity's, from Google): progress on `onProgress`; the program's path. */
+  assistantDownload: (kind: string, onProgress: Channel<DownloadProgress>) => invoke<string>('assistant_download', { kind, onProgress }),
 
   historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
   historyReveal: () => invoke<void>('history_reveal'),

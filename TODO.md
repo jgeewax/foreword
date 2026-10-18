@@ -220,7 +220,7 @@
 
 - [x] make settings -> files screen much prettier. its really ugly
 
-- [ ] add support for antigravity CLI? (or is that gemini?)
+- [x] add support for antigravity CLI? (or is that gemini?)
 
 - [ ] make a really pretty README.md for the github repo
 

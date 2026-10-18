@@ -76,7 +76,7 @@ pub fn search_path() -> OsString {
     env::join_paths(dirs).unwrap_or(inherited)
 }
 
-fn is_executable(p: &Path) -> bool {
+pub fn is_executable(p: &Path) -> bool {
     p.metadata()
         .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
         .unwrap_or(false)

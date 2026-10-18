@@ -8,10 +8,11 @@ export type SendKey = 'enter' | 'mod-enter';
 export type HistoryPlacement = 'tab' | 'below';
 
 /** Which program runs the writing assistant: OpenCode, or an agent spoken to over ACP. */
-export type AssistantId = 'opencode' | 'claude' | 'gemini' | 'codex';
-export const ASSISTANTS: AssistantId[] = ['opencode', 'claude', 'gemini', 'codex'];
-export const ASSISTANT_NAMES: Record<AssistantId, string> = { opencode: 'OpenCode', claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex' };
-const ASSISTANT_MAKERS: Record<string, AssistantId> = { anthropic: 'claude', google: 'gemini', openai: 'codex', chatgpt: 'codex' };
+export type AssistantId = 'opencode' | 'claude' | 'gemini' | 'codex' | 'antigravity';
+export const ASSISTANTS: AssistantId[] = ['opencode', 'claude', 'gemini', 'codex', 'antigravity'];
+export const ASSISTANT_NAMES: Record<AssistantId, string> = { opencode: 'OpenCode', claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex', antigravity: 'Antigravity' };
+// Google's is Antigravity now: Gemini CLI, which it replaced, no longer takes personal Google logins.
+const ASSISTANT_MAKERS: Record<string, AssistantId> = { anthropic: 'claude', google: 'antigravity', agy: 'antigravity', openai: 'codex', chatgpt: 'codex' };
 
 /** The assistants a word could name, for /assistant: the start of an id or name ("claude", "gem", "open"), or the maker. */
 export function assistantsFor(word: string): AssistantId[] {

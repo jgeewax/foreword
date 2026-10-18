@@ -877,6 +877,13 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .mark-claude { background: linear-gradient(160deg, #e3906f, #c6613f); }
 .mark-gemini { background: linear-gradient(135deg, #4b8ef7 5%, #9a6fd0 60%, #d8687a); }
 .mark-codex { background: linear-gradient(160deg, #1fb88f, #0d8566); }
+.mark-antigravity { background: linear-gradient(160deg, #7b8cff, #3d4fd6); }
+/* Antigravity's connector, downloading from Google. */
+.download-progress { display: flex; align-items: center; gap: 10px; }
+.download-bar { position: relative; flex: 1; max-width: 320px; height: 6px; overflow: hidden; border-radius: 3px; background: var(--bg-3); }
+.download-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); transition: width 0.15s linear; }
+.download-bar > span.checking { animation: pulse 1.2s ease-in-out infinite; }
+.download-text { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .assistant-now { margin: 12px 0 8px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); }
 .assistant-now.tone-warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
 .assistant-now.tone-bad { border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }

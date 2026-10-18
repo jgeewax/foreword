@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-assistant-download"
+description = "Enables the assistant_download command without any pre-configured scope."
+commands.allow = ["assistant_download"]
+
+[[permission]]
+identifier = "deny-assistant-download"
+description = "Denies the assistant_download command without any pre-configured scope."
+commands.deny = ["assistant_download"]
