@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { studio } from '../app/studio';
 import type { Version } from '../lib/ipc';
 import { onContextMenu } from '../lib/context-menu';
+import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 
 const KIND: Record<string, { icon: string; title: string }> = {
@@ -119,8 +120,14 @@ function HistoryAbout() {
       {open && (
         <div className="history-about">
           <p>
-            <b>Where:</b> in a Git repository Typst Studio keeps for this book, in its own data folder rather than in the book folder. History never touches your own Git
-            repository, if the book has one: that's Source Control, where you commit, pull and push yourself.
+            <b>Where:</b> in a Git repository Typst Studio keeps for this book, in its own data folder rather than in the book folder
+            {repo && (
+              <>
+                {' '}
+                (<code className="selectable">{tildePath(repo.gitDir)}</code>)
+              </>
+            )}
+            . History never touches your own Git repository, if the book has one: that's Source Control, where you commit, pull and push yourself.
           </p>
           <p>
             <b>Going back:</b> click a version to see what changed in it, line by line. <b>◀ Older</b> and <b>Newer ▶</b> step through the versions one at a time; <b>Compare with

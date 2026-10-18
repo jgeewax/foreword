@@ -36,13 +36,6 @@ describe('PerfTracker', () => {
 });
 
 describe('paths for messages', () => {
-  it('shortens long folders in the middle', async () => {
-    const { shortPath } = await import('./paths');
-    expect(shortPath('/Users/ada/Documents')).toBe('~/Documents');
-    expect(shortPath('/Users/ada/Library/Mobile Documents/com~apple~CloudDocs/Books/Drafts')).toBe('~/…/Books/Drafts');
-    expect(shortPath('/Volumes/Backup')).toBe('/Volumes/Backup');
-  });
-
   it('reads a pasted path: quotes, file URLs and Terminal escapes', async () => {
     const { pastedPath } = await import('./paths');
     expect(pastedPath('  /opt/homebrew/bin/tinymist \n')).toBe('/opt/homebrew/bin/tinymist');

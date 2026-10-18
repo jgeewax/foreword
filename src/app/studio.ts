@@ -3,7 +3,7 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { shortPath, tildePath } from '../lib/paths';
+import { tildePath } from '../lib/paths';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
@@ -849,7 +849,7 @@ export class Studio {
       value: folder ? `${folder}/` : '',
       placeholder: 'e.g. notes.typ or chapters/epilogue.typ',
       okLabel: 'Create',
-      help: 'Folders in the name are created as needed.',
+      help: `In the book’s folder, ${tildePath(this.state.workspace?.root ?? '')}. Folders in the name are created as needed.`,
     });
     const path = answer && Studio.validName(answer);
     if (answer && !path) return this.toast(`“${answer}” isn't a usable file name`, 'error');
@@ -865,7 +865,14 @@ export class Studio {
   }
 
   async newFolder(folder = this.defaultFolder()) {
-    const answer = await this.prompt({ title: 'New folder', label: 'Name', value: folder ? `${folder}/` : '', placeholder: 'e.g. figures', okLabel: 'Create' });
+    const answer = await this.prompt({
+      title: 'New folder',
+      label: 'Name',
+      value: folder ? `${folder}/` : '',
+      placeholder: 'e.g. figures',
+      okLabel: 'Create',
+      help: `In the book’s folder, ${tildePath(this.state.workspace?.root ?? '')}.`,
+    });
     const path = answer && Studio.validName(answer);
     if (answer && !path) return this.toast(`“${answer}” isn't a usable folder name`, 'error');
     if (!path) return;
@@ -2002,7 +2009,7 @@ export class Studio {
       if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
       const path = await this.typst.exportPdf(`${ws.root}/${COVER_PRINT}`);
       const rel = path.startsWith(ws.root + '/') ? path.slice(ws.root.length + 1) : path;
-      this.toast(`Cover exported to ${rel}`);
+      this.toast(`Cover exported to ${tildePath(path)}`);
       void this.refreshFiles();
       return rel;
     } catch (e) {
@@ -3953,7 +3960,7 @@ export class Studio {
       this.rememberExportPath(saved);
       this.lastExport = saved;
       const name = saved.slice(saved.lastIndexOf('/') + 1);
-      this.toast(`Saved “${name}” in ${shortPath(saved.slice(0, saved.lastIndexOf('/')))}`, 'info', [
+      this.toast(`Saved “${name}” in ${tildePath(saved.slice(0, saved.lastIndexOf('/')))}`, 'info', [
         { label: 'Open', run: () => void this.openPdf(saved) },
         { label: 'Show in Finder', run: () => void ipc.revealPdf(saved).catch((e) => this.toast(errorMessage(e), 'error')) },
       ]);

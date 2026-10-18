@@ -202,7 +202,7 @@
 
 - [x] get rid of checkboxes in the settings. those are dangerous. healthy UI controls only for settings.
 
-- [ ] for defaults, be explicit. you can say "this folder" but then must include the exact path so that its clear
+- [x] for defaults, be explicit. you can say "this folder" but then must include the exact path so that its clear
 
 - [x] add a way to change ai providers (opencode/codex/etc) from the ai chat panel
 

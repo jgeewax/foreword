@@ -1,6 +1,7 @@
+import { appDataDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { PROJECT_FILE } from '../app/project-settings';
+import { exportFolderOf, PROJECT_FILE, typstRootOf } from '../app/project-settings';
 import { studio, type SettingsPage } from '../app/studio';
 import { ipc, type ToolInfo, type ToolProbe } from '../lib/ipc';
 import { useStore } from '../lib/store';
@@ -38,8 +39,15 @@ function ProjectSection() {
   const save = async (patch: Parameters<typeof studio.updateProjectSettings>[0]) => setErrors(await studio.updateProjectSettings(patch));
   const entry = project.settings.entryPoint ?? ws.entry ?? '';
   const pdfName = (entry.split('/').pop() ?? 'main.typ').replace(/\.typ$/, '.pdf');
-  const entryDir = entry.includes('/') ? entry.slice(0, entry.lastIndexOf('/') + 1) : '';
-  const outputExample = outputDir.trim() ? `${outputDir.trim().replace(/^\.\/+/, '').replace(/\/+$/, '')}/${pdfName}` : `${entryDir}${pdfName}`;
+  const entryDir = entry.includes('/') ? entry.slice(0, entry.lastIndexOf('/')) : '';
+  // A folder of the book (relative to it, or absolute) by its full path: a default is said exactly.
+  const full = (rel: string) => {
+    const r = rel.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
+    return tildePath(r.startsWith('/') ? r : r && r !== '.' ? `${ws.root}/${r}` : ws.root);
+  };
+  const rootSet = !!project.settings.root?.trim();
+  const mainFolder = entryDir ? `the main file’s folder, ${full(entryDir)}` : `the book’s folder, ${full('')}`;
+  const outputExample = `${full(exportFolderOf({ outputDir }, entry))}/${pdfName}`;
 
   const addFontFolder = async () => {
     const picked = await openDialog({ directory: true, multiple: false, defaultPath: ws.root, title: 'Choose a font folder' });
@@ -85,12 +93,16 @@ function ProjectSection() {
           id="project-root"
           className="settings-input"
           value={root}
-          placeholder={entryDir ? `${entryDir.replace(/\/$/, '')} (the main file’s folder)` : 'this folder'}
+          placeholder={`Default: ${mainFolder}`}
           disabled={locked}
           onChange={(e) => setRoot(e.target.value)}
           onBlur={() => root.trim() !== (project.settings.root ?? '') && void save({ root: root.trim() })}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         />
+        <p className="settings-help settings-in-use">
+          In use: <code className="selectable">{full(typstRootOf(project.settings, entry))}</code>
+          {rootSet ? ', set here.' : `, ${entryDir ? 'the main file’s folder' : 'the book’s folder'} (the default).`}
+        </p>
         <p className="settings-help">
           Where paths starting with <code>/</code> begin, like <code>image("/figures/map.png")</code>, and the folder Typst may read. For a book kept in a subfolder such as{' '}
           <code>src/</code>, the main file’s folder is used unless you set it here.
@@ -104,22 +116,31 @@ function ProjectSection() {
           id="project-output"
           className="settings-input"
           value={outputDir}
-          placeholder="next to the main file"
+          placeholder={`Default: next to the main file, in ${full(entryDir)}`}
           disabled={locked}
           onChange={(e) => setOutputDir(e.target.value)}
           onBlur={() => outputDir.trim() !== (project.settings.outputDir ?? '') && void save({ outputDir: outputDir.trim() })}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         />
         <p className="settings-help">
-          Export PDF (⇧⌘E) builds <code>{outputExample}</code>, then saves a copy where you choose.
+          Export PDF (⇧⌘E) builds <code className="selectable">{outputExample}</code>
+          {outputDir.trim() ? '' : ' (next to the main file, the default)'}, then saves a copy where you choose.
         </p>
       </div>
       <div className="settings-field">
         <div className="settings-label">Extra font folders</div>
-        {fonts.length === 0 && <p className="settings-help">None. Fonts installed on this Mac are always available.</p>}
+        {fonts.length === 0 && (
+          <p className="settings-help">
+            None. Fonts installed on this Mac are always available (those in <code>~/Library/Fonts</code>, <code>/Library/Fonts</code> and <code>/System/Library/Fonts</code>), and
+            the ones Typst comes with.
+          </p>
+        )}
         {fonts.map((f) => (
           <div className="settings-list-row" key={f}>
-            <code>{f}</code>
+            <span className="settings-font-folder">
+              <code>{f}</code>
+              {!f.startsWith('/') && <code className="muted selectable">{full(f)}</code>}
+            </span>
             <button className="link" disabled={locked} onClick={() => void save({ fontPaths: fonts.filter((x) => x !== f) })}>
               Remove
             </button>
@@ -198,7 +219,7 @@ function ScopeBanner({ scope }: { scope: 'app' | 'book' }) {
     return (
       <div className="settings-scope">
         <span>
-          <strong>For every book.</strong> Saved in <code className="selectable">{file?.path ?? '~/.typst-studio/settings.json'}</code>; edit it by hand if you like, and changes apply when
+          <strong>For every book.</strong> Saved in <code className="selectable">{tildePath(file?.path ?? '~/.typst-studio/settings.json')}</code>; edit it by hand if you like, and changes apply when
           you come back to Typst Studio.{' '}
           <button className="link" onClick={() => void studio.openConfigFile()}>
             Open in text editor
@@ -211,7 +232,8 @@ function ScopeBanner({ scope }: { scope: 'app' | 'book' }) {
   return (
     <div className="settings-scope book">
       <span>
-        <strong>For {ws?.name ?? 'this book'} only.</strong> Saved in <code>{PROJECT_FILE}</code> in the book’s folder, so it travels with the book.{' '}
+        <strong>For {ws?.name ?? 'this book'} only.</strong> Saved in <code className="selectable">{ws ? tildePath(`${ws.root}/${PROJECT_FILE}`) : PROJECT_FILE}</code>, in the
+        book’s folder, so it travels with the book.{' '}
         <button
           className="link"
           onClick={() => {
@@ -271,7 +293,7 @@ function GeneralPage() {
               +
             </button>
             <button onClick={() => setTextSize(DEFAULT_SETTINGS.editorFontSize)} disabled={settings.editorFontSize === DEFAULT_SETTINGS.editorFontSize}>
-              Default
+              Default ({DEFAULT_SETTINGS.editorFontSize} px)
             </button>
           </div>
           <p className="settings-help">The text you write, in the editor and in What changed. Size of everything (⌘= and ⌘−) scales the whole window, this text included.</p>
@@ -394,7 +416,7 @@ function PermissionsPage() {
  * another: a copy found on this Mac, a file, a pasted path or a typed one
  * (checked as it's typed). Automatic goes back to the first copy found.
  */
-function ToolCard({ tool, label, purpose, info, install, error }: { tool: ToolName; label: string; purpose: string; info: ToolInfo | undefined; install: string; error?: string }) {
+function ToolCard({ tool, label, purpose, info, install, error }: { tool: ToolName; label: string; purpose: ReactNode; info: ToolInfo | undefined; install: string; error?: string }) {
   const chosen = useStore(studio.store, (s) => s.settings.toolPaths[tool] ?? '');
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -467,6 +489,7 @@ function ToolCard({ tool, label, purpose, info, install, error }: { tool: ToolNa
         <>
           <span className="tool-option-title">Automatic</span>
           <span className="tool-option-detail">{copies[0] ? `The first one found: ${copies[0].version ?? 'version unknown'}, ${copies[0].source}` : 'Nothing found yet'}</span>
+          {copies[0] && <span className="tool-option-path">{tildePath(copies[0].path)}</span>}
         </>
       ),
     },
@@ -619,6 +642,10 @@ function ToolsPage() {
   const tools = useStore(studio.store, (s) => s.tools);
   const history = useStore(studio.store, (s) => s.history);
   const [searching, setSearching] = useState(false);
+  // Where History is kept: this book's repository, or (no book open) the folder they're all in.
+  const [historyHome, setHistoryHome] = useState<string | null>(null);
+  useEffect(() => void appDataDir().then((d) => setHistoryHome(`${d.replace(/\/$/, '')}/history`), () => {}), []);
+  const historyAt = history.repo?.gitDir ?? historyHome;
   const search = async () => {
     setSearching(true);
     try {
@@ -644,7 +671,18 @@ function ToolsPage() {
       <ToolCard
         tool="git"
         label="Git"
-        purpose="Keeps History, in Typst Studio’s own folder. If your book is in a Git repository, Source Control uses it too."
+        purpose={
+          <>
+            Keeps History, in Typst Studio’s own folder
+            {historyAt && (
+              <>
+                {history.repo ? ' (this book’s: ' : ' ('}
+                <code className="selectable">{tildePath(historyAt)}</code>)
+              </>
+            )}
+            . If your book is in a Git repository, Source Control uses it too.
+          </>
+        }
         info={tools?.git}
         install="xcode-select --install"
         error={tools?.git?.path ? history.error : undefined}
@@ -713,6 +751,7 @@ function markBoxes(scroller: HTMLElement, ranges: Range[]): [number, number, num
 
 export function SettingsDialog() {
   const ws = useStore(studio.store, (s) => s.workspace);
+  const configPath = useStore(studio.store, (s) => s.configFile?.path ?? '~/.typst-studio/settings.json');
   const dialogRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -828,7 +867,7 @@ export function SettingsDialog() {
           <nav className="settings-nav" role="tablist" aria-orientation="vertical">
             {pages.map((p, i) => [
               pages[i - 1]?.scope !== p.scope && (
-                <div key={`${p.scope}-title`} className="settings-nav-group" title={p.scope === 'book' ? 'Saved in the book’s folder, so they travel with it' : 'For every book'}>
+                <div key={`${p.scope}-title`} className="settings-nav-group" title={p.scope === 'book' ? `Saved in ${tildePath(`${ws?.root}/${PROJECT_FILE}`)}, so they travel with the book` : `For every book: saved in ${tildePath(configPath)}`}>
                   {groupTitle(p.scope)}
                 </div>
               ),

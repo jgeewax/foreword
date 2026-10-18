@@ -4238,6 +4238,73 @@ async function settingControlsChecks() {
   return out;
 }
 
+/**
+ * Defaults are said exactly: wherever a folder is "the main file's" or "Typst
+ * Studio's own", its full path is there too (Settings, History, New File).
+ */
+async function explicitDefaultsChecks() {
+  const ws = studio.state.workspace!;
+  const book = ws.root.replace(/^\/Users\/[^/]+/, '~');
+  const text = (sel: string) => document.querySelector(sel)?.textContent ?? '';
+  const out: Record<string, unknown> = { book };
+  studio.openSettings('book');
+  await sleep(400);
+  const field = (id: string) => document.getElementById(id)?.closest('.settings-field');
+  out.files = {
+    banner: text('.settings-scope'),
+    rootPlaceholder: document.querySelector<HTMLInputElement>('#project-root')?.placeholder,
+    rootInUse: field('project-root')?.querySelector('.settings-in-use')?.textContent,
+    outputPlaceholder: document.querySelector<HTMLInputElement>('#project-output')?.placeholder,
+    output: [...(field('project-output')?.querySelectorAll('.settings-help') ?? [])].map((p) => p.textContent).join(' '),
+    fonts: [...document.querySelectorAll('.settings-label')].find((l) => l.textContent === 'Extra font folders')?.parentElement?.querySelector('.settings-help')?.textContent,
+    snapshot: await snap('defaults-files'),
+  };
+  [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Tools')?.click();
+  await sleep(600);
+  const git = [...document.querySelectorAll('.tool-card')].find((c) => c.querySelector('.settings-label')?.textContent === 'Git');
+  document.querySelector<HTMLButtonElement>('.tool-trigger')?.click();
+  await sleep(200);
+  out.tools = { git: git?.querySelector('.tool-card-head .settings-help')?.textContent, automatic: text('.tool-list .tool-option'), snapshot: await snap('defaults-tools') };
+  document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'General')?.click();
+  await sleep(300);
+  out.textSizeDefault = [...document.querySelectorAll('.settings-content button')].find((b) => b.textContent?.startsWith('Default'))?.textContent;
+  studio.closeSettings();
+  await sleep(200);
+  // History's "How does this work?", in its own tab.
+  const sidebar = studio.state.sidebar;
+  const placement = studio.state.settings.historyPlacement;
+  studio.updateSettings({ historyPlacement: 'tab' }, { write: false });
+  studio.showSidebar('history');
+  await sleep(400);
+  [...document.querySelectorAll<HTMLButtonElement>('.history-help button')].find((b) => b.textContent === 'How does this work?')?.click();
+  await sleep(200);
+  out.historyWhere = [...document.querySelectorAll('.history-about p')].find((p) => p.textContent?.startsWith('Where'))?.textContent;
+  studio.updateSettings({ historyPlacement: placement }, { write: false });
+  studio.showSidebar(sidebar);
+  // New File says which folder its name is in; Cancel leaves it.
+  const asked = studio.newFile('');
+  await sleep(300);
+  out.newFile = text('.prompt .settings-help');
+  [...document.querySelectorAll<HTMLButtonElement>('.prompt button')].find((b) => b.textContent?.trim() === 'Cancel')?.click();
+  await asked;
+  const files = out.files as Record<string, string>;
+  const tools = out.tools as Record<string, string>;
+  out.ok =
+    files.banner.includes(`${book}/.typst-studio.json`) &&
+    !!files.rootPlaceholder?.includes(book) &&
+    !!files.rootInUse?.includes(book) &&
+    !!files.outputPlaceholder?.includes(book) &&
+    files.output.includes(`${book}/`) &&
+    !!files.fonts?.includes('~/Library/Fonts') &&
+    /history\/\w+\.git/.test(tools.git ?? '') &&
+    /\/(tinymist)\b/.test(tools.automatic ?? '') &&
+    out.textSizeDefault === 'Default (12 px)' &&
+    /history\/\w+\.git/.test(String(out.historyWhere)) &&
+    String(out.newFile).includes(book);
+  return out;
+}
+
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'below' });
@@ -4963,7 +5030,7 @@ async function textSizeChecks() {
   await sleep(400);
   const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.settings-content button')].find((b) => b.getAttribute('aria-label') === label || b.textContent?.trim() === label);
   out.control = document.querySelector('.settings-content .settings-zoom')?.closest('.settings-field')?.textContent?.slice(0, 80);
-  out.defaultDisabled = button('Default')?.disabled;
+  out.defaultDisabled = button('Default (12 px)')?.disabled;
   for (let i = 0; i < 2; i++) {
     button('Bigger text')?.click();
     await sleep(150);
@@ -4974,7 +5041,7 @@ async function textSizeChecks() {
   out.editorAt14 = { line: line(), cssVar: getComputedStyle(document.documentElement).getPropertyValue('--editor-font-size') };
   studio.openSettings('general');
   await sleep(300);
-  button('Default')?.click();
+  button('Default (12 px)')?.click();
   await sleep(200);
   for (let i = 0; i < 5; i++) {
     button('Smaller text')?.click();
@@ -5289,6 +5356,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('agentsettings')) result.agentsettings = await agentSettingsChecks();
     if (want('assistantmenu')) result.assistantmenu = await assistantMenuChecks();
     if (want('settingcontrols')) result.settingcontrols = await settingControlsChecks();
+    if (want('defaults')) result.defaults = await explicitDefaultsChecks();
     // It starts Claude Code: only when asked for.
     if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();

@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef } from 'react';
+import { exportFolderOf } from '../app/project-settings';
 import { studio } from '../app/studio';
-import { COVER_PREVIEW } from '../cover';
+import { COVER_PREVIEW, COVER_PRINT } from '../cover';
+import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
 
@@ -14,6 +16,11 @@ export function PreviewPane() {
   const target = useStore(studio.store, (s) => s.previewTarget);
   const hasCover = useStore(studio.store, (s) => !!s.workspace?.files.includes(COVER_PREVIEW));
   const exporting = useStore(studio.store, (s) => s.exporting);
+  // Where Export cover puts it, exactly: the export folder, else beside the cover's file.
+  const coverPdf = useStore(studio.store, (s) => {
+    const folder = exportFolderOf(s.project.settings, COVER_PRINT);
+    return tildePath(`${s.workspace?.root ?? ''}${folder ? `/${folder}` : ''}/${COVER_PRINT.split('/').pop()!.replace(/\.typ$/, '.pdf')}`);
+  });
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -78,7 +85,7 @@ export function PreviewPane() {
             <button className="small" title="Match the cover to the book's page size and page count (the spine)" onClick={() => void studio.updateCoverFromBook()}>
               Update from book
             </button>
-            <button className="small" disabled={exporting} title="Export the printable cover (no guides) to the export folder" onClick={() => void studio.exportCover()}>
+            <button className="small" disabled={exporting} title={`Export the printable cover (no guides) to ${coverPdf}`} onClick={() => void studio.exportCover()}>
               Export cover
             </button>
           </>

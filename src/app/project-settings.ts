@@ -92,6 +92,12 @@ export function outputPathPattern(s: ProjectSettings, folder: string): string {
   return dir ? `${folder}/${dir}/$name` : '$root/$dir/$name';
 }
 
+/** Where an export of `file` goes (relative to the folder opened, '' for it): the export folder if set, else the file's own folder, as outputPathPattern says. */
+export function exportFolderOf(s: ProjectSettings, file: string): string {
+  const dir = s.outputDir?.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
+  return dir || (file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '');
+}
+
 /** Font folders as absolute paths (Tinymist resolves them from its own working directory otherwise). */
 export function absoluteFontPaths(s: ProjectSettings, root: string): string[] {
   return (s.fontPaths ?? []).filter((p) => p.trim()).map((p) => (p.startsWith('/') ? p : `${root}/${p.replace(/^\.\/+/, '')}`));

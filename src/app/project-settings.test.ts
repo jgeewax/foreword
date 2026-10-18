@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { absoluteFontPaths, outputPathPattern, parseProjectSettings, serializeProjectSettings, typstRootOf, validateProjectSettings } from './project-settings';
+import { absoluteFontPaths, exportFolderOf, outputPathPattern, parseProjectSettings, serializeProjectSettings, typstRootOf, validateProjectSettings } from './project-settings';
 
 describe('parseProjectSettings', () => {
   it('reads known keys and keeps the raw object', () => {
@@ -42,6 +42,12 @@ describe('export and font paths', () => {
   it('builds the Tinymist output pattern', () => {
     expect(outputPathPattern({}, '/b')).toBe('$root/$dir/$name');
     expect(outputPathPattern({ outputDir: './dist/' }, '/b')).toBe('/b/dist/$name');
+  });
+  it('says which folder an export goes to: the export folder, else the file’s own', () => {
+    expect(exportFolderOf({}, 'main.typ')).toBe('');
+    expect(exportFolderOf({}, 'src/main.typ')).toBe('src');
+    expect(exportFolderOf({ outputDir: './export/' }, 'src/main.typ')).toBe('export');
+    expect(exportFolderOf({ outputDir: '  ' }, 'cover/cover.typ')).toBe('cover');
   });
   it('makes font folders absolute', () => {
     expect(absoluteFontPaths({ fontPaths: ['fonts', './more', '/Library/Fonts', ''] }, '/b')).toEqual(['/b/fonts', '/b/more', '/Library/Fonts']);
