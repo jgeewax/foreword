@@ -2757,8 +2757,9 @@ async function commentTagChecks() {
 
 /**
  * Format on save and Format Document (typstyle, through Tinymist): an equation
- * and a #let are saved formatted, the rest of the chapter untouched and the
- * cursor kept; ⌘Z undoes the formatting; with the setting off a save leaves the
+ * and a #let are saved formatted, with blank lines around headings (not around
+ * an equation line starting with `=`), the rest of the chapter untouched
+ * and the cursor kept; ⌘Z undoes the formatting; with the setting off a save leaves the
  * text alone; a syntax error is saved as written. Edits a chapter: scratch book
  * only; puts it back. The setting is changed in memory only (the author's app
  * shares the stored settings).
@@ -2781,7 +2782,29 @@ async function formatChecks() {
   };
   try {
     const end = model.getFullModelRange().getEndPosition();
-    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: '\n$\n  a&=b+c \\\n  cc+dd&=e && "if" x > 0 \\\n  f&=g && "otherwise"\n$\n#let f(x,y)=x+y\n' }]);
+    // An equation, a #let, headings with no blank lines around them (one with a comment above, one labelled on
+    // the next line), and an equation line starting with `=`.
+    const messy = [
+      '',
+      '$',
+      '  a&=b+c \\',
+      '  cc+dd&=e && "if" x > 0 \\',
+      '  f&=g && "otherwise"',
+      '$',
+      '#let f(x,y)=x+y',
+      '== Straight into text',
+      'No blank line above this.',
+      '// A note on the next heading',
+      '=== Labelled',
+      '<fmt-label>',
+      'And this.',
+      '$',
+      '  x',
+      '  = y',
+      '$',
+      '',
+    ];
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: messy.join('\n') }]);
     const typed = model.getValue();
     // The cursor just after "cc+dd": that line gains spaces before and after it.
     const eqLine = model.getLinesContent().findIndex((l) => l.includes('cc+dd&=')) + 1;
@@ -2793,10 +2816,32 @@ async function formatChecks() {
     await studio.menuCommand('save');
     const saveMs = Math.round(clock() - t);
     const saved = await disk();
-    const formatted = ['$', '      a & =b+c \\', '  cc+dd & =e   && "if" x > 0 \\', '      f & =g   && "otherwise"', '$', '#let f(x, y) = x + y', ''].join('\n');
+    const formatted = [
+      '$',
+      '      a & =b+c \\',
+      '  cc+dd & =e   && "if" x > 0 \\',
+      '      f & =g   && "otherwise"',
+      '$',
+      '#let f(x, y) = x + y',
+      '',
+      '== Straight into text',
+      '',
+      'No blank line above this.',
+      '',
+      '// A note on the next heading',
+      '=== Labelled',
+      '<fmt-label>',
+      '',
+      'And this.',
+      '$',
+      '  x',
+      '  = y',
+      '$',
+      '',
+    ].join('\n');
     out.formatOnSave = {
       saveMs,
-      equationAligned: saved.endsWith(formatted),
+      formattedAsExpected: saved.endsWith(formatted),
       restOfChapterUntouched: saved.startsWith(original.text),
       bufferIsDisk: model.getValue() === saved,
       dirty: !!studio.state.dirty[path],

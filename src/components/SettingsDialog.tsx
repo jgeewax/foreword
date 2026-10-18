@@ -215,12 +215,12 @@ function GeneralPage() {
             <input type="checkbox" checked={settings.formatOnSave} onChange={(e) => studio.updateSettings({ formatOnSave: e.target.checked })} />
             <span>
               Format on save
-              <span className="muted"> — tidy spacing and indentation in Typst files, and line up &amp; and &amp;&amp; in equations</span>
+              <span className="muted"> — tidy spacing and indentation in Typst files, line up &amp; and &amp;&amp; in equations, and leave a blank line above and below each heading</span>
             </span>
           </label>
           <p className="settings-help">
-            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there. Prose and line breaks stay as you wrote them. Format Document (⇧⌥F) formats
-            the open file either way; ⌘Z undoes it.
+            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
+            line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
           </p>
         </div>
       </Section>

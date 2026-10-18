@@ -2058,6 +2058,21 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   9,600-line file. With a syntax error the file is saved as written.
 - **Format Document** (⇧⌥F, Edit menu, the editor's menu) works whether or not
   format on save is on, and says so when a syntax error stops it.
+- **A blank line above and below each heading** (asked for by the user; our own
+  rule, not typstyle's). It's Markdown's rule (markdownlint MD022, Prettier),
+  not Typst's: Typst's tutorial writes the paragraph on the line after
+  `= Introduction`, and both render the same. typstyle keeps the blank lines, so
+  VS Code doesn't undo them. Headings come from Tinymist's
+  `textDocument/documentSymbol` (kind 3, from the syntax tree), asked for after
+  typstyle's edits are in the buffer, so an equation line or raw text starting
+  with `=` is never taken for one. `//` comments right above a heading stay with
+  it (the blank line goes above them), and so does a label on the line below
+  (the blank line goes after it; a label attaches across a blank line too,
+  checked with `typst compile`). None at the top or end of the file or of a
+  block (a line ending in `[`, `(` or `{`, or a line starting with `]`, `)` or
+  `}`), and none around a heading that shares its line (`#block[= Title] more`).
+  Both steps are one undo step. typstyle on the result changes nothing, so one
+  save is enough. The sample book and every template already follow the rule.
 - **The cursor stays put.** Tinymist sends one edit from the first change to the
   last, which would move the cursor and scroll position. The edits are cut down
   first, as VS Code does: a line diff, then character diffs within changed lines
@@ -2072,9 +2087,12 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   when it splits the call. Typst and `src/code/cells.ts` both remove common
   indentation, so the code and its hash are the same.
 - Self-test `format` (edits, scratch book): ⌘S formats the equation and `#let`
-  without touching the rest of the chapter (16 ms save). The cursor keeps its
-  place, ⌘Z undoes only the formatting, and the setting off saves as typed.
-  Format Document took 2 ms. A syntax error shows a toast on Format Document and
+  and puts blank lines around two headings (one with a comment above, one
+  labelled on the next line), not around an equation line `= y`, without
+  touching the rest of the chapter (29 ms save with the outline request; 16 ms
+  before). The cursor keeps its place, ⌘Z
+  undoes only the formatting, and the setting off saves as typed. Format
+  Document took 5 ms. A syntax error shows a toast on Format Document and
   is saved as written. The editor's menu, the Edit menu and Settings all offer it.
 - **Not yet:** several book templates aren't typstyle-clean (continuation
   lines in content blocks, `#run(...)` on one line, import order), so a new

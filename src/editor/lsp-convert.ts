@@ -41,6 +41,9 @@ export function applyLspChanges(text: string, changes: readonly LspContentChange
   return text;
 }
 
+/** An outline entry (DocumentSymbol, or the older flat SymbolInformation with `location`). */
+export type LspSymbol = { name: string; kind: number; range?: LspRange; location?: { range: LspRange }; children?: LspSymbol[] };
+
 /** A server's edit (formatting): unlike `contentChanges`, every range is in the original text. */
 export type LspTextEdit = { range: LspRange; newText: string };
 

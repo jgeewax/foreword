@@ -1,6 +1,6 @@
 // TypstService: LSP client for the single Tinymist process (diagnostics +
 // live preview from unsaved buffers). Transport is the Rust stdio bridge.
-import type { LspContentChange, LspDiagnostic, LspTextEdit } from '../editor/lsp-convert';
+import type { LspContentChange, LspDiagnostic, LspSymbol, LspTextEdit } from '../editor/lsp-convert';
 import { relativeToUri } from '../editor/lsp-convert';
 import { Channel, ipc } from '../lib/ipc';
 import { Emitter } from '../lib/store';
@@ -81,7 +81,7 @@ export class TypstService extends Emitter<Events> {
       rootUri,
       workspaceFolders: [{ uri: rootUri, name: root.split('/').pop() }],
       capabilities: {
-        textDocument: { synchronization: { didSave: true }, publishDiagnostics: { versionSupport: true } },
+        textDocument: { synchronization: { didSave: true }, publishDiagnostics: { versionSupport: true }, documentSymbol: { hierarchicalDocumentSymbolSupport: true } },
         workspace: { configuration: true, workspaceFolders: true },
         window: { workDoneProgress: false, showDocument: { support: true } },
       },
@@ -127,6 +127,12 @@ export class TypstService extends Emitter<Events> {
   async format(uri: string): Promise<LspTextEdit[] | null> {
     if (!this.running) return null;
     return (await this.request('textDocument/formatting', { textDocument: { uri }, options: { tabSize: 2, insertSpaces: true } })) ?? null;
+  }
+
+  /** The outline of an open document, from its syntax tree: headings (kind 3) with their labels, and #let bindings. */
+  async documentSymbols(uri: string): Promise<LspSymbol[] | null> {
+    if (!this.running) return null;
+    return (await this.request('textDocument/documentSymbol', { textDocument: { uri } })) ?? null;
   }
 
   /**

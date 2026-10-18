@@ -3,6 +3,7 @@
 // conflict-checked; external changes reload clean buffers and flag dirty ones.
 import { ipc, isCmdError } from '../lib/ipc';
 import type { TypstService } from '../services/typst';
+import { blankLinesAroundHeadings, headingRanges } from './format';
 import { applyLspEdits, relativeToUri, toLspChanges, toMarker, type LspDiagnostic } from './lsp-convert';
 import { languageFor, monaco } from './monaco';
 import { minimalEdit, smallEdits } from './text-edit';
@@ -106,34 +107,53 @@ export class Documents {
   }
 
   /**
-   * Format a Typst buffer with Tinymist's typstyle, as one undoable step. Its
-   * edits are cut down to what changed, so the cursor stays put. Nothing
-   * happens if the text changes while the formatter works.
+   * Format a Typst buffer with Tinymist's typstyle, then blank lines around
+   * headings (format.ts), as one undoable step. The edits are cut down to
+   * what changed, so the cursor stays put. Nothing happens if the text changes
+   * while the formatter works.
    */
   async format(path: string, timeoutMs = FORMAT_TIMEOUT_MS): Promise<FormatOutcome> {
     const doc = this.docs.get(path);
     if (!doc?.isTypst || !doc.lspOpen || !this.typst.running) return 'unavailable';
     const { model } = doc;
+    const deadline = Date.now() + timeoutMs;
+    const ask = async <T>(request: Promise<T>): Promise<T | 'timeout' | 'unavailable'> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<'timeout'>((resolve) => (timer = setTimeout(() => resolve('timeout'), Math.max(0, deadline - Date.now()))));
+      return Promise.race([request, timeout])
+        .catch(() => 'unavailable' as const)
+        .finally(() => clearTimeout(timer));
+    };
     const version = model.getVersionId();
     const before = model.getValue();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<'timeout'>((resolve) => (timer = setTimeout(() => resolve('timeout'), timeoutMs)));
-    const edits = await Promise.race([this.typst.format(doc.uri), timeout])
-      .catch(() => 'unavailable' as const)
-      .finally(() => clearTimeout(timer));
+    const edits = await ask(this.typst.format(doc.uri));
     if (edits === 'timeout' || edits === 'unavailable') return edits;
     if (edits === null) return 'syntax-error';
     if (model.isDisposed() || model.getVersionId() !== version) return 'changed';
-    const changes = smallEdits(before, applyLspEdits(before, edits));
-    if (!changes.length) return 'unchanged';
     model.pushStackElement();
+    let changed = this.replaceText(model, before, applyLspEdits(before, edits));
+    // The headings come from Tinymist's syntax tree of the formatted text (not
+    // lines inside equations or raw blocks that start with `=`).
+    const formatted = model.getVersionId();
+    const symbols = await ask(this.typst.documentSymbols(doc.uri));
+    if (Array.isArray(symbols) && !model.isDisposed() && model.getVersionId() === formatted) {
+      const text = model.getValue();
+      changed = this.replaceText(model, text, blankLinesAroundHeadings(text, headingRanges(symbols))) || changed;
+    }
+    if (!model.isDisposed()) model.pushStackElement();
+    return changed ? 'formatted' : 'unchanged';
+  }
+
+  /** Turn the model's text (`before`) into `after` with small edits, in the open undo step. False if they're the same. */
+  private replaceText(model: monaco.editor.ITextModel, before: string, after: string): boolean {
+    const changes = smallEdits(before, after);
+    if (!changes.length) return false;
     model.pushEditOperations(
       [],
       changes.map((c) => ({ range: monaco.Range.fromPositions(model.getPositionAt(c.start), model.getPositionAt(c.end)), text: c.text })),
       () => null,
     );
-    model.pushStackElement();
-    return 'formatted';
+    return true;
   }
 
   /**
