@@ -11,11 +11,11 @@ import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { AssistantPage } from './AssistantSettings';
 import { BookFilesPage } from './BookFilesSettings';
-import { Choice, ColorChoice, SwitchRow } from './SettingControls';
+import { Choice, ColorChoice, SwitchRow, TypedSetting } from './SettingControls';
 import { ToolPicker } from './ToolPicker';
 import { DownloadProgress, InstallSteps, RELEASES } from './UpdateDialog';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
-import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, MARK_COLORS, type ToolName } from '../app/settings';
+import { DEFAULT_SETTINGS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, isCommandName, MARK_COLORS, parseRulers, rulersText, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -278,7 +278,7 @@ function UpdatesSection() {
   );
 }
 
-/** The editor: its text, formatting on save, and how the assistant's lines are marked in it. */
+/** The editor: its text, formatting on save, long lines, and how the assistant's lines are marked in it. */
 function EditorPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const setTextSize = (px: number) => studio.updateSettings({ editorFontSize: Math.min(EDITOR_FONT_SIZES.max, Math.max(EDITOR_FONT_SIZES.min, Math.round(px))) });
@@ -310,6 +310,54 @@ function EditorPage() {
             With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
             line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
           </p>
+        </div>
+      </Section>
+      <Section title="Long lines">
+        <div className="settings-field">
+          <div className="settings-label">Wrap long lines</div>
+          <Choice
+            label="Wrap long lines"
+            value={settings.wordWrap}
+            onChange={(wordWrap) => studio.updateSettings({ wordWrap })}
+            options={[
+              { value: 'window', label: 'At the edge', detail: 'Where the editor ends, so a paragraph rewraps as the window or the pane changes size.' },
+              { value: 'column', label: 'At a column' },
+              { value: 'off', label: 'Don’t wrap', detail: 'A line runs on past the edge until you start a new one; scroll sideways to read the rest.' },
+            ]}
+          />
+          {settings.wordWrap === 'column' && (
+            <div className="settings-wrap-column">
+              <TypedSetting
+                label="Wrap at column"
+                value={settings.wordWrapColumn}
+                parse={(text) => {
+                  const n = Number(text.trim());
+                  return Number.isInteger(n) && n >= EDITOR_COLUMNS.min && n <= EDITOR_COLUMNS.max ? n : null;
+                }}
+                format={String}
+                onChange={(wordWrapColumn) => studio.updateSettings({ wordWrapColumn })}
+                mistake={`A whole number of characters, from ${EDITOR_COLUMNS.min} to ${EDITOR_COLUMNS.max}.`}
+                className="settings-column"
+                before="Wrap at"
+                after="characters"
+              />
+              <p className="settings-help">Or at the editor’s edge, when that comes first, so no line runs out of sight.</p>
+            </div>
+          )}
+        </div>
+        <div className="settings-field">
+          <div className="settings-label">Rulers</div>
+          <TypedSetting
+            label="Rulers"
+            value={settings.rulers}
+            parse={parseRulers}
+            format={rulersText}
+            onChange={(rulers) => studio.updateSettings({ rulers })}
+            mistake={`Columns from ${EDITOR_COLUMNS.min} to ${EDITOR_COLUMNS.max}, apart with commas: 80, 120.`}
+            className="settings-rulers"
+            placeholder="None"
+          />
+          <p className="settings-help">A thin line down the editor at each of these columns, to see how long a line is getting: 80, 120 draws two. Leave it empty for none.</p>
         </div>
       </Section>
       <Section title="The assistant’s marks">

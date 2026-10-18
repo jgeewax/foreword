@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRESETS } from '../services/agent/permissions';
-import { assistantsFor, composerKeyAction, editorLineHeight, loadSettings, saveSettings } from './settings';
+import { assistantsFor, composerKeyAction, editorLineHeight, loadSettings, parseRulers, rulersText, saveSettings } from './settings';
 
 const enter = (mods: Partial<{ shift: boolean; meta: boolean; ctrl: boolean; alt: boolean; composing: boolean }> = {}) => ({
   key: 'Enter',
@@ -63,7 +63,7 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {}, assistant: 'opencode', checkForUpdates: true, skippedUpdate: '' });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', allowCommands: [], formatOnSave: true, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], toolPaths: {}, assistant: 'opencode', checkForUpdates: true, skippedUpdate: '' });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
     store.set('studio.settings', '{"aiEditColor":"#3FB950","aiReadColor":"blue"}');
@@ -78,6 +78,12 @@ describe('settings storage', () => {
       store.set('studio.settings', `{"editorFontSize":${bad}}`);
       expect(loadSettings().editorFontSize).toBe(12);
     }
+    store.set('studio.settings', '{"wordWrap":"column","wordWrapColumn":120,"rulers":[120,80,80]}');
+    expect(loadSettings()).toMatchObject({ wordWrap: 'column', wordWrapColumn: 120, rulers: [80, 120] });
+    store.set('studio.settings', '{"wordWrap":"on","wordWrapColumn":"120","rulers":[80,"100",5,72.5,120]}');
+    expect(loadSettings()).toMatchObject({ wordWrap: 'window', wordWrapColumn: 80, rulers: [80, 120] });
+    store.set('studio.settings', '{"rulers":"80"}');
+    expect(loadSettings().rulers).toEqual([]);
     store.set('studio.settings', '{"toolPaths":{"git":" /usr/bin/git ","tinymist":"","opencode":7,"python":"/usr/bin/python3"}}');
     expect(loadSettings().toolPaths).toEqual({ git: '/usr/bin/git' });
     store.set('studio.settings', '{"assistant":"claude"}');
@@ -100,6 +106,21 @@ describe('editorLineHeight', () => {
     expect(editorLineHeight(12)).toBe(18);
     expect(editorLineHeight(13)).toBe(20);
     expect(editorLineHeight(14)).toBe(21);
+  });
+});
+
+describe('parseRulers', () => {
+  it('reads columns as typed: commas or spaces, ascending, each once', () => {
+    expect(parseRulers('80, 120')).toEqual([80, 120]);
+    expect(parseRulers('120 80,80')).toEqual([80, 120]);
+    expect(parseRulers(' 100 ')).toEqual([100]);
+    expect(rulersText([80, 120])).toBe('80, 120');
+  });
+
+  it('takes empty text as none, and anything that isn’t a column as a mistake', () => {
+    expect(parseRulers('')).toEqual([]);
+    expect(parseRulers(' , ')).toEqual([]);
+    for (const bad of ['80, abc', '80.5', '10', '1000', '-80', '20 30 40 50 60 70 80 90 100']) expect(parseRulers(bad)).toBeNull();
   });
 });
 

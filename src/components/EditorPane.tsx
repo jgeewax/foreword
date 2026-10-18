@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createRoot, type Root } from 'react-dom/client';
 import { CommentCard, CommentComposer } from './CommentCard';
 import { studio } from '../app/studio';
-import { editorTextOptions, monaco } from '../editor/monaco';
+import { editorTextOptions, editorWrapOptions, monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
@@ -91,9 +91,9 @@ export function EditorPane() {
     const editor = monaco.editor.create(hostRef.current!, {
       model: null,
       automaticLayout: true,
-      wordWrap: 'on',
       minimap: { enabled: false },
       ...editorTextOptions(studio.state.settings.editorFontSize),
+      ...editorWrapOptions(studio.state.settings),
       fontFamily: '"SF Mono", Menlo, Monaco, monospace',
       scrollBeyondLastLine: false,
       renderLineHighlight: 'line',
@@ -418,13 +418,23 @@ export function EditorPane() {
     editor.onDidChangeModel(() => studio.onEditorSelection());
     studio.attachEditor(editor);
     const off = studio.events.on('focus-editor', () => editor.focus());
-    // The text size (Settings ▸ General ▸ Editor).
+    // The text size, wrapping and rulers (Settings ▸ Editor).
     let lastSize = studio.state.settings.editorFontSize;
+    const wrapState = () => {
+      const s = studio.state.settings;
+      return [s.wordWrap, s.wordWrapColumn, s.rulers.join()] as const;
+    };
+    let lastWrap = wrapState();
     const offSize = studio.store.subscribe(() => {
       const size = studio.state.settings.editorFontSize;
-      if (size === lastSize) return;
-      lastSize = size;
-      editor.updateOptions(editorTextOptions(size));
+      if (size !== lastSize) {
+        lastSize = size;
+        editor.updateOptions(editorTextOptions(size));
+      }
+      const wrap = wrapState();
+      if (wrap.every((v, i) => v === lastWrap[i])) return;
+      lastWrap = wrap;
+      editor.updateOptions(editorWrapOptions(studio.state.settings));
     });
     return () => {
       off();

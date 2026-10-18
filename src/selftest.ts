@@ -5364,6 +5364,123 @@ async function textSizeChecks() {
   return out;
 }
 
+/**
+ * Settings ▸ Editor ▸ Long lines: wrapping at a column (or the editor's edge,
+ * when that comes first), not at all, and rulers. A typed column applies on
+ * Enter or on closing Settings, not at each key; a mistake says so and isn't
+ * used. Measured from what Monaco draws. The settings are put back.
+ */
+async function wrapRulerChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { wordWrap: studio.state.settings.wordWrap, wordWrapColumn: studio.state.settings.wordWrapColumn, rulers: studio.state.settings.rulers };
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = '*{animation:none!important;transition:none!important}';
+  await studio.openFile('chapters/ch1-vectors.typ');
+  await sleep(600);
+  const editor = studio.editor!;
+  const E = monaco.editor.EditorOption;
+  /** Where Monaco wraps, the widest line drawn and the rulers, in characters from the start of a line. */
+  const drawn = () => {
+    // Drawn now: Monaco draws on animation frames, which a window behind others doesn't get.
+    editor.render(true);
+    const chars = editor.getOption(E.fontInfo).typicalHalfwidthCharacterWidth;
+    const lines = document.querySelector('.editor-host .view-lines')!.getBoundingClientRect();
+    const widest = Math.max(...[...document.querySelectorAll('.editor-host .view-line > span')].map((s) => s.getBoundingClientRect().right - lines.left));
+    const rulers = [...document.querySelectorAll('.editor-host .view-ruler')].map((r) => Math.round((r.getBoundingClientRect().left - lines.left) / chars));
+    // -1: it doesn't wrap.
+    return { wrapsAt: editor.getOption(E.wrappingInfo).wrappingColumn, widestChars: Math.round(widest / chars), viewWidthChars: Math.floor(editor.getLayoutInfo().contentWidth / chars), rulers };
+  };
+  const settingsBox = (label: string) => document.querySelector<HTMLInputElement>(`.settings-content input[aria-label="${label}"]`);
+  const type = async (input: HTMLInputElement | null, text: string) => {
+    if (!input) return;
+    input.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, text);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+  };
+  const enter = async (input: HTMLInputElement | null) => {
+    input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await sleep(300);
+  };
+  studio.updateSettings({ wordWrap: 'window', wordWrapColumn: 80, rulers: [] }, { write: false });
+  await sleep(300);
+  out.byDefault = drawn();
+  studio.openSettings('editor');
+  await sleep(400);
+  const choice = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.segmented[aria-label="Wrap long lines"] [role="radio"]')].find((b) => b.textContent === label);
+  choice('At a column')?.click();
+  await sleep(300);
+  out.columnShown = { box: settingsBox('Wrap at column')?.value, row: settingsBox('Wrap at column')?.closest('.settings-row')?.textContent };
+  // Typing 60: not used at each key (6 would be a mistake, and wrap at 6 on the way).
+  await type(settingsBox('Wrap at column'), '6');
+  out.typingSix = { setting: studio.state.settings.wordWrapColumn, mistake: document.querySelector('.settings-content .settings-help.bad')?.textContent, invalid: settingsBox('Wrap at column')?.getAttribute('aria-invalid') };
+  await type(settingsBox('Wrap at column'), '60');
+  out.typedSixty = { setting: studio.state.settings.wordWrapColumn, mistake: document.querySelector('.settings-content .settings-help.bad')?.textContent ?? null };
+  await enter(settingsBox('Wrap at column'));
+  out.afterEnter = studio.state.settings.wordWrapColumn;
+  // Rulers: typed out of order, used tidied up.
+  await type(settingsBox('Rulers'), '72 40,40');
+  await enter(settingsBox('Rulers'));
+  out.rulers = { setting: studio.state.settings.rulers, box: settingsBox('Rulers')?.value };
+  await type(settingsBox('Rulers'), '40, abc');
+  out.rulersMistake = { setting: studio.state.settings.rulers, mistake: document.querySelector('.settings-content .settings-help.bad')?.textContent };
+  // Esc puts the box back and leaves Settings open.
+  settingsBox('Rulers')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await sleep(200);
+  out.afterEsc = { box: settingsBox('Rulers')?.value, settingsOpen: studio.state.settingsOpen };
+  out.snapshot = await snap('settings-long-lines');
+  studio.closeSettings();
+  await sleep(400);
+  out.atColumn60 = drawn();
+  // Narrower than the column: the edge comes first.
+  studio.updateSettings({ wordWrapColumn: 400 }, { write: false });
+  await sleep(300);
+  out.atColumn400 = drawn();
+  studio.updateSettings({ wordWrap: 'off' }, { write: false });
+  await sleep(300);
+  out.off = drawn();
+  // A column typed and Settings closed straight away: still used.
+  studio.updateSettings({ wordWrap: 'column', wordWrapColumn: 80 }, { write: false });
+  studio.openSettings('editor');
+  await sleep(400);
+  await type(settingsBox('Wrap at column'), '100');
+  studio.closeSettings();
+  await sleep(400);
+  out.closedWhileTyping = studio.state.settings.wordWrapColumn;
+  out.file = (({ wordWrap, wordWrapColumn, rulers }) => ({ wordWrap, wordWrapColumn, rulers }))(JSON.parse((await ipc.configRead()).text ?? '{}'));
+  studio.updateSettings({ wordWrap: 'column', wordWrapColumn: 60, rulers: [40, 72] }, { write: false });
+  await sleep(400);
+  out.drawnForPicture = drawn();
+  out.editorSnapshot = await snap('editor-long-lines');
+  studio.updateSettings(saved);
+  await sleep(300);
+  style.remove();
+  out.restored = { ...drawn(), settings: { wordWrap: studio.state.settings.wordWrap, wordWrapColumn: studio.state.settings.wordWrapColumn, rulers: studio.state.settings.rulers } };
+  const d = out as Record<string, ReturnType<typeof drawn>>;
+  // The edge: where it wraps by default (Monaco keeps a column or two back from the scrollbar).
+  out.ok =
+    d.byDefault.wrapsAt > 60 &&
+    d.byDefault.widestChars <= d.byDefault.wrapsAt &&
+    d.byDefault.wrapsAt <= d.byDefault.viewWidthChars &&
+    d.byDefault.rulers.length === 0 &&
+    out.typingSix && (out.typingSix as { setting: number }).setting === 80 &&
+    out.afterEnter === 60 &&
+    JSON.stringify((out.rulers as { setting: number[] }).setting) === '[40,72]' &&
+    (out.rulers as { box: string }).box === '40, 72' &&
+    JSON.stringify((out.rulersMistake as { setting: number[] }).setting) === '[40,72]' &&
+    (out.afterEsc as { box: string; settingsOpen: boolean }).box === '40, 72' &&
+    (out.afterEsc as { settingsOpen: boolean }).settingsOpen &&
+    d.atColumn60.wrapsAt === 60 &&
+    d.atColumn60.widestChars <= 60 &&
+    JSON.stringify(d.atColumn60.rulers) === '[40,72]' &&
+    d.atColumn400.wrapsAt === d.byDefault.wrapsAt &&
+    d.atColumn400.widestChars <= d.atColumn400.wrapsAt &&
+    d.off.wrapsAt === -1 &&
+    d.off.widestChars > d.off.viewWidthChars &&
+    out.closedWhileTyping === 100;
+  return out;
+}
+
 /** Settings dialog hides the native preview; the composer honours the send-key setting (TODO #2). */
 async function settingsChecks() {
   const out: Record<string, unknown> = {};
@@ -5688,6 +5805,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
+    if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();
     if (want('bundle')) result.bundle = await bundleChecks();
     if (launch.selftestEdits && want('samples')) result.samples = await sampleChecks();

@@ -225,3 +225,5 @@
 - [x] make a really pretty README.md for the github repo
 
 - [x] in settings modal, X in top right corner isnt centered properly (visible when hovering)
+
+- [x] editor settings for where long lines wrap (e.g. at 120) and vertical rulers at chosen columns (e.g. 80 and 120), as in vs code

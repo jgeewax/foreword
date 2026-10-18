@@ -827,6 +827,12 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .settings-content .settings-help { font-size: 12px; }
 .settings-row { display: flex; align-items: center; gap: 8px; }
 .settings-zoom { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+/* Columns typed in: where lines wrap, and the rulers. */
+.settings-wrap-column { margin-top: 10px; }
+.settings-content .settings-input.settings-column { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.settings-content .settings-input.settings-rulers { max-width: 220px; font-variant-numeric: tabular-nums; }
+.settings-input[aria-invalid="true"] { border-color: var(--bad); }
+.settings-row + .settings-help.bad { margin-top: 4px; }
 /* Search settings: every page at once, only what matches, the words highlighted. */
 .settings-search { flex: 0 1 380px; display: flex; align-items: center; gap: 6px; margin-left: 8px; height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-2); color: var(--muted); }
 .settings-search:focus-within { border-color: var(--accent); }

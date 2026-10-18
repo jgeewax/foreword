@@ -256,7 +256,7 @@ export function paletteCommands(studio: Studio): Command[] {
       'Settings',
       [
         menu('settings', 'Open Settings', { keys: '⌘,', keywords: ['preferences'], anywhere: true }),
-        { id: 'settings-editor', title: 'Editor Settings', keywords: ['text size', 'font', 'marks', 'colour', 'color', 'preferences'], anywhere: true, run: () => studio.openSettings('editor') },
+        { id: 'settings-editor', title: 'Editor Settings', keywords: ['text size', 'font', 'word wrap', 'rulers', 'column', 'marks', 'colour', 'color', 'preferences'], anywhere: true, run: () => studio.openSettings('editor') },
         { id: 'about', title: 'About Typst Studio', keywords: ['version', 'credits'], anywhere: true, run: () => studio.openAbout() },
         { id: 'check-updates', title: 'Check for Updates', keywords: ['update', 'upgrade', 'new version'], anywhere: true, run: () => void studio.checkForUpdates({ dialog: true }) },
         { id: 'settings-assistant', title: 'Assistant Settings', keywords: ['claude', 'codex', 'gemini', 'antigravity', 'opencode', 'sign in', 'preferences'], anywhere: true, run: () => studio.openSettings('assistant') },

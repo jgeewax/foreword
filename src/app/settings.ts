@@ -22,6 +22,9 @@ export function assistantsFor(word: string): AssistantId[] {
   return ASSISTANTS.filter((id) => id.startsWith(w) || ASSISTANT_NAMES[id].toLowerCase().startsWith(w));
 }
 
+/** Where the editor wraps a long line: at its edge, at a column (or the edge, if that comes first), or nowhere. */
+export type WordWrap = 'window' | 'column' | 'off';
+
 /** The programs Typst Studio runs itself; Settings ▸ Tools can choose each one. */
 export type ToolName = 'tinymist' | 'opencode' | 'git';
 export const TOOL_NAMES: ToolName[] = ['tinymist', 'opencode', 'git'];
@@ -45,6 +48,12 @@ export type AppSettings = {
   formatOnSave: boolean;
   /** The editor's text size in px (before the UI zoom), as VS Code's editor.fontSize. */
   editorFontSize: number;
+  /** Where long lines wrap, as VS Code's editor.wordWrap ('window' is its "on", 'column' its "bounded"). */
+  wordWrap: WordWrap;
+  /** The column they wrap at, with wordWrap 'column', as VS Code's editor.wordWrapColumn. */
+  wordWrapColumn: number;
+  /** A vertical line at each of these columns, as VS Code's editor.rulers (ascending; none by default). */
+  rulers: number[];
   /** Programs chosen in Settings ▸ Tools (absent: found automatically). The Rust side reads these from the settings file. */
   toolPaths: Partial<Record<ToolName, string>>;
   /** Which program runs the writing assistant. */
@@ -66,6 +75,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   allowCommands: [],
   formatOnSave: true,
   editorFontSize: 12,
+  wordWrap: 'window',
+  wordWrapColumn: 80,
+  rulers: [],
   toolPaths: {},
   assistant: 'opencode',
   checkForUpdates: true,
@@ -76,6 +88,23 @@ export const EDITOR_FONT_SIZES = { min: 9, max: 24 };
 
 /** The editor's line height for a text size: VS Code's on macOS (1.5 times, rounded). */
 export const editorLineHeight = (fontSize: number) => Math.round(fontSize * 1.5);
+
+/** The columns the editor wraps at and draws rulers at (in characters). */
+export const EDITOR_COLUMNS = { min: 20, max: 400 };
+const MAX_RULERS = 8;
+
+const isColumn = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= EDITOR_COLUMNS.min && n <= EDITOR_COLUMNS.max;
+
+/** Rulers as typed ("80, 120"): ascending, each once; null if any isn't a column. Empty text is none. */
+export function parseRulers(text: string): number[] | null {
+  const words = text.split(/[\s,]+/).filter(Boolean);
+  const columns = words.map(Number);
+  if (!columns.every(isColumn)) return null;
+  const out = [...new Set(columns)].sort((a, b) => a - b);
+  return out.length <= MAX_RULERS ? out : null;
+}
+
+export const rulersText = (rulers: number[]) => rulers.join(', ');
 
 const KEY = 'studio.settings';
 
@@ -132,6 +161,12 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
   const size = raw.editorFontSize;
   if (typeof size === 'number' && size >= EDITOR_FONT_SIZES.min && size <= EDITOR_FONT_SIZES.max) out.editorFontSize = Math.round(size * 2) / 2;
+  if (raw.wordWrap === 'window' || raw.wordWrap === 'column' || raw.wordWrap === 'off') out.wordWrap = raw.wordWrap;
+  if (isColumn(raw.wordWrapColumn)) out.wordWrapColumn = raw.wordWrapColumn;
+  if (Array.isArray(raw.rulers)) {
+    const rulers = raw.rulers.filter(isColumn);
+    out.rulers = [...new Set(rulers)].sort((a, b) => a - b).slice(0, MAX_RULERS);
+  }
   if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
   if (ASSISTANTS.includes(raw.assistant as AssistantId)) out.assistant = raw.assistant as AssistantId;
   if (typeof raw.checkForUpdates === 'boolean') out.checkForUpdates = raw.checkForUpdates;

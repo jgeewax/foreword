@@ -16,6 +16,12 @@ describe('the settings file', () => {
     expect(text.endsWith('}\n')).toBe(true);
   });
 
+  it('keeps where lines wrap and the rulers', () => {
+    const c = parseConfig('{ "wordWrap": "column", "wordWrapColumn": 120, "rulers": [80, 120] }');
+    expect(c.settings).toMatchObject({ wordWrap: 'column', wordWrapColumn: 120, rulers: [80, 120] });
+    expect(JSON.parse(serializeConfig(c.raw, { ...c.settings, rulers: [72] }, 1))).toMatchObject({ wordWrap: 'column', wordWrapColumn: 120, rulers: [72] });
+  });
+
   it('keeps the programs chosen for the tools', () => {
     const c = parseConfig('{ "toolPaths": { "tinymist": "~/bin/tinymist", "git": "" } }');
     expect(c.settings.toolPaths).toEqual({ tinymist: '~/bin/tinymist' });

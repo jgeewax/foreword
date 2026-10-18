@@ -100,6 +100,85 @@ export function ColorChoice({ label, on, color, colors, onChange }: { label: str
   );
 }
 
+/**
+ * A setting typed in a box (a column, a list of columns). It's used on Enter, on
+ * leaving the box or on closing Settings, not at each key, so typing 200 doesn't
+ * wrap at 20 on the way. While it isn't one, `mistake` says why; leaving the box
+ * then puts the setting back, and Esc does at any time (a second Esc closes Settings).
+ */
+export function TypedSetting<T>({
+  label,
+  value,
+  parse,
+  format,
+  onChange,
+  mistake,
+  className,
+  placeholder,
+  before,
+  after,
+}: {
+  label: string;
+  value: T;
+  parse: (text: string) => T | null;
+  format: (value: T) => string;
+  onChange: (value: T) => void;
+  mistake: string;
+  className?: string;
+  placeholder?: string;
+  /** Words either side of the box ("Wrap at", "characters"). */
+  before?: ReactNode;
+  after?: ReactNode;
+}) {
+  const shown = format(value);
+  const [draft, setDraft] = useState(shown);
+  const [typing, setTyping] = useState(false);
+  // The setting when it changes elsewhere (the settings file), but not under the author's typing.
+  useEffect(() => {
+    if (!typing) setDraft(shown);
+  }, [shown, typing]);
+  const parsed = parse(draft);
+  const use = useRef(() => {});
+  use.current = () => {
+    if (parsed !== null && format(parsed) !== shown) onChange(parsed);
+  };
+  useEffect(() => () => use.current(), []);
+  return (
+    <>
+      <div className="settings-row">
+        {before}
+        <input
+          className={`settings-input${className ? ` ${className}` : ''}`}
+          aria-label={label}
+          aria-invalid={parsed === null}
+          placeholder={placeholder}
+          spellCheck={false}
+          value={draft}
+          onFocus={() => setTyping(true)}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            use.current();
+            setTyping(false);
+            setDraft(parsed === null ? shown : format(parsed));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              use.current();
+              if (parsed !== null) setDraft(format(parsed));
+            } else if (e.key === 'Escape' && draft !== shown) {
+              // Puts it back, not closing Settings.
+              e.stopPropagation();
+              setDraft(shown);
+            }
+          }}
+        />
+        {after}
+      </div>
+      {parsed === null && <div className="settings-help bad">{mistake}</div>}
+    </>
+  );
+}
+
 export type PickerRow = {
   key: string;
   /** What it is, more about it, and a path (in type, as Tools' copies). */
