@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRESETS } from '../services/agent/permissions';
-import { composerKeyAction, editorLineHeight, loadSettings, saveSettings } from './settings';
+import { assistantsFor, composerKeyAction, editorLineHeight, loadSettings, saveSettings } from './settings';
 
 const enter = (mods: Partial<{ shift: boolean; meta: boolean; ctrl: boolean; alt: boolean; composing: boolean }> = {}) => ({
   key: 'Enter',
@@ -94,5 +94,23 @@ describe('editorLineHeight', () => {
     expect(editorLineHeight(12)).toBe(18);
     expect(editorLineHeight(13)).toBe(20);
     expect(editorLineHeight(14)).toBe(21);
+  });
+});
+
+describe('assistantsFor', () => {
+  it('takes the start of an id or a name, or the maker', () => {
+    expect(assistantsFor('claude')).toEqual(['claude']);
+    expect(assistantsFor('Claude Code')).toEqual(['claude']);
+    expect(assistantsFor('gem')).toEqual(['gemini']);
+    expect(assistantsFor('open')).toEqual(['opencode']);
+    expect(assistantsFor(' Codex ')).toEqual(['codex']);
+    expect(assistantsFor('openai')).toEqual(['codex']);
+    expect(assistantsFor('Anthropic')).toEqual(['claude']);
+  });
+
+  it('lists every one a short word fits, and none for nothing', () => {
+    expect(assistantsFor('c')).toEqual(['claude', 'codex']);
+    expect(assistantsFor('')).toEqual([]);
+    expect(assistantsFor('gpt')).toEqual([]);
   });
 });

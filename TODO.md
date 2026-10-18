@@ -204,7 +204,7 @@
 
 - [ ] for defaults, be explicit. you can say "this folder" but then must include the exact path so that its clear
 
-- [ ] add a way to change ai providers (opencode/codex/etc) from the ai chat panel
+- [x] add a way to change ai providers (opencode/codex/etc) from the ai chat panel
 
 - [x] add a way to open the agent settings form the ai chat panel
 

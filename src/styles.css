@@ -686,6 +686,30 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .mode-name { font-weight: 600; }
 .mode-description { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 .plan-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
+/* The assistant menu, beside the model: its mark (and name, when there's room); opens upward. */
+.assistant-menu { flex: none; }
+.assistant-trigger { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 5px; font-size: 11.5px; color: var(--muted); background: transparent; border-color: transparent; white-space: nowrap; }
+.assistant-trigger:hover:not(:disabled) { border-color: transparent; background: var(--bg-3); color: var(--fg); }
+.assistant-trigger-mark { position: relative; display: inline-grid; }
+.assistant-trigger-dot { position: absolute; right: -2px; bottom: -2px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--bg); }
+.assistant-trigger-dot.tone-busy { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.assistant-trigger-dot.tone-warn { background: var(--warn); }
+.assistant-trigger-dot.tone-bad { background: var(--bad); }
+.assistant-trigger-name { display: none; }
+@container (min-width: 460px) { .assistant-trigger-name { display: inline; } }
+.assistant-menu-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding-top: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
+.assistant-menu-title { padding: 4px 10px 4px; color: var(--muted); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.assistant-menu-row { display: flex; align-items: center; gap: 10px; height: auto; padding: 6px 10px; text-align: left; white-space: normal; border: none; border-radius: 0; background: transparent; }
+.assistant-menu-row:hover:not(:disabled), .assistant-menu-row:focus-visible, .assistant-menu-row.current { outline: none; border: none; background: var(--sel); }
+.assistant-menu-row.locked { opacity: 0.5; }
+.assistant-menu-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.assistant-menu-name { font-weight: 600; }
+.assistant-menu-row .assistant-status { margin-top: 0; font-size: 11px; }
+.assistant-menu-row.current .assistant-status.tone-ok { color: var(--fg); }
+.assistant-menu-row .model-check { display: grid; place-items: center; width: 14px; }
+.assistant-menu-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; padding: 5px 6px 5px 10px; border-top: 1px solid var(--border); font-size: 11px; }
+.assistant-menu-footer .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-menu-settings { display: inline-flex; flex: none; align-items: center; gap: 5px; }
 
 /* The chat's live progress line, and the model's reasoning. */
 .activity-line { display: flex; align-items: center; gap: 8px; padding: 6px 2px 2px; font-size: 12.5px; animation: rise-in 0.18s ease-out; }
@@ -815,7 +839,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .tone-warn .assistant-dot { background: var(--warn); }
 .tone-bad .assistant-dot { background: var(--bad); }
 /* Each one's mark: a glyph on a tile of its own colour. */
-.assistant-mark { flex: none; display: grid; place-items: center; border-radius: 9px; color: #fff; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.14); }
+.assistant-mark { flex: none; display: grid; place-items: center; color: #fff; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.14); }
 .mark-opencode { background: linear-gradient(160deg, #545c6b, #2d323b); }
 .mark-claude { background: linear-gradient(160deg, #e3906f, #c6613f); }
 .mark-gemini { background: linear-gradient(135deg, #4b8ef7 5%, #9a6fd0 60%, #d8687a); }

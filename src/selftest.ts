@@ -4090,6 +4090,90 @@ async function agentSettingsChecks() {
   return { ok, button, fits, headerShot, opened };
 }
 
+/**
+ * The chat's assistant menu: the mark beside the model, the four assistants
+ * with how each is here, ↑↓, Settings…, and no switching while one works.
+ * Switching itself is recorded, not done, unless `real` (assistantswitch,
+ * asked for by name): then Claude Code starts, and OpenCode again after.
+ */
+async function assistantMenuChecks(real = false) {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.settings.assistant;
+  const update = studio.updateSettings.bind(studio);
+  const patches: unknown[] = [];
+  // Never Typst Studio's settings file (the user's own app reads it); when not real, not even the setting.
+  studio.updateSettings = (patch, opts) => (real ? update(patch, { ...opts, write: false }) : void patches.push(patch));
+  const trigger = () => document.querySelector<HTMLButtonElement>('.composer-controls .assistant-trigger');
+  const rows = () => [...document.querySelectorAll<HTMLButtonElement>('.assistant-menu-row')];
+  const menu = () => ({
+    rows: rows().map((r) => `${r.dataset.assistant}${r.getAttribute('aria-checked') === 'true' ? ' ✓' : ''}: ${r.querySelector('.assistant-status')?.textContent}`),
+    footer: document.querySelector('.assistant-menu-footer .muted')?.textContent,
+  });
+  const settle = () => waitFor(() => ['ready', 'error'].includes(studio.state.agent.status), 180000, 'agent').catch(() => {});
+  try {
+    await settle();
+    const t = trigger();
+    out.trigger = t && { label: t.getAttribute('aria-label'), title: t.title, beforeModel: t.parentElement?.nextElementSibling?.classList.contains('model-picker') };
+    t?.click();
+    await sleep(200);
+    out.focused = (document.activeElement as HTMLElement | null)?.dataset.assistant;
+    // How each would run here: filled in once it's been checked.
+    await waitFor(() => !rows().some((r) => r.textContent?.includes('Looking…')), 15000, 'statuses').catch(() => {});
+    const list = document.querySelector('.assistant-menu-popover')?.getBoundingClientRect();
+    const button = t?.getBoundingClientRect();
+    out.open = { ...menu(), inWindow: !!list && list.top >= 0, above: !!list && !!button && list.bottom <= button.top + 1, snapshot: await snap('assistant-menu') };
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await sleep(50);
+    out.arrowDown = (document.activeElement as HTMLElement | null)?.dataset.assistant;
+    // While a conversation works, the others can't be chosen: it says why.
+    studio.store.set((s) => ({ agent: { ...s.agent, running: true } }));
+    await sleep(100);
+    rows().find((r) => r.dataset.assistant !== saved)?.click();
+    await sleep(100);
+    out.busy = { ...menu(), locked: rows().filter((r) => r.classList.contains('locked')).length, patches: patches.length, toast: studio.state.toast?.text, assistant: studio.state.settings.assistant };
+    studio.store.set((s) => ({ agent: { ...s.agent, running: false } }));
+    studio.store.set({ toast: null });
+    await sleep(100);
+    // Settings… opens Typst Studio ▸ Assistant.
+    document.querySelector<HTMLButtonElement>('.assistant-menu-settings')?.click();
+    await sleep(300);
+    out.settings = { open: studio.state.settingsOpen, page: document.querySelector('.settings-nav button.active')?.textContent, menuClosed: !document.querySelector('.assistant-menu-popover') };
+    studio.closeSettings();
+    await sleep(200);
+    // Choosing another: a new conversation with it.
+    const other = real ? 'claude' : saved === 'codex' ? 'gemini' : 'codex';
+    trigger()?.click();
+    await sleep(200);
+    document.querySelector<HTMLButtonElement>(`.assistant-menu-row[data-assistant="${other}"]`)?.click();
+    await sleep(300);
+    if (real) {
+      await waitFor(() => studio.state.agent.status === 'starting', 5000, 'restart').catch(() => {});
+      await settle();
+    }
+    out.chose = { patches: [...patches], assistant: studio.state.settings.assistant, status: studio.state.agent.status, error: studio.state.agent.error ?? null, label: trigger()?.getAttribute('aria-label'), menuClosed: !document.querySelector('.assistant-menu-popover') };
+    if (real) out.chose = { ...(out.chose as object), snapshot: await snap('assistant-menu-switched') };
+    // /assistant: says which; a name it can't place; and back by name.
+    const notices = () => studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text);
+    const said = notices().length;
+    await studio.runSlash('/assistant');
+    await studio.runSlash('/assistant c');
+    await studio.runSlash(`/assistant ${saved}`);
+    if (real) {
+      await waitFor(() => studio.state.agent.status === 'starting', 5000, 'restart').catch(() => {});
+      await settle();
+    }
+    out.slash = { said: notices().slice(said), patches: patches.slice(1), assistant: studio.state.settings.assistant, status: studio.state.agent.status };
+  } finally {
+    delete (studio as { updateSettings?: unknown }).updateSettings;
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    if (studio.state.settings.assistant !== saved) {
+      studio.updateSettings({ assistant: saved }, { write: false });
+      await settle();
+    }
+  }
+  return out;
+}
+
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'below' });
@@ -5139,6 +5223,9 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('previewclose')) result.previewclose = await previewCloseChecks();
     if (want('agentsettings')) result.agentsettings = await agentSettingsChecks();
+    if (want('assistantmenu')) result.assistantmenu = await assistantMenuChecks();
+    // It starts Claude Code: only when asked for.
+    if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('selectall')) result.selectall = await selectAllChecks();

@@ -7,6 +7,7 @@ import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
+import { AssistantMenu } from './AssistantMenu';
 import { Icon } from './icons';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
@@ -769,6 +770,7 @@ function Composer() {
         />
         <div className="composer-controls">
           <ModeMenu />
+          <AssistantMenu />
           <ModelPicker placement="up" />
           <PermissionsMenu />
           <span className="spacer" />

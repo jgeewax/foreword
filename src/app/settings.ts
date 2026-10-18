@@ -11,6 +11,15 @@ export type HistoryPlacement = 'tab' | 'below';
 export type AssistantId = 'opencode' | 'claude' | 'gemini' | 'codex';
 export const ASSISTANTS: AssistantId[] = ['opencode', 'claude', 'gemini', 'codex'];
 export const ASSISTANT_NAMES: Record<AssistantId, string> = { opencode: 'OpenCode', claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex' };
+const ASSISTANT_MAKERS: Record<string, AssistantId> = { anthropic: 'claude', google: 'gemini', openai: 'codex', chatgpt: 'codex' };
+
+/** The assistants a word could name, for /assistant: the start of an id or name ("claude", "gem", "open"), or the maker. */
+export function assistantsFor(word: string): AssistantId[] {
+  const w = word.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!w) return [];
+  if (ASSISTANT_MAKERS[w]) return [ASSISTANT_MAKERS[w]];
+  return ASSISTANTS.filter((id) => id.startsWith(w) || ASSISTANT_NAMES[id].toLowerCase().startsWith(w));
+}
 
 /** The programs Typst Studio runs itself; Settings ▸ Tools can choose each one. */
 export type ToolName = 'tinymist' | 'opencode' | 'git';

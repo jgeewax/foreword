@@ -11,7 +11,7 @@ import { Icon } from './icons';
 import { ModelPicker } from './ModelPicker';
 
 /** Who makes each one, and the account it runs on. */
-const ABOUT: Record<AssistantId, { maker: string; account: string }> = {
+export const ABOUT: Record<AssistantId, { maker: string; account: string }> = {
   opencode: { maker: 'Open source', account: 'Any model you’ve set up in it: OpenAI, Anthropic, Google, or one on this Mac' },
   claude: { maker: 'Anthropic', account: 'Claude, with your Claude plan or an API key' },
   // Gemini CLI stopped serving personal Google logins in June 2026.
@@ -29,7 +29,7 @@ const GLYPHS: Record<AssistantId, ReactNode> = {
 
 export function AssistantMark({ id, size = 34 }: { id: AssistantId; size?: number }) {
   return (
-    <span className={`assistant-mark mark-${id}`} style={{ width: size, height: size }} aria-hidden>
+    <span className={`assistant-mark mark-${id}`} style={{ width: size, height: size, borderRadius: Math.round(size * 0.27) }} aria-hidden>
       <svg viewBox="0 0 24 24" width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
         {GLYPHS[id]}
       </svg>
@@ -37,13 +37,13 @@ export function AssistantMark({ id, size = 34 }: { id: AssistantId; size?: numbe
   );
 }
 
-type Tone = 'ok' | 'busy' | 'warn' | 'bad' | 'off';
+export type Tone = 'ok' | 'busy' | 'warn' | 'bad' | 'off';
 type Agent = StudioState['agent'];
 
 /** Where the chosen assistant is. */
-type Now = 'no-book' | 'starting' | 'running' | 'signed-out' | 'no-node' | 'not-installed' | 'failed' | 'off';
+export type Now = 'no-book' | 'starting' | 'running' | 'signed-out' | 'no-node' | 'not-installed' | 'failed' | 'off';
 
-function nowOf(id: AssistantId, agent: Agent, setup: AssistantSetup | undefined, hasBook: boolean): Now {
+export function nowOf(id: AssistantId, agent: Agent, setup: AssistantSetup | undefined, hasBook: boolean): Now {
   if (!hasBook) return 'no-book';
   if (agent.status === 'starting') return 'starting';
   if (agent.status === 'ready') return 'running';
@@ -59,7 +59,7 @@ const ARROWS: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft:
 const signedInWith = (s: AssistantSetup) => (s.account ? `Signed in with ${s.account}` : 'Signed in');
 
 /** A card's status line: how the chosen one is now; for the others, how they'd run. */
-function cardStatus(id: AssistantId, now: Now | null, setup: AssistantSetup | undefined, model: string | null, version: string | null): { tone: Tone; text: string } {
+export function cardStatus(id: AssistantId, now: Now | null, setup: AssistantSetup | undefined, model: string | null, version: string | null): { tone: Tone; text: string } {
   switch (now) {
     case 'no-book':
       return { tone: 'off', text: 'Starts when you open a book' };
@@ -138,7 +138,7 @@ export function AssistantPage({ goToTools }: { goToTools: () => void }) {
   const modelName = current?.name ?? agent.model?.id ?? null;
   const name = ASSISTANT_NAMES[chosen];
 
-  const choose = (id: AssistantId) => id !== chosen && studio.updateSettings({ assistant: id });
+  const choose = (id: AssistantId) => studio.switchAssistant(id);
   const signIn = async () => {
     try {
       await ipc.assistantSignIn(chosen);

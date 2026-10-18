@@ -24,7 +24,7 @@ import {
   validateProjectSettings,
   type ProjectSettings,
 } from './project-settings';
-import { loadSettings, saveSettings, type AppSettings, type AssistantId, type ToolName } from './settings';
+import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type ToolName } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
@@ -3408,6 +3408,19 @@ export class Studio {
         }
         break;
       }
+      case 'assistant': {
+        const names = ASSISTANTS.map((id) => ASSISTANT_NAMES[id]).join(', ');
+        if (!cmd.arg) {
+          say(`Assistant: ${ASSISTANT_NAMES[this.state.settings.assistant]}. Switch with /assistant and a name: ${names}.`);
+          break;
+        }
+        const [id, ...more] = assistantsFor(cmd.arg);
+        if (!id) say(`No assistant is called “${cmd.arg}”. Try ${names}.`, 'error');
+        else if (more.length) say(`“${cmd.arg}” could be ${[id, ...more].map((a) => ASSISTANT_NAMES[a]).join(' or ')}: type more of the name.`, 'error');
+        else if (id === this.state.settings.assistant) say(`${ASSISTANT_NAMES[id]} is the assistant already.`);
+        else this.switchAssistant(id);
+        break;
+      }
       case 'permissions': {
         const preset = PERMISSION_WORDS[cmd.arg.toLowerCase()];
         if (!preset) say('Use /permissions ask, /permissions edit or /permissions readonly.', 'error');
@@ -3715,6 +3728,23 @@ export class Studio {
       this.newSession();
       void this.restartAgent();
     }
+  }
+
+  /** A conversation is at work (shown or in the background): switching assistant would stop it. */
+  get assistantBusy() {
+    const a = this.state.agent;
+    return a.running || Object.values(a.background).some((t) => t.running);
+  }
+
+  /** Another program as the writing assistant (Settings, the chat's assistant menu, /assistant): a new conversation with it. */
+  switchAssistant(id: AssistantId): boolean {
+    if (id === this.state.settings.assistant) return true;
+    if (this.assistantBusy) {
+      this.toast(`The assistant is working: stop it, or let it finish, then switch to ${ASSISTANT_NAMES[id]}.`, 'error');
+      return false;
+    }
+    this.updateSettings({ assistant: id });
+    return true;
   }
 
   /** Settings ▸ Tools: check again which programs are in use (e.g. after installing one). */
