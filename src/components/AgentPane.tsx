@@ -1132,6 +1132,18 @@ function QueuedMessages() {
 function StyleGuideBar() {
   const guide = useStore(studio.store, (s) => s.styleGuide);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
+  // This conversation is drafting the guide: say so, rather than offering to start it.
+  const drafting = useStore(studio.store, (s) => s.styleGuide.drafting !== null && (s.styleGuide.drafting === '' || s.styleGuide.drafting === s.agent.sessionId));
+  if (drafting) {
+    return (
+      <div className="style-bar drafting">
+        <ActivityGlyph phase="thinking" />
+        <span>
+          <strong>Drafting your style guide</strong> from the chapters. It opens in the editor when it’s written.
+        </span>
+      </div>
+    );
+  }
   if (guide.exists) {
     return (
       <div className="style-bar">

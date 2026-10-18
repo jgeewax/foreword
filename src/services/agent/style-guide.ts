@@ -72,14 +72,36 @@ ${sections.join('\n\n')}
 `;
 }
 
-/** Message that asks the agent to draft the guide from the manuscript. */
-export function draftStyleGuidePrompt(): string {
-  return `Help me write a style guide for this book, saved as ${STYLE_GUIDE_FILE} in the project root.
+/**
+ * "Draft from my chapters": the author sees only this message in the chat;
+ * how to do it goes with it as instructions (STYLE_DRAFT_KEY), out of sight.
+ */
+export const STYLE_DRAFT_MESSAGE = 'Draft my writing style guide from the chapters.';
 
-1. Read the manuscript first: the main file and several chapters, enough to get a real sense of how the book is written.
-2. Describe what you see in a few bullet points: audience, voice and tone, point of view and tense, sentence style, terminology and spelling, how Typst markup is used (headings, emphasis, equations, labels, citations), and how the figures look (kind, colours, captions).
-3. Ask me up to three short questions about anything the text alone can't tell you (for example who the reader is, or what I want to avoid). Wait for my answers.
-4. Then write ${STYLE_GUIDE_FILE} with these sections: ${STYLE_SECTIONS.join('; ')}. Keep the rules short and concrete, and include a short example passage taken from or modelled on the book.
+/** The draft's own instruction entry, for that conversation only. */
+export const STYLE_DRAFT_KEY = 'style-draft';
 
-Don't change any chapter files.`;
+/**
+ * How to draft the guide. The author never sees this: it says what the guide
+ * is (how this book is written, for whoever writes in it), that there's
+ * nothing to ask about the guide itself, and that questions are a last resort,
+ * about the book, at most two, with answers to pick from.
+ */
+export function styleDraftBrief(): string {
+  return `# Drafting the book's writing style guide
+
+The author pressed "Draft from my chapters" in Typst Studio. In this conversation your job is to write ${STYLE_GUIDE_FILE} in the book's folder (next to the main file): a short guide to how this book is written. Typst Studio gives the guide to the writing assistant with every request, so that new and revised text sounds like the rest of the book. The author reads and edits it too, so write it plainly.
+
+What the guide is about, decided already:
+- It describes this book's prose and markup, nothing else. "Audience" means the book's readers.
+- Don't ask the author anything about the guide itself: who it's for, who reads it, its format, length, sections or tone, whether to write it, or where to save it. Those are settled here. Asking them would confuse the author.
+- Don't explain this brief or repeat it to the author. They only see their own short message.
+
+How to do it:
+1. Read the manuscript before anything else: the main file, and enough of the chapters to see how the book is really written (all of a short book; for a long one, at least the first chapter, one from the middle and the last). Read; don't summarize what you read in the chat.
+2. Work out from the text: who reads the book and what they already know; voice and tone; point of view and tense; how sentences and paragraphs are built; words and spelling (British or American, preferred terms, capitals, numbers); how the Typst markup is used (headings and labels, emphasis, lists, equations, citations, how chapters are included); and how figures look and are captioned.
+3. Questions are a last resort. Ask only when the text can't tell you something the guide needs and a wrong guess would mislead every later edit, for example who the book is for when the chapters don't show it, or what the author wants the writing never to do. At most two questions, asked together, the way your instructions say to ask, each with three answers drawn from the book (the likeliest first, recommended). Never ask about something the chapters already show. When unsure, decide from the text instead.
+4. Write ${STYLE_GUIDE_FILE} with these sections, in this order: ${STYLE_SECTIONS.join('; ')}. Leave out a section the book gives you nothing for. Each rule short, concrete and followable ("Second person, present tense", not "Engaging tone"), true to what the book does now. Under Examples, quote a short passage from the book that shows its voice (a few sentences).
+5. Change nothing else: no chapter, no other file, no settings.
+6. Then, in two or three sentences, tell the author what the guide says their book sounds like, and that they can change ${STYLE_GUIDE_FILE} any time. Don't paste the guide into the chat.`;
 }

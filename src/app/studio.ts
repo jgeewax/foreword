@@ -57,7 +57,7 @@ import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructi
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
-import { draftStyleGuidePrompt, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
+import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleDraftBrief, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
@@ -271,8 +271,12 @@ export type StudioState = {
   /** `.typst-studio.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
   exporting: boolean;
-  /** WRITING_STYLE.md: whether it exists, and whether the user dismissed the setup prompt. */
-  styleGuide: { exists: boolean; chars: number; dismissed: boolean };
+  /**
+   * WRITING_STYLE.md: whether it exists, and whether the user dismissed the
+   * setup prompt. `drafting`: the conversation drafting it from the chapters
+   * ('' while it starts), until the guide is written.
+   */
+  styleGuide: { exists: boolean; chars: number; dismissed: boolean; drafting: string | null };
   history: HistoryState;
   /** The author's own Git repository, if the book is in one. */
   git: GitState;
@@ -365,7 +369,7 @@ const initialState: StudioState = {
   recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
-  styleGuide: { exists: false, chars: 0, dismissed: false },
+  styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null },
   history: initialHistory,
   git: initialGit,
   code: initialCode,
@@ -2632,6 +2636,7 @@ export class Studio {
         this.recordTurn(sessionId, turn);
         return this.refreshAiEdits();
       });
+      void this.afterStyleDraft(sessionId);
       void this.code.afterAgentTurn();
       if (this.restartAgentWhenIdle) {
         this.restartAgentWhenIdle = false;
@@ -3270,6 +3275,8 @@ export class Studio {
         this.setAgent({ sessionId });
         await this.applyInstructions(sessionId);
       }
+      // A brief that goes with this message, out of sight (the style guide's draft).
+      if (this.pendingBrief) await agent.setInstructions(sessionId, this.pendingBrief.key, this.pendingBrief.text);
       await agent.send(sessionId, text, context);
       return true;
     } catch (e) {
@@ -4255,12 +4262,14 @@ export class Studio {
         return false;
       }
     })();
-    this.store.set({ styleGuide: { exists: text !== null, chars: text?.length ?? 0, dismissed } });
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, exists: text !== null, chars: text?.length ?? 0, dismissed } }));
     const { sessionId } = this.state.agent;
     if (!updateSession || !changed || !sessionId || !this.agent) return;
     try {
       if (text?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(text));
       else await this.agent.removeInstructions(sessionId, STYLE_INSTRUCTIONS_KEY);
+      // The draft says it's ready when its turn ends (afterStyleDraft).
+      if (sessionId === this.state.styleGuide.drafting) return;
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: text?.trim() ? `Using the updated ${STYLE_GUIDE_FILE}.` : `${STYLE_GUIDE_FILE} was removed; no style guide in use.` });
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't update the style guide for this conversation: ${errorMessage(e)}` });
@@ -4285,9 +4294,44 @@ export class Studio {
     await this.openFile(STYLE_GUIDE_FILE);
   }
 
-  /** Ask the agent to read the manuscript, ask a few questions, and write the guide. */
+  /** Instructions for the next message's conversation, which the author doesn't see (set by draftStyleGuide). */
+  private pendingBrief: { key: string; text: string } | null = null;
+
+  /** The guide's text when its draft began: the draft is done when the file is there and different. */
+  private styleDraftBefore: string | null = null;
+
+  /**
+   * "Draft from my chapters": a task of its own, in Write mode, that reads the
+   * manuscript, may ask a question or two about the book, and writes the guide.
+   * The chat shows the author a short message; the brief goes with it as that
+   * conversation's instructions, out of sight.
+   */
   async draftStyleGuide() {
-    return this.send(draftStyleGuidePrompt());
+    const a = this.state.agent;
+    if (!this.agent || a.status !== 'ready' || a.running) return false;
+    if (a.sessionId || a.items.length) this.newSession();
+    if (this.state.agent.mode !== 'write') await this.setMode('write');
+    this.styleDraftBefore = this.styleGuideText;
+    this.pendingBrief = { key: STYLE_DRAFT_KEY, text: styleDraftBrief() };
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '' } }));
+    const sent = await this.send(STYLE_DRAFT_MESSAGE);
+    this.pendingBrief = null;
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: sent ? this.state.agent.sessionId : null } }));
+    return sent;
+  }
+
+  /** A turn of the draft ended: once the guide is written, it opens in the editor. */
+  private async afterStyleDraft(sessionId: string | null) {
+    if (!sessionId || sessionId !== this.state.styleGuide.drafting) return;
+    await this.loadStyleGuide();
+    const text = this.styleGuideText;
+    if (!text?.trim() || text === this.styleDraftBefore) return;
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: null } }));
+    await this.refreshFiles();
+    await this.openFile(STYLE_GUIDE_FILE);
+    if (this.state.agent.sessionId === sessionId) {
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `Your style guide is open in the editor (${STYLE_GUIDE_FILE}). Every message follows it from now on; change anything that isn't right.` });
+    }
   }
 
   dismissStyleGuidePrompt() {

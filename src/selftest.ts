@@ -370,6 +370,87 @@ async function optionsChecks() {
 }
 
 /**
+ * "Draft from my chapters", with a real assistant (Claude Code on a small
+ * model, Codex, or OpenCode on a free one): the chat shows only the short
+ * message, any question is about the book (answered with its first choice),
+ * WRITING_STYLE.md is written and opens in the editor, and no chapter changes.
+ * Writes the guide: scratch book only.
+ */
+async function styleDraftChecks(kind: 'claude' | 'codex' | 'opencode') {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings'].map((k) => [k, localStorage.getItem(k)] as const);
+  const chapters = studio.state.workspace!.files.filter((f) => f.endsWith('.typ'));
+  const hashes = Object.fromEntries(await Promise.all(chapters.map(async (f) => [f, await ipc.fsHash(f)] as const)));
+  try {
+    studio.updateSettings({ assistant: kind, permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    out.status = studio.state.agent.status;
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const models = studio.state.agent.models;
+    const small =
+      kind === 'opencode' ? models.find((m) => m.providerID === 'opencode' && /free/i.test(m.id) && m.supportsTools) : models.find((m) => /haiku|luna|mini/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.model = studio.state.agent.model?.id;
+    studio.newSession();
+    await sleep(300);
+    out.barBefore = document.querySelector('.style-bar')?.textContent;
+    document.querySelector<HTMLButtonElement>('.style-bar.setup .primary')?.click();
+    await sleep(1500);
+    out.barWhileDrafting = document.querySelector('.style-bar')?.textContent;
+    const asked: unknown[] = [];
+    const t0 = Date.now();
+    let idleSince = 0;
+    while (Date.now() - t0 < 420000) {
+      const a = studio.state.agent;
+      const q = a.items.find((i) => i.kind === 'question' && i.state === 'pending');
+      if (q?.kind === 'question') {
+        asked.push(q.fields.map((f) => ({ title: f.title, question: f.description, options: f.options?.map((o) => o.label) })));
+        if (asked.length === 1) out.snapshotQuestion = await snap(`styledraft-${kind}-question`);
+        const answer: Record<string, string | string[] | boolean> = {};
+        for (const f of q.fields) if (f.options?.length) answer[f.key] = f.type === 'multiselect' ? [f.options[0].value] : f.options[0].value;
+        await studio.answerQuestion(q.id, answer);
+        await sleep(1000);
+        continue;
+      }
+      const p = a.items.find((i) => i.kind === 'permission' && i.state === 'pending');
+      if (p) {
+        await studio.replyPermission(p.id, 'once');
+        await sleep(500);
+        continue;
+      }
+      if (studio.state.styleGuide.drafting === null && studio.state.styleGuide.exists) break;
+      if (!a.running) {
+        idleSince ||= Date.now();
+        if (Date.now() - idleSince > 15000) break;
+      } else idleSince = 0;
+      await sleep(1000);
+    }
+    await sleep(1500);
+    const items = studio.state.agent.items;
+    out.seconds = Math.round((Date.now() - t0) / 1000);
+    out.userMessages = items.filter((i) => i.kind === 'user').map((i) => (i as { text: string }).text);
+    out.asked = asked;
+    out.tools = items.filter((i) => i.kind === 'tool').map((i) => `${(i as { name: string }).name} ${(i as { summary: string }).summary}`.slice(0, 120));
+    out.replies = items.filter((i) => i.kind === 'assistant').map((i) => (i as { text: string }).text.slice(0, 600));
+    out.notices = items.filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text);
+    out.guide = studio.state.styleGuide;
+    out.activeFile = studio.state.active;
+    const guide = await ipc.fsRead('WRITING_STYLE.md').catch(() => null);
+    out.headings = guide?.text.split('\n').filter((l) => l.startsWith('#'));
+    out.guideStart = guide?.text.slice(0, 1500);
+    out.chaptersUnchanged = (await Promise.all(chapters.map(async (f) => (await ipc.fsHash(f)) === hashes[f]))).every(Boolean);
+    out.barAfter = document.querySelector('.style-bar')?.textContent;
+    out.snapshot = await snap(`styledraft-${kind}`);
+  } finally {
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * What the chat shows while the assistant works, for each phase, posed without
  * a model: who's at work ("Claude is thinking…"), words that change with the
  * wait, a tip once the turn runs long, and each phase's moving picture. A
@@ -6330,6 +6411,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
+    for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
