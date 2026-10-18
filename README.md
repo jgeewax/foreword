@@ -179,5 +179,5 @@ cd src-tauri && TYPST_STUDIO_WORKSPACE=/tmp/book TYPST_STUDIO_SELFTEST=/tmp/st/o
 <br>
 
 <div align="center">
-<sub>Typst Studio is an independent project. It isn't made by, or affiliated with, the Typst team.</sub>
+<sub>Made by JJ Geewax in Singapore. Typst Studio is an independent project: it isn't made by, or affiliated with, the Typst team.</sub>
 </div>
