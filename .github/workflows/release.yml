@@ -63,6 +63,8 @@ jobs:
 
       - name: OpenCode and Tinymist, to go inside the app
         run: |
+          # The runner's Homebrew is a snapshot (it once had OpenCode 1.x): today's formula, for 2.x.
+          brew update --quiet
           brew install opencode
           node scripts/bundle-opencode.mjs
           node scripts/bundle-tinymist.mjs
