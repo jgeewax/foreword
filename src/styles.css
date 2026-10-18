@@ -895,6 +895,8 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .assistant-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .assistant-row-actions button.small { display: inline-flex; align-items: center; gap: 5px; }
 .assistant-model { display: flex; width: min(340px, 100%); }
+/* OpenCode's program, chosen as in Tools. */
+.assistant-tool { width: 100%; }
 .assistant-account.warn { color: var(--warn); }
 .assistant-program { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; max-width: 100%; min-width: 0; }
 .settings-section .assistant-program code { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }

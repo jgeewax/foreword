@@ -213,3 +213,5 @@
 - [x] lines assistant changed vs us changes should be a color picker with an option to do the same and show no difference. a toggle switch is wrong for this.
 
 - [x] line coloring should be in a separate settings section. that is about the editor, not about which agent system youre using
+
+- [x] im confused why opencode is in the tools section of settings while also in the agent section. i think it should probably go from the tool section?

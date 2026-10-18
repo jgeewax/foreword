@@ -9,6 +9,7 @@ import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
 import { ModelPicker } from './ModelPicker';
+import { ToolPicker } from './ToolPicker';
 
 /** Who makes each one, and the account it runs on. */
 export const ABOUT: Record<AssistantId, { maker: string; account: string }> = {
@@ -107,7 +108,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function AssistantPage({ goToTools }: { goToTools: () => void }) {
+export function AssistantPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const agent = useStore(studio.store, (s) => s.agent);
   const hasBook = useStore(studio.store, (s) => !!s.workspace);
@@ -251,11 +252,7 @@ export function AssistantPage({ goToTools }: { goToTools: () => void }) {
           {now === 'not-installed' && (
             <div className="assistant-fix">
               <p>
-                In Terminal: <Command text="brew install opencode" />, then Start again. Or{' '}
-                <button className="link" onClick={goToTools}>
-                  choose a copy in Tools
-                </button>
-                .
+                In Terminal: <Command text="brew install opencode" />, then Start again. Or choose a copy you have, under Program below.
               </p>
             </div>
           )}
@@ -308,7 +305,7 @@ export function AssistantPage({ goToTools }: { goToTools: () => void }) {
               </Row>
             )}
             <Row label="Program">
-              <ProgramRow id={chosen} setup={setup} opencode={opencode} goToTools={goToTools} />
+              <ProgramRow id={chosen} setup={setup} opencode={opencode} />
             </Row>
           </div>
         </div>
@@ -318,29 +315,19 @@ export function AssistantPage({ goToTools }: { goToTools: () => void }) {
   );
 }
 
-/** The program that runs it: installed, run by npx, or missing. */
-function ProgramRow({ id, setup, opencode, goToTools }: { id: AssistantId; setup: AssistantSetup | undefined; opencode: ToolInfo | undefined; goToTools: () => void }) {
-  if (!setup) return <span className="muted">Looking…</span>;
+/** The program that runs it: OpenCode's, to choose (as Tinymist's and Git's in Tools); the others' installed, run by npx, or missing. */
+function ProgramRow({ id, setup, opencode }: { id: AssistantId; setup: AssistantSetup | undefined; opencode: ToolInfo | undefined }) {
   if (id === 'opencode') {
-    const copy = opencode?.copies?.find((c) => c.path === opencode.path);
     return (
       <>
-        {setup.program ? (
-          <span className="assistant-program">
-            <span>{[opencode?.version, copy?.source ?? (opencode?.fromSettings ? 'your choice' : null)].filter(Boolean).join(' · ') || 'Installed'}</span>
-            <code className="selectable">{tildePath(setup.program)}</code>
-          </span>
-        ) : (
-          <span className="bad">Not installed</span>
-        )}
-        <span className="assistant-row-help">
-          <button className="link" onClick={goToTools}>
-            Choose another copy in Tools
-          </button>
-        </span>
+        <div className="assistant-tool">
+          <ToolPicker tool="opencode" label="OpenCode" info={opencode} install="brew install opencode" notInstalled={null} />
+        </div>
+        <span className="assistant-row-help">Choose another and OpenCode starts again with it.</span>
       </>
     );
   }
+  if (!setup) return <span className="muted">Looking…</span>;
   if (setup.program) {
     return (
       <>

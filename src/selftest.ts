@@ -4833,7 +4833,12 @@ async function toolPathChecks() {
   studio.openSettings('tools');
   await waitFor(() => studio.state.tools?.tinymist.copies, 15000, 'copies').catch(() => {});
   await sleep(400);
-  const card = (label: string) => [...document.querySelectorAll<HTMLElement>('.tool-card')].find((c) => c.querySelector('.settings-label')?.textContent === label)!;
+  // Each tool's program picker (OpenCode's is on the Assistant page).
+  const card = (label: string) => document.querySelector<HTMLElement>(`[data-tool="${label.toLowerCase()}"]`)!;
+  const settingsPage = async (name: string) => {
+    [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === name)?.click();
+    await sleep(400);
+  };
   const trigger = (label: string) => card(label).querySelector<HTMLButtonElement>('.tool-trigger')!;
   const options = (label: string) => [...card(label).querySelectorAll<HTMLElement>('.tool-option')];
   const openList = async (label: string) => {
@@ -4867,7 +4872,8 @@ async function toolPathChecks() {
   const mark = (step: string) => timeline.push(`${Math.round(performance.now() - t0)} ms: — ${step}`);
 
   out.found = Object.fromEntries((['tinymist', 'opencode', 'git'] as const).map((t) => [t, studio.state.tools?.[t].copies?.map((c) => `${c.version} · ${c.source} · ${c.path}`)]));
-  out.shownBefore = { tinymist: shown('Tinymist'), opencode: shown('OpenCode'), git: shown('Git') };
+  out.toolsPage = [...document.querySelectorAll<HTMLElement>('.settings-content [data-tool]')].map((e) => e.dataset.tool);
+  out.shownBefore = { tinymist: shown('Tinymist'), git: shown('Git') };
 
   // Tinymist: VS Code's copy, from the list.
   mark('Tinymist: VS Code’s copy from the list');
@@ -4928,10 +4934,12 @@ async function toolPathChecks() {
     await waitFor(() => !studio.state.tools?.git.configured, 10000, 'git automatic').catch(() => {});
   }
 
-  // OpenCode: its own copy, then Automatic; the assistant starts again each time.
+  // OpenCode, in Settings ▸ Assistant: its own copy, then Automatic; the assistant starts again each time.
   const opencode = studio.state.tools?.opencode.copies?.[0];
-  if (opencode) {
+  if (opencode && studio.state.settings.assistant === 'opencode') {
     mark('OpenCode');
+    await settingsPage('Assistant');
+    out.opencodeShownBefore = shown('OpenCode');
     const seen: string[] = [];
     const off = studio.store.subscribe(() => {
       if (seen.at(-1) !== studio.state.agent.status) seen.push(studio.state.agent.status);
@@ -4944,7 +4952,9 @@ async function toolPathChecks() {
     await pick('OpenCode', (t) => t.startsWith('Automatic'));
     await waitFor(() => !studio.state.tools?.opencode.configured && starts() === 2 && studio.state.agent.status === 'ready', 60000, 'opencode automatic').catch(() => {});
     off();
-    out.opencodeAutomatic = { agent: studio.state.agent.status, seen };
+    out.opencodeAutomatic = { agent: studio.state.agent.status, seen, shown: shown('OpenCode') };
+    out.snapshotAssistant = await snap('tools-opencode-in-assistant');
+    await settingsPage('Tools');
   }
 
   // Search again.
@@ -4952,7 +4962,7 @@ async function toolPathChecks() {
   search.click();
   await sleep(30);
   out.searchAgain = { during: search.textContent, after: await waitFor(() => !search.disabled && search.textContent, 15000, 'search').catch(() => 'timed out') };
-  out.after = { settings: studio.state.settings.toolPaths, file: await file(), shown: { tinymist: shown('Tinymist'), opencode: shown('OpenCode'), git: shown('Git') } };
+  out.after = { settings: studio.state.settings.toolPaths, file: await file(), shown: { tinymist: shown('Tinymist'), git: shown('Git') } };
   out.snapshotAfter = await snap('tools-after');
   offTimeline();
   studio.closeSettings();
