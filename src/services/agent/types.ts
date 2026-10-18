@@ -21,14 +21,20 @@ export type PermissionDecision = 'once' | 'always' | 'reject';
 
 export type FilePatch = { file: string; patch: string };
 
-/** A field of an OpenCode form (the question tool asks with one string or multiselect field per question). */
+/**
+ * One of the assistant's questions (a field of a form): OpenCode's question
+ * tool asks with one string or multiselect field per question; ACP agents'
+ * forms and questions written in a reply come to the same shape (questions.ts).
+ * `title` is its short header ("Tone"), `description` the question itself.
+ */
 export type FormField = {
   key: string;
   type: 'string' | 'number' | 'integer' | 'boolean' | 'multiselect' | 'external';
   title?: string;
   description?: string;
   required?: boolean;
-  options?: { value: string; label: string; description?: string }[];
+  /** `preview`: something to look at for the option (Claude Code's mockups and snippets). */
+  options?: { value: string; label: string; description?: string; preview?: string }[];
   /** Free text allowed besides the options. */
   custom?: boolean;
   placeholder?: string;
@@ -53,9 +59,10 @@ export type AgentEvent =
   | { type: 'turn-started'; sessionId: string }
   | { type: 'turn-finished'; sessionId: string; outcome: 'succeeded' | 'failed' | 'interrupted' | 'stopped'; error?: string }
   | { type: 'step-started'; sessionId: string }
-  /** The assistant asks (the question tool): answer with replyForm, or dismiss. */
+  /** The assistant asks (its question tool): answer with replyForm, or dismiss. */
   | { type: 'form-asked'; sessionId: string; form: FormRequest }
-  | { type: 'form-settled'; sessionId: string; formId: string; outcome: 'answered' | 'cancelled' }
+  /** `withdrawn`: the assistant stopped waiting (the turn was stopped, or it gave up). */
+  | { type: 'form-settled'; sessionId: string; formId: string; outcome: 'answered' | 'cancelled' | 'withdrawn' }
   /** A message (ours, queued or not) reached the conversation. */
   | { type: 'inbox-delivered'; sessionId: string; inboxId: string }
   | { type: 'step-finished'; sessionId: string; finish: string }

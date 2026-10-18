@@ -61,3 +61,21 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   return <>{blocks.map(block)}</>;
 });
+
+/** A line of the assistant's (an option of its question): emphasis, code and Typst math, with no paragraphs. */
+export const MarkdownLine = memo(function MarkdownLine({ text }: { text: string }) {
+  const blocks = useMemo(() => parseMarkdown(text), [text]);
+  const lines = blocks.flatMap((b) => (b.t === 'para' || b.t === 'heading' ? [b.c] : []));
+  // Anything bigger (a list, a code block) as it was written.
+  if (lines.length !== blocks.length) return <>{text}</>;
+  return (
+    <>
+      {lines.map((c, k) => (
+        <Fragment key={k}>
+          {k > 0 && ' '}
+          {inlines(c)}
+        </Fragment>
+      ))}
+    </>
+  );
+});

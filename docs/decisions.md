@@ -1886,6 +1886,91 @@ section), the page starts at the window's top and the offset is measured.
   option clicked and answered (the reply followed the choice), and a dismissal
   that ended the turn.
 
+### Questions from every assistant: the question panel
+
+- **Why:** with Claude Code (and Gemini CLI, Codex outside Plan) the
+  assistant's questions came as text, answered by typing. Two reasons:
+  - claude-agent-acp leaves Claude Code's AskUserQuestion out
+    (`disallowedTools`) unless the client says it can show forms;
+  - Gemini CLI leaves its `ask_user` out in ACP mode, whatever the client says.
+- **How each one asks now:**
+  - **Claude Code:** the app's `initialize` says `elicitation: {form: {}}`.
+    AskUserQuestion then comes as `elicitation/create`, with its tool call's
+    id: one `question_<n>` per question (header as title, question as
+    description; with one question, the question is the `message`), a
+    `oneOf` for one choice or an array of `anyOf` for several, and a
+    `question_<n>_custom` field for the author's own answer.
+  - **Codex:** request_user_input comes the same way. Its title is the
+    question and its description the header; a "None of the above" option
+    plus a `role: user_note` field stand for Other. It's only offered in Plan
+    mode unless the feature `default_mode_request_user_input` is on: the app
+    starts codex-acp with `CODEX_CONFIG={"features":{…: true}}` (acp.rs).
+  - **OpenCode:** its question tool, as before (a form).
+  - **Gemini CLI and Antigravity:** no question tool, so the instructions
+    ask for a fenced `questions` block of JSON at the end of the reply.
+    The chat hides the block (while it streams too) and asks it in the
+    panel once the turn ends; the answers go back as the author's next
+    message ("My answers: - question? answer").
+- **One shape** (questions.ts): every way in becomes the panel's questions:
+  one choice, several, yes or no, words, or a number. Answers go back in
+  the asker's terms: an own answer into Claude's `_custom` field, or into
+  Codex's "None of the above" plus its note. Answers are accepted;
+  **Skip** declines (Claude Code tells the model "The user did not answer
+  the questions." and it carries on). Stop answers an open question as
+  cancelled, and the agent's `$/cancel_request` withdraws one: it shows
+  "Not answered".
+- **The instructions** (per assistant) say how to ask:
+  - with its own tool by name, never as questions in the reply;
+  - everything at once, up to four questions in order, each with a short
+    header;
+  - three options (two to four), a one-line description each, the
+    recommendation first with "(Recommended)";
+  - several when more than one applies (Codex's tool takes one answer, so
+    the author names several in their own words); Yes and No for a yes-or-no
+    question;
+  - no "Other" option: the panel always has one.
+- **The panel takes the message box's place**, like Claude Code's:
+  - one question at a time, with tabs when there are several, then a
+    Review of the answers (each opens its question again) and Submit;
+  - 1–9 choose (one question with choices answers at once), Y/N for
+    yes-or-no, 1–9 or space tick several, ⏎ goes on, ←→ move between
+    questions, ↑↓ between options, esc skips;
+  - "(Recommended)" is a badge;
+  - Other is a box after the options (the number after them focuses it);
+    for several it's ticked with the rest;
+  - labels and descriptions draw Typst math, as the chat does;
+  - Claude Code's option `preview` shows under the options;
+  - Stop is there while the turn waits.
+
+  It takes the keyboard only when the author is in the chat or nowhere,
+  never from the editor. The message box comes back when the questions are
+  answered (with the keyboard, if the panel had it), and its draft is kept.
+- **In the chat:** "The assistant asks you 2 questions, below" while they
+  wait; then a card with each header and answer (asked in a reply, just
+  the questions, since the author's message has the answers), "You
+  skipped…", or "Not answered". Reopened conversations show the cards
+  again:
+  - from the question tool call (OpenCode's and Claude Code's results both
+    say `"Question"="Answer"`);
+  - for Codex, which reports no tool call, from one the adapter adds to its
+    record;
+  - a reply's questions block counts as answered once the author has
+    written after it.
+- **Verified with the real programs:**
+  - recorded (`__fixtures__/acp-questions.jsonl`): claude-agent-acp 0.93.0
+    on Haiku with two questions (one choice, several), one question skipped,
+    and codex-acp 2.2.2 with the feature on in the default mode;
+  - self-tests in the app (`questions-claude`, `questions-codex`): asked with
+    the tool in 3–9 s, answered by keys (including an own answer among
+    several), replies that repeat the answers exactly, skipped with esc, and
+    the card again after switching away and back;
+  - `questions` (OpenCode) passes with the panel;
+  - `askpanel` (no model) goes through every kind, key, the review, skip,
+    withdraw, and the editor keeping the keyboard;
+  - without its tool, Haiku given Gemini's instructions wrote a valid
+    `questions` block of three questions, recommendations first.
+  - Not yet run with a signed-in Gemini CLI (no Google login on this Mac).
+
 ### Feeling fast
 
 - **Instant response:** Send clears the composer and shows the message at
@@ -2359,9 +2444,9 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - **The instructions now name the book's folder.** Haiku turned this
   scratch path's `-Users-…/` into `-Users-…-` and read outside the book (the
   card asked; the test refused); with the folder spelled out it didn't.
-- **Not offered:** OpenCode's question tool (Claude asks in its reply
-  instead), and editing unsaved buffers through ACP's `fs/*` (the app saves
-  before every message, as with OpenCode).
+- **Not offered:** editing unsaved buffers through ACP's `fs/*` (the app
+  saves before every message, as with OpenCode). Questions came later: see
+  "Questions from every assistant".
 - Verified: recorded traffic (`__fixtures__/acp-claude.jsonl`, the account
   lines removed) replayed through the adapter in unit tests. Self-test
   `acp-claude` with real turns on Haiku 5.5: models listed, a read (lines

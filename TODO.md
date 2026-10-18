@@ -227,3 +227,5 @@
 - [x] in settings modal, X in top right corner isnt centered properly (visible when hovering)
 
 - [x] editor settings for where long lines wrap (e.g. at 120) and vertical rulers at chosen columns (e.g. 80 and 120), as in vs code
+
+- [x] we need a claude-code style question asking tool and UI in the chatbox. right now, when there are questions, the model seems to just dump them as text and i have to type to answer. i want multiple questions in order possible. for each one, suggest 3 options and give me a "other" option as well. this also includes multi-select checkbox (as well as other), y/n questions, etc. we have to be really thorough on this one.

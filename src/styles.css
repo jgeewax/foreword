@@ -791,25 +791,61 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .queued-item.steer .queued-state { color: var(--accent); }
 .queued-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The assistant's questions. */
-.question { border: 1px solid var(--accent); border-radius: 10px; padding: 10px; background: var(--bg-2); display: flex; flex-direction: column; gap: 10px; animation: pop-in 0.18s ease-out; }
-.question.done { border-color: var(--border); padding: 6px 10px; gap: 2px; font-size: 12px; animation: none; }
-.question-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
-.question.done .question-head { color: var(--muted); }
-.question-header { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.question-text { margin: 2px 0 6px; line-height: 1.4; }
-.question-options { display: flex; flex-direction: column; gap: 4px; }
-.question-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; padding: 6px 8px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); }
-.question-option:hover:not(:disabled) { border-color: var(--accent); }
-.question-option.picked { border-color: var(--accent); background: var(--sel); }
-.question-key { flex: none; min-width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); }
-.question-option.picked .question-key { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
-.question-option-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.question-label { font-weight: 600; }
-.question-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
-.question-other { margin-top: 4px; width: 100%; }
-.question-actions { display: flex; justify-content: flex-end; gap: 6px; }
-.question-answer { line-height: 1.4; }
+/* The assistant's questions: in the chat, a line while they wait, then what was asked and answered. */
+.question-waiting { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); animation: rise-in 0.16s ease-out; }
+.question-record { border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; animation: rise-in 0.16s ease-out; }
+.question-record-head { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.question-record.answered .question-record-head .icon-svg { color: var(--good); }
+.question-record-row { display: flex; gap: 8px; min-width: 0; line-height: 1.4; }
+.question-record-q { flex: none; max-width: 45%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.question-record:not(.answered) .question-record-q, .question-record.answered:not(:has(.question-record-a)) .question-record-q { max-width: none; white-space: normal; }
+.question-record-a { min-width: 0; font-weight: 550; overflow-wrap: anywhere; }
+
+/* The question panel, in the message box's place: one question at a time. */
+.composer.asking { padding: 8px; }
+.ask-panel { display: flex; flex-direction: column; gap: 8px; padding: 9px 10px 8px; background: var(--bg); border: 1px solid var(--accent); border-radius: 10px; outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); animation: pop-in 0.18s ease-out; }
+.ask-panel.busy { opacity: 0.75; }
+.ask-top { display: flex; flex-direction: column; gap: 6px; }
+.ask-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.ask-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.ask-tab { display: inline-flex; align-items: center; gap: 5px; max-width: 160px; padding: 1px 8px 1px 3px; border-radius: 11px; font-size: 11.5px; background: var(--bg-2); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-tab.current { color: var(--fg); border-color: var(--accent); background: var(--sel); }
+.ask-tab.review { padding-left: 8px; }
+.ask-tab-mark { flex: none; display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; font-size: 9.5px; font-weight: 700; background: var(--bg-3); color: var(--muted); }
+.ask-tab.done .ask-tab-mark { background: var(--good); color: var(--bg); }
+.ask-step { display: flex; flex-direction: column; gap: 7px; animation: appear 0.12s ease-out; }
+.ask-question { font-size: 13px; font-weight: 550; line-height: 1.4; -webkit-user-select: text; user-select: text; }
+.ask-choices { display: flex; flex-direction: column; gap: 4px; }
+.ask-choice { display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left; padding: 6px 9px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--border); outline: none; }
+.ask-choice:hover:not(:disabled), .ask-choice:focus-visible, .ask-choice:focus-within { border-color: var(--accent); }
+button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.ask-choice.picked { border-color: var(--accent); background: var(--sel); }
+.ask-key { flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-top: 0.5px; padding: 0 3px; border-radius: 5px; font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--bg); border: 1px solid var(--border); }
+.ask-key.box { padding: 0; width: 18px; }
+.ask-choice.picked .ask-key { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+.ask-key .icon-svg { stroke-width: 3; }
+.ask-choice-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ask-label { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-weight: 600; }
+.ask-badge { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0 5px; border-radius: 4px; color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.ask-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.ask-own { align-items: center; cursor: text; }
+.ask-own .ask-key { cursor: default; }
+.ask-own-input { flex: 1; min-width: 0; padding: 0; font: inherit; color: var(--fg); background: transparent; border: none; outline: none; }
+.ask-own-input::placeholder { color: var(--muted); }
+.ask-text, .ask-number { width: 100%; font: inherit; color: var(--fg); background: var(--bg-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; outline: none; resize: vertical; }
+.ask-text:focus, .ask-number:focus { border-color: var(--accent); }
+.ask-preview { margin: 0; font: 11.5px/1.4 "SF Mono", Menlo, monospace; background: var(--bg-2); border: 1px dashed var(--border); border-radius: 6px; padding: 6px 8px; white-space: pre; overflow-x: auto; max-height: 180px; }
+.ask-review { display: flex; flex-direction: column; gap: 3px; }
+.ask-review-row { display: flex; flex-direction: column; align-items: stretch; gap: 1px; width: 100%; text-align: left; padding: 5px 9px; border-radius: 7px; background: var(--bg-2); }
+.ask-review-row:hover:not(:disabled), .ask-review-row:focus-visible { border-color: var(--accent); }
+.ask-review-q { color: var(--muted); font-size: 11.5px; }
+.ask-review-a { font-weight: 600; }
+.ask-review-a.none { font-weight: 400; color: var(--muted); font-style: italic; }
+.ask-actions { display: flex; align-items: center; gap: 6px; }
+.ask-actions > button { flex: none; }
+/* The keys give way to the buttons in a narrow chat. */
+.ask-hint { flex: 1 1 0; min-width: 0; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-actions .primary { min-width: 64px; }
 .activity-line.phase-asking .activity-spinner { animation: pulse 1.2s ease-in-out infinite; border-top-color: var(--border); background: var(--accent); }
 
 /* Settings: a big window with its sections down the side. */

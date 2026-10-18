@@ -105,6 +105,11 @@ export function appTool(call: AcpToolCall): { name: string; input: Record<string
     case 'TodoWrite':
     case 'write_todos':
       return { name: 'todowrite', input: raw };
+    // Questions for the author: the panel asks them (a form elicitation), the row stays out.
+    case 'AskUserQuestion':
+    case 'request_user_input':
+    case 'ask_user':
+      return { name: 'question', input: { questions: raw.questions } };
   }
   switch (call.kind) {
     case 'read':

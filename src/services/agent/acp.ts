@@ -3,13 +3,14 @@
 // in the book's folder (acp.rs). JSON-RPC lines both ways. What OpenCode keeps
 // on its server, the app keeps here: each conversation's transcript, its
 // instructions (sent with the next message when they change), its permission
-// rules (the agent asks; the rules answer, or the author does), and messages
-// queued while a turn runs.
+// rules (the agent asks; the rules answer, or the author does), the questions
+// it asks the author (form elicitations), and messages queued while a turn runs.
 import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
 import { appTool, conversationTitle, decide, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
 import { formatAuthorEdits } from './author-edits';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
+import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
 import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
 
 export type AcpKind = 'claude' | 'gemini' | 'codex' | 'antigravity';
@@ -79,6 +80,8 @@ type Session = {
   queue: { inboxId: string; text: string }[];
   /** Permission requests waiting for the author: our request id → the agent's JSON-RPC id and options. */
   asking: Map<string, { rpcId: number | string; options: { optionId: string; kind: string }[]; ask: { action: string; resources: string[]; patches: FilePatch[] } }>;
+  /** Questions waiting for the author (`elicitation/create`): our form id → the agent's JSON-RPC id, and how answers go back. */
+  forms: Map<string, { rpcId: number | string; form: FormRequest; wire: ElicitationWire }>;
   /** Each tool call as the agent has described it so far (updates add to it), and as the app's tool. */
   tools: Map<string, { call: AcpToolCall; name: string; input: Record<string, unknown> }>;
   /** Command output streamed as it runs (Codex's `terminal_output_delta`), by tool call. */
@@ -121,7 +124,9 @@ export class AcpAdapter implements AgentAdapter {
     this.emit({ type: 'connection', status: 'open' });
     const init = await this.request('initialize', {
       protocolVersion: 1,
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+      // Forms: Claude Code's AskUserQuestion and Codex's request_user_input ask
+      // through them (without, Claude Code leaves its question tool out).
+      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, elicitation: { form: {} } },
       clientInfo: { name: 'typst-studio', title: 'Typst Studio', version: '0.1.0' },
     });
     this.caps = init ?? {};
@@ -192,6 +197,8 @@ export class AcpAdapter implements AgentAdapter {
     }
     if (m.method === 'session/update') return this.update(m.params);
     if (m.method === 'session/request_permission') return this.askPermission(m.id, m.params);
+    if (m.method === 'elicitation/create') return this.askQuestions(m.id, m.params);
+    if (m.method === '$/cancel_request') return this.withdrawn(m.params?.requestId);
     // Anything else the agent asks of us (files, terminals): not offered.
     if (m.id !== undefined) this.send_({ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: `${m.method} isn't supported` } });
   }
@@ -227,6 +234,7 @@ export class AcpAdapter implements AgentAdapter {
       sentInstructions: '',
       queue: [],
       asking: new Map(),
+      forms: new Map(),
       tools: new Map(),
       output: new Map(),
       mode: String(res?.modes?.currentModeId ?? ''),
@@ -469,6 +477,11 @@ export class AcpAdapter implements AgentAdapter {
     // Requests the turn left open are over.
     for (const [requestId] of s.asking) this.emit({ type: 'permission-replied', sessionId: s.id, requestId, reply: 'reject' });
     s.asking.clear();
+    for (const [formId, f] of s.forms) {
+      this.respond(f.rpcId, { action: 'cancel' });
+      this.emit({ type: 'form-settled', sessionId: s.id, formId, outcome: 'withdrawn' });
+    }
+    s.forms.clear();
     this.emit({ type: 'turn-finished', sessionId: s.id, outcome, error });
     const next = s.queue.shift();
     if (next) {
@@ -479,8 +492,13 @@ export class AcpAdapter implements AgentAdapter {
 
   async cancel(sessionId: string) {
     const s = this.session(sessionId);
-    // The protocol: answer every open permission request as cancelled, then cancel.
+    // The protocol: answer every open permission request and question as cancelled, then cancel.
     for (const [, a] of s.asking) this.respond(a.rpcId, { outcome: { outcome: 'cancelled' } });
+    for (const [formId, f] of s.forms) {
+      this.respond(f.rpcId, { action: 'cancel' });
+      this.emit({ type: 'form-settled', sessionId, formId, outcome: 'withdrawn' });
+    }
+    s.forms.clear();
     this.notify('session/cancel', { sessionId });
   }
 
@@ -601,14 +619,70 @@ export class AcpAdapter implements AgentAdapter {
     return [...(this.sessions.get(sessionId)?.asking ?? new Map()).entries()].map(([requestId, a]) => ({ requestId, ...a.ask }));
   }
 
-  // The question tool is OpenCode's: ACP agents ask in their replies.
-  async pendingForms(): Promise<FormRequest[]> {
-    return [];
+  // ---- questions for the author ------------------------------------------------------
+
+  /**
+   * The agent asks the author (a form elicitation): Claude Code's
+   * AskUserQuestion, Codex's request_user_input. It waits for the answer;
+   * what the panel can't show is declined at once.
+   */
+  private askQuestions(rpcId: number | string, params: any) {
+    const s = this.sessions.get(params?.sessionId);
+    const formId = `acp-ask-${++this.seq}`;
+    const asked = s ? formFromElicitation(formId, params) : null;
+    if (!s || !asked) return this.respond(rpcId, { action: 'decline' });
+    s.forms.set(formId, { rpcId, ...asked });
+    this.emit({ type: 'form-asked', sessionId: s.id, form: asked.form });
   }
 
-  async replyForm(_sessionId: string, _formId: string, _answer: FormAnswer) {}
+  /** The agent stopped waiting for a question (`$/cancel_request`): the card goes. */
+  private withdrawn(rpcId: unknown) {
+    for (const s of this.sessions.values()) {
+      for (const [formId, f] of s.forms) {
+        if (f.rpcId !== rpcId) continue;
+        s.forms.delete(formId);
+        this.emit({ type: 'form-settled', sessionId: s.id, formId, outcome: 'withdrawn' });
+      }
+    }
+  }
 
-  async cancelForm() {}
+  async pendingForms(sessionId: string): Promise<FormRequest[]> {
+    return [...(this.sessions.get(sessionId)?.forms.values() ?? [])].map((f) => f.form);
+  }
+
+  async replyForm(sessionId: string, formId: string, answer: FormAnswer) {
+    const s = this.session(sessionId);
+    const f = s.forms.get(formId);
+    if (!f) throw new AcpError('The assistant is no longer waiting for that answer.');
+    s.forms.delete(formId);
+    this.respond(f.rpcId, { action: 'accept', content: elicitationContent(f.form, f.wire, answer) });
+    this.record(s, formId, f.form, answer);
+    this.emit({ type: 'form-settled', sessionId, formId, outcome: 'answered' });
+  }
+
+  /**
+   * The questions in the conversation's record, as a question tool call, when
+   * the agent didn't report one (Codex's request_user_input): the card is there
+   * again after switching away and back. Claude Code's AskUserQuestion is its own.
+   */
+  private record(s: Session, formId: string, form: FormRequest, answer: FormAnswer | null) {
+    if (form.callId && s.tools.has(form.callId)) return;
+    const { input, output } = questionToolCall(form, answer);
+    // Like any tool call, it ends the text before it.
+    this.endPart(s);
+    s.transcript.tool(`${s.id}:a${s.turn}`, form.callId ?? formId, 'question', input, 'completed', output);
+  }
+
+  /** Skipped: the agent hears that the author didn't answer, and carries on. */
+  async cancelForm(sessionId: string, formId: string) {
+    const s = this.session(sessionId);
+    const f = s.forms.get(formId);
+    if (!f) return;
+    s.forms.delete(formId);
+    this.respond(f.rpcId, { action: 'decline' });
+    this.record(s, formId, f.form, null);
+    this.emit({ type: 'form-settled', sessionId, formId, outcome: 'cancelled' });
+  }
 }
 
 function waitFor(done: () => boolean, ms = 120000): Promise<void> {

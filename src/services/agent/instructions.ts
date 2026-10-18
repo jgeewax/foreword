@@ -14,9 +14,46 @@ export type InstructionContext = {
   codeExamples?: boolean;
   /** The book's folder (absolute), for tools that need whole paths. */
   root?: string;
+  /** Which assistant (Settings ▸ Assistant): how it asks the author questions. */
+  assistant?: string;
 };
 
 export const INSTRUCTIONS_KEY = 'typst-studio';
+
+/**
+ * Assistants with a question tool the chat shows as its question panel: its
+ * name, and how a question takes several answers (Codex's takes one).
+ * The others (Gemini CLI, Antigravity: their ACP modes leave theirs out) ask
+ * with a ```questions block (questions.ts).
+ */
+const QUESTION_TOOLS: Record<string, { tool: string; several?: string }> = {
+  opencode: { tool: 'question', several: '`multiple: true`' },
+  claude: { tool: 'AskUserQuestion', several: '`multiSelect: true`' },
+  codex: { tool: 'request_user_input' },
+};
+
+const ASKING_RULES = (several: string | undefined) => `- Ask everything you need at once: up to four questions, in the order they should be answered.
+- Give each question a short header (one or two words, like "Tone") and three options (two to four when three don't fit): a label of one to five words, and a one-line description each. Put your recommendation first, with "(Recommended)" after its label.
+- ${several ? `When more than one option can apply, let the author pick several (${several}).` : 'When more than one option can apply, say so in the question: the author can name several in their own answer.'} For a yes-or-no question, the options are Yes and No.
+- Don't add an "Other" or "None of the above" option: the author can always type their own answer.
+- Ask only what you need. When the request is clear, get on with it.`;
+
+function askingSection(assistant: string | undefined): string {
+  const native = QUESTION_TOOLS[assistant ?? 'opencode'];
+  if (native) {
+    return `## Asking the author
+- When the author has to decide something (a direction, a title, which of several fixes, what to keep or cut), ask with your ${native.tool} tool, never as questions in your reply, and wait for the answers. Ask before a large rewrite rather than guessing.
+${ASKING_RULES(native.several)}`;
+  }
+  return `## Asking the author
+- When the author has to decide something (a direction, a title, which of several fixes, what to keep or cut), ask with a questions block, never as questions in your reply. Ask before a large rewrite rather than guessing.
+- The block is JSON in a fence marked \`questions\`, at the end of your reply; then stop and wait. Typst Studio shows it as a form, and the author's answers come back as their next message. For example:
+\`\`\`questions
+{"questions": [{"header": "Tone", "question": "Which tone should chapter 3 have?", "options": [{"label": "Warm (Recommended)", "description": "Close to chapters 1 and 2"}, {"label": "Formal", "description": "Measured and precise"}, {"label": "Playful", "description": "Light, with jokes"}]}]}
+\`\`\`
+${ASKING_RULES('`"multiSelect": true`')}
+- A question with no options to choose from: \`"type": "text"\` (an open answer) or \`"type": "yesno"\`.`;
+}
 
 export function buildInstructions(ctx: InstructionContext): string {
   const chapters = ctx.typFiles.filter((f) => f !== ctx.entry);
@@ -44,9 +81,10 @@ You are the writing assistant inside Typst Studio, an editor for books and long-
 - If the book is in a Git repository, don't commit, push, pull, stash or switch branches unless the author asks: they do that in Typst Studio's Source Control.
 - Do not create scripts, programs, build files, tests, package manifests, or other tooling. Use Typst code (\`#set\`, \`#show\`, \`#let\`, functions) only when it serves the document.
 - After an edit, say in one to three plain sentences what you changed. No code-review style summaries, no file-by-file reports.
-- Ask a short clarifying question when a request is ambiguous rather than guessing at a large rewrite. When the author has to choose (a direction, a title, which of several fixes), ask with the question tool: a few clear options, each with a one-line description, your recommendation first and marked "(Recommended)". The author can also type their own answer. Ask only what you need.
 - In your replies (not the book), write formulas in Typst math between dollar signs, like $a^2 + b^2 = c^2$ or $sum_(i=1)^n x_i$, never LaTeX (\\frac, \\sum): the chat draws Typst math. Put Typst markup you show in a \`\`\`typst block; the chat shows what it makes under it.
 - Many authors are new to Typst. When your answer involves markup they may not know, say in a few plain words what it does, and prefer the simplest markup that works.
+
+${askingSection(ctx.assistant)}
 
 ## Figures look alike
 - When you make or redraw a figure, match the book's other figures. If \`${FIGURE_STYLE_FILE}\` exists, import its wrappers (\`figure-canvas\` for CeTZ, \`figure-diagram\` for fletcher, \`figure-chart\` for Lilaq) and its \`palette\`, and don't set colours, fonts or line widths in the figure itself. Otherwise copy the look of the existing figures. Figures mode has the details.

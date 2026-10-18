@@ -14,6 +14,7 @@ import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { menuRecorder, type MenuEntry } from './lib/context-menu';
 import { rawEventTap } from './services/agent/opencode';
 import { parseOptions } from './services/agent/options-mode';
+import { formFromElicitation } from './services/agent/questions';
 import { PRESETS } from './services/agent/permissions';
 import { TEMPLATES } from './templates';
 
@@ -2227,12 +2228,12 @@ async function questionChecks() {
   out.activity = studio.state.agent.activity?.phase;
   out.questionRows = [...document.querySelectorAll('.tool summary')].filter((t) => /question/i.test(t.textContent ?? '')).length;
   out.snapshotAsked = await snap('question-asked');
-  // Click the second option, then Answer.
-  const options = [...document.querySelectorAll<HTMLButtonElement>('.question .question-option')];
-  const chosen = options[1]?.querySelector('.question-label')?.textContent ?? null;
+  // Click the second option: one question with choices is answered at once (several end on a review).
+  const options = [...document.querySelectorAll<HTMLButtonElement>('.ask-panel button.ask-choice')];
+  const chosen = options[1]?.querySelector('.ask-label')?.textContent ?? null;
   options[1]?.click();
   await sleep(150);
-  document.querySelector<HTMLButtonElement>('.question button[type="submit"]')?.click();
+  document.querySelector<HTMLButtonElement>('.ask-panel .ask-submit')?.click();
   await waitFor(() => !studio.state.agent.running, 120000, 'reply').catch(() => {});
   await sleep(500);
   const replies = studio.state.agent.items.filter((i) => i.kind === 'assistant');
@@ -2240,7 +2241,7 @@ async function questionChecks() {
     chosen,
     state: studio.state.agent.items.find((i) => i.kind === 'question')?.kind === 'question' ? (studio.state.agent.items.find((i) => i.kind === 'question') as { state: string }).state : null,
     reply: replies.length ? (replies[replies.length - 1] as { text: string }).text.slice(0, 200) : null,
-    summary: document.querySelector('.question.done')?.textContent,
+    summary: document.querySelector('.question-record')?.textContent,
   };
   out.snapshotAnswered = await snap('question-answered');
   // No "Is this task done?" was asked: the header's Done button finishes it anyway.
@@ -2262,10 +2263,335 @@ async function questionChecks() {
   void studio.send(ask);
   await waitFor(question, 120000, 'question 2').catch(() => {});
   await sleep(300);
-  document.querySelector<HTMLButtonElement>('.question .question-actions button:not(.primary)')?.click();
+  [...document.querySelectorAll<HTMLButtonElement>('.ask-panel .ask-actions button')].find((b) => b.textContent === 'Skip')?.click();
   await waitFor(() => !studio.state.agent.running, 120000, 'after dismiss').catch(() => {});
   out.dismissed = { state: (studio.state.agent.items.find((i) => i.kind === 'question') as { state?: string } | undefined)?.state, running: studio.state.agent.running };
   await studio.setMode('write');
+  return out;
+}
+
+/**
+ * The question panel, with questions as each assistant sends them (no model):
+ * Claude Code's two (a choice, then several with an answer of your own) by
+ * keys, through the review; one choice that answers at once; Codex's with
+ * "None of the above"; a reply's questions block (yes or no, then words)
+ * answered as a message; skipped with esc; withdrawn; and asked while you
+ * write in the editor, which keeps the keyboard.
+ */
+async function askPanelChecks() {
+  const out: Record<string, unknown> = {};
+  const style = document.createElement('style');
+  style.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.appendChild(style);
+  const saved = { agent: studio.agent, send: studio.send, state: studio.state.agent };
+  const calls: unknown[][] = [];
+  const sent: string[] = [];
+  studio.agent = {
+    ...(saved.agent ?? {}),
+    replyForm: async (...a: unknown[]) => void calls.push(['reply', ...a.slice(1)]),
+    cancelForm: async (...a: unknown[]) => void calls.push(['skip', a[1]]),
+    cancel: async () => void calls.push(['stop']),
+  } as unknown as typeof studio.agent;
+  studio.send = async (text: string) => (sent.push(text), true);
+  const emit = (e: Record<string, unknown>) => (studio as unknown as { onAgentEvent(e: unknown): void }).onAgentEvent({ sessionId: 'selftest-ask', ...e });
+  const key = (k: string, target: EventTarget | null = document.activeElement) => target?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  const type = (el: Element | null, text: string) => {
+    if (!el) return;
+    Object.getOwnPropertyDescriptor(el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value')!.set!.call(el, text);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const panel = () => document.querySelector<HTMLElement>('.ask-panel');
+  const view = () => ({
+    panel: !!panel(),
+    composer: !!document.querySelector('.composer-box textarea'),
+    focusInPanel: !!panel()?.contains(document.activeElement),
+    focused: document.activeElement?.className || document.activeElement?.tagName,
+    title: panel()?.querySelector('.ask-title')?.textContent,
+    tabs: [...(panel()?.querySelectorAll('.ask-tab') ?? [])].map((t) => `${t.textContent}${t.classList.contains('current') ? '*' : ''}`),
+    question: panel()?.querySelector('.ask-question')?.textContent,
+    choices: [...(panel()?.querySelectorAll('.ask-step .ask-choice') ?? [])].map((c) => `${c.querySelector('.ask-key')?.textContent ?? ''} ${c.querySelector('.ask-label')?.textContent ?? (c.querySelector('input') as HTMLInputElement | null)?.placeholder}${c.classList.contains('picked') ? ' ✓' : ''}`),
+    review: [...(panel()?.querySelectorAll('.ask-review-row') ?? [])].map((r) => `${r.querySelector('.ask-review-q')?.textContent} → ${r.querySelector('.ask-review-a')?.textContent}`),
+    hint: panel()?.querySelector('.ask-hint')?.textContent,
+    activity: studio.state.agent.activity?.phase,
+  });
+  const record = () => [...document.querySelectorAll('.question-record')].at(-1)?.textContent ?? null;
+  const reset = (running: boolean) => {
+    studio.store.set((s) => ({ agent: { ...s.agent, sessionId: 'selftest-ask', running, items: [], queued: [], activity: running ? { phase: 'waiting', since: Date.now() } : null } }));
+  };
+  const ask = (id: string, params: object) => emit({ type: 'form-asked', form: formFromElicitation(id, { mode: 'form', sessionId: 'selftest-ask', ...params })!.form });
+  try {
+    // Claude Code's AskUserQuestion: two questions, asked while you're in the chat.
+    reset(true);
+    await sleep(100);
+    document.querySelector<HTMLTextAreaElement>('.composer-box textarea')?.focus();
+    ask('ask-1', {
+      toolCallId: 'toolu_selftest',
+      message: 'Please answer the following questions.',
+      requestedSchema: {
+        type: 'object',
+        properties: {
+          question_0: {
+            type: 'string',
+            title: 'Tone',
+            description: 'Which tone should the next chapter have?',
+            oneOf: [
+              { const: 'Conversational (Recommended)', title: 'Conversational (Recommended)', description: 'Warm and direct, like chapters 1 and 2.' },
+              { const: 'Formal', title: 'Formal', description: 'Precise, like $A bold(v) = lambda bold(v)$.' },
+              { const: 'Narrative', title: 'Narrative', description: 'Story-driven, with scenes.' },
+            ],
+          },
+          question_0_custom: { type: 'string', title: 'Other' },
+          question_1: {
+            type: 'array',
+            title: 'Topics',
+            description: 'Which topics should it cover?',
+            items: {
+              anyOf: [
+                { const: 'Background', title: 'Background', description: 'How the idea came about.' },
+                { const: 'Core concepts', title: 'Core concepts', description: 'The central ideas, step by step.' },
+                { const: 'Examples', title: 'Examples', description: 'Worked examples.' },
+              ],
+            },
+          },
+          question_1_custom: { type: 'string', title: 'Other' },
+        },
+      },
+    });
+    await sleep(300);
+    out.asked = view();
+    // Typst math in an option's description is drawn, as in the chat.
+    out.mathDrawn = !!(await waitFor(() => panel()?.querySelector('.ask-desc img.typst-inline'), 5000, 'math').catch(() => null));
+    out.snapshotAsked = await snap('ask-two');
+    // "2" picks Formal and moves on to the next question.
+    key('2');
+    await sleep(200);
+    out.second = view();
+    // Several: 1 and 3 tick, your own answer joins them; ⏎ in it goes to the review.
+    key('1');
+    key('3');
+    const own = panel()?.querySelector<HTMLInputElement>('.ask-own-input');
+    own?.focus();
+    type(own ?? null, 'Common mistakes');
+    await sleep(100);
+    out.ticked = view();
+    out.snapshotMulti = await snap('ask-several');
+    key('Enter', own);
+    await sleep(200);
+    out.review = view();
+    out.snapshotReview = await snap('ask-review');
+    // ← goes back to a question; → to the review again.
+    key('ArrowLeft', panel());
+    await sleep(100);
+    out.back = view().question;
+    key('ArrowRight', panel());
+    await sleep(100);
+    panel()?.querySelector<HTMLButtonElement>('.ask-submit')?.click();
+    await sleep(300);
+    out.answered = { calls: calls.splice(0), ...view(), record: record(), state: studio.state.agent.items.find((i) => i.id === 'ask-1')?.kind === 'question' ? (studio.state.agent.items.find((i) => i.id === 'ask-1') as { state: string }).state : null };
+    emit({ type: 'form-settled', formId: 'ask-1', outcome: 'answered' });
+    await sleep(300);
+    out.afterAnswer = { focusedComposer: document.activeElement === document.querySelector('.composer-box textarea'), record: record() };
+    out.snapshotAnswered = await snap('ask-answered');
+
+    // One choice: a click answers at once.
+    ask('ask-2', { message: 'Should the next chapter be about eigenvalues or determinants?', requestedSchema: { type: 'object', properties: { question_0: { type: 'string', title: 'Next chapter', oneOf: [{ const: 'Eigenvalues', title: 'Eigenvalues' }, { const: 'Determinants', title: 'Determinants' }] }, question_0_custom: { type: 'string', title: 'Other' } } } });
+    await sleep(300);
+    out.one = view();
+    out.snapshotOne = await snap('ask-one');
+    panel()?.querySelectorAll<HTMLButtonElement>('button.ask-choice')[1]?.click();
+    await sleep(200);
+    out.oneAnswered = calls.splice(0);
+    emit({ type: 'form-settled', formId: 'ask-2', outcome: 'answered' });
+
+    // Codex: an answer of your own instead of its options.
+    ask('ask-3', {
+      message: 'Codex needs your input to continue.',
+      requestedSchema: {
+        type: 'object',
+        properties: {
+          next_chapter: {
+            type: 'string',
+            title: 'Should the next chapter be about eigenvalues or determinants?',
+            description: 'Next chapter',
+            _meta: { codex: { isOther: true } },
+            oneOf: [
+              { const: 'Eigenvalues', title: 'Eigenvalues' },
+              { const: 'Determinants', title: 'Determinants' },
+              { const: 'None of the above', title: 'None of the above', description: 'Provide a different answer in the note field.' },
+            ],
+          },
+          next_chapter_note: { type: 'string', title: 'Additional answer or note', _meta: { codex: { questionId: 'next_chapter', role: 'user_note' } } },
+        },
+        required: ['next_chapter'],
+      },
+    });
+    await sleep(300);
+    out.codex = view();
+    key('3');
+    await sleep(100);
+    out.codexOwnFocused = document.activeElement?.classList.contains('ask-own-input');
+    type(document.activeElement, 'Both, briefly');
+    key('Enter');
+    await sleep(200);
+    out.codexAnswered = calls.splice(0);
+    emit({ type: 'form-settled', formId: 'ask-3', outcome: 'answered' });
+
+    // Skipped with esc; then a question the assistant withdraws.
+    ask('ask-4', { message: 'Keep the epigraph?', requestedSchema: { type: 'object', properties: { keep: { type: 'boolean', title: 'Epigraph' } } } });
+    await sleep(300);
+    out.yesno = view();
+    key('Escape');
+    await sleep(200);
+    out.skipped = { calls: calls.splice(0) };
+    emit({ type: 'form-settled', formId: 'ask-4', outcome: 'cancelled' });
+    await sleep(100);
+    out.skippedRecord = record();
+    ask('ask-5', { message: 'Which title?', requestedSchema: { type: 'object', properties: { t: { type: 'string', title: 'Title', oneOf: [{ const: 'A', title: 'A' }] } } } });
+    await sleep(200);
+    emit({ type: 'form-settled', formId: 'ask-5', outcome: 'withdrawn' });
+    await sleep(200);
+    out.withdrawn = { panel: !!panel(), record: record() };
+
+    // Asked while you write in the editor: the panel shows, the editor keeps the keyboard.
+    studio.editor?.focus();
+    await sleep(100);
+    ask('ask-6', { message: 'Which title?', requestedSchema: { type: 'object', properties: { t: { type: 'string', title: 'Title', oneOf: [{ const: 'A', title: 'A' }] } } } });
+    await sleep(300);
+    out.whileEditing = { panel: !!panel(), editorKeepsFocus: !!document.activeElement?.closest('.monaco-editor') };
+    emit({ type: 'form-settled', formId: 'ask-6', outcome: 'withdrawn' });
+
+    // A reply's questions block (an assistant without a question tool): hidden while it's
+    // written; once the turn ends, the panel; the answers go as your next message.
+    reset(true);
+    const reply = 'Two things first.\n\n```questions\n{"questions": [{"header": "Exercises", "question": "Add exercises at the end of each section?", "type": "yesno"}, {"header": "Avoid", "question": "Anything to avoid?", "type": "text", "placeholder": "Words, topics…"}]}\n```';
+    emit({ type: 'text-delta', messageId: 'selftest-reply', ordinal: 0, delta: reply.slice(0, 40) });
+    await sleep(150);
+    out.streaming = { text: document.querySelector('.msg.assistant')?.textContent, panel: !!panel() };
+    emit({ type: 'text-ended', messageId: 'selftest-reply', ordinal: 0, text: reply });
+    await sleep(150);
+    out.blockWhileRunning = { panel: !!panel(), waiting: document.querySelector('.question-waiting')?.textContent, reply: document.querySelector('.msg.assistant')?.textContent };
+    studio.store.set((s) => ({ agent: { ...s.agent, running: false } }));
+    await sleep(300);
+    out.block = view();
+    out.snapshotBlock = await snap('ask-block');
+    key('y', panel());
+    await sleep(200);
+    out.blockText = view();
+    const box = panel()?.querySelector<HTMLTextAreaElement>('textarea.ask-text');
+    box?.focus();
+    type(box ?? null, 'Footnotes');
+    key('Enter', box);
+    await sleep(200);
+    out.blockReview = view();
+    panel()?.querySelector<HTMLButtonElement>('.ask-submit')?.click();
+    await sleep(300);
+    out.blockAnswered = { sent: sent.splice(0), panel: !!panel(), record: record() };
+  } finally {
+    studio.agent = saved.agent;
+    studio.send = saved.send;
+    studio.store.set((s) => ({ agent: { ...s.agent, ...saved.state, items: saved.state.items } }));
+    style.remove();
+  }
+  return out;
+}
+
+/**
+ * The question panel with a real ACP assistant (Claude Code or Codex): it asks
+ * with its own tool, you answer by keys (a choice; for Claude Code also several,
+ * with your own words), it carries on with your answers; skipped, it carries
+ * on without; the answered card again after switching away and back.
+ */
+async function questionsAcpChecks(kind: 'claude' | 'codex') {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const key = (k: string, target: EventTarget | null = document.activeElement) => target?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  const panel = () => document.querySelector<HTMLElement>('.ask-panel');
+  const pending = () => studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
+  const lastReply = () => (studio.state.agent.items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text ?? '';
+  // The model chosen here is remembered for every window: put it back after.
+  const savedKeys = ['studio.model', 'studio.recentModels'].map((k) => [k, localStorage.getItem(k)] as const);
+  try {
+    studio.updateSettings({ assistant: kind, permissions: PRESETS.ask.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    out.status = studio.state.agent.status;
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const small = studio.state.agent.models.find((m) => /haiku|luna|mini/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.model = studio.state.agent.model?.id;
+    studio.newSession();
+    await sleep(300);
+    document.querySelector<HTMLTextAreaElement>('.composer-box textarea')?.focus();
+
+    // Asked with its own tool; answered by keys.
+    const t0 = clock();
+    void studio.send(
+      kind === 'claude'
+        ? 'Before anything else, ask me two questions at once with your question tool: which tone the next chapter should have (single choice), and which topics it should cover (several can apply). Then reply with one sentence that repeats my answers exactly. Don’t read or change any files.'
+        : 'Before anything else, ask me with your question tool whether the next chapter should be about eigenvalues or determinants. Then reply with one sentence that repeats my answer exactly. Don’t read or change any files.',
+    );
+    const q = await waitFor(pending, 180000, 'question').catch(() => null);
+    await sleep(500);
+    out.asked = q?.kind === 'question' ? { ms: Math.round(clock() - t0), fields: q.fields.map((f) => ({ title: f.title, text: f.description, type: f.type, options: f.options?.map((o) => o.label), custom: f.custom })) } : null;
+    out.panel = { shown: !!panel(), focused: !!panel()?.contains(document.activeElement), activity: studio.state.agent.activity?.phase, toolRows: [...document.querySelectorAll('.tool summary')].map((s) => s.textContent) };
+    out.snapshotAsked = await snap(`questions-${kind}-asked`);
+    if (q?.kind === 'question') {
+      // The second option of the first question; for several, the first and your own words.
+      key('2', panel());
+      await sleep(300);
+      if (q.fields.length > 1) {
+        const multi = q.fields[1].type === 'multiselect';
+        if (multi) key('1', panel());
+        else key('1', panel());
+        const own = panel()?.querySelector<HTMLInputElement>('.ask-own-input');
+        if (multi && own) {
+          own.focus();
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(own, 'Common mistakes');
+          own.dispatchEvent(new Event('input', { bubbles: true }));
+          key('Enter', own);
+        }
+        await sleep(300);
+        out.review = [...(panel()?.querySelectorAll('.ask-review-row') ?? [])].map((r) => r.textContent);
+        out.snapshotReview = await snap(`questions-${kind}-review`);
+        panel()?.querySelector<HTMLButtonElement>('.ask-submit')?.click();
+      }
+      await waitFor(() => !studio.state.agent.running, 180000, 'reply').catch(() => {});
+      await sleep(500);
+      const item = studio.state.agent.items.find((i) => i.id === q.id);
+      out.answered = {
+        state: item?.kind === 'question' ? item.state : null,
+        answer: item?.kind === 'question' ? item.answer : null,
+        record: document.querySelector('.question-record')?.textContent,
+        reply: lastReply().slice(0, 300),
+        composerBack: !!document.querySelector('.composer-box textarea'),
+      };
+      out.snapshotAnswered = await snap(`questions-${kind}-answered`);
+    }
+
+    // The conversation again after switching away and back: the answered card from the saved tool call.
+    const sessionId = studio.state.agent.sessionId;
+    studio.newSession();
+    await sleep(300);
+    await studio.loadTasks();
+    if (sessionId) await studio.switchTask(sessionId);
+    await sleep(800);
+    out.reopened = studio.state.agent.items.filter((i) => i.kind === 'question').map((i) => (i.kind === 'question' ? { state: i.state, answer: i.answer, fields: i.fields.length } : null));
+
+    // Skipped (esc): it carries on without the answer.
+    studio.newSession();
+    await sleep(300);
+    void studio.send('Ask me with your question tool whether to keep the epigraph in chapter 1 (yes or no). If I don’t answer, say in one sentence that you’ll leave it as it is. Don’t read or change any files.');
+    await waitFor(pending, 180000, 'question 2').catch(() => {});
+    await sleep(500);
+    key('Escape', panel());
+    await waitFor(() => !studio.state.agent.running, 180000, 'after skip').catch(() => {});
+    await sleep(500);
+    out.skipped = { record: document.querySelector('.question-record')?.textContent, reply: lastReply().slice(0, 300) };
+  } finally {
+    studio.updateSettings(saved, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    await sleep(500);
+  }
   return out;
 }
 
@@ -5832,6 +6158,8 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestAgent && want('thinking')) result.thinking = await thinkingChecks();
     if (launch.selftestAgent && want('queue')) result.queue = await queueChecks();
     if (launch.selftestAgent && want('questions')) result.questions = await questionChecks();
+    if (want('askpanel')) result.askpanel = await askPanelChecks();
+    for (const kind of ['claude', 'codex'] as const) if (launch.selftestAgent && want(`questions-${kind}`)) result[`questions-${kind}`] = await questionsAcpChecks(kind);
     if (launch.selftestAgent && want('safe-commands')) result.safeCommands = await safeCommandChecks();
     if (launch.selftestAgent && want('multitask')) result.multitask = await multitaskChecks();
     if (launch.selftestAgent && want('resume')) result.resume = await resumeChecks();

@@ -2,14 +2,15 @@ import { clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix } fro
 import { ASSISTANT_NAMES } from '../app/settings';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
-import { studio, type ChatItem } from '../app/studio';
+import { pendingQuestion, studio, type ChatItem, type QuestionItem } from '../app/studio';
 import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
+import { answerText, isAnswered, isRecommended, questionKind, questionText, splitQuestions, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
 import { Icon } from './icons';
-import { Markdown } from './Markdown';
+import { Markdown, MarkdownLine } from './Markdown';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu } from './TaskMenu';
@@ -105,155 +106,383 @@ const itemMenu = (text: string, what: string) =>
     { label: `Copy ${what}`, action: () => studio.copy(text) },
   ]);
 
-type QuestionItem = Extract<ChatItem, { kind: 'question' }>;
 type Field = QuestionItem['fields'][number];
 type Value = string | number | boolean | string[];
 
-const isEmpty = (v: Value | undefined) => v === undefined || v === '' || (Array.isArray(v) && !v.length);
-const shown = (v: Value | undefined) => (Array.isArray(v) ? v.join(', ') : v === undefined || v === '' ? '—' : String(v));
+/** A question's short name, for tabs and the record: its header, or the start of the question. */
+function questionName(f: Field) {
+  if (f.title) return f.title;
+  const t = questionText(f).replace(/\s+/g, ' ');
+  return t.length > 40 ? `${t.slice(0, 39)}…` : t;
+}
 
-/** One question: its options as buttons (checkboxes for several), plus a free answer when allowed. */
-function QuestionField({ field, value, onChange, disabled, autoFocus }: { field: Field; value: Value | undefined; onChange: (v: Value) => void; disabled: boolean; autoFocus: boolean }) {
-  const options = field.options ?? [];
-  const multi = field.type === 'multiselect';
-  const picked = (o: string) => (multi ? Array.isArray(value) && value.includes(o) : value === o);
-  const isOther = !multi && typeof value === 'string' && value !== '' && !options.some((o) => o.value === value);
-  const [other, setOther] = useState(isOther ? String(value) : '');
-  const pick = (o: string) => {
-    if (multi) {
-      const now = Array.isArray(value) ? value : [];
-      onChange(now.includes(o) ? now.filter((x) => x !== o) : [...now, o]);
-    } else onChange(o);
-  };
+/**
+ * The question in the chat, once it's answered: what was asked and what you
+ * said (asked in a reply, your message below says it). While it waits, a line
+ * pointing to the panel.
+ */
+function QuestionRecord({ item }: { item: QuestionItem }) {
+  const questions = item.fields.filter((f) => f.type !== 'external');
+  const several = questions.length > 1;
+  if (item.state === 'pending' || item.state === 'sending') {
+    return (
+      <div className="question-waiting">
+        <Icon name="help" size={13} />
+        The assistant asks you {several ? `${questions.length} questions` : 'a question'}, below
+      </div>
+    );
+  }
+  const head =
+    item.state === 'answered' ? (item.via === 'message' ? 'The assistant asked' : several ? 'You answered' : 'You answered') : item.state === 'dismissed' ? `You skipped ${several ? 'the questions' : 'the question'}` : 'Not answered';
+  const withAnswers = item.state === 'answered' && item.via !== 'message';
   return (
-    <div className="question-field">
-      {field.title && <div className="question-header">{field.title}</div>}
-      {field.description && <div className="question-text">{field.description}</div>}
-      {options.length > 0 && (
-        <div className="question-options" role={multi ? 'group' : 'radiogroup'}>
-          {options.map((o, i) => (
-            <button
-              key={o.value}
-              type="button"
-              role={multi ? 'checkbox' : 'radio'}
-              aria-checked={picked(o.value)}
-              className={`question-option${picked(o.value) ? ' picked' : ''}`}
-              disabled={disabled}
-              autoFocus={autoFocus && i === 0}
-              onClick={() => pick(o.value)}
-            >
-              <span className="question-key">{multi ? (picked(o.value) ? '☑' : '☐') : i + 1}</span>
-              <span className="question-option-body">
-                <span className="question-label">{o.label}</span>
-                {o.description && <span className="question-desc">{o.description}</span>}
-              </span>
-            </button>
-          ))}
+    <div className={`question-record ${item.state}`}>
+      <div className="question-record-head">
+        {item.state === 'answered' && <Icon name="check" size={12} />}
+        {head}
+      </div>
+      {questions.map((f) => (
+        <div key={f.key} className="question-record-row" title={questionText(f)}>
+          <span className="question-record-q">{withAnswers ? questionName(f) : questionText(f)}</span>
+          {withAnswers && <span className="question-record-a">{answerText(f, item.answer?.[f.key]) ? <MarkdownLine text={answerText(f, item.answer?.[f.key])} /> : <span className="muted">Not answered</span>}</span>}
         </div>
-      )}
-      {field.type === 'boolean' && (
-        <div className="question-options">
-          {[true, false].map((b) => (
-            <button key={String(b)} type="button" className={`question-option${value === b ? ' picked' : ''}`} disabled={disabled} onClick={() => onChange(b)}>
-              {b ? 'Yes' : 'No'}
-            </button>
-          ))}
-        </div>
-      )}
-      {field.type === 'external' && field.url && (
-        <button type="button" className="link" onClick={() => void studio.openPrinterPage(field.url!)}>
-          Open {field.url}
-        </button>
-      )}
-      {(field.custom || (!options.length && (field.type === 'string' || field.type === 'number' || field.type === 'integer'))) && (
-        <input
-          className="question-other"
-          type={field.type === 'string' || field.type === 'multiselect' ? 'text' : 'number'}
-          placeholder={options.length ? 'Or type your own answer…' : (field.placeholder ?? 'Your answer…')}
-          value={options.length ? other : value === undefined ? '' : String(value)}
-          disabled={disabled}
-          autoFocus={autoFocus && !options.length}
-          onChange={(e) => {
-            const t = e.target.value;
-            if (!options.length) return onChange(field.type === 'string' ? t : t === '' ? '' : Number(t));
-            setOther(t);
-            if (multi) {
-              const known = (Array.isArray(value) ? value : []).filter((x) => options.some((o) => o.value === x));
-              onChange(t.trim() ? [...known, t.trim()] : known);
-            } else onChange(t);
-          }}
-        />
-      )}
+      ))}
     </div>
   );
 }
 
-/** The assistant's question(s): answer and it carries on; dismiss and it's told you declined. */
-function QuestionCard({ item }: { item: QuestionItem }) {
-  const [values, setValues] = useState<Record<string, Value>>(() => (item.answer ? { ...item.answer } : {}));
-  const ref = useRef<HTMLFormElement>(null);
-  const settled = item.state === 'answered' || item.state === 'dismissed';
+const KEY_HINT: Record<QuestionKind, string> = {
+  choice: '1–9 to choose',
+  multi: '1–9 or space to tick · ⏎ next',
+  yesno: 'Y or N',
+  text: '⏎ next · ⇧⏎ new line',
+  number: '⏎ next',
+  link: '',
+};
+
+/**
+ * The assistant's questions, in the composer's place, one at a time (as in
+ * Claude Code): choices with numbered keys, several choices with checkboxes,
+ * yes or no, or your own words; every choice question has Other for an answer
+ * of your own. Several questions have tabs and end on a review of the
+ * answers. A single choice answers at once. Skip (esc) tells the assistant
+ * you didn't answer.
+ */
+function QuestionPanel({ item }: { item: QuestionItem }) {
+  const running = useStore(studio.store, (s) => s.agent.running);
+  const questions = useMemo(() => item.fields.filter((f) => f.type !== 'external'), [item.fields]);
+  const links = item.fields.filter((f) => f.type === 'external' && f.url);
+  const n = questions.length;
+  // Several questions end on a review (step n).
+  const [step, setStep] = useState(0);
+  const [values, setValues] = useState<Record<string, Value>>({});
+  /** Your own answer to each question, and whether it's the one chosen (ticked, for several). */
+  const [own, setOwn] = useState<Record<string, string>>({});
+  const [ownOn, setOwnOn] = useState<Record<string, boolean>>({});
+  /** The option being looked at (focus or hover), for its preview. */
+  const [peek, setPeek] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const busy = item.state === 'sending';
-  const questions = item.fields.filter((f) => f.type !== 'external');
-  const ready = questions.every((f) => !isEmpty(values[f.key]));
-  const submit = () => {
-    if (!ready || busy || settled) return;
+  const field = step < n ? questions[step] : null;
+
+  const answerOf = (f: Field, vals = values, mine = own, on = ownOn): Value | undefined => {
+    const kind = questionKind(f);
+    const text = (mine[f.key] ?? '').trim();
+    if (kind === 'multi') return [...((vals[f.key] as string[] | undefined) ?? []), ...(on[f.key] && text ? [text] : [])];
+    if ((kind === 'choice' || kind === 'yesno') && on[f.key]) return text;
+    const v = vals[f.key];
+    return typeof v === 'string' ? v.trim() : v;
+  };
+  const answered = (f: Field) => isAnswered(answerOf(f));
+  const ready = questions.every((f) => !f.required || answered(f));
+
+  const submit = (vals = values, mine = own, on = ownOn) => {
+    if (busy || !questions.every((f) => !f.required || isAnswered(answerOf(f, vals, mine, on)))) return;
     const answer: Record<string, Value> = {};
     for (const f of questions) {
-      const v = values[f.key];
-      answer[f.key] = typeof v === 'string' ? v.trim() : v;
+      const v = answerOf(f, vals, mine, on);
+      if (isAnswered(v)) answer[f.key] = v!;
     }
     void studio.answerQuestion(item.id, answer);
   };
-  if (settled) {
-    return (
-      <div className={`question done ${item.state}`}>
-        <div className="question-head">{item.state === 'answered' ? 'You answered' : 'You dismissed the question'}</div>
-        {item.state === 'answered' &&
-          questions.map((f) => (
-            <div key={f.key} className="question-answer">
-              <span className="muted">{f.title ?? f.description}:</span> {shown(item.answer?.[f.key])}
-            </div>
-          ))}
-      </div>
-    );
-  }
-  return (
-    <form
-      ref={ref}
-      className="question"
-      aria-label="The assistant asks"
-      onSubmit={(e) => {
+  /** On from this question: the next one, the review, or (just one question) answer. */
+  const next = (vals = values, mine = own, on = ownOn) => {
+    if (n === 1) submit(vals, mine, on);
+    else setStep((s) => Math.min(s + 1, n));
+  };
+  const choose = (f: Field, v: string | boolean) => {
+    const vals = { ...values, [f.key]: v };
+    const on = { ...ownOn, [f.key]: false };
+    setValues(vals);
+    setOwnOn(on);
+    next(vals, own, on);
+  };
+  const toggle = (f: Field, v: string) =>
+    setValues((vals) => {
+      const now = (vals[f.key] as string[] | undefined) ?? [];
+      return { ...vals, [f.key]: now.includes(v) ? now.filter((x) => x !== v) : [...now, v] };
+    });
+  const typeOwn = (f: Field, text: string) => {
+    setOwn({ ...own, [f.key]: text });
+    // Typed, it's the answer (or, for several, ticked); emptied, the options are again.
+    setOwnOn({ ...ownOn, [f.key]: text.trim() !== '' });
+  };
+
+  // The keyboard comes here when you're in the chat (not when you're writing in the editor):
+  // to the answer chosen so far, or the first thing to answer with.
+  const focusStep = () => {
+    const el = ref.current;
+    if (!el) return;
+    const own = field && ownOn[field.key] ? '.ask-own-input' : null;
+    for (const selector of [own, 'button.ask-choice[aria-checked="true"]', '.ask-text', '.ask-number', 'button.ask-choice', '.ask-submit']) {
+      const target = selector && el.querySelector<HTMLElement>(selector);
+      if (target) return target.focus();
+    }
+  };
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const active = document.activeElement;
+    const inChat = !active || active === document.body || !!active.closest('.agent-pane');
+    if (el && (inChat || el.contains(active))) focusStep();
+    setPeek(null);
+  }, [step]);
+  // Gone (answered or skipped) with the keyboard: the message box has it again.
+  useEffect(
+    () => () => {
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) studio.events.emit('focus-composer');
+      });
+    },
+    [],
+  );
+
+  const choices = () => [...(ref.current?.querySelectorAll<HTMLElement>('.ask-step button.ask-choice, .ask-step .ask-own-input') ?? [])];
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (busy || e.metaKey || e.ctrlKey || e.altKey || e.nativeEvent.isComposing) return;
+    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // Out of what you're typing first; then skip.
+      if (typing && (e.target as HTMLInputElement).value) (choices().find((c) => c !== e.target) ?? ref.current)?.focus();
+      else void studio.dismissQuestion(item.id);
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (e.target instanceof HTMLTextAreaElement) return;
+      const list = choices();
+      const at = list.indexOf(e.target as HTMLElement);
+      if (at < 0 && !list.length) return;
+      e.preventDefault();
+      list[Math.max(0, Math.min(list.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+      return;
+    }
+    if (typing) {
+      if (e.key === 'Enter' && !e.shiftKey && field) {
+        e.preventDefault();
+        if (answered(field) || !field.required) next();
+      }
+      return;
+    }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && n > 1) {
+      e.preventDefault();
+      setStep((s) => Math.max(0, Math.min(n, s + (e.key === 'ArrowRight' ? 1 : -1))));
+      return;
+    }
+    if (!field) {
+      if (e.key === 'Enter' && ready && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
         submit();
-      }}
-      onKeyDown={(e) => {
-        // 1–9 picks an option of the first question still unanswered (single choice).
-        if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
-        const n = Number(e.key);
-        const field = questions.find((f) => f.type !== 'multiselect' && f.options?.length && isEmpty(values[f.key])) ?? questions.find((f) => f.type !== 'multiselect' && f.options?.length);
-        if (field && n >= 1 && n <= (field.options?.length ?? 0)) {
-          e.preventDefault();
-          setValues((v) => ({ ...v, [field.key]: field.options![n - 1].value }));
-        } else if (e.key === 'Enter' && ready) {
-          e.preventDefault();
-          submit();
-        }
-      }}
-    >
-      <div className="question-head">The assistant asks</div>
-      {item.fields.map((f, i) => (
-        <QuestionField key={f.key} field={f} value={values[f.key]} disabled={busy} autoFocus={i === 0} onChange={(v) => setValues((vs) => ({ ...vs, [f.key]: v }))} />
-      ))}
-      <div className="question-actions">
-        <button type="button" disabled={busy} onClick={() => void studio.dismissQuestion(item.id)}>
-          Dismiss
-        </button>
-        <button type="submit" className="primary" disabled={!ready || busy}>
-          {busy ? 'Sending…' : 'Answer'}
-        </button>
+      }
+      return;
+    }
+    const kind = questionKind(field);
+    if (kind === 'multi' && e.key === 'Enter' && (e.target === ref.current || (e.target as HTMLElement).classList.contains('ask-choice'))) {
+      // Ticking is a click (or space); ⏎ moves on.
+      e.preventDefault();
+      if (answered(field) || !field.required) next();
+      return;
+    }
+    const options = kind === 'yesno' ? [true, false] : (field.options ?? []).map((o) => o.value);
+    const key = e.key.toLowerCase();
+    const index = kind === 'yesno' && (key === 'y' || key === 'n') ? (key === 'y' ? 0 : 1) : /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
+    if (index >= 0 && index < options.length) {
+      e.preventDefault();
+      if (kind === 'multi') toggle(field, options[index] as string);
+      else choose(field, options[index]);
+    } else if (index === options.length && field.custom) {
+      // The number after the options: your own answer.
+      e.preventDefault();
+      ref.current?.querySelector<HTMLInputElement>('.ask-own-input')?.focus();
+    } else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement) && (answered(field) || !field.required) && kind !== 'choice' && kind !== 'yesno') {
+      e.preventDefault();
+      next();
+    }
+  };
+
+  const kind = field ? questionKind(field) : null;
+  const preview = field?.options?.find((o) => o.value === (peek ?? (values[field.key] as string)))?.preview;
+  const last = step >= n - 1;
+  const hint = busy ? 'Sending…' : `${kind ? KEY_HINT[kind] : '⏎ submit'}${n > 1 ? ' · ←→ questions' : ''} · esc skip`;
+  return (
+    <div className={`ask-panel${busy ? ' busy' : ''}`} ref={ref} role="dialog" aria-label="The assistant asks" tabIndex={-1} onKeyDown={onKeyDown}>
+      <div className="ask-top">
+        <span className="ask-title">
+          <Icon name="help" size={14} />
+          {n > 1 ? `The assistant has ${n} questions` : 'The assistant asks'}
+        </span>
+        {n > 1 && (
+          <div className="ask-tabs" role="tablist">
+            {questions.map((f, i) => (
+              <button key={f.key} role="tab" aria-selected={step === i} className={`ask-tab${step === i ? ' current' : ''}${answered(f) ? ' done' : ''}`} title={questionText(f)} tabIndex={-1} onClick={() => setStep(i)}>
+                <span className="ask-tab-mark" aria-hidden>
+                  {answered(f) ? '✓' : i + 1}
+                </span>
+                {questionName(f)}
+              </button>
+            ))}
+            <button role="tab" aria-selected={step === n} className={`ask-tab review${step === n ? ' current' : ''}`} tabIndex={-1} onClick={() => setStep(n)}>
+              Review
+            </button>
+          </div>
+        )}
       </div>
-    </form>
+
+      {field && kind ? (
+        <div className="ask-step" key={field.key}>
+          <div className="ask-question md">
+            <Markdown text={questionText(field)} />
+          </div>
+          {(kind === 'choice' || kind === 'multi' || kind === 'yesno') && (
+            <div className="ask-choices" role={kind === 'multi' ? 'group' : 'radiogroup'} aria-label={questionText(field)}>
+              {(kind === 'yesno' ? [{ value: true, label: 'Yes' }, { value: false, label: 'No' }] : (field.options ?? [])).map((o, i) => {
+                const picked = kind === 'multi' ? ((values[field.key] as string[] | undefined) ?? []).includes(o.value as string) : !ownOn[field.key] && values[field.key] === o.value;
+                const label = String(o.label);
+                const description = 'description' in o ? o.description : undefined;
+                return (
+                  <button
+                    key={String(o.value)}
+                    type="button"
+                    role={kind === 'multi' ? 'checkbox' : 'radio'}
+                    aria-checked={picked}
+                    className={`ask-choice${picked ? ' picked' : ''}`}
+                    disabled={busy}
+                    onFocus={() => setPeek(typeof o.value === 'string' ? o.value : null)}
+                    onMouseEnter={() => setPeek(typeof o.value === 'string' ? o.value : null)}
+                    onClick={() => (kind === 'multi' ? toggle(field, o.value as string) : choose(field, o.value))}
+                  >
+                    <span className={`ask-key${kind === 'multi' ? ' box' : ''}`} aria-hidden>
+                      {kind === 'multi' ? picked ? <Icon name="check" size={11} /> : '' : kind === 'yesno' ? (o.value ? 'Y' : 'N') : i + 1}
+                    </span>
+                    <span className="ask-choice-body">
+                      <span className="ask-label">
+                        <span>
+                          <MarkdownLine text={withoutRecommended(label)} />
+                        </span>
+                        {isRecommended(label) && <span className="ask-badge">Recommended</span>}
+                      </span>
+                      {description && (
+                        <span className="ask-desc md">
+                          <MarkdownLine text={description} />
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+              {field.custom && (
+                <label className={`ask-choice ask-own${ownOn[field.key] ? ' picked' : ''}`} onMouseEnter={() => setPeek(null)}>
+                  <span
+                    className={`ask-key${kind === 'multi' ? ' box' : ''}`}
+                    aria-hidden
+                    onClick={(e) => {
+                      // The box ticks your own answer in or out (for several).
+                      if (kind !== 'multi') return;
+                      e.preventDefault();
+                      setOwnOn({ ...ownOn, [field.key]: !ownOn[field.key] });
+                    }}
+                  >
+                    {kind === 'multi' ? ownOn[field.key] ? <Icon name="check" size={11} /> : '' : kind === 'yesno' ? '…' : (field.options?.length ?? 0) + 1}
+                  </span>
+                  <input
+                    className="ask-own-input"
+                    value={own[field.key] ?? ''}
+                    placeholder={kind === 'multi' ? 'Something else (type it)…' : 'Other: type your own answer…'}
+                    aria-label="Your own answer"
+                    disabled={busy}
+                    onFocus={() => setPeek(null)}
+                    onChange={(e) => typeOwn(field, e.target.value)}
+                  />
+                </label>
+              )}
+            </div>
+          )}
+          {kind === 'text' && (
+            <textarea
+              className="ask-text"
+              rows={2}
+              value={(values[field.key] as string | undefined) ?? ''}
+              placeholder={field.placeholder ?? 'Your answer…'}
+              disabled={busy}
+              onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+            />
+          )}
+          {kind === 'number' && (
+            <input
+              className="ask-number"
+              type="number"
+              value={values[field.key] === undefined ? '' : String(values[field.key])}
+              placeholder={field.placeholder ?? 'A number…'}
+              disabled={busy}
+              onChange={(e) => setValues({ ...values, [field.key]: e.target.value === '' ? '' : Number(e.target.value) })}
+            />
+          )}
+          {preview && <pre className="ask-preview">{preview}</pre>}
+        </div>
+      ) : (
+        <div className="ask-review" role="list" aria-label="Your answers">
+          {questions.map((f, i) => (
+            <button key={f.key} type="button" role="listitem" className="ask-review-row" title="Change this answer" onClick={() => setStep(i)}>
+              <span className="ask-review-q">{questionText(f)}</span>
+              <span className={`ask-review-a${answered(f) ? '' : ' none'}`}>{answered(f) ? <MarkdownLine text={answerText(f, answerOf(f))} /> : f.required ? 'Needs an answer' : 'Not answered'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {links.map((f) => (
+        <button key={f.key} type="button" className="link" onClick={() => void studio.openPrinterPage(f.url!)}>
+          Open {f.url}
+        </button>
+      ))}
+
+      <div className="ask-actions">
+        <span className="ask-hint" title={hint}>
+          {hint}
+        </span>
+        {running && item.via !== 'message' && (
+          <button type="button" className="ask-stop" title="Stop the assistant now" disabled={busy} onClick={() => void studio.cancel()}>
+            Stop
+          </button>
+        )}
+        <button type="button" disabled={busy} title="Don't answer: the assistant carries on without your answers (esc)" onClick={() => void studio.dismissQuestion(item.id)}>
+          Skip
+        </button>
+        {n > 1 && step > 0 && (
+          <button type="button" disabled={busy} onClick={() => setStep(step - 1)}>
+            Back
+          </button>
+        )}
+        {field && n > 1 ? (
+          <button type="button" className="primary ask-submit" disabled={busy || (!!field.required && !answered(field))} onClick={() => next()}>
+            {last ? 'Review' : 'Next'}
+          </button>
+        ) : (
+          <button type="button" className="primary ask-submit" disabled={busy || !ready || (n === 1 && !questions.some(answered))} onClick={() => submit()}>
+            {busy ? 'Sending…' : n > 1 ? 'Submit answers' : 'Submit'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -437,15 +666,19 @@ function ItemBody({ item }: { item: ChatItem }) {
     case 'thinking':
       return <Thinking item={item} />;
     case 'question':
-      return <QuestionCard item={item} />;
-    case 'assistant':
+      return <QuestionRecord item={item} />;
+    case 'assistant': {
       if (item.options) return <OptionsReply item={item} />;
+      // Questions at the end of a reply are asked in the panel, not shown as their block.
+      const text = withoutAddressed(withoutMarker(splitQuestions(item.text).text));
+      if (!text.trim() && item.taskCheck !== 'ask') return null;
       return (
         <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
-          <Markdown text={withoutAddressed(withoutMarker(item.text))} />
+          <Markdown text={text} />
           {item.taskCheck === 'ask' && <TaskCheck id={item.id} />}
         </div>
       );
+    }
     case 'tool':
       return <ToolRow item={item} />;
     case 'permission':
@@ -935,6 +1168,7 @@ function Starter() {
 export function AgentPane() {
   const assistantName = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
   const agent = useStore(studio.store, (s) => s.agent);
+  const asking = pendingQuestion(agent);
   const listRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -1016,7 +1250,15 @@ export function AgentPane() {
           ))}
           <ActivityLine />
         </div>
-        <Composer />
+        {/* The assistant's questions take the message box's place until they're answered or skipped. */}
+        {asking ? (
+          <div className="composer asking">
+            <QueuedMessages />
+            <QuestionPanel key={asking.id} item={asking} />
+          </div>
+        ) : (
+          <Composer />
+        )}
       </div>
     </section>
   );

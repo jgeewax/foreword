@@ -26,6 +26,8 @@ export function toFormRequest(raw: any): FormRequest | null {
     }));
   const metadata = f.metadata && typeof f.metadata === 'object' ? f.metadata : undefined;
   const callId = typeof metadata?.tool?.id === 'string' ? metadata.tool.id : undefined;
+  // The question tool reports an answer for every question.
+  if (metadata?.kind === 'question') for (const field of fields) field.required = true;
   return fields.length ? { id: f.id, title: str(f.title, 'Questions'), fields, metadata, callId } : null;
 }
 

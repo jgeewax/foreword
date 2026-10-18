@@ -7,6 +7,7 @@ import { readLabel, readOf, type AiRead } from './ai-marks';
 import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
+import { questionFromTool, splitQuestions } from '../services/agent/questions';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
 
@@ -109,10 +110,22 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
         if (part.type === 'text') {
           const n = texts++;
           if (part.text?.trim()) items.push({ kind: 'assistant', id: `${m.id}:${n}`, text: part.text, done: true });
+          // Questions asked in the reply: still waiting, unless the author has written since (below).
+          const { fields } = splitQuestions(part.text ?? '');
+          if (fields) items.push({ kind: 'question', id: `${m.id}:${n}:ask`, title: 'Questions', fields, state: 'pending', via: 'message' });
+        } else if (part.type === 'tool' && part.name === 'question' && isSettled(part.state?.status)) {
+          // Asked with the question tool: the card as it was answered (or skipped).
+          const output = part.state?.content?.map((c) => c.text ?? '').join('\n') ?? part.state?.error ?? '';
+          const asked = questionFromTool(part.state?.input, output);
+          if (asked) {
+            items.push({ kind: 'question', id: part.id ?? `${m.id}:${i}`, title: 'Questions', fields: asked.fields, answer: asked.answer, state: asked.answered ? 'answered' : 'dismissed' });
+            return;
+          }
         } else if (part.type === 'reasoning') {
           const n = thoughts++;
           if (part.text?.trim()) items.push({ kind: 'thinking', id: `${m.id}:r${n}`, text: part.text, done: true, started: part.time?.created ?? 0, ended: part.time?.completed });
-        } else if (part.type === 'tool') {
+        }
+        if (part.type === 'tool') {
           const status = part.state?.status;
           const output = part.state?.content?.map((c) => c.text ?? '').join('\n') ?? '';
           const read = root ? readOf(root, part.name ?? '', part.state?.input, output) : null;
@@ -131,8 +144,17 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
       });
     }
   }
+  // A reply's questions the author has written since: answered (that message has the answers).
+  let wrote = false;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it.kind === 'user') wrote = true;
+    else if (it.kind === 'question' && it.via === 'message' && it.state === 'pending' && wrote) items[i] = { ...it, state: 'answered' };
+  }
   return items;
 }
+
+const isSettled = (status: string | undefined) => status !== 'running' && status !== 'pending';
 
 /**
  * The latest model call's prompt size (input plus cached tokens): how much of

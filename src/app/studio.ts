@@ -63,6 +63,7 @@ import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
 import { TypstService } from '../services/typst';
 
@@ -106,16 +107,22 @@ export type Activity = {
 export type ChatItem =
   | { kind: 'user'; id: string; text: string; attachments: string[] }
   | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
-  /** The assistant asks (multiple choice or free text) and waits for the answer. */
+  /**
+   * The assistant asks (choices, several choices, yes or no, or its own words)
+   * and waits: the question panel takes the composer's place until it's
+   * answered or skipped. `expired`: the assistant stopped waiting.
+   */
   | {
       kind: 'question';
       id: string;
       title: string;
       fields: FormField[];
-      state: 'pending' | 'sending' | 'answered' | 'dismissed';
+      state: 'pending' | 'sending' | 'answered' | 'dismissed' | 'expired';
       answer?: FormAnswer;
       /** The question tool call that asked (its chat row is then left out: the card is the record). */
       callId?: string;
+      /** Asked in a reply (a ```questions block): the answers go back as the author's next message. */
+      via?: 'message';
     }
   /** The model's reasoning, as it streams (shown faintly, then folded to "Thought for 4 s"). */
   | {
@@ -151,6 +158,18 @@ export type ChatItem =
       state: 'pending' | 'sending' | 'once' | 'always' | 'reject';
     }
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
+
+export type QuestionItem = Extract<ChatItem, { kind: 'question' }>;
+
+/**
+ * The question waiting for the author in the shown conversation (the question
+ * panel, in the composer's place): the first one asked. A reply's questions
+ * wait once its turn is over.
+ */
+export function pendingQuestion(a: { items: ChatItem[]; running: boolean }): QuestionItem | null {
+  const q = a.items.find((it): it is QuestionItem => it.kind === 'question' && (it.state === 'pending' || it.state === 'sending') && (it.via !== 'message' || !a.running));
+  return q ?? null;
+}
 
 export type Attachment = { id: string; label: string; selection: SourceSelection };
 
@@ -2879,6 +2898,13 @@ export class Studio {
       case 'text-delta':
         if (base.label !== 'Writing…') set({ label: 'Writing…' });
         break;
+      case 'text-ended':
+        // Questions in a reply: they wait for the author once the turn ends.
+        if (splitQuestions(e.text).fields) {
+          set({ attention: 'question' });
+          this.toast(`“${this.taskTitle(sessionId)}” needs you: it has a question.`, 'info', [show]);
+        }
+        break;
       case 'retry-scheduled':
         set({ label: 'The model is busy, trying again' });
         break;
@@ -3181,6 +3207,9 @@ export class Studio {
     if (!agent || state.status !== 'ready' || !text.trim()) return false;
     // While a turn runs, the message waits for it (or, "send now", joins it at its next step).
     if (state.running) return this.queueMessage(text, delivery);
+    // A reply's questions, passed over: the author wrote something else instead.
+    const passedOver = (it: ChatItem): it is QuestionItem => it.kind === 'question' && it.via === 'message' && it.state === 'pending';
+    if (state.items.some(passedOver)) this.setAgent((a) => ({ items: a.items.map((it) => (passedOver(it) ? { ...it, state: 'dismissed' as const } : it)) }));
     // Options replace a passage: use the editor's cursor when nothing is selected or attached.
     if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
     const attachments = this.outgoingAttachments();
@@ -3242,12 +3271,23 @@ export class Studio {
     }
   }
 
-  // ---- questions from the assistant (OpenCode forms) ---------------------------------
+  // ---- questions from the assistant ------------------------------------------------
+  // Asked with its question tool (OpenCode's form, an ACP agent's form
+  // elicitation), or in a reply (a ```questions block): one panel either way.
 
   private addQuestion(form: FormRequest) {
     if (this.state.agent.items.some((it) => it.id === form.id)) return;
     this.pushItem({ kind: 'question', id: form.id, title: form.title, fields: form.fields, state: 'pending', callId: form.callId });
     this.setActivity({ phase: 'asking' });
+    this.events.emit('show-agent-pane');
+  }
+
+  /** A reply that ends with a ```questions block: its panel, answered with a message. */
+  private addReplyQuestions(itemId: string, text: string) {
+    const { fields } = splitQuestions(text);
+    const id = `${itemId}:ask`;
+    if (!fields || this.state.agent.items.some((it) => it.id === id)) return;
+    this.pushItem({ kind: 'question', id, title: 'Questions', fields, state: 'pending', via: 'message' });
     this.events.emit('show-agent-pane');
   }
 
@@ -3265,6 +3305,14 @@ export class Studio {
   async answerQuestion(formId: string, answer: FormAnswer) {
     const sessionId = this.state.agent.sessionId;
     if (!this.agent || !sessionId) return;
+    const item = this.state.agent.items.find((it) => it.id === formId);
+    if (item?.kind !== 'question' || (item.state !== 'pending' && item.state !== 'sending')) return;
+    if (item.via === 'message') {
+      // Answered first, so sending doesn't count it as passed over.
+      this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'answered', answer } : it));
+      if (!(await this.send(answersMessage(item.fields, answer)))) this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'pending' } : it));
+      return;
+    }
     this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'sending', answer } : it));
     try {
       await this.agent.replyForm(sessionId, formId, answer);
@@ -3276,9 +3324,15 @@ export class Studio {
     }
   }
 
+  /** Skip: the assistant hears that the author didn't answer (a reply's questions just go). */
   async dismissQuestion(formId: string) {
     const sessionId = this.state.agent.sessionId;
     if (!this.agent || !sessionId) return;
+    const item = this.state.agent.items.find((it) => it.id === formId);
+    if (item?.kind === 'question' && item.via === 'message') {
+      this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'dismissed' } : it));
+      return;
+    }
     try {
       await this.agent.cancelForm(sessionId, formId);
       this.updateItem(formId, (it) => (it.kind === 'question' ? { ...it, state: 'dismissed' } : it));
@@ -3395,6 +3449,7 @@ export class Studio {
       typFiles: ws.files.filter((f) => f.endsWith('.typ')),
       codeExamples: ws.files.includes(OUTPUTS_FILE) || this.state.code.cells.length > 0,
       root: ws.root,
+      assistant: this.agentKind ?? this.state.settings.assistant,
     });
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
@@ -3642,7 +3697,9 @@ export class Studio {
         break;
       case 'form-settled':
         this.updateItem(e.formId, (it) =>
-          it.kind === 'question' && (it.state === 'pending' || it.state === 'sending') ? { ...it, state: e.outcome === 'answered' ? 'answered' : 'dismissed' } : it,
+          it.kind === 'question' && (it.state === 'pending' || it.state === 'sending')
+            ? { ...it, state: e.outcome === 'answered' ? 'answered' : e.outcome === 'withdrawn' ? 'expired' : 'dismissed' }
+            : it,
         );
         if (this.state.agent.activity?.phase === 'asking') this.setActivity({ phase: 'waiting' });
         break;
@@ -3709,6 +3766,7 @@ export class Studio {
             ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true, ...taskCheck } : it)) }
             : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState(), ...taskCheck }] },
         );
+        this.addReplyQuestions(id, e.text);
         break;
       }
       case 'tool-started':

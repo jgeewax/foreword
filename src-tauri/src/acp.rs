@@ -635,6 +635,17 @@ async fn signed_by_google(path: &Path) -> bool {
     intact && google
 }
 
+/// Settings for the assistant's connector (codex-acp's `CODEX_CONFIG`, on top
+/// of the author's own config.toml). Codex offers its question tool
+/// (request_user_input, which the chat shows as its question panel) only in
+/// Plan mode unless this feature is on.
+fn config_for(kind: &str) -> Option<&'static str> {
+    match kind {
+        "codex" => Some(r#"{"features":{"default_mode_request_user_input":true}}"#),
+        _ => None,
+    }
+}
+
 /// Start an assistant in the book's folder. Its stdout lines (JSON-RPC
 /// messages) go to `on_message`; when it exits, `{"$exit": <code>}`.
 #[tauri::command]
@@ -649,7 +660,11 @@ pub async fn acp_start(
     if let Some(mut old) = guard.take() {
         old.kill();
     }
-    let mut child = Command::new(&program)
+    let mut command = Command::new(&program);
+    if let Some(config) = config_for(&kind) {
+        command.env("CODEX_CONFIG", config);
+    }
+    let mut child = command
         .args(&args)
         .current_dir(&root)
         .env("PATH", discover::search_path())
