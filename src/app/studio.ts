@@ -24,7 +24,7 @@ import {
   validateProjectSettings,
   type ProjectSettings,
 } from './project-settings';
-import { loadSettings, saveSettings, type AppSettings, type ToolName } from './settings';
+import { loadSettings, saveSettings, type AppSettings, type AssistantId, type ToolName } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
@@ -457,6 +457,8 @@ export class Studio {
   private pendingDisk = new Set<string>();
   private diskTimer: number | undefined;
   private unsubscribeAgent: (() => void) | null = null;
+  /** Which program the running assistant is (Settings ▸ Assistant). */
+  private agentKind: AssistantId | null = null;
   /** A new OpenCode was chosen while the assistant worked: start it once the turn is over. */
   private restartAgentWhenIdle = false;
   /** Errors already shown for the current turn (OpenCode reports a failure more than once). */
@@ -2590,8 +2592,11 @@ export class Studio {
     // OpenCode, or Claude Code, Gemini CLI or Codex over ACP (Settings ▸ Assistant).
     const which = this.state.settings.assistant;
     const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root) : new AcpAdapter(ws.root, which);
+    // Another program: its own models (the list fills in once it's started).
+    const switched = this.agentKind !== which;
+    this.agentKind = which;
     this.agent = agent;
-    this.setAgent({ status: 'starting', error: undefined, background: {} });
+    this.setAgent({ status: 'starting', error: undefined, background: {}, ...(switched ? { models: [], model: null } : {}) });
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = agent.subscribe((e) => this.onAgentEvent(e));
     window.clearInterval(this.backgroundPoll);

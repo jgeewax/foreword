@@ -138,6 +138,24 @@ describe('AcpAdapter', () => {
     expect(contextTokens(context as never)).toBeGreaterThan(30000);
   });
 
+  it('says how to sign in when the agent isn’t signed in', async () => {
+    // Gemini CLI 0.64 without a login, as recorded: session/new fails with auth_required.
+    let deliver: (m: any) => void = () => {};
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage) => {
+        deliver = onMessage;
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        if (m.method === 'initialize') queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: 1, authMethods: [{ id: 'oauth-personal', name: 'Log in with Google' }] } }));
+        if (m.method === 'session/new') queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'Gemini API key is missing or not configured.' } }));
+      },
+      stop: async () => {},
+    };
+    const start = new AcpAdapter(ROOT, 'gemini', transport).start();
+    await expect(start).rejects.toThrow('Gemini CLI isn’t signed in (“Gemini API key is missing or not configured.”). In Terminal, run npx @google/gemini-cli (or gemini), choose Log in with Google, then quit it; then start it again.');
+  });
+
   it('answers by the rules without asking, and cancels what’s open on Stop', async () => {
     const { adapter, sent, events, deliver } = harness();
     await adapter.start();

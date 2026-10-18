@@ -1,3 +1,4 @@
+import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Stat } from '../app/studio';
 import { Icon } from './icons';
 import type { ToolInfo } from '../lib/ipc';
@@ -87,6 +88,7 @@ export function StatusBar() {
   const preview = useStore(studio.store, (s) => s.preview);
   const agent = useStore(studio.store, (s) => s.agent.status);
   const agentError = useStore(studio.store, (s) => s.agent.error);
+  const assistantName = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
   const connection = useStore(studio.store, (s) => s.agent.connection);
   const running = useStore(studio.store, (s) => s.agent.running);
   const model = useStore(studio.store, (s) => s.agent.model);
@@ -174,7 +176,7 @@ export function StatusBar() {
         tone={agentTone}
         icon="✦"
         label={`${agentLabel}${model && agent === 'ready' ? ` · ${model.id}` : ''}`}
-        title={agent === 'error' ? `${agentError ?? 'OpenCode is not running.'} Click to try again.` : model ? `${model.providerID}/${model.id}` : 'Writing assistant (OpenCode)'}
+        title={agent === 'error' ? `${agentError ?? `${assistantName} is not running.`} Click to try again.` : model ? `${model.providerID}/${model.id}` : `Writing assistant (${assistantName})`}
         onClick={agent === 'error' ? () => void studio.startAgent() : undefined}
       />
     </footer>

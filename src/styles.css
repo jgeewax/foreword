@@ -784,6 +784,8 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .command-chip { padding: 1px 6px; border-radius: 4px; background: var(--bg-2); border: 1px solid var(--border); font-size: 11.5px; }
 /* Settings ▸ Tools: a card per tool, with a picker of the copies found and other ways to choose. */
 .tools-intro { display: flex; align-items: flex-start; gap: 16px; }
+.assistant-error { display: flex; align-items: flex-start; gap: 12px; }
+.assistant-error button { flex: none; }
 .tools-intro .settings-help { flex: 1; margin-top: 0; }
 .tools-search { flex: none; display: inline-flex; align-items: center; gap: 5px; }
 .tool-card { padding: 12px 0; border-bottom: 1px solid var(--border); }

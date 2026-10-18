@@ -9,6 +9,7 @@ import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
+import { SIGN_IN } from '../services/agent/acp';
 import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type AssistantId, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -278,6 +279,7 @@ function GeneralPage() {
 const ASSISTANT_CHOICES: { id: AssistantId; label: string; detail: string }[] = [
   { id: 'opencode', label: 'OpenCode', detail: 'any model you’ve set up in OpenCode: OpenAI, Anthropic, Google, local models' },
   { id: 'claude', label: 'Claude Code', detail: 'Anthropic’s Claude, with your Claude subscription or API key' },
+  { id: 'gemini', label: 'Gemini CLI', detail: 'Google’s Gemini, with your Google account or a Gemini API key' },
 ];
 
 function AssistantPage() {
@@ -295,10 +297,17 @@ function AssistantPage() {
             <Radio key={a.id} name="assistant" value={a.id} current={settings.assistant} onChange={(v) => studio.updateSettings({ assistant: v })} label={a.label} detail={a.detail} />
           ))}
           <p className="settings-help">
-            Claude Code uses your own Claude account: sign in once in Terminal with <code>claude</code>. Typst Studio talks to it through its connector for the Agent Client
-            Protocol, which Node.js runs (the first start downloads it). Changing the assistant starts a new conversation.
+            Claude Code and Gemini CLI use your own account: sign in once in Terminal (<code>{SIGN_IN.claude.command}</code>, or <code>{SIGN_IN.gemini.command}</code>). Typst Studio
+            talks to them over the Agent Client Protocol, through programs Node.js runs (the first start downloads them). Changing the assistant starts a new conversation.
           </p>
-          {status === 'error' && error && <p className="settings-help bad">It didn’t start: {error}</p>}
+          {status === 'error' && error && (
+            <div className="settings-help bad assistant-error">
+              <span>It didn’t start: {error}</span>
+              <button className="small" onClick={() => void studio.restartAgent()}>
+                Start again
+              </button>
+            </div>
+          )}
         </div>
       </Section>
       <Section title="Model">

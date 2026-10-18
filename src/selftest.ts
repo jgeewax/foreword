@@ -4197,7 +4197,19 @@ async function acpChecks(kind: 'claude' | 'gemini' | 'codex') {
       model: studio.state.agent.model,
       models: studio.state.agent.models.map((m) => `${m.providerName}: ${m.name}`).slice(0, 8),
     };
-    if (studio.state.agent.status !== 'ready') return out;
+    if (studio.state.agent.status !== 'ready') {
+      // It couldn't start (not signed in, say): Settings says why, with Start again.
+      studio.openSettings('assistant');
+      await sleep(500);
+      out.settings = {
+        error: document.querySelector('.assistant-error span')?.textContent,
+        startAgain: !!document.querySelector('.assistant-error button'),
+        chosen: (document.querySelector('.settings-content input[name="assistant"]:checked') as HTMLInputElement | null)?.value,
+        snapshot: await snap(`acp-${kind}-settings`),
+      };
+      studio.closeSettings();
+      return out;
+    }
     // The turns' events, for the record.
     const t0 = clock();
     const events: string[] = (out.events = []);

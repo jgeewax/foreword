@@ -10,6 +10,7 @@ export type HistoryPlacement = 'tab' | 'below';
 /** Which program runs the writing assistant: OpenCode, or an agent spoken to over ACP. */
 export type AssistantId = 'opencode' | 'claude' | 'gemini' | 'codex';
 export const ASSISTANTS: AssistantId[] = ['opencode', 'claude', 'gemini', 'codex'];
+export const ASSISTANT_NAMES: Record<AssistantId, string> = { opencode: 'OpenCode', claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex' };
 
 /** The programs Typst Studio runs itself; Settings ▸ Tools can choose each one. */
 export type ToolName = 'tinymist' | 'opencode' | 'git';

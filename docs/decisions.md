@@ -2369,6 +2369,30 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   changed, a message queued and delivered after, Stop (interrupted, Resume
   offered), the conversation rebuilt after switching and after a restart.
 
+### Gemini CLI as the assistant
+
+- **The same route:** Gemini CLI speaks ACP itself (`gemini --acp`; the old
+  `--experimental-acp` is deprecated). The app runs `gemini` if it's
+  installed, otherwise `npx @google/gemini-cli` (pinned 0.64.0).
+- **Signing in.** Not signed in, Gemini answers `session/new` with ACP's
+  `auth_required` (-32000: "Gemini API key is missing or not configured").
+  It offers Log in with Google, an API key, Vertex AI or a gateway. The app
+  doesn't drive the sign-in (Google's login opens a browser, and an API key
+  would have to reach the program somehow). Instead it says what's wrong
+  and how to sign in once in Terminal (Gemini keeps its login), with Start
+  again in Settings ▸ Assistant. Each assistant's status line and the
+  status bar now name the program chosen, not "OpenCode".
+- **Another program, its own models:** starting a different assistant clears
+  the model list (a failed start no longer shows the previous program's
+  models).
+- **Not yet tried with a signed-in Gemini:** there's no Google login on this
+  Mac. Everything after the sign-in is the code Claude Code's turns
+  verified. Gemini's tools (`read_file`, `replace`, `run_shell_command`…)
+  map to the app's by name, and ACP's `kind` covers the rest.
+- Verified: a unit test with Gemini's recorded reply; self-test `acp-gemini`
+  starts it with npx and shows the sign-in message and Start again in
+  Settings, with an empty model list; back on OpenCode afterwards.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

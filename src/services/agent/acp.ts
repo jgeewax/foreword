@@ -16,6 +16,16 @@ export type AcpKind = 'claude' | 'gemini' | 'codex';
 
 export const ACP_NAMES: Record<AcpKind, string> = { claude: 'Claude Code', gemini: 'Gemini CLI', codex: 'Codex' };
 
+/** How to sign in, once, in Terminal (each program keeps its login). */
+export const SIGN_IN: Record<AcpKind, { command: string; how: string }> = {
+  claude: { command: 'claude', how: 'run claude, and sign in with /login' },
+  gemini: { command: 'npx @google/gemini-cli', how: 'run npx @google/gemini-cli (or gemini), choose Log in with Google, then quit it' },
+  codex: { command: 'npx @openai/codex login', how: 'run npx @openai/codex login (or codex login), and sign in with ChatGPT' },
+};
+
+/** ACP's "sign in first" error (`auth_required`). */
+const AUTH_REQUIRED = -32000;
+
 /** Instructions go before the author's message, inside these, and are taken out again when a conversation is replayed. */
 const INSTRUCTIONS_OPEN = '<typst-studio-instructions>';
 const INSTRUCTIONS_CLOSE = '</typst-studio-instructions>';
@@ -63,7 +73,9 @@ type Session = {
   replaying: boolean;
 };
 
-export class AcpError extends Error {}
+export class AcpError extends Error {
+  code?: number;
+}
 
 export class AcpAdapter implements AgentAdapter {
   private listeners = new Set<(e: AgentEvent) => void>();
@@ -92,9 +104,15 @@ export class AcpAdapter implements AgentAdapter {
       clientInfo: { name: 'typst-studio', title: 'Typst Studio', version: '0.1.0' },
     });
     this.caps = init ?? {};
-    // A failure here (signed out, say) is the start's failure, in the agent's own words.
-    const warm = await this.newSession();
-    this.warm = Promise.resolve(warm);
+    // A failure here is the start's failure: signed out, it says how to sign in; otherwise in the agent's own words.
+    try {
+      this.warm = Promise.resolve(await this.newSession());
+    } catch (e) {
+      if (e instanceof AcpError && e.code === AUTH_REQUIRED) {
+        throw new AcpError(`${ACP_NAMES[this.kind]} isn’t signed in (“${e.message}”). In Terminal, ${SIGN_IN[this.kind].how}; then start it again.`);
+      }
+      throw e;
+    }
   }
 
   async stop() {
@@ -137,8 +155,11 @@ export class AcpAdapter implements AgentAdapter {
       const p = this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
-      if (m.error) p.reject(new AcpError(m.error.data?.message ?? m.error.message ?? 'The assistant refused.'));
-      else p.resolve(m.result);
+      if (m.error) {
+        const error = new AcpError(m.error.data?.message ?? m.error.message ?? 'The assistant refused.');
+        error.code = m.error.code;
+        p.reject(error);
+      } else p.resolve(m.result);
       return;
     }
     if (m.method === 'session/update') return this.update(m.params);

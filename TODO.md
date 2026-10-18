@@ -180,7 +180,7 @@
 
 - [x] better sample books , one for each type. a novel in the public domain. the transformers paper (attn is all you need), etc.
 
-- [ ] can we make this wokr with gemini CLI rather than opencode? (settings choice)
+- [x] can we make this wokr with gemini CLI rather than opencode? (settings choice)
 
 - [x] can we make ti work with claude code CLI as well? and not just opencode? (settings choice)
 

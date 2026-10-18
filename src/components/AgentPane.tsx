@@ -1,3 +1,4 @@
+import { ASSISTANT_NAMES } from '../app/settings';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
@@ -912,6 +913,7 @@ function Starter() {
 }
 
 export function AgentPane() {
+  const assistantName = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
   const agent = useStore(studio.store, (s) => s.agent);
   const listRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -949,9 +951,13 @@ export function AgentPane() {
         </header>
         {(agent.status !== 'ready' || agent.connection === 'lost') && (
           <div className="agent-status">
-            {agent.status === 'starting' && 'Starting the assistant (OpenCode)…'}
+            {agent.status === 'starting' && `Starting the assistant (${assistantName})…`}
             {agent.status === 'off' && 'The assistant is off.'}
-            {agent.status === 'error' && <span className="bad">OpenCode: {agent.error}</span>}
+            {agent.status === 'error' && (
+              <span className="bad">
+                {assistantName}: {agent.error}
+              </span>
+            )}
             {agent.status === 'ready' && agent.connection === 'lost' && <span className="bad">Reconnecting to the assistant…</span>}
             <span className="spacer" />
             {agent.status === 'error' && (
