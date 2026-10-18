@@ -222,6 +222,6 @@
 
 - [x] add support for antigravity CLI? (or is that gemini?)
 
-- [ ] make a really pretty README.md for the github repo
+- [x] make a really pretty README.md for the github repo
 
 - [x] in settings modal, X in top right corner isnt centered properly (visible when hovering)
