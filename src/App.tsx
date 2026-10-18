@@ -247,6 +247,13 @@ export function App() {
   // Typst source outside the editor (What changed's words) is set like the editor.
   const editorFontSize = useStore(studio.store, (s) => s.settings.editorFontSize);
   useEffect(() => document.documentElement.style.setProperty('--editor-font-size', `${editorFontSize}px`), [editorFontSize]);
+  // The assistant's marks in the editor, in the colours chosen in Settings ▸ Assistant.
+  const aiEditColor = useStore(studio.store, (s) => s.settings.aiEditColor);
+  const aiReadColor = useStore(studio.store, (s) => s.settings.aiReadColor);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ai-edit', aiEditColor);
+    document.documentElement.style.setProperty('--ai-read', aiReadColor);
+  }, [aiEditColor, aiReadColor]);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}

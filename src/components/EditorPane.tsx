@@ -169,7 +169,7 @@ export function EditorPane() {
               linesDecorationsClassName: m.removal ? 'ai-edit-removal' : 'ai-edit-line',
               linesDecorationsTooltip: m.removal ? 'The assistant removed text here (hover the line number)' : 'Changed by the assistant (hover the line number)',
               lineNumberHoverMessage: editHover(m),
-              overviewRuler: { color: '#a371f7', position: monaco.editor.OverviewRulerLane.Left },
+              overviewRuler: { color: studio.state.settings.aiEditColor, position: monaco.editor.OverviewRulerLane.Left },
             },
           });
         }
@@ -182,7 +182,7 @@ export function EditorPane() {
               isWholeLine: true,
               linesDecorationsClassName: 'ai-read-line',
               linesDecorationsTooltip: `The assistant read these lines in this conversation (lines ${r.from}–${r.to} now)`,
-              overviewRuler: { color: 'rgba(88, 166, 255, 0.35)', position: monaco.editor.OverviewRulerLane.Center },
+              overviewRuler: { color: `${studio.state.settings.aiReadColor}59`, position: monaco.editor.OverviewRulerLane.Center },
             },
           });
         }
@@ -190,9 +190,13 @@ export function EditorPane() {
       aiMarks.set(decorations);
     };
     let aiTimer: number | undefined;
-    let lastAi = [studio.state.aiMarks, studio.state.settings.markAiEdits, studio.state.settings.markAiReads] as const;
+    const aiState = () => {
+      const { aiMarks: marks, settings: s } = studio.state;
+      return [marks, s.markAiEdits, s.markAiReads, s.aiEditColor, s.aiReadColor] as const;
+    };
+    let lastAi = aiState();
     const offAi = studio.store.subscribe(() => {
-      const next = [studio.state.aiMarks, studio.state.settings.markAiEdits, studio.state.settings.markAiReads] as const;
+      const next = aiState();
       if (next.every((v, i) => v === lastAi[i])) return;
       lastAi = next;
       paintAi();

@@ -40,6 +40,8 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     historyPlacement: settings.historyPlacement,
     markAiEdits: settings.markAiEdits,
     markAiReads: settings.markAiReads,
+    aiEditColor: settings.aiEditColor,
+    aiReadColor: settings.aiReadColor,
     formatOnSave: settings.formatOnSave,
     editorFontSize: settings.editorFontSize,
     toolPaths: settings.toolPaths,

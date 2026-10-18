@@ -63,9 +63,11 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {}, assistant: 'opencode' });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {}, assistant: 'opencode' });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
+    store.set('studio.settings', '{"aiEditColor":"#3FB950","aiReadColor":"blue"}');
+    expect(loadSettings()).toMatchObject({ aiEditColor: '#3fb950', aiReadColor: '#58a6ff' });
     store.set('studio.settings', '{"formatOnSave":false}');
     expect(loadSettings().formatOnSave).toBe(false);
     store.set('studio.settings', '{"formatOnSave":"no"}');

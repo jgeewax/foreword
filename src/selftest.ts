@@ -4220,18 +4220,55 @@ async function settingControlsChecks() {
     out.sendKey = { before: sendBefore, after: sendAfter, snapshot: await snap('setting-controls-general') };
     [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Assistant')?.click();
     await sleep(300);
-    out.assistantPage = { switches: [...document.querySelectorAll('.settings-switch')].map((l) => `${l.querySelector('.settings-switch-label')?.textContent}: ${l.querySelector('[role="switch"]')?.getAttribute('aria-checked')}`), native: native() };
-    document.querySelector('.settings-switch')?.scrollIntoView({ block: 'center' });
+    // The assistant's marks: a colour each, or "Same as yours" (no mark).
+    const colors = (name: string) => document.querySelector<HTMLElement>(`.color-choice[aria-label="${name}"]`);
+    const checked = (name: string) => colors(name)?.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') ?? colors(name)?.querySelector('[aria-checked="true"]')?.textContent;
+    const marks = () => ({
+      changed: checked('Lines the assistant changed'),
+      read: checked('Lines the assistant read'),
+      edits: [studio.state.settings.markAiEdits, studio.state.settings.aiEditColor],
+      css: getComputedStyle(document.documentElement).getPropertyValue('--ai-edit').trim(),
+    });
+    const marksBefore = marks();
+    colors('Lines the assistant changed')?.querySelector<HTMLElement>('[aria-label="Green"]')?.click();
     await sleep(100);
-    out.assistantSnapshot = await snap('setting-controls-assistant');
+    const green = marks();
+    colors('Lines the assistant changed')?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await sleep(100);
+    const arrowed = { ...marks(), focused: document.activeElement?.getAttribute('aria-label') };
+    colors('Lines the assistant changed')?.scrollIntoView({ block: 'center' });
+    await sleep(100);
+    const shot = await snap('setting-controls-assistant');
+    // Another colour, as the Mac's colour panel sends it to the hidden colour input.
+    const picker = colors('Lines the assistant changed')?.querySelector<HTMLInputElement>('input[type="color"]');
+    if (picker) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(picker, '#123456');
+      picker.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await sleep(100);
+    const custom = { ...marks(), canOpen: typeof picker?.showPicker === 'function' };
+    [...(colors('Lines the assistant changed')?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])].find((b) => b.textContent === 'Same as yours')?.click();
+    await sleep(100);
+    const none = marks();
+    out.assistantPage = { before: marksBefore, green, arrowed, custom, none, native: native(), switches: document.querySelectorAll('.settings-content [role="switch"]').length, snapshot: shot };
     out.ok =
       Object.values(out.nativeOnPages as Record<string, number>).every((n) => n === 0) &&
       (out.formatOnSave as { flips: boolean }).flips &&
       sendAfter.setting !== sendBefore.setting &&
       sendAfter.note !== sendBefore.note &&
-      sendAfter.focused === sendAfter.chosen;
+      sendAfter.focused === sendAfter.chosen &&
+      green.changed === 'Green' &&
+      green.css === '#3fb950' &&
+      arrowed.changed === 'Yellow' &&
+      arrowed.focused === 'Yellow' &&
+      custom.changed === 'Another colour' &&
+      custom.css === '#123456' &&
+      none.changed === 'Same as yours' &&
+      none.edits[0] === false;
   } finally {
-    studio.updateSettings({ formatOnSave: saved.formatOnSave, sendKey: saved.sendKey });
+    const { formatOnSave, sendKey, markAiEdits, aiEditColor } = saved;
+    studio.updateSettings({ formatOnSave, sendKey, markAiEdits, aiEditColor });
     delete (studio as { updateSettings?: unknown }).updateSettings;
     studio.closeSettings();
   }

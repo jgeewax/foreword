@@ -1,6 +1,7 @@
 // Settings' own controls, in place of the browser's checkboxes and radio
-// buttons: a switch for on or off, and a segmented control for one of a few.
-import { useRef, type ReactNode } from 'react';
+// buttons: a switch for on or off, a segmented control for one of a few,
+// and a colour picker.
+import { useRef, type CSSProperties, type ReactNode } from 'react';
 
 /**
  * An on/off setting, as in macOS's System Settings: what it does, then the
@@ -42,5 +43,58 @@ export function Choice<T extends string>({ label, value, options, onChange }: { 
       </div>
       {options[at]?.detail && <p className="settings-help">{options[at].detail}</p>}
     </>
+  );
+}
+
+/**
+ * A colour for a mark: swatches, any other colour (the Mac's colour picker),
+ * or none: "Same as yours", the lines looking like the ones you wrote. Arrows
+ * move along, as in a radio group.
+ */
+export function ColorChoice({ label, on, color, colors, onChange }: { label: string; on: boolean; color: string; colors: { color: string; name: string }[]; onChange: (choice: { on: boolean; color?: string }) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLInputElement>(null);
+  // The swatches, then another colour (the one chosen, if it isn't a swatch's), then none.
+  const other = colors.length;
+  const none = colors.length + 1;
+  const preset = colors.findIndex((c) => c.color === color);
+  const at = !on ? none : preset >= 0 ? preset : other;
+  const pick = (i: number) => onChange(i === none ? { on: false } : { on: true, color: i === other ? color : colors[i].color });
+  const openPicker = () => {
+    const input = pickerRef.current;
+    if (!input) return;
+    if (input.showPicker) input.showPicker();
+    else input.click();
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const step = STEPS[e.key];
+    if (!step) return;
+    e.preventDefault();
+    let to = (at + step + none + 1) % (none + 1);
+    // Arrows pass "another colour" until there is one (choosing one opens the picker).
+    if (to === other && preset >= 0) to = (to + step + none + 1) % (none + 1);
+    pick(to);
+    ref.current?.querySelectorAll<HTMLElement>('[role="radio"]')[to]?.focus();
+  };
+  const radio = (i: number) => ({ role: 'radio', 'aria-checked': i === at, tabIndex: i === at ? 0 : -1 }) as const;
+  return (
+    <div className="color-choice" role="radiogroup" aria-label={label} ref={ref} onKeyDown={onKeyDown}>
+      {colors.map((c, i) => (
+        <button key={c.color} type="button" className="swatch" style={{ '--swatch': c.color } as CSSProperties} aria-label={c.name} title={c.name} {...radio(i)} onClick={() => pick(i)} />
+      ))}
+      <button
+        type="button"
+        className={`swatch other${preset >= 0 ? '' : ' custom'}`}
+        style={preset >= 0 ? undefined : ({ '--swatch': color } as CSSProperties)}
+        aria-label="Another colour"
+        title={preset >= 0 ? 'Another colour…' : `${color}: click for another`}
+        {...radio(other)}
+        onClick={openPicker}
+      />
+      <input ref={pickerRef} type="color" className="color-picker-input" tabIndex={-1} aria-hidden value={color} onChange={(e) => onChange({ on: true, color: e.target.value })} />
+      <button type="button" className="swatch-none" title="No mark: these lines look like the ones you wrote" {...radio(none)} onClick={() => pick(none)}>
+        Same as yours
+      </button>
+    </div>
   );
 }

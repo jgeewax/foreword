@@ -31,10 +31,13 @@ export type AppSettings = {
   /** What the assistant may do (see permissions.ts). */
   permissions: AgentPermissions;
   historyPlacement: HistoryPlacement;
-  /** Mark the lines the assistant changed (from History), in the editor's gutter. */
+  /** Mark the lines the assistant changed (from History), in the editor's gutter; off, they look like the author's. */
   markAiEdits: boolean;
   /** Mark the lines the assistant read in the current conversation. */
   markAiReads: boolean;
+  /** The colours of those marks (#rrggbb). */
+  aiEditColor: string;
+  aiReadColor: string;
   /** Commands the assistant may run without asking, in every book (e.g. "python3"), besides those that only look. */
   allowCommands: string[];
   /** Format Typst files (typstyle, through Tinymist) when the author saves them. */
@@ -53,6 +56,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   historyPlacement: 'tab',
   markAiEdits: true,
   markAiReads: true,
+  aiEditColor: '#a371f7',
+  aiReadColor: '#58a6ff',
   allowCommands: [],
   formatOnSave: true,
   editorFontSize: 12,
@@ -82,6 +87,18 @@ export function saveSettings(settings: AppSettings) {
   } catch {}
 }
 
+/** The marks' colour choices, besides one of the author's own. */
+export const MARK_COLORS = [
+  { color: '#a371f7', name: 'Violet' },
+  { color: '#58a6ff', name: 'Blue' },
+  { color: '#3fb950', name: 'Green' },
+  { color: '#d29922', name: 'Yellow' },
+  { color: '#f0883e', name: 'Orange' },
+  { color: '#db61a2', name: 'Pink' },
+];
+
+const isColor = (c: unknown): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+
 /** A command name to allow ("python3", "git add"): one or two plain words, no wildcards or shell syntax. */
 export const isCommandName = (c: string) => /^[A-Za-z0-9][\w.+-]*( [A-Za-z0-9][\w.+-]*)?$/.test(c) && c.length <= 40;
 
@@ -102,6 +119,8 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (raw.historyPlacement === 'tab' || raw.historyPlacement === 'below') out.historyPlacement = raw.historyPlacement;
   if (typeof raw.markAiEdits === 'boolean') out.markAiEdits = raw.markAiEdits;
   if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
+  if (isColor(raw.aiEditColor)) out.aiEditColor = raw.aiEditColor.toLowerCase();
+  if (isColor(raw.aiReadColor)) out.aiReadColor = raw.aiReadColor.toLowerCase();
   if (Array.isArray(raw.allowCommands)) out.allowCommands = sanitizeCommands(raw.allowCommands);
   if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
   const size = raw.editorFontSize;

@@ -209,3 +209,5 @@
 - [x] add a way to open the agent settings form the ai chat panel
 
 - [x] add an X button on the preview pane to make it go away
+
+- [x] lines assistant changed vs us changes should be a color picker with an option to do the same and show no difference. a toggle switch is wrong for this.
