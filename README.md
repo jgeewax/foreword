@@ -4,9 +4,9 @@
 
 # Typst Studio
 
-**Write books in plain text. Watch them become books.**
+**Write your book with AI. See every page as it'll print.**
 
-A Mac app for writing books, papers and picture books in [Typst](https://typst.app). The typeset pages update beside your words as you type, and a writing assistant reads, explains and edits with you, showing every change it makes.
+A Mac app for writing books in [Typst](https://typst.app). Your chapter on one side, the finished pages on the other, updating as you type. Beside them, an AI assistant that drafts, revises and lays out the pages with you.
 
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20first-111?logo=apple&logoColor=white)
 ![Typst](https://img.shields.io/badge/Typst-0.15-239dad)
@@ -25,17 +25,31 @@ A Mac app for writing books, papers and picture books in [Typst](https://typst.a
 
 <br>
 
+## Why another editor
+
+Every tool for writing a book was made for something else.
+
+| | |
+| :-- | :-- |
+| **Word** | Made for letters and reports. Three hundred pages in, the styles drift, the figures wander and the numbering breaks. |
+| **Google Docs** | Made for sharing a draft, not for laying out pages you'd send to a printer. |
+| **LaTeX** | Gorgeous pages, eventually. Slow builds, cryptic errors, and nothing to look at until it compiles. |
+| **Typst** | Fast, readable and beautiful. But its editors are made for papers and programmers, not for writing a whole book. |
+| **AI in a code editor** | The assistant is brilliant; the room is wrong. Terminals, diffs and build commands, when all you wanted was the next chapter. |
+
+Typst Studio is made for one job: **writing a book**, with an AI assistant at your side and the pages in front of you.
+
 ## What it's like
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### The pages as they'll print, while you type
+### See the page as it'll print, while you type
 
-Typst Studio typesets the book from what you've typed, saved or not, and redraws only the pages in view. In a 491-page book, a change reaches the preview in about a tenth of a second.
+A book lives or dies on details: a figure that lands two pages late, a reference that points nowhere, a citation that didn't resolve. Typst Studio typesets the book from what you've typed, saved or not, so you catch them the moment they happen, not after a slow build.
 
-Click a passage in the preview to go to its source. An error is underlined where it is, and the preview keeps the last good pages until it's fixed.
+It redraws only the pages in view: in a 491-page book, a change shows up in about a tenth of a second. Click anything in the pages to jump to its source. A mistake is underlined where it is, in plain words, and the pages stay up while you fix it.
 
 </td>
 <td width="50%" valign="top">
@@ -49,58 +63,82 @@ Click a passage in the preview to go to its source. An error is underlined where
 <td width="50%" valign="top">
 
 <img src="docs/images/jekyll-edit.webp" alt="Jekyll and Hyde open at chapter one, with the chapter's opening page in the preview, and the assistant reporting the edit it made to the first paragraph.">
-<sub><i>The assistant tightening the first paragraph of Jekyll and Hyde.</i></sub>
+<sub><i>The assistant tightening the first paragraph of Jekyll and Hyde, and saying what it cut.</i></sub>
 
 </td>
 <td width="50%" valign="top">
 
-### An assistant that edits, and shows its work
+### An AI assistant, in an editor made for writing
 
-Select a passage and ask about it, or ask for a change. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands.
+AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text, ask about it or ask for a change, and it edits the book itself, then tells you what it did in a sentence or two. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands.
 
-**Plan** talks a change through before writing it. **Options** gives three versions of a passage to pick from. You decide what it may do without asking.
+It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Plan** talks a chapter through before anything is written. **Options** gives you three versions of a passage to pick from. You decide what it may do without asking.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-### Every version, and what changed in it
+### Beautiful layouts, without learning how
 
-History saves a version as you work and around every assistant change, in a repository of its own, outside the book's folder. Open any version to see what changed, line by line or word by word, then undo just that change or put the whole book back.
+Typst can set almost anything a book designer can imagine, if you know how to ask it. Now you don't have to. Say what you want in plain words, the assistant writes the Typst, and the result is on the page a moment later:
 
-Already keep your book in Git? Source Control stages, commits, pulls and pushes it.
+> *“Start every chapter on a right-hand page.”*<br>
+> *“Put this paragraph in a shaded box beside the text.”*<br>
+> *“Draw a flowchart of the hiring process.”*<br>
+> *“Make a chart from data/sales.csv.”*
+
+And when you're stuck, it gets you moving: an outline for the next chapter, a rough first pass, three ways to open a scene.
 
 </td>
-<td width="50%" valign="top">
-
-<img src="docs/images/jekyll-changes.webp" alt="What changed: the assistant's version of chapter one beside the previous one, with the removed words in red and the new line in green.">
-<sub><i>What changed in the assistant's version, with Undo these changes.</i></sub>
-
-</td>
-</tr>
-<tr>
 <td width="50%" valign="top">
 
 <img src="docs/images/peter.webp" alt="The Tale of Peter Rabbit as a picture book: each page's text and picture in the source, and the title page with Beatrix Potter's illustration in the preview.">
-<sub><i>The Tale of Peter Rabbit, as a picture book: one page per picture.</i></sub>
+<sub><i>The Tale of Peter Rabbit, laid out as a picture book: one page per picture.</i></sub>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Comment through the chapter, then fix it all at once
+
+Chat is good for one change at a time. Revising a chapter is dozens. So read it through like an editor and leave a comment wherever something's off: *too slow*, *cut this*, *needs a source*. Then press **Fix all**. The assistant works through every comment, and you check each change before it stays.
+
+Comments sit beside the text, never in it.
 
 </td>
 <td width="50%" valign="top">
 
-### Novels, textbooks, picture books and papers
+1. **Plan the chapter.** Talk it through with the assistant first. Nothing changes until you're ready.
+2. **Comment as you read.** Select a passage, in the text or the pages, and press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>.
+3. **Fix them all.** One click, *Fix all with the assistant*, hands every open comment over.
+4. **Check each change.** See it before and after, then **Keep** it or **Undo change**.
 
-Start from a template: a novel, non-fiction, a textbook, a programming book or a picture book, at the page sizes printers use in the US, the UK and Europe, and Asia. Papers start from IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS or APA.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-Or open a finished sample and try the assistant on it: *Jekyll and Hyde*, *Calculus Made Easy*, *The Elements of Style*, *The Tale of Peter Rabbit*, *Attention Is All You Need*, and *Counting Words*, whose Python examples run.
+<img src="docs/images/jekyll-changes.webp" alt="What changed: the assistant's version of chapter one beside the previous one, with the removed words in red and the new line in green.">
+<sub><i>What the assistant changed in chapter one, with Undo these changes.</i></sub>
+
+</td>
+<td width="50%" valign="top">
+
+### Go back to any version. No Git required
+
+Engineers keep every version in Git. Most writers keep *chapter-3-final-v2-REAL.docx*. Typst Studio keeps the versions for you, as you work and around every change the assistant makes, in a repository of its own outside the book's folder.
+
+Open any version to see what changed, line by line or word by word, then undo just that change or put the whole book back. Name a version, like “Draft sent to my editor”. Already keep your book in Git? Source Control stages, commits, pulls and pushes it.
 
 </td>
 </tr>
 </table>
 
-## Bring the assistant you already use
+## Bring the AI you already use
 
-The writing assistant is a program on your Mac, signed in with your own account. Pick one in **Settings ▸ Assistant**, or from the chat, beside the model.
+The assistant is a program on your Mac, signed in with your own account, so there's no new subscription. Pick one in **Settings ▸ Assistant**, or from the chat, beside the model.
 
 | Assistant | From | Runs on | How Typst Studio talks to it |
 | :-- | :-- | :-- | :-- |
@@ -112,9 +150,10 @@ The writing assistant is a program on your Mac, signed in with your own account.
 
 Each conversation is its own task, and several can run at once. Settings ▸ Assistant says what each one needs on your Mac and signs you in.
 
-## Made for the whole job of a book
+## Everything else a book needs
 
-- **Review comments.** Comment on passages as an editor would, then have the assistant address them, each change kept or undone on its own.
+- **Templates for any book.** A novel, non-fiction, a textbook, a programming book or a picture book, at the page sizes printers use in the US, the UK and Europe, and Asia. Papers start from IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS or APA.
+- **Sample books to try.** Open a finished one and try the assistant on it: *Jekyll and Hyde*, *Calculus Made Easy*, *The Elements of Style*, *The Tale of Peter Rabbit*, *Attention Is All You Need*, and *Counting Words*, whose Python examples run.
 - **Code that runs.** Examples in Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell run from the book, with their real output set beneath and checked against what you expect.
 - **Covers and printing.** Design a print cover with the spine worked out from the page count, check the files against the printer's rules, and order through Mixam.
 - **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. The assistant can draft it from your chapters.
