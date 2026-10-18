@@ -2764,6 +2764,64 @@ async function activityChecks() {
   return out;
 }
 
+/** Switching sidebar views keeps the sidebar's width (as in VS Code). */
+async function sidebarWidthChecks() {
+  const out: Record<string, unknown> = {};
+  const width = (sel: string) => Math.round((document.querySelector(sel)?.getBoundingClientRect().width ?? 0) * 10) / 10;
+  const measure = () => ({ view: studio.state.sidebar, sidebar: width('.explorer'), bar: width('.activity-bar') });
+  const tabs = () => [...document.querySelectorAll<HTMLButtonElement>('.activity-bar [role="tab"]')];
+  const labels = tabs().map((b) => b.getAttribute('aria-label')!);
+  // A real click: pointer events (the panel library listens on the document), then the click.
+  const press = (el: HTMLElement, dx = 0) => {
+    const r = el.getBoundingClientRect();
+    const init = { bubbles: true, cancelable: true, clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2, pointerId: 1, pointerType: 'mouse', button: 0, isPrimary: true };
+    el.dispatchEvent(new PointerEvent('pointermove', init));
+    el.dispatchEvent(new PointerEvent('pointerdown', { ...init, buttons: 1 }));
+    el.dispatchEvent(new PointerEvent('pointerup', init));
+    el.dispatchEvent(new MouseEvent('click', init));
+  };
+  const switchAll = async () => {
+    const rows: ReturnType<typeof measure>[] = [];
+    for (const label of labels) {
+      const b = tabs().find((x) => x.getAttribute('aria-label') === label);
+      if (!b || b.classList.contains('on')) continue;
+      press(b);
+      await sleep(400);
+      rows.push(measure());
+    }
+    return { rows, same: new Set(rows.map((r) => `${r.sidebar}/${r.bar}`)).size === 1 };
+  };
+  const saved = studio.state.sidebar;
+  const layoutKey = 'react-resizable-panels:studio-panes';
+  const savedLayout = localStorage.getItem(layoutKey);
+  out.start = measure();
+  out.views = await switchAll();
+  // Drag the sidebar's edge wider: every view keeps the new width.
+  const sep = document.querySelector<HTMLElement>('.workbench > .panes > .separator')!;
+  const r = sep.getBoundingClientRect();
+  const drag = (type: string, x: number) =>
+    sep.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: r.top + r.height / 2, pointerId: 1, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1, isPrimary: true }));
+  const x0 = r.left + r.width / 2;
+  drag('pointermove', x0);
+  drag('pointerdown', x0);
+  for (let i = 1; i <= 10; i++) drag('pointermove', x0 + 12 * i);
+  drag('pointerup', x0 + 120);
+  await sleep(400);
+  out.afterDrag = measure();
+  out.viewsAfterDrag = await switchAll();
+  // Hide it (the open view's icon), then open it from another icon (pressed near the bar's right edge): same width.
+  const on = tabs().find((b) => b.classList.contains('on'))!;
+  press(on);
+  await sleep(400);
+  out.hidden = measure();
+  press(tabs().find((b) => b !== on)!, 18);
+  await sleep(400);
+  out.reopened = measure();
+  studio.showSidebar(saved);
+  if (savedLayout) localStorage.setItem(layoutKey, savedLayout);
+  return out;
+}
+
 /** Reading part of a file: the read tool, never a question; an explicit `sed -n` runs without one too (real model, Ask first). */
 async function readToolsChecks() {
   const out: Record<string, unknown> = {};
@@ -3727,6 +3785,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
+    if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
     if (want('git')) result.git = await gitChecks();
