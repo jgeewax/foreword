@@ -206,6 +206,6 @@
 
 - [ ] add a way to change ai providers (opencode/codex/etc) from the ai chat panel
 
-- [ ] add a way to open the agent settings form the ai chat panel
+- [x] add a way to open the agent settings form the ai chat panel
 
 - [x] add an X button on the preview pane to make it go away

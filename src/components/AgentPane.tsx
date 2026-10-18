@@ -966,6 +966,14 @@ export function AgentPane() {
               New task
             </button>
           )}
+          <button
+            className="icon pane-action agent-settings"
+            aria-label="Assistant settings"
+            title={`Assistant settings: which assistant (${assistantName}), its model and its account`}
+            onClick={() => studio.openSettings('assistant')}
+          >
+            <Icon name="settings" size={15} />
+          </button>
         </header>
         {(agent.status !== 'ready' || agent.connection === 'lost') && (
           <div className="agent-status">

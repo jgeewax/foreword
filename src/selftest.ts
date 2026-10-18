@@ -6,7 +6,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 // OpenCode) when TYPST_STUDIO_SELFTEST=<out.json> is set. Never saves files;
 // agent edit requests are rejected.
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
-import { studio } from './app/studio';
+import { studio, type ChatItem } from './app/studio';
 import { monaco } from './editor/monaco';
 import { selectAll } from './editor/select-all';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
@@ -4064,6 +4064,32 @@ async function previewCloseChecks() {
   return { ok, before, shot, button, closed, shownAgain };
 }
 
+/** The chat's ⚙ opens Settings at Typst Studio ▸ Assistant; the header still fits beside it. */
+async function agentSettingsChecks() {
+  const header = document.querySelector<HTMLElement>('.agent-pane .pane-header')!;
+  const gear = header.querySelector<HTMLButtonElement>('.agent-settings');
+  const button = gear && { label: gear.getAttribute('aria-label'), title: gear.title, last: gear === header.lastElementChild };
+  // With a conversation going (New task shows), at the pane's narrowest.
+  const items = studio.state.agent.items;
+  studio.store.set((s) => ({ agent: { ...s.agent, items: [...items, { id: 'selftest-gear', kind: 'user', text: 'Hello', attachments: [] } as ChatItem] } }));
+  await sleep(200);
+  const fits = header.scrollWidth <= header.clientWidth && !!header.querySelector('.new-task');
+  const headerShot = await snap('agent-settings-header');
+  studio.store.set((s) => ({ agent: { ...s.agent, items } }));
+  gear?.click();
+  await sleep(400);
+  const opened = {
+    open: studio.state.settingsOpen,
+    page: document.querySelector('.settings-nav button.active')?.textContent,
+    cards: document.querySelectorAll('.settings .assistant-card').length,
+    snapshot: await snap('agent-settings'),
+  };
+  studio.closeSettings();
+  await sleep(200);
+  const ok = !!gear && fits && opened.open && opened.page === 'Assistant' && opened.cards === 4;
+  return { ok, button, fits, headerShot, opened };
+}
+
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'below' });
@@ -5112,6 +5138,7 @@ export async function runSelftest(launch: LaunchOptions) {
     }
     if (want('shot')) result.shot = await shotChecks();
     if (want('previewclose')) result.previewclose = await previewCloseChecks();
+    if (want('agentsettings')) result.agentsettings = await agentSettingsChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('selectall')) result.selectall = await selectAllChecks();
