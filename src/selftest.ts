@@ -370,6 +370,89 @@ async function optionsChecks() {
 }
 
 /**
+ * What the chat shows while the assistant works, for each phase, posed without
+ * a model: who's at work ("Claude is thinking…"), words that change with the
+ * wait, a tip once the turn runs long, and each phase's moving picture. A
+ * window behind others doesn't animate, so each picture is also photographed
+ * paused at six points of its animation, enlarged (a filmstrip).
+ */
+async function activityLookChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = studio.state.agent;
+  const now = Date.now();
+  type Phase = { phase: 'sending' | 'waiting' | 'thinking' | 'tool' | 'writing' | 'retrying' | 'asking'; since: number; phaseSince?: number; label?: string; retryAt?: number; attempt?: number };
+  const pose = (activity: Phase, items: ChatItem[] = []) =>
+    studio.store.set((s) => ({ agent: { ...s.agent, running: true, sessionId: 'selftest-activity', activity, items: [{ kind: 'user', id: 'u', text: 'Tighten the opening of chapter 2.', attachments: [] }, ...items] } }));
+  const read = () => ({
+    line: document.querySelector('.activity-line')?.textContent ?? null,
+    tip: document.querySelector('.activity-tip')?.textContent ?? null,
+    glyph: document.querySelector('.activity-line .glyph')?.getAttribute('class') ?? null,
+    thinking: document.querySelector('.thinking.live .thinking-head')?.textContent ?? null,
+  });
+  const phases: [string, Phase][] = [
+    ['sending', { phase: 'sending', since: now }],
+    ['waiting', { phase: 'waiting', since: now - 2000 }],
+    ['waiting10s', { phase: 'waiting', since: now - 10000 }],
+    ['waiting40s', { phase: 'waiting', since: now - 40000 }],
+    ['tool', { phase: 'tool', label: 'Reading “Eigenvalues” (chapter 2)', since: now - 20000, phaseSince: now - 3000 }],
+    ['writing', { phase: 'writing', since: now - 30000, phaseSince: now - 2000 }],
+    ['retrying', { phase: 'retrying', since: now - 5000, retryAt: now + 8000, attempt: 2 }],
+    ['asking', { phase: 'asking', since: now - 20000 }],
+  ];
+  try {
+    for (const [name, a] of phases) {
+      pose(a);
+      await sleep(1100);
+      out[name] = read();
+    }
+    pose({ phase: 'thinking', since: now - 9000, phaseSince: now - 3000 }, [
+      { kind: 'thinking', id: 'm:r0', text: 'The opening sentence buries the definition.\nMove the matrix first, then the vector.', done: false, started: Date.now() - 3000, waited: 6000 },
+    ]);
+    await sleep(1100);
+    out.thinking = read();
+    out.snapshotThinking = await snap('activity-thinking');
+    pose({ phase: 'waiting', since: now - 20000 });
+    await sleep(1100);
+    out.snapshotWaiting = await snap('activity-waiting');
+
+    // The filmstrip: each picture, six times, paused at 0, 1/6, … of its animation, four times as big.
+    const strip = document.createElement('div');
+    strip.style.cssText = 'position:fixed;left:40px;top:120px;z-index:99999;background:var(--bg);padding:24px;border:1px solid var(--border);display:flex;flex-direction:column;gap:28px';
+    for (const [name, a] of phases.filter(([n]) => ['waiting', 'tool', 'writing', 'retrying', 'asking'].includes(n))) {
+      pose(a);
+      await sleep(400);
+      const glyph = document.querySelector('.activity-line .glyph');
+      if (!glyph) continue;
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:56px;align-items:center';
+      const label = document.createElement('span');
+      label.textContent = name;
+      label.style.cssText = 'width:70px;font-size:12px;color:var(--muted)';
+      row.append(label);
+      for (let i = 0; i < 6; i++) {
+        const frame = document.createElement('div');
+        frame.style.cssText = 'transform:scale(4);transform-origin:center;width:16px;height:16px;display:grid;place-items:center';
+        const clone = glyph.cloneNode(true) as Element;
+        for (const el of [clone, ...clone.querySelectorAll('*')]) {
+          (el as HTMLElement).style.setProperty('animation-play-state', 'paused', 'important');
+          (el as HTMLElement).style.setProperty('animation-delay', `${-(i / 6) * 2.4}s`, 'important');
+        }
+        frame.append(clone);
+        row.append(frame);
+      }
+      strip.append(row);
+    }
+    document.body.append(strip);
+    await sleep(300);
+    out.snapshotStrip = await snap('activity-strip');
+    strip.remove();
+  } finally {
+    studio.store.set((s) => ({ agent: { ...s.agent, running: saved.running, sessionId: saved.sessionId, activity: saved.activity, items: saved.items } }));
+  }
+  return out;
+}
+
+/**
  * Options mode: picking an option asks whether the task is done, under the
  * options; Not yet isn't asked again for that reply; Yes saves the file (the
  * option is in the version) and starts a new task. Replies are made up, so no
@@ -6246,6 +6329,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
+    if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();

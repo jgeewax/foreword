@@ -1,8 +1,8 @@
-import { clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix } from '../app/activity';
+import { activityWords, clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix, waitingTip, workerName } from '../app/activity';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
-import { pendingQuestion, studio, type ChatItem, type QuestionItem } from '../app/studio';
+import { pendingQuestion, studio, type Activity, type ChatItem, type QuestionItem } from '../app/studio';
 import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
@@ -569,6 +569,47 @@ function useNow(on: boolean, every = 250) {
   return now;
 }
 
+/** Who's at work, for the chat: "Claude", "Codex", or OpenCode's model. */
+function useWorkerName() {
+  const assistant = useStore(studio.store, (s) => s.settings.assistant);
+  const model = useStore(studio.store, (s) => (s.agent.model ? s.agent.models.find((m) => m.providerID === s.agent.model!.providerID && m.id === s.agent.model!.id)?.name : null));
+  return workerName(assistant, model);
+}
+
+/**
+ * A small moving picture for what the assistant is doing: a sparkle that
+ * twinkles while it thinks, a line being written while it writes, a comet
+ * going round while a tool runs, an hourglass while it waits to try again.
+ */
+export function ActivityGlyph({ phase }: { phase: Activity['phase'] | 'starting' }) {
+  if (phase === 'writing') {
+    return (
+      <svg className="glyph glyph-write" viewBox="0 0 24 24" aria-hidden>
+        <path className="glyph-ink" d="M2 15c2.5-5 4.5-5 5.5-1s2.5 4 4.5-1 3.5-5.5 5-1 2.5 3.5 5 1" />
+        <circle className="glyph-nib" cx="22" cy="13" r="1.6" />
+      </svg>
+    );
+  }
+  if (phase === 'tool') return <span className="glyph glyph-comet" aria-hidden />;
+  if (phase === 'retrying') {
+    return (
+      <svg className="glyph glyph-hourglass" viewBox="0 0 24 24" aria-hidden>
+        <path className="glass" d="M7 3.5h10M7 20.5h10M8 3.5c0 5 8 5 8 8.5s-8 3.5-8 8.5M16 3.5c0 5-8 5-8 8.5s8 3.5 8 8.5" />
+        <path className="sand-top" d="M9.6 6.5h4.8L12 10.5z" />
+        <path className="sand-bottom" d="M12 15.5l3.6 4H8.4z" />
+      </svg>
+    );
+  }
+  if (phase === 'asking') return <span className="glyph glyph-pulse" aria-hidden />;
+  return (
+    <svg className="glyph glyph-sparkle" viewBox="0 0 24 24" aria-hidden>
+      <path className="sparkle-big" d="M10 3.5l1.9 6.6 6.6 1.9-6.6 1.9L10 20.5l-1.9-6.6L1.5 12l6.6-1.9z" />
+      <path className="sparkle-small a" d="M19.5 2.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
+      <path className="sparkle-small b" d="M19 16l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    </svg>
+  );
+}
+
 /**
  * The model's reasoning: its last lines while it streams, then folded to
  * "Waited 12 s · Thought for 4 s". Waiting (the model saying nothing yet:
@@ -578,12 +619,14 @@ function useNow(on: boolean, every = 250) {
 function Thinking({ item }: { item: Extract<ChatItem, { kind: 'thinking' }> }) {
   const [open, setOpen] = useState(false);
   const now = useNow(!item.done, 1000);
+  const name = useWorkerName();
   if (!item.done) {
     return (
       <div className="thinking live">
         <div className="thinking-head">
+          <ActivityGlyph phase="thinking" />
           {waitedPrefix(item)}
-          <span className="shimmer">Thinking…</span> <span className="thinking-time">{clockTime(thinkingSoFar(item, now))}</span>
+          <span className="shimmer">{name} is thinking…</span> <span className="thinking-time">{clockTime(thinkingSoFar(item, now))}</span>
         </div>
         <div className="thinking-tail">
           <div>{item.text}</div>
@@ -605,37 +648,42 @@ function Thinking({ item }: { item: Extract<ChatItem, { kind: 'thinking' }> }) {
 function ActivityLine() {
   const running = useStore(studio.store, (s) => s.agent.running);
   const activity = useStore(studio.store, (s) => s.agent.activity);
-  // A live thinking block already says "Thinking…".
+  // A live thinking block already says "… is thinking".
   const thinkingShown = useStore(studio.store, (s) => {
     const last = s.agent.items[s.agent.items.length - 1];
     return last?.kind === 'thinking' && !last.done;
   });
+  const name = useWorkerName();
   const now = useNow(running);
   if (!running || !activity || (thinkingShown && activity.phase === 'thinking')) return null;
   // This step's own time (how long it's been waiting, or thinking, or on this
   // tool), and the turn's when it has had other steps before.
   const { step, total } = stepTimes(activity, now);
   const wait = activity.retryAt ? Math.max(0, Math.ceil((activity.retryAt - now) / 1000)) : 0;
-  const label =
-    activity.phase === 'sending'
-      ? 'Sending…'
-      : activity.phase === 'waiting'
-        ? 'Waiting for the model…'
-        : activity.phase === 'thinking'
-          ? 'Thinking…'
-          : activity.phase === 'tool'
-            ? `${activity.label ?? 'Working'}…`
-            : activity.phase === 'writing'
-              ? 'Writing…'
-              : activity.phase === 'asking'
-                ? 'Waiting for your answer'
-                : `The model is busy. Trying again${wait ? ` in ${wait} s` : ' now'}${activity.attempt ? ` (attempt ${activity.attempt})` : ''}`;
+  const words = activityWords(activity, name, step, wait);
+  const label = activity.phase === 'asking' || activity.phase === 'retrying' ? words : `${words}…`;
+  // A long turn: something worth knowing, under the line (not while it's waiting on you).
+  const tip = activity.phase === 'asking' ? null : waitingTip(total, activity.since);
   return (
-    <div className={`activity-line phase-${activity.phase}`} role="status" aria-live="polite" title={activity.reason}>
-      <span className="activity-spinner" aria-hidden />
-      <span className="activity-label shimmer">{label}</span>
-      <span className="activity-time">{clockTime(step)}</span>
-      {total > step && <span className="activity-total" title="Since you sent it">{clockTime(total)} in all</span>}
+    <div className={`activity phase-${activity.phase}`}>
+      <div className="activity-line" role="status" aria-live="polite" title={activity.reason}>
+        <ActivityGlyph phase={activity.phase} />
+        {/* Keyed by its words, so each new phrase comes in rather than just swapping. */}
+        <span key={words} className="activity-label shimmer">
+          {label}
+        </span>
+        <span className="activity-time">{clockTime(step)}</span>
+        {total > step && (
+          <span className="activity-total" title="Since you sent it">
+            {clockTime(total)} in all
+          </span>
+        )}
+      </div>
+      {tip && (
+        <div key={tip} className="activity-tip">
+          {tip}
+        </div>
+      )}
     </div>
   );
 }
@@ -1215,7 +1263,15 @@ export function AgentPane() {
         </header>
         {(agent.status !== 'ready' || agent.connection === 'lost') && (
           <div className="agent-status">
-            {agent.status === 'starting' && (agent.signingIn ? `Sign in with Google, in your browser, to start ${assistantName}…` : `Starting the assistant (${assistantName})…`)}
+            {agent.status === 'starting' &&
+              (agent.signingIn ? (
+                `Sign in with Google, in your browser, to start ${assistantName}…`
+              ) : (
+                <>
+                  <ActivityGlyph phase="starting" />
+                  <span className="shimmer">Starting {assistantName}…</span>
+                </>
+              ))}
             {agent.status === 'off' && 'The assistant is off.'}
             {agent.status === 'error' && (
               // Signed out, Settings says how to sign in (Sign in…).

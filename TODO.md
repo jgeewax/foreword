@@ -230,6 +230,8 @@
 
 - [x] we need a claude-code style question asking tool and UI in the chatbox. right now, when there are questions, the model seems to just dump them as text and i have to type to answer. i want multiple questions in order possible. for each one, suggest 3 options and give me a "other" option as well. this also includes multi-select checkbox (as well as other), y/n questions, etc. we have to be really thorough on this one.
 
+- [x] make the loading spinners and text more interesting to feel less slow. e.g., waiting on the model "Claude is thinking..." or "Codex is thinking...", and better animations, something more entertaining so that we dont feel liek this is taking SO LONG because it really can be slow.
+
 - [x] in option mode, when i pick an option (use this), it shoudl prmpt me to see if the task is done
 
 - [x] hisotry left panel is a bit confusing because i dont know what ot expect when i click on stuff. its not obvious that it would expand and collapse. lets use visual indicators in that panel to make it more obvious

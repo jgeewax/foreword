@@ -158,7 +158,7 @@ button.indicator:hover { background: var(--bg-3); }
   animation: shimmer 1.8s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .shimmer, .activity-spinner { animation: none !important; }
+  .shimmer, .glyph, .glyph * { animation: none !important; }
   .shimmer { color: var(--muted); background: none; }
 }
 
@@ -757,10 +757,43 @@ button.switch:active:not(:disabled) { transform: none; }
 .assistant-menu-settings { display: inline-flex; flex: none; align-items: center; gap: 5px; }
 
 /* The chat's live progress line, and the model's reasoning. */
-.activity-line { display: flex; align-items: center; gap: 8px; padding: 6px 2px 2px; font-size: 12.5px; animation: rise-in 0.18s ease-out; }
-.activity-spinner { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin 0.75s linear infinite; }
-.activity-line.phase-retrying .activity-spinner { border-top-color: var(--warn); }
-.activity-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity { animation: rise-in 0.18s ease-out; }
+.activity-line { display: flex; align-items: center; gap: 8px; padding: 6px 2px 2px; font-size: 12.5px; }
+/* Each new phrase rises in, rather than just swapping. */
+.activity-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; animation: shimmer 1.8s linear infinite, phrase-in 0.35s ease-out; }
+@keyframes phrase-in { from { opacity: 0; transform: translateY(3px); } }
+.activity-tip { margin: 3px 2px 0 24px; font-size: 11.5px; line-height: 1.4; color: var(--muted); animation: appear 0.6s ease-out; }
+.activity-tip::before { content: "Tip · "; font-weight: 600; }
+
+/* The assistant's moving pictures (ActivityGlyph), 16px, in the accent colour. */
+.glyph { flex: none; width: 16px; height: 16px; color: var(--accent); }
+svg.glyph { overflow: visible; }
+.glyph-sparkle path { fill: currentColor; transform-box: fill-box; transform-origin: center; }
+.glyph-sparkle .sparkle-big { animation: sparkle-turn 2.4s ease-in-out infinite; }
+.glyph-sparkle .sparkle-small { animation: twinkle 1.6s ease-in-out infinite; }
+.glyph-sparkle .sparkle-small.b { animation-delay: 0.8s; }
+@keyframes sparkle-turn { 0% { transform: rotate(0) scale(0.82); } 50% { transform: rotate(90deg) scale(1.05); } 100% { transform: rotate(180deg) scale(0.82); } }
+@keyframes twinkle { 0%, 100% { opacity: 0.15; transform: scale(0.4); } 50% { opacity: 1; transform: scale(1); } }
+/* Writing: a line of handwriting drawn and drawn again, the nib at its end. */
+.glyph-write .glyph-ink { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 32; animation: write-line 1.6s ease-in-out infinite; }
+.glyph-write .glyph-nib { fill: currentColor; animation: nib 1.6s ease-in-out infinite; }
+@keyframes write-line { 0% { stroke-dashoffset: 32; } 60%, 75% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes nib { 0% { transform: translateX(-20px); opacity: 0; } 10% { opacity: 1; } 60%, 75% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(0); opacity: 0; } }
+/* A tool: a comet going round. */
+.glyph-comet { width: 13px; height: 13px; margin: 1.5px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 25%, var(--accent)); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.2px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.2px), #000 calc(100% - 2px)); animation: spin 0.8s linear infinite; }
+/* Waiting to try again: an hourglass whose sand runs down, then it turns over (and the sand is on top again). */
+.glyph-hourglass { color: var(--warn); animation: hourglass 2.4s ease-in-out infinite; }
+.glyph-hourglass .glass { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.glyph-hourglass .sand-top, .glyph-hourglass .sand-bottom { fill: currentColor; transform-box: fill-box; transform-origin: bottom; }
+.glyph-hourglass .sand-top { animation: sand-out 2.4s linear infinite; }
+.glyph-hourglass .sand-bottom { animation: sand-in 2.4s linear infinite; }
+@keyframes hourglass { 0%, 70% { transform: rotate(0); } 90%, 100% { transform: rotate(180deg); } }
+@keyframes sand-out { 0% { transform: scaleY(1); } 70%, 100% { transform: scaleY(0); } }
+@keyframes sand-in { 0% { transform: scaleY(0); } 70%, 100% { transform: scaleY(1); } }
+/* Waiting on you. */
+.glyph-pulse { width: 8px; height: 8px; margin: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.thinking-head .glyph { width: 13px; height: 13px; vertical-align: -2px; margin-right: 6px; }
+.agent-status .glyph { width: 13px; height: 13px; }
 .activity-time { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .thinking { font-size: 12px; color: var(--muted); animation: rise-in 0.18s ease-out; }
 .thinking-head { background: none; border: none; padding: 0; color: var(--muted); font-size: 12px; }
@@ -858,7 +891,6 @@ button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px col
 /* The keys give way to the buttons in a narrow chat. */
 .ask-hint { flex: 1 1 0; min-width: 0; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ask-actions .primary { min-width: 64px; }
-.activity-line.phase-asking .activity-spinner { animation: pulse 1.2s ease-in-out infinite; border-top-color: var(--border); background: var(--accent); }
 
 /* Settings: a big window with its sections down the side. */
 .modal.settings { width: min(960px, calc(100% - 48px)); height: min(700px, calc(100% - 48px)); max-height: none; }

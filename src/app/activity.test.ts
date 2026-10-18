@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockTime, nextActivity, stepTimes, thinkingSoFar, thoughtHeading, waitedFor, waitedPrefix } from './activity';
+import { activityWords, clockTime, nextActivity, stepTimes, thinkingSoFar, thoughtHeading, WAITING_TIPS, WAITING_WORDS, waitedFor, waitedPrefix, waitingTip, waitingWords, workerName } from './activity';
 import type { Activity, ChatItem } from './studio';
 
 type Thought = Extract<ChatItem, { kind: 'thinking' }>;
@@ -64,5 +64,50 @@ describe('a thinking block’s heading', () => {
 
   it('writes times as seconds, then minutes', () => {
     expect([clockTime(0), clockTime(59), clockTime(60), clockTime(605)]).toEqual(['0 s', '59 s', '1:00', '10:05']);
+  });
+});
+
+describe('what the chat says while a turn runs', () => {
+  it('names who is at work: the assistant, or OpenCode’s model', () => {
+    expect(workerName('claude', 'opus')).toBe('Claude');
+    expect(workerName('codex')).toBe('Codex');
+    expect(workerName('gemini')).toBe('Gemini');
+    expect(workerName('opencode', 'GPT-5')).toBe('GPT-5');
+    expect(workerName('opencode', 'deepseek-v4-flash')).toBe('deepseek-v4-flash');
+    expect(workerName('opencode', 'Nemotron 3.5 Super VL Free')).toBe('Nemotron 3.5…');
+    expect(workerName('opencode', 'a-very-long-model-name-without-spaces-at-all')).toBe('a-very-long-model-name…');
+    expect(workerName('opencode', null)).toBe('The assistant');
+  });
+
+  it('says "is thinking" first, then other words every few seconds, from a place picked per turn', () => {
+    expect(waitingWords(0, 3)).toBe('thinking');
+    expect(waitingWords(3, 3)).toBe('thinking');
+    expect(waitingWords(4, 0)).toBe(WAITING_WORDS[0]);
+    expect(waitingWords(8, 0)).toBe(WAITING_WORDS[0]);
+    expect(waitingWords(9, 0)).toBe(WAITING_WORDS[1]);
+    expect(waitingWords(4, 5)).toBe(WAITING_WORDS[5]);
+    // Each is said for a while, and they don't repeat back to back.
+    const said = Array.from({ length: 40 }, (_, s) => waitingWords(s, 1234));
+    for (let i = 1; i < said.length; i++) if (said[i] !== said[i - 1]) expect(i === 4 || (i - 4) % 5 === 0).toBe(true);
+    // A long wait says now and then that it's still going.
+    expect(Array.from({ length: 120 }, (_, s) => waitingWords(s, 0))).toContain('still at it');
+  });
+
+  it('words each step', () => {
+    const a = (phase: string, more = {}) => ({ phase, since: 0, ...more }) as never;
+    expect(activityWords(a('sending'), 'Codex', 0, 0)).toBe('Sending to Codex');
+    expect(activityWords(a('waiting'), 'Claude', 1, 0)).toBe('Claude is thinking');
+    expect(activityWords(a('thinking'), 'Claude', 30, 0)).toBe('Claude is thinking');
+    expect(activityWords(a('writing'), 'GPT-5', 2, 0)).toBe('GPT-5 is writing');
+    expect(activityWords(a('tool', { label: 'Reading “The Storm”' }), 'Claude', 2, 0)).toBe('Reading “The Storm”');
+    expect(activityWords(a('asking'), 'Claude', 2, 0)).toBe('Waiting for your answer');
+    expect(activityWords(a('retrying', { attempt: 2 }), 'Claude', 2, 5)).toBe('The model is busy. Trying again in 5 s (attempt 2)');
+  });
+
+  it('offers a tip once a turn runs long, and another later', () => {
+    expect(waitingTip(14, 0)).toBeNull();
+    expect(WAITING_TIPS).toContain(waitingTip(15, 0));
+    expect(waitingTip(15, 0)).toBe(waitingTip(26, 0));
+    expect(waitingTip(27, 0)).not.toBe(waitingTip(15, 0));
   });
 });
