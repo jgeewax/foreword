@@ -162,7 +162,7 @@
 
 - [x] add search inside settings screen
 
-- [ ] typst basics shouldnt show up overtop of AI panel, it should be a new tab that we can close like a file
+- [x] typst basics shouldnt show up overtop of AI panel, it should be a new tab that we can close like a file
 
 - [x] pointer icon should become hand with finger for file tabs.
 

@@ -1287,6 +1287,29 @@ pane top (off by 0 pt).
   yellow braces, images purple, others a plain page. It's the same `FileIcon`
   as Source Control's rows. Verified (self-test `tabs`): four chapters' tabs
   each start with the Typst icon.
+- **Tabs that aren't files** sit among the files' tabs, as VS Code's
+  Settings or Welcome do. They close, reorder and cycle like the rest (×,
+  ⌘W, ⌃⇥, the tab menu), and they aren't remembered for next time.
+  - Their keys share the tab list with the files' paths (`view:…`,
+    `src/app/view-tabs.ts`). `viewTab` says which is in front. `active` stays
+    the file the editor holds, so everything that reads it as "the current
+    file" still does.
+  - The editor is hidden, not unmounted, behind one. Coming back, the file is
+    where it was (switching tabs no longer re-applies an older saved position
+    when the file didn't change).
+- **Typst basics is a tab** (help icon), no longer drawn over the assistant
+  in the right-hand pane, so the chat stays usable beside it. In the tab it's
+  a page in one readable column with its title. The ? icon brings it to the
+  front, or closes it when it's in front.
+  - **Insert** goes into the file behind the tab ("Insert at the cursor in
+    ch1-vectors.typ"), which comes to the front so the author sees it land.
+  - Verified (self-test `guide`): opening put the guide in the editor pane
+    (not the assistant's), with the editor hidden. Insert added the footnote
+    at the cursor and brought the chapter to the front; a block example got
+    its own paragraph, and undo restored the text. Going to the guide and
+    back kept the cursor and scroll. ⌃⇥ went on to the first tab, ⌘W and the
+    × closed it, and only the three files were saved as open tabs. The tab
+    shortcuts (self-test `tabs`) work as before.
 
 ### Showing that the assistant is working
 

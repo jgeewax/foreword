@@ -558,39 +558,9 @@ async function onboardingChecks() {
   await studio.openFile(file);
   const editor = studio.editor!;
   const model = editor.getModel()!;
-  const original = model.getValue();
-
-  // Guide in the right-hand pane; examples go in at the cursor.
-  studio.openGuide();
-  await sleep(400);
-  const button = (title: string, label: string) =>
-    [...document.querySelectorAll('.guide-item')].find((e) => e.querySelector('h3')?.textContent === title)?.querySelector<HTMLButtonElement>(`.guide-actions button:${label === 'Insert' ? 'first-child' : 'last-child'}`);
-  out.guide = {
-    inPane: !!document.querySelector('.agent-pane .guide'),
-    sections: document.querySelectorAll('.guide-section').length,
-    items: document.querySelectorAll('.guide-item').length,
-    insertButtons: [...document.querySelectorAll('.guide-actions button')].filter((b) => b.textContent === 'Insert').length,
-  };
-  try {
-    out.snapshotGuide = await ipc.previewSnapshot('guide', 'main');
-  } catch (e) {
-    out.snapshotGuide = errorMessage(e);
-  }
   const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
-  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
-  button('Footnotes', 'Insert')?.click();
-  await sleep(200);
-  out.insertInline = { lineEndsWith: model.getLineContent(line).endsWith('The letter was never sent.#footnote[It is now in the county archive.]') };
-  editor.trigger('selftest', 'undo', null);
-  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
-  button('A new page', 'Insert')?.click();
-  await sleep(200);
-  out.insertBlock = { ownParagraph: model.getValue().includes(`${model.getLineContent(line)}\n\n#pagebreak()\n`) };
-  editor.trigger('selftest', 'undo', null);
-  await sleep(200);
-  out.undoRestores = model.getValue() === original;
-  studio.closeGuide();
-  await sleep(200);
+
+  out.guide = await guideChecks();
 
   // Chat starter: a suggestion starts the conversation right away.
   studio.newSession();
@@ -665,6 +635,84 @@ async function onboardingChecks() {
   out.welcomeGuide = !!document.querySelector('.guide-modal .guide');
   studio.closeGuide();
   await studio.openWorkspace(root);
+  return out;
+}
+
+/**
+ * Typst basics in its own tab, beside the files: examples go in at the cursor
+ * of the file behind it, which comes to the front. Touches the chapter only
+ * with edits it undoes.
+ */
+async function guideChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+  const tabNames = () => [...document.querySelectorAll('.tab')].map((t) => `${t.querySelector('.tab-name')?.textContent}${t.classList.contains('active') ? ' (front)' : ''}`);
+
+  studio.openGuide();
+  await sleep(400);
+  const button = (title: string, label: string) =>
+    [...document.querySelectorAll('.guide-item')].find((e) => e.querySelector('h3')?.textContent === title)?.querySelector<HTMLButtonElement>(`.guide-actions button:${label === 'Insert' ? 'first-child' : 'last-child'}`);
+  out.tab = {
+    tabs: tabNames(),
+    inEditorPane: !!document.querySelector('.editor-pane .guide'),
+    overAssistant: !!document.querySelector('.agent-pane .guide'),
+    editorHidden: !!document.querySelector<HTMLElement>('.editor-host')?.hidden,
+    guideOpen: studio.state.guideOpen,
+    sections: document.querySelectorAll('.guide-section').length,
+    items: document.querySelectorAll('.guide-item').length,
+    insertButtons: [...document.querySelectorAll('.guide-actions button')].filter((b) => b.textContent === 'Insert').length,
+    insertTitle: button('Footnotes', 'Insert')?.title,
+    snapshot: await snap('guide-tab'),
+  };
+  // Insert: into the file behind the tab, which comes to the front.
+  button('Footnotes', 'Insert')?.click();
+  await sleep(200);
+  out.insertInline = {
+    lineEndsWith: model.getLineContent(line).endsWith('The letter was never sent.#footnote[It is now in the county archive.]'),
+    fileInFront: studio.state.viewTab === null && studio.state.active === file,
+    tabs: tabNames(),
+  };
+  editor.trigger('selftest', 'undo', null);
+  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+  studio.openGuide();
+  await sleep(300);
+  button('A new page', 'Insert')?.click();
+  await sleep(200);
+  out.insertBlock = { ownParagraph: model.getValue().includes(`${model.getLineContent(line)}\n\n#pagebreak()\n`) };
+  editor.trigger('selftest', 'undo', null);
+  await sleep(200);
+  out.undoRestores = model.getValue() === original;
+  // Back and forth between the guide and the file: the file is where it was.
+  editor.setPosition({ lineNumber: line, column: 3 });
+  const scrolledNow = editor.getScrollTop();
+  studio.activate('view:guide');
+  await sleep(200);
+  studio.activate(file);
+  await sleep(200);
+  out.fileKeptItsPlace = { cursor: editor.getPosition()?.toString(), want: `(${line},3)`, scroll: editor.getScrollTop() === scrolledNow };
+  // ⌃⇥ and ⌘W treat it as a tab; the tabs saved for next time are files only.
+  studio.activate('view:guide');
+  studio.tabCommand('next');
+  out.nextFromGuide = { viewTab: studio.state.viewTab, active: studio.state.active };
+  studio.activate('view:guide');
+  await sleep(350);
+  studio.tabCommand('close');
+  await sleep(200);
+  out.closedWithCmdW = { tabs: tabNames(), guideOpen: studio.state.guideOpen, viewTab: studio.state.viewTab, editorShown: !document.querySelector<HTMLElement>('.editor-host')?.hidden };
+  studio.openGuide();
+  await sleep(300);
+  const saved = JSON.parse(localStorage.getItem(`studio.tabs:${studio.state.workspace!.root}`) ?? '{}');
+  out.savedTabs = saved.tabs;
+  // Its × closes it too, and the ? icon toggles it.
+  [...document.querySelectorAll('.tab')].find((t) => t.querySelector('.tab-name')?.textContent === 'Typst basics')?.querySelector<HTMLButtonElement>('.tab-close')?.click();
+  await sleep(200);
+  out.closedWithX = { tabs: tabNames(), guideOpen: studio.state.guideOpen };
   return out;
 }
 
@@ -3625,6 +3673,8 @@ export async function runSelftest(launch: LaunchOptions) {
       log('project settings');
       result.projectSettings = await projectSettingsChecks();
     }
+    // Onboarding runs these too (with the assistant).
+    if (launch.selftestEdits && want('guide') && !(launch.selftestAgent && want('onboarding'))) result.guide = await guideChecks();
     if (launch.selftestEdits && launch.selftestAgent) {
       if (want('style')) {
         log('style guide');

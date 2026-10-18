@@ -9,19 +9,27 @@ function copy(text: string) {
   );
 }
 
-/** "Typst basics" for writers: plain-language explanations with examples. */
-export function TypstGuide({ onClose }: { onClose: () => void }) {
-  const canInsert = useStore(studio.store, (s) => !!s.active && !!s.workspace);
+/**
+ * "Typst basics" for writers: plain-language explanations with examples. In
+ * its own tab beside the files; on the welcome screen, a dialog (`onClose`).
+ */
+export function TypstGuide({ onClose }: { onClose?: () => void }) {
+  // Insert goes into the file behind the tab, which comes to the front.
+  const target = useStore(studio.store, (s) => (s.workspace ? s.active : null));
+  const name = target?.slice(target.lastIndexOf('/') + 1);
   return (
     <div className="guide">
-      <div className="guide-header">
-        <strong>Typst basics</strong>
-        <span className="spacer" />
-        <button className="link" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      {onClose && (
+        <div className="guide-header">
+          <strong>Typst basics</strong>
+          <span className="spacer" />
+          <button className="link" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
       <div className="guide-body">
+        {!onClose && <h1 className="guide-title">Typst basics</h1>}
         <p className="guide-intro">
           Your book is plain text with a little markup. You write; the preview shows the typeset pages as you type. These are the pieces you'll use most.
         </p>
@@ -37,7 +45,7 @@ export function TypstGuide({ onClose }: { onClose: () => void }) {
                     <pre>{item.code}</pre>
                     <div className="guide-actions">
                       {item.insert && (
-                        <button disabled={!canInsert} title={canInsert ? 'Insert at the cursor (⌘Z to undo)' : 'Open a chapter first'} onClick={() => studio.insertSnippet(item.code!)}>
+                        <button disabled={!target} title={target ? `Insert at the cursor in ${name} (⌘Z to undo)` : 'Open a chapter first'} onClick={() => studio.insertSnippet(item.code!)}>
                           Insert
                         </button>
                       )}

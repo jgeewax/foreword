@@ -9,7 +9,6 @@ import { Icon } from './icons';
 import { Markdown } from './Markdown';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
-import { TypstGuide } from './TypstGuide';
 import { ContextMeter, TaskMenu } from './TaskMenu';
 import { withoutMarker } from '../app/tasks';
 import { withoutAddressed } from '../app/review';
@@ -891,7 +890,6 @@ function Starter() {
 
 export function AgentPane() {
   const agent = useStore(studio.store, (s) => s.agent);
-  const guideOpen = useStore(studio.store, (s) => s.guideOpen);
   const listRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -902,9 +900,7 @@ export function AgentPane() {
 
   return (
     <section className="pane agent-pane">
-      {guideOpen && <TypstGuide onClose={() => studio.closeGuide()} />}
-      {/* Hidden, not unmounted, while the guide is open: keeps the draft message and scroll position. */}
-      <div className="agent-body" hidden={guideOpen}>
+      <div className="agent-body">
         <header className="pane-header">
           <TaskMenu />
           {agent.running && <span className="busy-bar" aria-hidden />}

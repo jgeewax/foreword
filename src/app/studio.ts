@@ -31,6 +31,7 @@ import { parseConfig, serializeConfig } from './config';
 import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
+import { fileTabs, GUIDE_TAB, isViewTab } from './view-tabs';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
@@ -156,8 +157,12 @@ export type StudioState = {
   workspace: WorkspaceInfo | null;
   opening: string | null;
   openError: string | null;
+  /** The open tabs, in order: files' paths, and tabs that aren't files (see view-tabs.ts). */
   tabs: string[];
+  /** The file the editor holds: in front, unless `viewTab` is. */
   active: string | null;
+  /** The tab in front when it isn't a file (Typst basics); null: `active`'s. */
+  viewTab: string | null;
   dirty: Record<string, boolean>;
   conflicts: Record<string, string>;
   cursor: { line: number; column: number } | null;
@@ -205,7 +210,7 @@ export type StudioState = {
   /** The Settings page to open at (null: the one last shown). */
   settingsPage: SettingsPage | null;
   newBookOpen: boolean;
-  /** "Typst basics": in the right-hand pane (or a dialog on the welcome screen). */
+  /** "Typst basics" is in front: its tab (or a dialog on the welcome screen). */
   guideOpen: boolean;
   /** Recently opened books, newest first. */
   recent: string[];
@@ -261,6 +266,7 @@ const initialState: StudioState = {
   openError: null,
   tabs: [],
   active: null,
+  viewTab: null,
   dirty: {},
   conflicts: {},
   cursor: null,
@@ -680,7 +686,7 @@ export class Studio {
           return { conflicts };
         }),
     });
-    this.store.set({ workspace: info, opening: null, tabs: [], active: null });
+    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false });
 
     await this.loadProjectSettings();
     await this.loadStyleGuide();
@@ -1012,17 +1018,20 @@ export class Studio {
 
   // ---- help for writers new to Typst ------------------------------------------------
 
+  /** "Typst basics" in its own tab, beside the files (a dialog on the welcome screen). */
   openGuide() {
-    this.store.set({ guideOpen: true });
-    this.events.emit('show-agent-pane');
+    if (this.state.workspace) this.openViewTab(GUIDE_TAB);
+    else this.store.set({ guideOpen: true });
   }
 
   closeGuide() {
+    if (this.state.tabs.includes(GUIDE_TAB)) this.closeViewTab(GUIDE_TAB);
     this.store.set({ guideOpen: false });
   }
 
-  /** Put a guide example at the cursor (block examples get their own paragraph). Undoable. */
+  /** Put a guide example at the cursor (block examples get their own paragraph), in front. Undoable. */
   insertSnippet(code: string) {
+    if (this.state.viewTab && this.state.active) this.activate(this.state.active);
     const editor = this.editor;
     const model = editor?.getModel();
     const selection = editor?.getSelection();
@@ -1071,14 +1080,13 @@ export class Studio {
   async fixProblem(problem?: { path: string; d: LspDiagnostic }) {
     problem ??= (await this.nextProblem()) ?? undefined;
     if (!problem || !this.editor) return;
-    if (this.state.active !== problem.path) await this.openFile(problem.path);
+    if (this.state.active !== problem.path || this.state.viewTab) await this.openFile(problem.path);
     const model = this.editor.getModel()!;
     const { start, end } = problem.d.range;
     this.editor.setSelection(new monaco.Range(start.line + 1, 1, end.line + 1, model.getLineMaxColumn(end.line + 1)));
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    this.closeGuide();
     await this.send(`Typst reports an error here: “${problem.d.message}”. Explain in a sentence or two, in plain words, what's wrong, then fix it.`);
   }
 
@@ -1758,7 +1766,7 @@ export class Studio {
 
   /** After a turn (or once History is up): reload the marks for the open files. */
   private async refreshAiEdits() {
-    for (const path of this.state.tabs) await this.loadAiEdits(path);
+    for (const path of fileTabs(this.state.tabs)) await this.loadAiEdits(path);
   }
 
   /** "What changed" for a version, by id (from a mark's hover). */
@@ -1965,6 +1973,8 @@ export class Studio {
       workspace: null,
       tabs: [],
       active: null,
+      viewTab: null,
+      guideOpen: false,
       dirty: {},
       conflicts: {},
       problems: { errors: 0, warnings: 0 },
@@ -2029,22 +2039,57 @@ export class Studio {
     this.persistTabs();
   }
 
+  /** Bring a tab to the front: a file's, or one that isn't a file. */
   activate(path: string) {
+    if (isViewTab(path)) return this.showViewTab(path);
     const doc = this.docs?.get(path);
     if (!doc) return;
     const current = this.state.active;
     if (this.editor && current && current !== path) this.viewStates.set(current, this.editor.saveViewState());
-    this.store.set({ active: path });
+    this.store.set({ active: path, viewTab: null, guideOpen: false });
     if (this.editor) {
-      this.editor.setModel(doc.model);
-      const view = this.viewStates.get(path);
-      if (view) this.editor.restoreViewState(view);
+      // Back from a tab that isn't a file, the editor is still as it was left.
+      if (current !== path || this.editor.getModel() !== doc.model) {
+        this.editor.setModel(doc.model);
+        const view = this.viewStates.get(path);
+        if (view) this.editor.restoreViewState(view);
+      }
       this.editor.focus();
     }
     this.persistTabs();
   }
 
+  /** The file the editor holds, without bringing it to the front (null: none). */
+  private holdFile(path: string | null) {
+    const doc = path ? this.docs?.get(path) : undefined;
+    this.store.set({ active: doc ? path : null });
+    if (!this.editor) return;
+    this.editor.setModel(doc?.model ?? null);
+    const view = path && this.viewStates.get(path);
+    if (view) this.editor.restoreViewState(view);
+  }
+
+  /** Open a tab that isn't a file (or bring it forward). */
+  openViewTab(key: string) {
+    this.store.set((s) => ({ tabs: s.tabs.includes(key) ? s.tabs : [...s.tabs, key] }));
+    this.showViewTab(key);
+  }
+
+  private showViewTab(key: string) {
+    if (this.state.tabs.includes(key)) this.store.set({ viewTab: key, guideOpen: key === GUIDE_TAB });
+  }
+
+  /** Close a tab that isn't a file; if it was in front, the last tab takes its place. */
+  private closeViewTab(key: string) {
+    const tabs = this.state.tabs.filter((t) => t !== key);
+    const front = this.state.viewTab === key;
+    this.store.set({ tabs, ...(front ? { viewTab: null } : {}), ...(key === GUIDE_TAB ? { guideOpen: false } : {}) });
+    const next = tabs[tabs.length - 1];
+    if (front && next) this.activate(next);
+  }
+
   async closeTab(path: string) {
+    if (isViewTab(path)) return this.closeViewTab(path);
     if (this.state.dirty[path]) {
       const discard = await ask(`${path} has unsaved changes. Close it and discard them?`, {
         title: 'Unsaved changes',
@@ -2064,12 +2109,10 @@ export class Studio {
       return { tabs, dirty };
     });
     if (this.state.active === path) {
-      const next = tabs[tabs.length - 1];
-      if (next) this.activate(next);
-      else {
-        this.store.set({ active: null });
-        this.editor?.setModel(null);
-      }
+      // The editor takes the last file still open. If this tab was in front, the last tab takes its place.
+      const front = this.state.viewTab ? null : tabs[tabs.length - 1];
+      this.holdFile(fileTabs(tabs).pop() ?? null);
+      if (front) this.activate(front);
     }
     this.persistTabs();
   }
@@ -2088,7 +2131,8 @@ export class Studio {
     const now = performance.now();
     if (this.lastTabCommand.id === id && now - this.lastTabCommand.at < 300) return;
     this.lastTabCommand = { id, at: now };
-    const active = this.state.active;
+    // Copy Path and Reveal are for a file in front.
+    const active = this.state.viewTab ? null : this.state.active;
     if (typeof command !== 'string') return this.showTabAt(command.at);
     switch (command) {
       case 'close':
@@ -2125,15 +2169,20 @@ export class Studio {
     }
   }
 
+  /** The tab in front: a file's, or one that isn't a file. */
+  private get frontTab() {
+    return this.state.viewTab ?? this.state.active;
+  }
+
   closeActiveTab() {
-    if (this.state.active) void this.closeTab(this.state.active);
+    if (this.frontTab) void this.closeTab(this.frontTab);
   }
 
   async closeAllTabs() {
     await this.closeTabs([...this.state.tabs]);
   }
 
-  async closeOtherTabs(keep = this.state.active) {
+  async closeOtherTabs(keep = this.frontTab) {
     await this.closeTabs(this.state.tabs.filter((t) => t !== keep));
   }
 
@@ -2144,9 +2193,9 @@ export class Studio {
 
   /** The next (1) or previous (−1) tab, wrapping round. */
   showNextTab(step: 1 | -1) {
-    const { tabs, active } = this.state;
+    const { tabs } = this.state;
     if (!tabs.length) return;
-    const i = active ? tabs.indexOf(active) : -1;
+    const i = this.frontTab ? tabs.indexOf(this.frontTab) : -1;
     this.activate(tabs[(i + step + tabs.length) % tabs.length]);
   }
 
@@ -2159,7 +2208,7 @@ export class Studio {
 
   private persistTabs() {
     const root = this.state.workspace?.root;
-    if (root) writeJson(tabsKey(root), { tabs: this.state.tabs, active: this.state.active });
+    if (root) writeJson(tabsKey(root), { tabs: fileTabs(this.state.tabs), active: this.state.active });
   }
 
   /** `typing`: the cursor moved with an edit (typing, paste, undo), not a click or an arrow key. */

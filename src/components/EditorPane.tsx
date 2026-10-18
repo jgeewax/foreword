@@ -8,7 +8,9 @@ import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
-import { FileIcon, Icon } from './icons';
+import { GUIDE_TAB, isViewTab } from '../app/view-tabs';
+import { FileIcon, Icon, type IconName } from './icons';
+import { TypstGuide } from './TypstGuide';
 import { useStore } from '../lib/store';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -51,12 +53,21 @@ function Measured({ onHeight, children }: { onHeight: (h: number) => void; child
   );
 }
 
+/** A tab that isn't a file: its name and icon. */
+function viewTabLabel(key: string): { name: string; icon: IconName } {
+  if (key === GUIDE_TAB) return { name: 'Typst basics', icon: 'help' };
+  return { name: key, icon: 'page' };
+}
+
 export function EditorPane() {
   const tabs = useStore(studio.store, (s) => s.tabs);
   const active = useStore(studio.store, (s) => s.active);
+  const viewTab = useStore(studio.store, (s) => s.viewTab);
   const dirty = useStore(studio.store, (s) => s.dirty);
   const conflict = useStore(studio.store, (s) => (s.active ? s.conflicts[s.active] : undefined));
   const hostRef = useRef<HTMLDivElement>(null);
+  // The tab in front: a file's (the editor), or one that isn't a file, shown in the editor's place.
+  const front = viewTab ?? active;
 
   useEffect(() => {
     const editor = monaco.editor.create(hostRef.current!, {
@@ -388,57 +399,69 @@ export function EditorPane() {
   return (
     <section className="pane editor-pane">
       <div className="tabs" role="tablist">
-        {tabs.map((t) => (
-          <div
-            key={t}
-            role="tab"
-            aria-selected={t === active}
-            className={`tab${t === active ? ' active' : ''}`}
-            title={t}
-            onContextMenu={onContextMenu(() => {
-              const i = tabs.indexOf(t);
-              return [
-                { label: 'Close', accelerator: 'CmdOrCtrl+W', action: () => void studio.closeTab(t) },
-                { label: 'Close Others', accelerator: 'CmdOrCtrl+Alt+T', enabled: tabs.length > 1, action: () => void studio.closeOtherTabs(t) },
-                { label: 'Close Tabs to the Right', enabled: i < tabs.length - 1, action: () => void studio.closeTabs(tabs.slice(i + 1)) },
-                { label: 'Close Saved', enabled: tabs.some((x) => !dirty[x]), action: () => void studio.closeSavedTabs() },
-                { label: 'Close All', action: () => void studio.closeAllTabs() },
-                'separator',
-                { label: 'History of This File', action: () => void studio.showFileHistory(t) },
-                { label: 'Reveal in Finder', action: () => void studio.reveal(t) },
-                { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(t), 'Path copied') },
-              ];
-            })}
-            onMouseDown={(e) => {
-              if (e.button === 1) void studio.closeTab(t);
-              else studio.activate(t);
-            }}
-          >
-            <FileIcon path={t} />
-            <span className="tab-name">{basename(t)}</span>
-            <button
-              className={`tab-close${dirty[t] ? ' dirty' : ''}`}
-              aria-label={`Close ${t}`}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => void studio.closeTab(t)}
+        {tabs.map((t) => {
+          const view = isViewTab(t) ? viewTabLabel(t) : null;
+          const name = view ? view.name : basename(t);
+          return (
+            <div
+              key={t}
+              role="tab"
+              aria-selected={t === front}
+              className={`tab${t === front ? ' active' : ''}`}
+              title={view ? view.name : t}
+              onContextMenu={onContextMenu(() => {
+                const i = tabs.indexOf(t);
+                return [
+                  { label: 'Close', accelerator: 'CmdOrCtrl+W', action: () => void studio.closeTab(t) },
+                  { label: 'Close Others', accelerator: 'CmdOrCtrl+Alt+T', enabled: tabs.length > 1, action: () => void studio.closeOtherTabs(t) },
+                  { label: 'Close Tabs to the Right', enabled: i < tabs.length - 1, action: () => void studio.closeTabs(tabs.slice(i + 1)) },
+                  { label: 'Close Saved', enabled: tabs.some((x) => !dirty[x]), action: () => void studio.closeSavedTabs() },
+                  { label: 'Close All', action: () => void studio.closeAllTabs() },
+                  !view && 'separator',
+                  !view && { label: 'History of This File', action: () => void studio.showFileHistory(t) },
+                  !view && { label: 'Reveal in Finder', action: () => void studio.reveal(t) },
+                  !view && { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(t), 'Path copied') },
+                ];
+              })}
+              onMouseDown={(e) => {
+                if (e.button === 1) void studio.closeTab(t);
+                else studio.activate(t);
+              }}
             >
-              <span className="dot">●</span>
-              <span className="x">
-                <Icon name="close" size={14} />
-              </span>
-            </button>
-          </div>
-        ))}
+              {view ? (
+                <span className="file-icon ft-view" aria-hidden>
+                  <Icon name={view.icon} size={15} />
+                </span>
+              ) : (
+                <FileIcon path={t} />
+              )}
+              <span className="tab-name">{name}</span>
+              <button
+                className={`tab-close${dirty[t] ? ' dirty' : ''}`}
+                aria-label={`Close ${name}`}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => void studio.closeTab(t)}
+              >
+                <span className="dot">●</span>
+                <span className="x">
+                  <Icon name="close" size={14} />
+                </span>
+              </button>
+            </div>
+          );
+        })}
       </div>
-      {conflict && active && (
+      {conflict && active && !viewTab && (
         <div className="banner warn">
           <span>{conflict}</span>
           <button onClick={() => void studio.reloadFromDisk(active)}>Reload from disk</button>
           <button onClick={() => void studio.save(active, { overwrite: true })}>Keep my version</button>
         </div>
       )}
-      <div className="editor-host" ref={hostRef} />
-      {!active && <div className="empty-hint">Open a file from the explorer.</div>}
+      {/* Hidden, not unmounted, behind a tab that isn't a file: it keeps its place in the file. */}
+      <div className="editor-host" ref={hostRef} hidden={!!viewTab} />
+      {viewTab === GUIDE_TAB && <TypstGuide />}
+      {!front && <div className="empty-hint">Open a file from the explorer.</div>}
     </section>
   );
 }

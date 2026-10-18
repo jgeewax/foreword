@@ -177,6 +177,7 @@ button.indicator:hover { background: var(--bg-3); }
 /* Tabs are the one place the pointer is a hand: they're clicked to switch, like links. */
 .tab, .tab-close { cursor: pointer; }
 .tab .file-icon { margin: 0 2px 0 -2px; }
+.file-icon.ft-view { color: var(--accent); }
 .tab.active { background: var(--bg); color: var(--fg); box-shadow: inset 0 -2px var(--accent); }
 .tab-close { background: none; border: none; width: 18px; height: 18px; padding: 0; border-radius: 4px; display: grid; place-items: center; }
 .tab-close .dot, .tab-close .x { grid-area: 1 / 1; display: grid; place-items: center; }
@@ -199,6 +200,7 @@ button.indicator:hover { background: var(--bg-3); }
 .file-icon.ft-image { color: #a074c4; }
 .file-icon.ft-conf { font-weight: 400; }
 .editor-host { flex: 1; min-height: 0; }
+.editor-host[hidden] { display: none; }
 .editor-pane .empty-hint { position: absolute; inset: 60px 0 auto; pointer-events: none; }
 .banner { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); }
 .banner span { flex: 1; }
@@ -351,8 +353,10 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .guide-keys td { padding: 3px 12px 3px 0; }
 .guide-more { margin-top: 16px; }
 .modal.guide-modal { width: min(640px, calc(100% - 32px)); height: calc(100% - 64px); overflow: hidden; }
+/* In its tab, a page: one readable column, centred in the pane. */
+.editor-pane .guide-body { padding: 4px max(24px, calc((100% - 720px) / 2)) 32px; font-size: 13px; }
+.guide-title { font-size: 20px; margin: 18px 0 8px; }
 .agent-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.agent-body[hidden] { display: none; }
 .toolbar .icon.on { color: var(--accent); }
 .statusbar .problems { display: inline-flex; gap: 8px; }
 .statusbar .link { font-size: 11.5px; padding: 0; }

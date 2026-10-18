@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { studio } from '../app/studio';
+import { fileTabs } from '../app/view-tabs';
 import { fuzzyMatch } from '../lib/fuzzy';
 import { useStore } from '../lib/store';
 
@@ -30,7 +31,9 @@ export function QuickOpen() {
     const candidates = files.filter((f) => !f.startsWith('.typst-studio/'));
     if (!query.trim()) {
       // Open tabs first (the one you're in last), then the rest by name.
-      const recent = [...tabs].reverse().filter((t) => t !== active);
+      const recent = fileTabs(tabs)
+        .reverse()
+        .filter((t) => t !== active);
       const rest = candidates.filter((f) => !recent.includes(f) && f !== active).sort();
       return [...recent, ...rest, ...(active ? [active] : [])].map((path) => ({ path, title: names.titles[path], score: 0, positions: [], inTitle: false }));
     }
