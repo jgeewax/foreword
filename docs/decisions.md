@@ -371,30 +371,71 @@ section), the page starts at the window's top and the offset is measured.
   no way to commit from the app.
 - **The Source Control view** (activity bar: branches, with a badge of
   uncommitted files; View → Source Control) appears when the book is in a
-  repository. It shows:
-  - the branch and its remote, with **Pull** (↓ behind) and **Push** (↑
-    ahead);
-  - a commit message and **Commit N files** (⌘⏎), which commits every change
-    in the book's folder, new files too;
-  - the changed files (M, N(ew), D, R, ! conflict), each by its chapter
-    heading;
-  - the recent commits.
+  repository. It's laid out as VS Code's, in two foldable sections with a
+  draggable divider (folds and divider remembered):
+  - **The repository** (its folder's name, the branch on the right):
+    - a message box (`Message (⌘⏎ to commit on "main")`), kept while the
+      view is closed. The placeholder stays on one line, cut short with …;
+      only what's written makes the box taller.
+    - a full-width **✓ Commit** button, with a ⌄ for **Commit & Push**.
+      As in VS Code, Commit takes what's staged. With nothing staged, it
+      takes every change in the book's folder, new files too, without asking
+      as VS Code does. Without a message it points at the box instead of
+      failing.
+    - **Staged Changes** (when anything is staged), then **Changes**, each
+      with a count badge and one row per file: a file-type icon, the name,
+      the folder dimmed, and VS Code's coloured status letter on the right
+      (M, A, D, R, U untracked, ! conflict). A file staged and then changed
+      again is in both groups. The chapter heading is in the tooltip.
+    - On hover, as VS Code's inline actions: Open File, and **+** Stage
+      Changes (**−** Unstage Changes when staged). Group rows have What
+      changed for them all, and Stage All or Unstage All.
+    - What changed shows the same diffs as VS Code: a staged file from the
+      last commit to what's staged, and a file under Changes from what's
+      staged to the file as it is.
+  - **Graph:** the commits that touched the book, on this branch and its
+    remote, as dots on coloured lanes. Merges and forks are drawn, and the
+    checked-out commit is a ring. Labels: the current branch (with a cloud
+    when its remote is at the same commit), other branches, the remote, and
+    tags. Rows with labels leave the author out, as VS Code does. Pull (↓
+    behind) and Push (↑ ahead) are in its title. 50 commits, then Load
+    More.
+  - The title bar has Refresh and ⋯ (Pull, Push, What Changed, Copy Branch
+    Name).
   Files and commits open **What changed** in words, the same view as History
   (shared `Passage`), with formulas drawn. A passage of uncommitted changes
   opens the file there.
+- **The Graph's log** is `git log --topo-order --parents HEAD @{upstream} --
+  .`. With `--parents`, each commit's parents are the previous commits that
+  touched the book, so the graph stays connected even when commits outside
+  the book are left out. `--decorate=full` tells local branches from remote
+  ones, even with a `/` in the name. The lanes are laid out in
+  `src/lib/git-graph.ts` (unit-tested). Rows are exactly 22px, so each row's
+  lines meet the next row's.
+- **Refreshes overlap** (files changing, a push finishing), so the newest one
+  wins; an older one that finishes later is dropped. Otherwise a stale log
+  could put the remote's label on the wrong commit.
 - **Scoped and safe** (`src-tauri/src/git.rs`):
   - **The author's Git:** it uses their config, hooks, signing and
     credentials, unlike History.
   - **Only the book's folder:** everything is limited to it (`-- .`).
-    `commit -- .` leaves anything staged elsewhere in a larger repository
-    alone.
+    With nothing staged, `commit -- .` leaves anything staged elsewhere in a
+    larger repository alone. A commit of what's staged commits the index, so
+    if anything outside the book is staged too, it refuses and names the
+    file rather than taking it.
+  - **Stage and unstage** are `git add --all` and `git restore --staged`
+    (`git rm --cached` before the first commit, which has no HEAD). Paths
+    are literal (`--literal-pathspecs`), so a name can't act as a pattern.
   - **Pull** is `--ff-only`, never a merge or rebase. **Push** sets the
     upstream to origin on a branch's first push.
   - **Nothing destructive:** no discard, reset, clean or checkout of files.
+    Unstaging keeps the changes in the files.
   - **No hanging:** Git never waits on a terminal (`GIT_TERMINAL_PROMPT=0`,
     SSH in batch mode); timeouts are 20 s to read and 120 s to write.
-  - **Checked arguments:** commit ids must be hex (or HEAD, `^`), and paths
-    must stay in the book, after `--`.
+  - **Checked arguments:** commit ids must be hex (or HEAD, `^`, or `:0`
+    for what's staged), and paths must stay in the book, after `--`.
+- **Native menus** drop a lone `&` (it marks a Windows-style shortcut
+  letter), so context menus double it: "Commit & Push" shows as written.
 - **When it refreshes:** when the book opens, 0.8 s after files change on
   disk (saves, the assistant), and when the window comes back to the front
   (commits made in a terminal).
@@ -403,13 +444,27 @@ section), the page starts at the window's top and the offset is measured.
 - Verified:
   - Rust tests: status parsing (ahead/behind, renames, conflicts, a book in a
     subfolder of the repository), argument checks, and a real commit that
-    takes only the book's folder.
+    takes only the book's folder. Staging: a file staged and then changed
+    again is in both groups; staging and unstaging work before the first
+    commit; a commit takes only what's staged, or everything when nothing is;
+    and something staged outside the book is refused, then left staged.
   - Self-test `git`, on a scratch repository with a local bare remote:
-    - an edited and a new chapter showed as M and N with a badge of 2;
+    - an edited and a new chapter showed as M and U with a badge of 2;
     - What changed listed both, with the preview hidden;
-    - Commit through the panel made "Add chapter two" (ahead 1);
+    - the message box was 26px empty (the placeholder on one line) and with
+      one line, and 60px with three;
+    - the hover icons were centred in their 22px buttons (offset 0, 0);
+    - the row's + staged the edited chapter under Staged Changes, its What
+      changed showed the one word added, and − took it back out;
+    - Commit with it staged took just that chapter ("Edit chapter one");
+      Commit again, with nothing staged, took the new one;
     - Push emptied "ahead" and the remote has the commit; Pull said "Up to
       date";
+    - the Graph (on a history with a merged branch and a tag) had 11 rows,
+      22px each and as tall as their lane cells, on 2 lanes. `main` was
+      marked as the same as `origin/main`, with `figures` and `v0.1` labelled;
+    - folding the Graph kept a half-written message, and unfolding brought
+      the 11 rows back;
     - the commit's What changed listed both files.
 
 ### Several windows, one book each (like VS Code)

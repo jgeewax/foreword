@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
+import { uncommitted } from '../app/source-control';
 import { studio } from '../app/studio';
-import { onContextMenu, type MenuEntry } from '../lib/context-menu';
+import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
@@ -105,6 +106,37 @@ const RefreshButton = () => (
   </button>
 );
 
+/** Source Control's title bar, as VS Code's: Refresh, and the rest under ⋯. */
+function SourceControlActions() {
+  const repo = useStore(studio.store, (s) => s.git.repo);
+  const busy = useStore(studio.store, (s) => !!s.git.busy);
+  return (
+    <>
+      <button className="icon pane-action" title="Check again (commits made elsewhere)" aria-label="Refresh" onClick={() => void studio.git.refresh()}>
+        <Icon name="refresh" size={16} />
+      </button>
+      <button
+        className="icon pane-action"
+        title="More actions"
+        aria-label="More actions"
+        disabled={!repo}
+        onClick={() =>
+          repo &&
+          void showContextMenu([
+            !!repo.upstream && { label: 'Pull', enabled: !busy, action: () => void studio.git.pull() },
+            { label: 'Push', enabled: !busy && (!repo.upstream || repo.ahead > 0), action: () => void studio.git.push() },
+            'separator',
+            { label: 'What Changed', enabled: repo.files.length > 0, action: () => void studio.git.showWorking() },
+            !!repo.branch && { label: 'Copy Branch Name', action: () => studio.copy(repo.branch!, 'Branch name copied') },
+          ])
+        }
+      >
+        <Icon name="more" size={16} />
+      </button>
+    </>
+  );
+}
+
 function PlacementButton({ to }: { to: 'tab' | 'below' }) {
   return (
     <button
@@ -134,7 +166,7 @@ function useViews() {
   const tasksWaiting = useStore(studio.store, (s) => Object.values(s.agent.background).filter((b) => b.attention || b.unread).length);
   // Source Control, when the book is in a Git repository: how many files changed since the last commit.
   const hasGit = useStore(studio.store, (s) => !!s.git.repo);
-  const gitChanged = useStore(studio.store, (s) => s.git.repo?.files.length ?? 0);
+  const gitChanged = useStore(studio.store, (s) => uncommitted(s.git.repo));
   const branch = useStore(studio.store, (s) => s.git.repo?.branch ?? null);
   return { hasCode, todoCount, hasReview, reviewOpen, tasksWaiting, hasGit, gitChanged, branch };
 }
@@ -233,11 +265,7 @@ function ViewHeader({ view, below }: { view: View; below: boolean }) {
         </>
       )}
       {view === 'history' && !below && <PlacementButton to="below" />}
-      {view === 'git' && (
-        <button className="icon" title="Check again (commits made elsewhere)" aria-label="Refresh" onClick={() => void studio.git.refresh()}>
-          ↻
-        </button>
-      )}
+      {view === 'git' && <SourceControlActions />}
       {view === 'tasks' && (
         <button className="icon" title="New task (a new conversation)" aria-label="New task" onClick={() => studio.newSession()}>
           +

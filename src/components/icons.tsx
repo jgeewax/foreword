@@ -107,6 +107,7 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   pin: (
@@ -124,6 +125,47 @@ const PATHS: Record<string, ReactNode> = {
     <>
       <path d="M5 5.5A2 2 0 0 1 7 3.5h12v14H7a2 2 0 0 0-2 2z" />
       <path d="M5 19.5a2 2 0 0 0 2 2h12v-4" />
+    </>
+  ),
+  // Source Control's actions and markers (codicons' shapes).
+  more: (
+    <>
+      <circle cx="5.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+      <path d="M18 3.5v3.7h-3.7" />
+    </>
+  ),
+  pull: <path d="M12 4v11.5M7 10.5l5 5 5-5M5 20h14" />,
+  push: <path d="M12 20V8.5M7 13.5l5-5 5 5M5 4h14" />,
+  openChanges: (
+    <>
+      <path d="M6 3.5h8l4 4v13H6z" />
+      <path d="M9.5 10.5h5M12 8v5M9.5 16.5h5" />
+    </>
+  ),
+  goToFile: (
+    <>
+      <path d="M13 3.5H6v17h12V8.5z" />
+      <path d="M13 3.5v5h5M9 14.5h6.5M13 12l2.5 2.5L13 17" />
+    </>
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="7.5" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  cloud: <path d="M7.5 18.5a4 4 0 0 1-.6-7.95 5.5 5.5 0 0 1 10.6 1.45 3.25 3.25 0 0 1-.25 6.5z" />,
+  tag: (
+    <>
+      <path d="M3.5 4.5v6.8l9 9 7.8-7.8-9-9H4.5a1 1 0 0 0-1 1z" />
+      <circle cx="8" cy="9" r="1.4" />
     </>
   ),
 };

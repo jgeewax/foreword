@@ -62,6 +62,8 @@ fn main() {
             "git_log",
             "git_commit_files",
             "git_commit",
+            "git_stage",
+            "git_unstage",
             "git_pull",
             "git_push",
             "history_reveal",

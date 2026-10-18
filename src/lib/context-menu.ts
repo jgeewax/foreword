@@ -39,7 +39,8 @@ export async function showContextMenu(entries: MenuEntry[]) {
   const items = tidy.map((e) =>
     typeof e === 'string'
       ? { item: PREDEFINED[e] }
-      : { text: e.label, enabled: e.enabled ?? true, accelerator: e.accelerator, action: () => e.action() },
+      : // A lone & marks a mnemonic (and disappears): && is a literal one, as in "Commit & Push".
+        { text: e.label.replaceAll('&', '&&'), enabled: e.enabled ?? true, accelerator: e.accelerator, action: () => e.action() },
   );
   if (!items.length) return;
   const menu = await Menu.new({ items });

@@ -35,8 +35,11 @@ export type LaunchOptions = {
 };
 /** A book file in Git: M modified, A added, D deleted, R renamed, ? new (not yet in Git), U conflict. */
 export type GitFile = { path: string; status: 'M' | 'A' | 'D' | 'R' | '?' | 'U' };
-export type GitStatus = { root: string; prefix: string; branch: string | null; upstream: string | null; ahead: number; behind: number; files: GitFile[] };
-export type GitCommit = { hash: string; short: string; subject: string; author: string; time: number; parent: boolean };
+/** `staged`: Staged Changes; `files`: changed and not staged (a file staged and changed again is in both). */
+export type GitStatus = { root: string; prefix: string; branch: string | null; upstream: string | null; ahead: number; behind: number; staged: GitFile[]; files: GitFile[] };
+export type GitRef = { name: string; kind: 'head' | 'branch' | 'remote' | 'tag' };
+/** `parents`: the commits before it that touched the book (none for the first). */
+export type GitCommit = { hash: string; short: string; subject: string; author: string; time: number; parents: string[]; head: boolean; refs: GitRef[] };
 export type Bounds = { x: number; y: number; width: number; height: number };
 export type AgentInfo = { baseUrl: string; bin: string };
 export type AgentResponse = { status: number; body: any };
@@ -62,6 +65,9 @@ export const ipc = {
   gitLog: (limit: number) => invoke<GitCommit[]>('git_log', { limit }),
   gitCommitFiles: (hash: string) => invoke<GitFile[]>('git_commit_files', { hash }),
   gitCommit: (message: string) => invoke<string>('git_commit', { message }),
+  /** Stage or unstage book files (`.`: all of them). */
+  gitStage: (paths: string[]) => invoke<void>('git_stage', { paths }),
+  gitUnstage: (paths: string[]) => invoke<void>('git_unstage', { paths }),
   gitPull: () => invoke<string>('git_pull'),
   gitPush: () => invoke<string>('git_push'),
   /** Whether another window has this book open (it comes to the front if so). */

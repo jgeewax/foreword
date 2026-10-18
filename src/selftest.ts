@@ -2660,16 +2660,90 @@ async function gitChecks() {
   out.working = { files: g().view?.files?.map((f) => `${f.status} ${f.path} +${f.diff?.added}`), previewHidden: (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden };
   out.snapshotChanges = await snap('git-changes');
   studio.git.closeView();
-  // Commit through the panel.
-  const box = document.querySelector<HTMLTextAreaElement>('.git-commit textarea')!;
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'Add chapter two');
-  box.dispatchEvent(new Event('input', { bubbles: true }));
-  await sleep(200);
-  document.querySelector<HTMLButtonElement>('.git-commit button.primary')?.click();
-  await waitFor(() => g().log.length === 2 && !g().busy, 15000, 'commit').catch(() => {});
-  out.committed = { commits: g().log.map((c) => c.subject), files: g().repo?.files.length, ahead: g().repo?.ahead, boxCleared: box.value === '' };
+  // Looked up each time: folding a section can replace it.
+  const box = () => document.querySelector<HTMLTextAreaElement>('.git-commit textarea')!;
+  const type = async (text: string) => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box(), text);
+    box().dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+  };
+  const commitButton = () => document.querySelector<HTMLButtonElement>('.git-commit button.primary')!;
+  const list = (files?: { status: string; path: string }[]) => files?.map((f) => `${f.status} ${f.path}`);
+  // A file's row in Staged Changes or Changes, and its hover buttons.
+  const rowOf = (path: string, staged: boolean) => [...document.querySelectorAll<HTMLElement>('.git-file')].find((r) => r.title.includes(path) && r.title.endsWith('(staged)') === staged);
+  const action = (path: string, staged: boolean, label: string) => rowOf(path, staged)?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  // The placeholder stays on one line: the box is only taller for what's written.
+  const height = () => Math.round(box().getBoundingClientRect().height);
+  out.box = { empty: height() };
+  await type('One line');
+  (out.box as Record<string, unknown>).oneLine = height();
+  await type('Three\nlines\nhere');
+  (out.box as Record<string, unknown>).threeLines = height();
+  await type('');
+  (out.box as Record<string, unknown>).emptyAgain = height();
+  // Hover buttons: each icon centred in its button.
+  const stageButton = action(file, false, 'Stage Changes');
+  const b = stageButton?.getBoundingClientRect();
+  const icon = stageButton?.querySelector('svg')?.getBoundingClientRect();
+  out.hoverIcon = b && icon && { button: [b.width, b.height], offsetX: icon.left + icon.width / 2 - (b.left + b.width / 2), offsetY: icon.top + icon.height / 2 - (b.top + b.height / 2) };
+  // + stages a file (Staged Changes, above Changes); − takes it back out.
+  stageButton?.click();
+  await waitFor(() => g().repo?.staged.length === 1, 10000, 'staged').catch(() => {});
+  await sleep(300);
+  out.staged = {
+    staged: list(g().repo?.staged),
+    files: list(g().repo?.files),
+    groups: [...document.querySelectorAll('.scm-group')].map((e) => e.textContent),
+    badge: document.querySelector('.activity-bar button[aria-label^="Source control"] .activity-badge')?.textContent,
+  };
+  out.snapshotStaged = await snap('git-staged');
+  // The hover buttons, shown as if every row were hovered (a snapshot can't hover).
+  const showAll = document.head.appendChild(document.createElement('style'));
+  showAll.textContent = '.scm-hover { visibility: visible !important; }';
+  out.snapshotActions = await snap('git-actions');
+  showAll.remove();
+  await studio.git.showWorking(file, true);
+  await waitFor(() => !!g().view?.files, 10000, 'staged diff').catch(() => {});
+  out.stagedView = { title: g().view?.title, files: g().view?.files?.map((f) => `${f.status} ${f.path} +${f.diff?.added}`) };
+  studio.git.closeView();
+  action(file, true, 'Unstage Changes')?.click();
+  await waitFor(() => g().repo?.staged.length === 0, 10000, 'unstaged').catch(() => {});
+  out.unstaged = { staged: list(g().repo?.staged), files: list(g().repo?.files) };
+  // Commit what's staged (just the chapter), then the rest with nothing staged.
+  const before = g().log.length;
+  await studio.git.stage([file]);
+  await type('Edit chapter one');
+  commitButton().click();
+  await waitFor(() => g().log.length === before + 1 && !g().busy, 15000, 'commit staged').catch(() => {});
+  out.committedStaged = { subject: g().log[0]?.subject, staged: list(g().repo?.staged), left: list(g().repo?.files) };
+  await type('Add chapter two');
+  commitButton().click();
+  await waitFor(() => g().log.length === before + 2 && !g().busy, 15000, 'commit').catch(() => {});
+  out.committed = { commits: g().log.slice(0, 2).map((c) => c.subject), files: g().repo?.files.length, ahead: g().repo?.ahead, boxCleared: box().value === '' };
   await studio.git.push();
   out.pushed = { ahead: g().repo?.ahead, toast: studio.state.toast?.text };
+  await sleep(300);
+  // The Graph: a row per commit, the checked-out one a ring with its branch (and its remote, now the same).
+  out.graph = {
+    rows: document.querySelectorAll('.scm-commit').length,
+    // The lanes' lines meet across rows only if each row is exactly as tall as its graph cell.
+    rowHeight: document.querySelector('.scm-commit')?.getBoundingClientRect().height,
+    cellHeight: document.querySelector('.scm-lanes')?.getBoundingClientRect().height,
+    lanes: Math.max(...[...document.querySelectorAll<SVGSVGElement>('.scm-lanes')].map((s) => s.width.baseVal.value)),
+    head: [...document.querySelectorAll('.scm-commit.head .scm-ref')].map((e) => `${e.className.replace('scm-ref ', '')} ${e.textContent}`),
+    refs: [...document.querySelectorAll('.scm-commit:not(.head) .scm-ref')].map((e) => `${e.className.replace('scm-ref ', '')} ${e.textContent}`),
+  };
+  out.snapshotGraph = await snap('git-graph');
+  // Folding the Graph keeps a message being written; unfolding brings the commits back.
+  const graphHeader = () => document.querySelector<HTMLElement>('.scm-graph-section .scm-section-header')!;
+  await type('Half a message');
+  graphHeader().click();
+  await sleep(200);
+  const folded = { rows: document.querySelectorAll('.scm-commit').length, message: box().value };
+  graphHeader().click();
+  await sleep(200);
+  out.fold = { folded, unfolded: document.querySelectorAll('.scm-commit').length };
+  await type('');
   await studio.git.pull();
   out.pulled = { behind: g().repo?.behind, toast: studio.state.toast?.text };
   await studio.git.showCommit(g().log[0]);

@@ -68,6 +68,8 @@
     "allow-git-log",
     "allow-git-commit-files",
     "allow-git-commit",
+    "allow-git-stage",
+    "allow-git-unstage",
     "allow-git-pull",
     "allow-git-push",
     "allow-history-reveal",

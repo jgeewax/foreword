@@ -583,6 +583,8 @@ pub fn run() {
             git::git_log,
             git::git_commit_files,
             git::git_commit,
+            git::git_stage,
+            git::git_unstage,
             git::git_pull,
             git::git_push,
             history::history_reveal,

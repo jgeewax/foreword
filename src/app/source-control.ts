@@ -23,13 +23,21 @@ export type GitState = {
   /** null: the book isn't in a Git repository. */
   repo: GitStatus | null;
   log: GitCommit[];
+  /** How many commits the graph asks for (Load More adds a page). */
+  limit: number;
   /** What's running: a commit, a pull or a push. */
   busy: 'commit' | 'pull' | 'push' | null;
   error: string | null;
   view: GitChangesView | null;
 };
 
-export const initialGit: GitState = { status: 'off', repo: null, log: [], busy: null, error: null, view: null };
+/** How many files aren't committed, staged or not (the activity bar's badge). */
+export const uncommitted = (repo: GitStatus | null) => (repo ? new Set([...repo.staged, ...repo.files].map((f) => f.path)).size : 0);
+
+/** Commits in the graph at first, and added by each Load More. */
+export const LOG_PAGE = 50;
+
+export const initialGit: GitState = { status: 'off', repo: null, log: [], limit: LOG_PAGE, busy: null, error: null, view: null };
 
 export type GitHost = {
   get(): GitState;
@@ -46,40 +54,58 @@ const asChange = (s: GitFile['status']): ChangedFile['status'] => (s === 'A' || 
 export class SourceControl {
   constructor(private readonly host: GitHost) {}
 
+  /** The commit message being written, kept while the view is closed. */
+  message = '';
+
   private get state() {
     return this.host.get();
   }
 
+  private refreshes = 0;
+
   /** Status and recent commits (quietly: a failure leaves the last known state). */
   async refresh() {
+    // Refreshes overlap (files changing, a push finishing): the newest one wins.
+    const n = ++this.refreshes;
     if (this.state.status === 'off') this.host.set({ status: 'loading' });
     try {
       const repo = await ipc.gitStatus();
-      const log = repo ? await ipc.gitLog(20) : [];
-      this.host.set({ status: 'ready', repo, log, error: null });
+      const log = repo ? await ipc.gitLog(this.state.limit) : [];
+      if (n === this.refreshes) this.host.set({ status: 'ready', repo, log, error: null });
     } catch (e) {
-      this.host.set({ status: 'error', error: errorMessage(e) });
+      if (n === this.refreshes) this.host.set({ status: 'error', error: errorMessage(e) });
     }
   }
 
+  /** The next page of older commits in the graph. */
+  async loadMore() {
+    this.host.set({ limit: this.state.limit + LOG_PAGE });
+    await this.refresh();
+  }
+
   reset() {
+    this.refreshes++; // the last book's refresh, still running, is dropped
+    this.message = '';
     this.host.set(initialGit);
   }
 
-  async commit(message: string): Promise<boolean> {
+  /** Commit every change in the book; `push`: then send it to the remote. */
+  async commit(message: string, push = false): Promise<boolean> {
     if (!message.trim() || this.state.busy) return false;
     this.host.set({ busy: 'commit' });
+    let ok = false;
     try {
       const short = await ipc.gitCommit(message);
       this.host.report(`Committed ${short}: ${message.trim().split('\n')[0]}`, 'info');
-      return true;
+      ok = true;
     } catch (e) {
       this.host.report(`Couldn't commit: ${errorMessage(e)}`, 'error');
-      return false;
     } finally {
       this.host.set({ busy: null });
       await this.refresh();
     }
+    if (ok && push) await this.push();
+    return ok;
   }
 
   async pull() {
@@ -104,14 +130,45 @@ export class SourceControl {
     }
   }
 
-  /** What's changed since the last commit (`only`: one file). */
-  async showWorking(only?: string) {
+  /** Stage files for the next commit (`.`: every change in the book), as VS Code's +. */
+  async stage(paths: string[]) {
+    await this.index(() => ipc.gitStage(paths), "Couldn't stage");
+  }
+
+  /** Take files out of the next commit (`.`: all of them); their changes stay. */
+  async unstage(paths: string[]) {
+    await this.index(() => ipc.gitUnstage(paths), "Couldn't unstage");
+  }
+
+  private async index(run: () => Promise<void>, failed: string) {
+    if (this.state.busy) return;
+    try {
+      await run();
+    } catch (e) {
+      this.host.report(`${failed}: ${errorMessage(e)}`, 'error');
+    }
+    await this.refresh();
+  }
+
+  /**
+   * What's changed (`only`: one file), as VS Code's diffs: Staged Changes
+   * from the last commit to what's staged; Changes from what's staged (the
+   * last commit, if nothing is) to the file as it is.
+   */
+  async showWorking(only?: string, staged = false) {
     const repo = this.state.repo;
     if (!repo) return;
-    const files = repo.files.filter((f) => !only || f.path === only);
+    const files = (staged ? repo.staged : repo.files).filter((f) => !only || f.path === only);
     const branch = repo.branch ? ` on ${repo.branch}` : '';
-    await this.show({ title: only ? `Changes to ${only}` : 'Not committed yet', subtitle: `Since the last commit${branch}`, working: true }, files, async (f) => [
-      f.status === 'A' || f.status === '?' ? null : await ipc.gitFile('HEAD', f.path),
+    if (staged) {
+      await this.show({ title: only ? `Staged changes to ${only}` : 'Staged for the next commit', subtitle: `Since the last commit${branch}`, working: false }, files, async (f) => [
+        f.status === 'A' ? null : await ipc.gitFile('HEAD', f.path),
+        f.status === 'D' ? null : await ipc.gitFile(':0', f.path),
+      ]);
+      return;
+    }
+    await this.show({ title: only ? `Changes to ${only}` : 'Not committed yet', subtitle: repo.staged.length ? 'Not staged yet' : `Since the last commit${branch}`, working: true }, files, async (f) => [
+      f.status === '?' ? null : await ipc.gitFile(f.status === 'U' ? 'HEAD' : ':0', f.path),
       f.status === 'D' ? null : (await ipc.fsRead(f.path)).text,
     ]);
   }
@@ -123,7 +180,7 @@ export class SourceControl {
     try {
       const files = await ipc.gitCommitFiles(c.hash);
       await this.show({ title: c.subject, subtitle: `${c.short} · ${c.author} · ${when}`, working: false }, files, async (f) => [
-        c.parent && f.status !== 'A' ? await ipc.gitFile(`${c.hash}^`, f.path) : null,
+        c.parents.length > 0 && f.status !== 'A' ? await ipc.gitFile(`${c.hash}^`, f.path) : null,
         f.status === 'D' ? null : await ipc.gitFile(c.hash, f.path),
       ]);
     } catch (e) {
