@@ -10,6 +10,7 @@ import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { AssistantPage } from './AssistantSettings';
+import { Choice, SwitchRow } from './SettingControls';
 import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -18,18 +19,6 @@ export function Section({ title, children }: { title: string; children: ReactNod
       <h2>{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Radio<T extends string>({ name, value, current, onChange, label, detail }: { name: string; value: T; current: T; onChange: (v: T) => void; label: string; detail?: string }) {
-  return (
-    <label className="settings-option">
-      <input type="radio" name={name} checked={current === value} onChange={() => onChange(value)} />
-      <span>
-        {label}
-        {detail && <span className="muted"> — {detail}</span>}
-      </span>
-    </label>
   );
 }
 
@@ -258,8 +247,15 @@ function GeneralPage() {
       <Section title="Chat">
         <div className="settings-field">
           <div className="settings-label">Send a message with</div>
-          <Radio name="sendKey" value="enter" current={settings.sendKey} onChange={(v) => studio.updateSettings({ sendKey: v })} label="Enter" detail="Shift+Enter for a new line" />
-          <Radio name="sendKey" value="mod-enter" current={settings.sendKey} onChange={(v) => studio.updateSettings({ sendKey: v })} label="⌘ Enter" detail="Enter for a new line" />
+          <Choice
+            label="Send a message with"
+            value={settings.sendKey}
+            onChange={(v) => studio.updateSettings({ sendKey: v })}
+            options={[
+              { value: 'enter', label: 'Enter', detail: 'Enter sends; Shift+Enter for a new line.' },
+              { value: 'mod-enter', label: '⌘ Enter', detail: '⌘ Enter sends; Enter for a new line.' },
+            ]}
+          />
           <p className="settings-help">While the assistant works, the same key queues a message; ⌥⏎ sends it to the assistant right away.</p>
         </div>
       </Section>
@@ -281,13 +277,10 @@ function GeneralPage() {
           <p className="settings-help">The text you write, in the editor and in What changed. Size of everything (⌘= and ⌘−) scales the whole window, this text included.</p>
         </div>
         <div className="settings-field">
-          <label className="settings-option">
-            <input type="checkbox" checked={settings.formatOnSave} onChange={(e) => studio.updateSettings({ formatOnSave: e.target.checked })} />
-            <span>
-              Format on save
-              <span className="muted"> — tidy spacing and indentation in Typst files, line up &amp; and &amp;&amp; in equations, and leave a blank line above and below each heading</span>
-            </span>
-          </label>
+          <SwitchRow checked={settings.formatOnSave} onChange={(formatOnSave) => studio.updateSettings({ formatOnSave })}>
+            <span className="settings-switch-label">Format on save</span>
+            <span className="settings-help">Tidy spacing and indentation in Typst files, line up &amp; and &amp;&amp; in equations, and leave a blank line above and below each heading.</span>
+          </SwitchRow>
           <p className="settings-help">
             With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
             line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
@@ -297,14 +290,14 @@ function GeneralPage() {
       <Section title="Layout">
         <div className="settings-field">
           <div className="settings-label">History</div>
-          <Radio name="historyPlacement" value="tab" current={settings.historyPlacement} onChange={(v) => studio.updateSettings({ historyPlacement: v })} label="In its own tab" detail="next to Files" />
-          <Radio
-            name="historyPlacement"
-            value="below"
-            current={settings.historyPlacement}
+          <Choice
+            label="History"
+            value={settings.historyPlacement}
             onChange={(v) => studio.updateSettings({ historyPlacement: v })}
-            label="Below the files"
-            detail="both visible at once; drag the divider to resize"
+            options={[
+              { value: 'tab', label: 'In its own tab', detail: 'A view of its own in the sidebar, next to Files.' },
+              { value: 'below', label: 'Below the files', detail: 'Both visible at once; drag the divider between them to resize.' },
+            ]}
           />
         </div>
         <div className="settings-field">

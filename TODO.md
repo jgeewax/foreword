@@ -200,7 +200,7 @@
 
 - [ ] use gh to create a repository and push remotely to github. jgeewax/typststudio
 
-- [ ] get rid of checkboxes in the settings. those are dangerous. healthy UI controls only for settings.
+- [x] get rid of checkboxes in the settings. those are dangerous. healthy UI controls only for settings.
 
 - [ ] for defaults, be explicit. you can say "this folder" but then must include the exact path so that its clear
 

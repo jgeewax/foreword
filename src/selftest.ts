@@ -2908,8 +2908,8 @@ async function formatChecks() {
     out.editMenu = (await ipc.menuOutline()).find(([title]) => title === 'Edit')?.[1];
     studio.openSettings('general');
     await sleep(400);
-    const box = [...document.querySelectorAll<HTMLLabelElement>('.settings-option')].find((l) => l.textContent?.includes('Format on save'));
-    out.settings = { label: box?.textContent ?? null, checked: box?.querySelector('input')?.checked ?? null, snapshot: await snap('settings-format-on-save') };
+    const row = [...document.querySelectorAll<HTMLLabelElement>('.settings-switch')].find((l) => l.textContent?.includes('Format on save'));
+    out.settings = { label: row?.textContent ?? null, checked: row?.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'true', snapshot: await snap('settings-format-on-save') };
     studio.closeSettings();
   } finally {
     formatOnSave(setting);
@@ -4174,6 +4174,70 @@ async function assistantMenuChecks(real = false) {
   return out;
 }
 
+/**
+ * Settings has no checkboxes or radio buttons on any page: switches flip from
+ * anywhere on their row, segmented controls choose by click or arrow, and the
+ * chosen one's note follows. Settings are put back, and never written to the file.
+ */
+async function settingControlsChecks() {
+  const saved = studio.state.settings;
+  const update = studio.updateSettings.bind(studio);
+  studio.updateSettings = (patch, opts) => update(patch, { ...opts, write: false });
+  const out: Record<string, unknown> = {};
+  try {
+    studio.openSettings('general');
+    await sleep(300);
+    const native = (sel = '.settings-content') => document.querySelectorAll(`${sel} input[type="checkbox"], ${sel} input[type="radio"]`).length;
+    // Each page in turn: Typst Studio's, then this book's.
+    out.nativeOnPages = {} as Record<string, number>;
+    for (const [i, tab] of [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].entries()) {
+      tab.click();
+      await sleep(150);
+      (out.nativeOnPages as Record<string, number>)[`${i + 1}-${tab.textContent}`] = native();
+    }
+    document.querySelector<HTMLButtonElement>('.settings-nav button')?.click();
+    await sleep(200);
+    const switchRow = (text: string) => [...document.querySelectorAll<HTMLLabelElement>('.settings-switch')].find((l) => l.textContent?.includes(text));
+    const on = (text: string) => switchRow(text)?.querySelector('[role="switch"]')?.getAttribute('aria-checked');
+    const before = { switch: on('Format on save'), setting: studio.state.settings.formatOnSave };
+    // A click on the words flips it; one on the switch flips it back.
+    switchRow('Format on save')?.querySelector<HTMLElement>('.settings-switch-label')?.click();
+    await sleep(100);
+    const afterWords = { switch: on('Format on save'), setting: studio.state.settings.formatOnSave };
+    switchRow('Format on save')?.querySelector<HTMLElement>('[role="switch"]')?.click();
+    await sleep(100);
+    const afterSwitch = { switch: on('Format on save'), setting: studio.state.settings.formatOnSave };
+    out.formatOnSave = { before, afterWords, afterSwitch, flips: afterWords.setting !== before.setting && afterSwitch.setting === before.setting };
+    // The send key: → moves the choice, and the note under it says what it means now.
+    const group = document.querySelector<HTMLElement>('.segmented[aria-label="Send a message with"]');
+    const chosen = () => group?.querySelector('[aria-checked="true"]')?.textContent;
+    const note = () => (group?.nextElementSibling as HTMLElement | null)?.textContent;
+    const sendBefore = { chosen: chosen(), note: note(), setting: studio.state.settings.sendKey };
+    group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await sleep(100);
+    const sendAfter = { chosen: chosen(), note: note(), setting: studio.state.settings.sendKey, focused: document.activeElement?.textContent };
+    out.sendKey = { before: sendBefore, after: sendAfter, snapshot: await snap('setting-controls-general') };
+    [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Assistant')?.click();
+    await sleep(300);
+    out.assistantPage = { switches: [...document.querySelectorAll('.settings-switch')].map((l) => `${l.querySelector('.settings-switch-label')?.textContent}: ${l.querySelector('[role="switch"]')?.getAttribute('aria-checked')}`), native: native() };
+    document.querySelector('.settings-switch')?.scrollIntoView({ block: 'center' });
+    await sleep(100);
+    out.assistantSnapshot = await snap('setting-controls-assistant');
+    out.ok =
+      Object.values(out.nativeOnPages as Record<string, number>).every((n) => n === 0) &&
+      (out.formatOnSave as { flips: boolean }).flips &&
+      sendAfter.setting !== sendBefore.setting &&
+      sendAfter.note !== sendBefore.note &&
+      sendAfter.focused === sendAfter.chosen;
+  } finally {
+    studio.updateSettings({ formatOnSave: saved.formatOnSave, sendKey: saved.sendKey });
+    delete (studio as { updateSettings?: unknown }).updateSettings;
+    studio.closeSettings();
+  }
+  return out;
+}
+
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'below' });
@@ -5224,6 +5288,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('previewclose')) result.previewclose = await previewCloseChecks();
     if (want('agentsettings')) result.agentsettings = await agentSettingsChecks();
     if (want('assistantmenu')) result.assistantmenu = await assistantMenuChecks();
+    if (want('settingcontrols')) result.settingcontrols = await settingControlsChecks();
     // It starts Claude Code: only when asked for.
     if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();

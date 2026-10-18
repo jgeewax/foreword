@@ -9,6 +9,7 @@ import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
 import { ModelPicker } from './ModelPicker';
+import { SwitchRow } from './SettingControls';
 
 /** Who makes each one, and the account it runs on. */
 export const ABOUT: Record<AssistantId, { maker: string; account: string }> = {
@@ -317,20 +318,18 @@ export function AssistantPage({ goToTools }: { goToTools: () => void }) {
       <section className="settings-section">
         <h2>The assistant’s marks in the editor</h2>
         <div className="settings-field">
-          <label className="settings-option">
-            <input type="checkbox" checked={settings.markAiEdits} onChange={(e) => studio.updateSettings({ markAiEdits: e.target.checked })} />
-            <span>
+          <SwitchRow checked={settings.markAiEdits} onChange={(markAiEdits) => studio.updateSettings({ markAiEdits })}>
+            <span className="settings-switch-label">
               Lines the assistant changed <span className="ai-swatch edit" />
-              <span className="muted"> — until you rewrite them; hover the line number for what was there before</span>
             </span>
-          </label>
-          <label className="settings-option">
-            <input type="checkbox" checked={settings.markAiReads} onChange={(e) => studio.updateSettings({ markAiReads: e.target.checked })} />
-            <span>
+            <span className="settings-help">Until you rewrite them; hover the line number for what was there before.</span>
+          </SwitchRow>
+          <SwitchRow checked={settings.markAiReads} onChange={(markAiReads) => studio.updateSettings({ markAiReads })}>
+            <span className="settings-switch-label">
               Lines the assistant read <span className="ai-swatch read" />
-              <span className="muted"> — in the current conversation</span>
             </span>
-          </label>
+            <span className="settings-help">In the current conversation.</span>
+          </SwitchRow>
         </div>
       </section>
     </>
