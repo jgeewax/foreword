@@ -761,6 +761,23 @@ section), the page starts at the window's top and the offset is measured.
   editor) are on the items too, so they're discoverable. The page calls
   preventDefault on a press, which stops the menu's key equivalent, so a
   press isn't applied twice. With the preview focused, the menu acts.
+- **Select All** (⌘A) is the app's item, not the stock one. In the page,
+  AppKit's `selectAll:` selects the focused field, and the editor's is
+  Monaco's hidden one: Edit → Select All in the editor selected nothing you
+  could see. With no field focused (after a click on the path under the tabs,
+  say), ⌘A fell through to it and selected the whole page, line numbers and
+  labels too. While the page has the keyboard the item goes to the page
+  (`select-all`, `editor/select-all.ts`): the editor's text, a field's own,
+  else the text last clicked in (the conversation, Typst basics) or the
+  editor in front. Anywhere else (the preview, a dialog's text field) it's
+  AppKit's. ⌘A in the editor stays Monaco's. A click on a file's tab no
+  longer takes back the keyboard the tab gives the editor.
+- The window is one grid column, `minmax(0, 1fr)`: a whole chapter selected
+  showed in the message box's card as one long line, which widened the column
+  past the window and pushed the preview and the assistant off screen.
+- Verified (self-test `selectall`; once also with real key presses, clicks and
+  the menu item, sent as AppKit events): each case above, the preview's own
+  Select All, and the layout with a whole chapter selected.
 - Verified (self-test `menubar`):
   - Every app item has a handler and every handler an item; the menu bar is
     read back from the running app (`menu_outline`, self-test only).

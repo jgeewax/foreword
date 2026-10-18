@@ -143,7 +143,8 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::cut(handle, None)?,
             &PredefinedMenuItem::copy(handle, None)?,
             &PredefinedMenuItem::paste(handle, None)?,
-            &PredefinedMenuItem::select_all(handle, None)?,
+            // Not the stock item: in the page it's the page's (see `select_all`).
+            &item("select-all", "Select All", Some("CmdOrCtrl+A"))?,
             &sep()?,
             &item("find", "Find…", Some("CmdOrCtrl+F"))?,
             &item("replace", "Find and Replace…", Some("CmdOrCtrl+Alt+F"))?,
@@ -252,6 +253,56 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         handle,
         &[&app, &file, &edit, &view, &book, &assistant, &window, &help],
     )
+}
+
+/// Edit → Select All, and ⌘A when nothing took the key. While the window's page
+/// has the keyboard, the page selects (event `select-all`): AppKit's
+/// `selectAll:` would select the focused field, and the editor's is Monaco's
+/// hidden one, not the text. Anywhere else (the preview, a dialog's text
+/// field) it's AppKit's, as the stock item was.
+pub fn select_all(app: &AppHandle, front: Option<String>) {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::{MainThreadMarker, rc::Retained, sel};
+        use objc2_app_kit::NSApplication;
+        use tauri::{Emitter, EventTarget, Manager};
+
+        fn native() {
+            if let Some(mtm) = MainThreadMarker::new() {
+                // SAFETY: selectAll: is a standard action; a nil target sends it to the first responder.
+                unsafe {
+                    NSApplication::sharedApplication(mtm).sendAction_to_from(
+                        sel!(selectAll:),
+                        None,
+                        None,
+                    )
+                };
+            }
+        }
+        let Some(page) = front.and_then(|label| app.get_webview(&label)) else {
+            return native();
+        };
+        let app = app.clone();
+        let label = page.label().to_string();
+        let _ = page.with_webview(move |platform| {
+            let Some(mtm) = MainThreadMarker::new() else {
+                return;
+            };
+            let responder = NSApplication::sharedApplication(mtm)
+                .keyWindow()
+                .and_then(|w| w.firstResponder());
+            if responder.is_some_and(|r| Retained::as_ptr(&r).cast() == platform.inner()) {
+                // Not from here: emitting runs script in this web view, which this call holds.
+                tauri::async_runtime::spawn(async move {
+                    let _ = app.emit_to(EventTarget::webview(&label), "select-all", ());
+                });
+            } else {
+                native();
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, front);
 }
 
 /// The menu bar as text, for the self-test: each menu's title and items.

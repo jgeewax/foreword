@@ -462,6 +462,8 @@ export function EditorPane() {
                 ];
               })}
               onMouseDown={(e) => {
+                // A file's tab gives the editor the focus; the click mustn't take it back.
+                if (!view) e.preventDefault();
                 if (e.button === 1) void studio.closeTab(t);
                 else studio.activate(t);
               }}

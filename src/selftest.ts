@@ -8,6 +8,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
 import { studio } from './app/studio';
 import { monaco } from './editor/monaco';
+import { selectAll } from './editor/select-all';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { menuRecorder, type MenuEntry } from './lib/context-menu';
@@ -3454,8 +3455,8 @@ async function menuBarChecks() {
   out.menus = outline.map(([title, items]) => `${title}: ${items.map((i) => i.split('=').pop()).join(' | ')}`);
   const ids = outline.flatMap(([, items]) => items.filter((i) => i.includes('=')).map((i) => i.split('=')[0]));
   const handled = Object.keys(studio.menuCommands);
-  // New Window and Close Window are handled by the app itself, not the page.
-  out.withoutHandler = ids.filter((id) => id !== 'close-window' && id !== 'new-window' && !handled.includes(id));
+  // New Window and Close Window are handled by the app itself, not the page; Select All has its own event.
+  out.withoutHandler = ids.filter((id) => !['close-window', 'new-window', 'select-all'].includes(id) && !handled.includes(id));
   out.withoutItem = handled.filter((id) => !ids.includes(id));
   out.itemsPerMenu = Object.fromEntries(outline.map(([title, items]) => [title, items.filter((i) => i !== '---').length]));
 
@@ -3612,6 +3613,103 @@ async function chromeChecks() {
     }
   }
   return { ok: notFollowing.length === 0 && zoomed.size === 0, notFollowing, cssZoomed: [...zoomed], missing, at67: at[0.67], at100: at[1], at150: at[1.5] };
+}
+
+/**
+ * Select All: ⌘A in the editor is Monaco's; Edit → Select All (`selectAll`, where
+ * the menu sends it while the page has the keyboard) selects the editor's text,
+ * a text field's own, or the text last clicked in, and never the whole page. A
+ * click on a file's tab leaves the keyboard in the editor; a whole chapter
+ * selected leaves the window's layout as it was. Read-only.
+ */
+async function selectAllChecks() {
+  const out: Record<string, any> = {};
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const isAll = () => !!editor.getSelection()?.equalsRange(model.getFullModelRange());
+  const reset = async () => {
+    editor.setSelection(new monaco.Selection(1, 1, 1, 1));
+    getSelection()?.removeAllRanges();
+    await sleep(100);
+  };
+  const press = (el: Element | null) => el?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  const blur = () => (document.activeElement as HTMLElement | null)?.blur();
+  // Text selected outside the editor (its hidden field mirrors the editor's selection).
+  const pageText = () => {
+    const s = getSelection();
+    return s?.anchorNode && editor.getDomNode()?.contains(s.anchorNode) ? 0 : String(s).length;
+  };
+
+  out.editMenu = (await ipc.menuOutline()).find(([title]) => title === 'Edit')?.[1];
+
+  await reset();
+  editor.focus();
+  const key = new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', keyCode: 65, metaKey: true, bubbles: true, cancelable: true } as KeyboardEventInit);
+  document.activeElement!.dispatchEvent(key);
+  await sleep(100);
+  out.key = { taken: key.defaultPrevented, all: isAll() };
+
+  await reset();
+  editor.focus();
+  selectAll();
+  await sleep(100);
+  out.editor = { all: isAll() };
+  // The whole chapter in the message box's selection card (one line, cut short) keeps the window's layout.
+  await waitFor(() => document.querySelector('.context-card.live'), 3000, 'the selection card').catch(() => {});
+  await sleep(300);
+  const right = (sel: string) => Math.round(document.querySelector(sel)?.getBoundingClientRect().right ?? -1);
+  out.layout = { window: innerWidth, app: right('.app'), composer: right('.composer'), card: !!document.querySelector('.context-card.live') };
+
+  const tab = [...document.querySelectorAll('.tab')].find((t) => t.getAttribute('title') === studio.state.active);
+  const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+  tab?.dispatchEvent(down);
+  out.tabPress = { keepsFocus: down.defaultPrevented, textFocus: editor.hasTextFocus() };
+
+  // Nothing focused, last pressed on chrome: the editor in front.
+  await reset();
+  press(document.querySelector('.tabs'));
+  blur();
+  selectAll();
+  await sleep(100);
+  out.unfocused = { all: isAll(), textFocus: editor.hasTextFocus(), page: pageText() };
+
+  // Last pressed in text (Typst basics): that text.
+  studio.openGuide();
+  const guide = await waitFor(() => document.querySelector('.guide-body'), 5000, 'Typst basics');
+  await reset();
+  press(guide.querySelector('p') ?? guide.firstElementChild);
+  blur();
+  selectAll();
+  const s = getSelection()!;
+  out.lastPressed = { inText: guide.contains(s.anchorNode) && guide.contains(s.focusNode), length: String(s).length, editorAll: isAll() };
+  // No editor in front, last pressed on chrome: nothing.
+  await reset();
+  press(document.querySelector('.tabs'));
+  blur();
+  selectAll();
+  out.noEditor = { page: pageText() };
+  studio.closeGuide();
+  await sleep(200);
+
+  // A text field: its own text.
+  await reset();
+  const box = document.querySelector<HTMLTextAreaElement>('.composer textarea');
+  if (box) {
+    box.focus();
+    box.setRangeText('hello there', 0, box.value.length, 'end');
+    selectAll();
+    await sleep(100);
+    out.field = { selected: box.selectionEnd - box.selectionStart, length: box.value.length, editorAll: isAll() };
+    box.setRangeText('', 0, box.value.length, 'end');
+    box.blur();
+  }
+  await reset();
+  out.ok =
+    !!out.editMenu?.includes('select-all=Select All') && out.key.taken && out.key.all && out.editor.all && out.tabPress.keepsFocus &&
+    out.layout.card && out.layout.app <= out.layout.window && out.layout.composer <= out.layout.window &&
+    out.unfocused.all && out.unfocused.page === 0 && out.lastPressed.inText && out.lastPressed.length > 100 && !out.lastPressed.editorAll &&
+    out.noEditor.page === 0 && (!box || (out.field.selected === out.field.length && !out.field.editorAll));
+  return out;
 }
 
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
@@ -4321,6 +4419,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
+    if (want('selectall')) result.selectall = await selectAllChecks();
     if (want('breadcrumbs')) result.breadcrumbs = await breadcrumbChecks();
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();

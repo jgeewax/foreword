@@ -90,7 +90,8 @@ button.small { padding: 1px 8px; font-size: 11.5px; }
 .spacer { flex: 1; }
 kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 
-.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+/* One column, the window's width: no content (a long line kept on one line) widens it past the window. */
+.app { display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); height: 100%; }
 .statusbar { display: flex; align-items: center; gap: 10px; padding: 0 8px; background: var(--bg-2); white-space: nowrap; overflow: hidden; }
 /*
  * The title bar, as VS Code's: the window's buttons (drawn by macOS) at the
