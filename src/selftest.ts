@@ -370,6 +370,69 @@ async function optionsChecks() {
 }
 
 /**
+ * Options mode: picking an option asks whether the task is done, under the
+ * options; Not yet isn't asked again for that reply; Yes saves the file (the
+ * option is in the version) and starts a new task. Replies are made up, so no
+ * model is needed. Saves a chapter and puts it back: scratch book only.
+ */
+async function optionsDoneChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const original = (await ipc.fsRead(file)).text;
+  await studio.openFile(file);
+  const model = studio.editor!.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => /^The eigenvalues of/.test(l)) + 1;
+  const text = model.getLineContent(line);
+  const target = { path: file, start: { line, column: 1 }, end: { line, column: text.length + 1 }, text };
+  const reply = (tag: string) =>
+    [1, 2, 3].map((n) => `### Option ${n}: ${tag} ${n}\n\`\`\`typst\n${tag} ${n}: the eigenvalues of $A$ are the roots.\n\`\`\`\nVersion ${n}.`).join('\n\n');
+  // Each reply is about the line as it is when it's asked.
+  const optionsItem = (id: string, tag: string) => {
+    const now = model.getLineContent(line);
+    const t = { ...target, end: { line, column: now.length + 1 }, text: now };
+    return { kind: 'assistant' as const, id, text: reply(tag), done: true, options: { target: t, original: t, applied: null } };
+  };
+  studio.store.set((s) => ({ agent: { ...s.agent, sessionId: 'selftest-options', running: false, mode: 'options', items: [{ kind: 'user', id: 'u1', text: 'Simpler', attachments: [] }, optionsItem('a1', 'First')] } }));
+  await sleep(200);
+  const use = async (n: number) => {
+    [...document.querySelectorAll('.options-reply')].at(-1)?.querySelectorAll<HTMLButtonElement>('.option-card .option-actions button.primary, .option-card .option-actions button:first-child')[n]?.click();
+    await sleep(400);
+  };
+  const check = () => [...document.querySelectorAll('.options-reply')].at(-1)?.querySelector('.task-check')?.textContent ?? null;
+  out.beforePick = check();
+  await use(1);
+  out.picked = { check: check(), inEditor: model.getLineContent(line), dirty: !!studio.state.dirty[file] };
+  [...document.querySelectorAll<HTMLButtonElement>('.task-check button')].find((b) => b.textContent === 'Not yet')?.click();
+  await sleep(200);
+  out.notYet = { check: check(), state: (studio.state.agent.items.find((i) => i.id === 'a1') as { taskCheck?: string }).taskCheck };
+  await use(2);
+  out.pickedAgain = { check: check(), inEditor: model.getLineContent(line) };
+
+  // Another reply: picked, then Yes.
+  studio.store.set((s) => ({ agent: { ...s.agent, items: [...s.agent.items, { kind: 'user', id: 'u2', text: 'Shorter', attachments: [] }, optionsItem('a2', 'Second')] } }));
+  await sleep(200);
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  await use(0);
+  out.second = { check: check() };
+  out.snapshot = await snap('options-done');
+  still.remove();
+  document.querySelector<HTMLButtonElement>('.task-check .primary')?.click();
+  await waitFor(() => studio.state.agent.sessionId === null, 10000, 'a new task').catch(() => {});
+  await sleep(500);
+  out.done = {
+    newTask: studio.state.agent.sessionId === null && studio.state.agent.items.length === 0,
+    saved: !studio.state.dirty[file] && (await ipc.fsRead(file)).text.includes('Second 1: the eigenvalues'),
+    version: studio.state.history.versions[0]?.label,
+  };
+  await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  await studio.reloadFromDisk(file);
+  studio.store.set((s) => ({ agent: { ...s.agent, mode: 'write' } }));
+  return out;
+}
+
+/**
  * History (TODO #8): automatic versions, the panel and diff, restores, and
  * undoing an agent turn. Writes files: scratch book only.
  */
@@ -6182,6 +6245,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('changeszoom')) result.changeszoom = await changesZoomChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
+    if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();

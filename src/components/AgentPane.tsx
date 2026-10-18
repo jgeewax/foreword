@@ -93,6 +93,8 @@ function OptionsReply({ item }: { item: AssistantItem }) {
           </div>
         </div>
       ))}
+      {/* Once one is in use: was that it? */}
+      {applied != null && item.taskCheck === 'ask' && <TaskCheck id={item.id} question={`Option ${parsed.options[applied]?.n ?? applied + 1} is in. Is this task done?`} />}
     </div>
   );
 }
@@ -697,16 +699,16 @@ function ItemBody({ item }: { item: ChatItem }) {
   }
 }
 
-/** "Is the task done?" under the reply that asks it. */
-function TaskCheck({ id }: { id: string }) {
+/** "Is the task done?" under the reply that asks it (or the option picked). */
+function TaskCheck({ id, question = 'Is this task done?' }: { id: string; question?: string }) {
   const running = useStore(studio.store, (s) => s.agent.running);
   return (
     <div className="task-check">
-      <span>Is this task done?</span>
-      <button className="primary" disabled={running} onClick={() => void studio.finishTask()}>
+      <span>{question}</span>
+      <button className="primary" disabled={running} title="Saves your files, keeps a named version in History, and starts a new task" onClick={() => void studio.finishTask()}>
         Yes, it's done: new task
       </button>
-      <button disabled={running} onClick={() => studio.dismissTaskCheck(id)}>
+      <button disabled={running} title="Keep going in this task" onClick={() => studio.dismissTaskCheck(id)}>
         Not yet
       </button>
     </div>

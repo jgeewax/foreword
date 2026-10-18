@@ -3059,6 +3059,12 @@ export class Studio {
   async finishTask() {
     const { sessionId } = this.state.agent;
     if (!sessionId || this.state.agent.running) return;
+    // What's in the editor is part of it (an option picked in Options mode is an unsaved edit): saved first, so the version has it.
+    const failures = (await this.docs?.saveAll()) ?? [];
+    if (failures.length) {
+      this.toast(`Not marked done: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`, 'error');
+      return;
+    }
     const title = this.taskTitle(sessionId);
     this.setTaskRecord(sessionId, 'done');
     await this.history.saveNamed(`Task done: ${title}`).catch(() => {});
@@ -3512,7 +3518,10 @@ export class Studio {
       end: { line: end.lineNumber, column: end.column },
       text: model.getValueInRange(monaco.Range.fromPositions(start, end)),
     };
-    this.updateItem(itemId, (it) => (it.kind === 'assistant' && it.options ? { ...it, options: { ...it.options, target: applied, applied: index } } : it));
+    // Picked one: is that the task done? (Asked once; "Not yet" isn't asked again for this reply.)
+    this.updateItem(itemId, (it) =>
+      it.kind === 'assistant' && it.options ? { ...it, options: { ...it.options, target: applied, applied: index }, taskCheck: it.taskCheck === 'dismissed' ? 'dismissed' : 'ask' } : it,
+    );
   }
 
   private agentError(message: string) {
