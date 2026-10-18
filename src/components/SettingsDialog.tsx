@@ -2,6 +2,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { PROJECT_FILE } from '../app/project-settings';
 import { studio, type SettingsPage } from '../app/studio';
+import type { ToolInfo } from '../lib/ipc';
 import { useStore } from '../lib/store';
 import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
@@ -384,15 +385,18 @@ function PermissionsPage() {
 function ToolsPage() {
   const tools = useStore(studio.store, (s) => s.tools);
   const history = useStore(studio.store, (s) => s.history);
-  const row = (label: string, purpose: string, info: { path: string | null; version: string | null } | undefined, install: string) => (
+  const row = (label: string, purpose: string, info: ToolInfo | undefined, install: string, error?: string) => (
     <div className="tool-status-row" key={label}>
-      <span className={info?.path ? 'ok' : 'bad'}>{info ? (info.path ? '✓' : '✕') : '…'}</span>
+      <span className={info ? (info.path ? 'ok' : 'bad') : 'muted'} title={info ? (info.path ? 'Installed' : 'Not installed') : 'Checking…'}>
+        {info ? (info.path ? '✓' : '✕') : '…'}
+      </span>
       <div>
         <div className="settings-label">
           {label} {info?.version && <span className="muted">{info.version}</span>}
         </div>
         <div className="settings-help">{purpose}</div>
         {info?.path ? <code className="selectable">{info.path}</code> : info && <div className="settings-help">Not installed. In Terminal: <code className="selectable">{install}</code>, then restart Typst Studio.</div>}
+        {error && <div className="settings-help bad">{error}</div>}
       </div>
     </div>
   );
@@ -400,14 +404,13 @@ function ToolsPage() {
     <Section title="Tools Typst Studio uses">
       {row('Tinymist', 'Typesets the live preview and exports PDFs.', tools?.tinymist, 'brew install tinymist')}
       {row('OpenCode', 'Runs the writing assistant.', tools?.opencode, 'brew install opencode')}
-      <div className="tool-status-row">
-        <span className={history.status === 'ready' ? 'ok' : history.status === 'unavailable' ? 'bad' : 'muted'}>{history.status === 'ready' ? '✓' : history.status === 'unavailable' ? '✕' : '…'}</span>
-        <div>
-          <div className="settings-label">git</div>
-          <div className="settings-help">Keeps History (in Typst Studio’s own folder; your book’s git is never touched).</div>
-          {history.error && <div className="settings-help bad">{history.error}</div>}
-        </div>
-      </div>
+      {row(
+        'Git',
+        'Keeps History, in Typst Studio’s own folder. If your book is in a Git repository, Source Control uses it too.',
+        tools?.git,
+        'xcode-select --install',
+        tools?.git?.path ? history.error : undefined,
+      )}
     </Section>
   );
 }

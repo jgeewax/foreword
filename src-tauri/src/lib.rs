@@ -148,6 +148,7 @@ impl WindowState {
 struct ToolsStatus {
     tinymist: discover::ToolInfo,
     opencode: discover::ToolInfo,
+    git: discover::ToolInfo,
 }
 
 #[tauri::command]
@@ -155,6 +156,7 @@ async fn tools_status() -> ToolsStatus {
     ToolsStatus {
         tinymist: discover::tool_info(discover::find_tinymist()),
         opencode: discover::tool_info(discover::find_opencode()),
+        git: discover::tool_info(discover::find_git()),
     }
 }
 

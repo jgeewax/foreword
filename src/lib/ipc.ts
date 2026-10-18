@@ -21,7 +21,7 @@ export type FileContent = { text: string; hash: string };
 export type Version = { id: string; parent: string | null; time: number; label: string; kind: string; files: number; added: number; deleted: number };
 export type FileChange = { path: string; status: 'A' | 'M' | 'D'; added: number | null; deleted: number | null };
 export type ToolInfo = { path: string | null; version: string | null };
-export type ToolsStatus = { tinymist: ToolInfo; opencode: ToolInfo };
+export type ToolsStatus = { tinymist: ToolInfo; opencode: ToolInfo; git: ToolInfo };
 export type LaunchOptions = {
   workspace: string | null;
   sampleBook: string | null;

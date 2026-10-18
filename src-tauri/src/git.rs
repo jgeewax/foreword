@@ -22,8 +22,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(20);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
 
 fn git_bin() -> CmdResult<PathBuf> {
-    discover::find("git", "TYPST_STUDIO_GIT")
-        .ok_or_else(|| CmdError::Unavailable("git was not found".into()))
+    discover::find_git().ok_or_else(|| CmdError::Unavailable("git was not found".into()))
 }
 
 /// `git -C <book> …` with the author's config. No prompts: credentials come

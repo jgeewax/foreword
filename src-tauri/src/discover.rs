@@ -82,6 +82,11 @@ pub fn find_opencode() -> Option<PathBuf> {
     find("opencode", "OPENCODE_PATH")
 }
 
+/// Git, for History and Source Control.
+pub fn find_git() -> Option<PathBuf> {
+    find("git", "TYPST_STUDIO_GIT")
+}
+
 #[derive(Serialize)]
 pub struct ToolInfo {
     pub path: Option<String>,
@@ -142,6 +147,10 @@ mod tests {
         assert_eq!(
             clean_version("typst 0.15.1 (unknown commit)").as_deref(),
             Some("0.15.1")
+        );
+        assert_eq!(
+            clean_version("git version 2.50.1 (Apple Git-155)\n").as_deref(),
+            Some("2.50.1")
         );
         assert_eq!(
             clean_version("tinymist \nBuild Git Describe:  v0.15.8\n").as_deref(),

@@ -60,7 +60,7 @@ pub struct HistoryInfo {
 }
 
 fn git_bin() -> CmdResult<PathBuf> {
-    discover::find("git", "TYPST_STUDIO_GIT")
+    discover::find_git()
         .ok_or_else(|| CmdError::Unavailable("git was not found; history is off".into()))
 }
 
