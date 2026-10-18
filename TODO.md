@@ -211,3 +211,5 @@
 - [x] add an X button on the preview pane to make it go away
 
 - [x] lines assistant changed vs us changes should be a color picker with an option to do the same and show no difference. a toggle switch is wrong for this.
+
+- [x] line coloring should be in a separate settings section. that is about the editor, not about which agent system youre using

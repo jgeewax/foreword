@@ -3,13 +3,12 @@
 // is now, its model, its account (with sign-in in Terminal) and its program.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { studio, type StudioState } from '../app/studio';
-import { ASSISTANT_NAMES, ASSISTANTS, MARK_COLORS, type AssistantId } from '../app/settings';
+import { ASSISTANT_NAMES, ASSISTANTS, type AssistantId } from '../app/settings';
 import { errorMessage, ipc, type AssistantSetup, type AssistantsSetup, type ToolInfo } from '../lib/ipc';
 import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
 import { ModelPicker } from './ModelPicker';
-import { ColorChoice } from './SettingControls';
 
 /** Who makes each one, and the account it runs on. */
 export const ABOUT: Record<AssistantId, { maker: string; account: string }> = {
@@ -314,38 +313,6 @@ export function AssistantPage({ goToTools }: { goToTools: () => void }) {
           </div>
         </div>
         <p className="settings-help">Switching starts a new conversation, with the other assistant.</p>
-      </section>
-      <section className="settings-section">
-        <h2>The assistant’s marks in the editor</h2>
-        <p className="settings-help">A bar beside the line numbers, in a colour of your choice; or none, so they look like the lines you wrote.</p>
-        <div className="settings-field">
-          <div className="settings-color">
-            <span className="settings-switch-text">
-              <span className="settings-switch-label">Lines the assistant changed</span>
-              <span className="settings-help">Until you rewrite them; hover the line number for what was there before.</span>
-            </span>
-            <ColorChoice
-              label="Lines the assistant changed"
-              on={settings.markAiEdits}
-              color={settings.aiEditColor}
-              colors={MARK_COLORS}
-              onChange={({ on, color }) => studio.updateSettings({ markAiEdits: on, ...(color ? { aiEditColor: color } : {}) })}
-            />
-          </div>
-          <div className="settings-color">
-            <span className="settings-switch-text">
-              <span className="settings-switch-label">Lines the assistant read</span>
-              <span className="settings-help">In the current conversation.</span>
-            </span>
-            <ColorChoice
-              label="Lines the assistant read"
-              on={settings.markAiReads}
-              color={settings.aiReadColor}
-              colors={MARK_COLORS}
-              onChange={({ on, color }) => studio.updateSettings({ markAiReads: on, ...(color ? { aiReadColor: color } : {}) })}
-            />
-          </div>
-        </div>
       </section>
     </>
   );

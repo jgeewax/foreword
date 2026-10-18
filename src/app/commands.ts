@@ -256,6 +256,7 @@ export function paletteCommands(studio: Studio): Command[] {
       'Settings',
       [
         menu('settings', 'Open Settings', { keys: '⌘,', keywords: ['preferences'], anywhere: true }),
+        { id: 'settings-editor', title: 'Editor Settings', keywords: ['text size', 'font', 'marks', 'colour', 'color', 'preferences'], anywhere: true, run: () => studio.openSettings('editor') },
         { id: 'settings-assistant', title: 'Assistant Settings', keywords: ['model', 'preferences'], anywhere: true, run: () => studio.openSettings('assistant') },
         { id: 'settings-tools', title: 'Tools (Tinymist, OpenCode, Git)', keywords: ['preferences'], anywhere: true, run: () => studio.openSettings('tools') },
         { id: 'settings-file', title: 'Open the Settings File', keywords: ['json', 'config'], anywhere: true, run: () => studio.openConfigFile() },

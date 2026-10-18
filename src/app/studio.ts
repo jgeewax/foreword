@@ -157,7 +157,7 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
 /** Settings' pages: Typst Studio's own (every book), then this book's (saved with it). */
-export type SettingsPage = 'general' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant';
+export type SettingsPage = 'general' | 'editor' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant';
 export type NewBookTab = 'book' | 'paper' | 'sample';
 
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };

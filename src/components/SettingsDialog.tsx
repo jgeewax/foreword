@@ -11,8 +11,8 @@ import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { AssistantPage } from './AssistantSettings';
-import { Choice, SwitchRow } from './SettingControls';
-import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type ToolName } from '../app/settings';
+import { Choice, ColorChoice, SwitchRow } from './SettingControls';
+import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, MARK_COLORS, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -254,7 +254,7 @@ const PAGE_KEY = 'studio.settingsPage';
 function readPage(): Page {
   try {
     const p = localStorage.getItem(PAGE_KEY);
-    return p === 'general' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-assistant' ? p : 'general';
+    return p === 'general' || p === 'editor' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-assistant' ? p : 'general';
   } catch {
     return 'general';
   }
@@ -263,7 +263,6 @@ function readPage(): Page {
 function GeneralPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const zoom = useStore(studio.store, (s) => s.zoom);
-  const setTextSize = (px: number) => studio.updateSettings({ editorFontSize: Math.min(EDITOR_FONT_SIZES.max, Math.max(EDITOR_FONT_SIZES.min, Math.round(px))) });
   return (
     <>
       <Section title="Chat">
@@ -279,34 +278,6 @@ function GeneralPage() {
             ]}
           />
           <p className="settings-help">While the assistant works, the same key queues a message; ⌥⏎ sends it to the assistant right away.</p>
-        </div>
-      </Section>
-      <Section title="Editor">
-        <div className="settings-field">
-          <div className="settings-label">Text size</div>
-          <div className="settings-row">
-            <button onClick={() => setTextSize(settings.editorFontSize - 1)} disabled={settings.editorFontSize <= EDITOR_FONT_SIZES.min} aria-label="Smaller text">
-              −
-            </button>
-            <span className="settings-zoom">{settings.editorFontSize} px</span>
-            <button onClick={() => setTextSize(settings.editorFontSize + 1)} disabled={settings.editorFontSize >= EDITOR_FONT_SIZES.max} aria-label="Bigger text">
-              +
-            </button>
-            <button onClick={() => setTextSize(DEFAULT_SETTINGS.editorFontSize)} disabled={settings.editorFontSize === DEFAULT_SETTINGS.editorFontSize}>
-              Default ({DEFAULT_SETTINGS.editorFontSize} px)
-            </button>
-          </div>
-          <p className="settings-help">The text you write, in the editor and in What changed. Size of everything (⌘= and ⌘−) scales the whole window, this text included.</p>
-        </div>
-        <div className="settings-field">
-          <SwitchRow checked={settings.formatOnSave} onChange={(formatOnSave) => studio.updateSettings({ formatOnSave })}>
-            <span className="settings-switch-label">Format on save</span>
-            <span className="settings-help">Tidy spacing and indentation in Typst files, line up &amp; and &amp;&amp; in equations, and leave a blank line above and below each heading.</span>
-          </SwitchRow>
-          <p className="settings-help">
-            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
-            line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
-          </p>
         </div>
       </Section>
       <Section title="Layout">
@@ -335,6 +306,75 @@ function GeneralPage() {
             <button onClick={() => void studio.zoom('reset', 'key')}>Actual size</button>
           </div>
           <p className="settings-help">⌘= and ⌘− too, ⌘0 for actual size. Everything in the window follows it except the preview, whose pages always fit the pane.</p>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+/** The editor: its text, formatting on save, and how the assistant's lines are marked in it. */
+function EditorPage() {
+  const settings = useStore(studio.store, (s) => s.settings);
+  const setTextSize = (px: number) => studio.updateSettings({ editorFontSize: Math.min(EDITOR_FONT_SIZES.max, Math.max(EDITOR_FONT_SIZES.min, Math.round(px))) });
+  return (
+    <>
+      <Section title="Text and formatting">
+        <div className="settings-field">
+          <div className="settings-label">Text size</div>
+          <div className="settings-row">
+            <button onClick={() => setTextSize(settings.editorFontSize - 1)} disabled={settings.editorFontSize <= EDITOR_FONT_SIZES.min} aria-label="Smaller text">
+              −
+            </button>
+            <span className="settings-zoom">{settings.editorFontSize} px</span>
+            <button onClick={() => setTextSize(settings.editorFontSize + 1)} disabled={settings.editorFontSize >= EDITOR_FONT_SIZES.max} aria-label="Bigger text">
+              +
+            </button>
+            <button onClick={() => setTextSize(DEFAULT_SETTINGS.editorFontSize)} disabled={settings.editorFontSize === DEFAULT_SETTINGS.editorFontSize}>
+              Default ({DEFAULT_SETTINGS.editorFontSize} px)
+            </button>
+          </div>
+          <p className="settings-help">The text you write, in the editor and in What changed. Size of everything (⌘= and ⌘−) scales the whole window, this text included.</p>
+        </div>
+        <div className="settings-field">
+          <SwitchRow checked={settings.formatOnSave} onChange={(formatOnSave) => studio.updateSettings({ formatOnSave })}>
+            <span className="settings-switch-label">Format on save</span>
+            <span className="settings-help">Tidy spacing and indentation in Typst files, line up &amp; and &amp;&amp; in equations, and leave a blank line above and below each heading.</span>
+          </SwitchRow>
+          <p className="settings-help">
+            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
+            line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
+          </p>
+        </div>
+      </Section>
+      <Section title="The assistant’s marks">
+        <p className="settings-help">A bar beside the line numbers, in a colour of your choice; or none, so they look like the lines you wrote.</p>
+        <div className="settings-field">
+          <div className="settings-color">
+            <span className="settings-switch-text">
+              <span className="settings-switch-label">Lines the assistant changed</span>
+              <span className="settings-help">Until you rewrite them; hover the line number for what was there before.</span>
+            </span>
+            <ColorChoice
+              label="Lines the assistant changed"
+              on={settings.markAiEdits}
+              color={settings.aiEditColor}
+              colors={MARK_COLORS}
+              onChange={({ on, color }) => studio.updateSettings({ markAiEdits: on, ...(color ? { aiEditColor: color } : {}) })}
+            />
+          </div>
+          <div className="settings-color">
+            <span className="settings-switch-text">
+              <span className="settings-switch-label">Lines the assistant read</span>
+              <span className="settings-help">In the current conversation.</span>
+            </span>
+            <ColorChoice
+              label="Lines the assistant read"
+              on={settings.markAiReads}
+              color={settings.aiReadColor}
+              colors={MARK_COLORS}
+              onChange={({ on, color }) => studio.updateSettings({ markAiReads: on, ...(color ? { aiReadColor: color } : {}) })}
+            />
+          </div>
         </div>
       </Section>
     </>
@@ -773,6 +813,7 @@ export function SettingsDialog() {
   // Typst Studio's own settings (every book), then this book's (saved with it), as VS Code's User and Workspace.
   const pages: { id: Page; label: string; icon: IconName; scope: 'app' | 'book' }[] = [
     { id: 'general', label: 'General', icon: 'settings', scope: 'app' },
+    { id: 'editor', label: 'Editor', icon: 'edit', scope: 'app' },
     { id: 'assistant', label: 'Assistant', icon: 'sparkle', scope: 'app' },
     { id: 'permissions', label: 'Permissions', icon: 'shield', scope: 'app' },
     { id: 'tools', label: 'Tools', icon: 'code', scope: 'app' },
@@ -844,7 +885,7 @@ export function SettingsDialog() {
   }, [query]);
 
   const pageContent = (id: Page) =>
-    ({ general: <GeneralPage />, assistant: <AssistantPage goToTools={() => (setQuery(''), setPage('tools'))} />, permissions: <PermissionsPage />, tools: <ToolsPage />, book: <ProjectSection />, 'book-assistant': <BookAssistantPage /> })[id];
+    ({ general: <GeneralPage />, editor: <EditorPage />, assistant: <AssistantPage goToTools={() => (setQuery(''), setPage('tools'))} />, permissions: <PermissionsPage />, tools: <ToolsPage />, book: <ProjectSection />, 'book-assistant': <BookAssistantPage /> })[id];
   const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (

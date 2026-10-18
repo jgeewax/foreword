@@ -2906,7 +2906,7 @@ async function formatChecks() {
     menuRecorder.record = undefined;
     out.contextMenu = last.map((e) => (typeof e === 'string' ? `[${e}]` : `${e.label}${'accelerator' in e && e.accelerator ? ` (${e.accelerator})` : ''}`));
     out.editMenu = (await ipc.menuOutline()).find(([title]) => title === 'Edit')?.[1];
-    studio.openSettings('general');
+    studio.openSettings('editor');
     await sleep(400);
     const row = [...document.querySelectorAll<HTMLLabelElement>('.settings-switch')].find((l) => l.textContent?.includes('Format on save'));
     out.settings = { label: row?.textContent ?? null, checked: row?.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'true', snapshot: await snap('settings-format-on-save') };
@@ -4197,6 +4197,24 @@ async function settingControlsChecks() {
     }
     document.querySelector<HTMLButtonElement>('.settings-nav button')?.click();
     await sleep(200);
+    // The send key: → moves the choice, and the note under it says what it means now.
+    const group = document.querySelector<HTMLElement>('.segmented[aria-label="Send a message with"]');
+    const chosen = () => group?.querySelector('[aria-checked="true"]')?.textContent;
+    const note = () => (group?.nextElementSibling as HTMLElement | null)?.textContent;
+    const sendBefore = { chosen: chosen(), note: note(), setting: studio.state.settings.sendKey };
+    group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await sleep(100);
+    const sendAfter = { chosen: chosen(), note: note(), setting: studio.state.settings.sendKey, focused: document.activeElement?.textContent };
+    out.sendKey = { before: sendBefore, after: sendAfter, snapshot: await snap('setting-controls-general') };
+    // The assistant's page is about which assistant; its marks in the editor are on the Editor page.
+    const page = async (name: string) => {
+      [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === name)?.click();
+      await sleep(300);
+      return [...document.querySelectorAll('.settings-content h2')].map((h) => h.textContent);
+    };
+    out.assistantHeadings = await page('Assistant');
+    out.editorHeadings = await page('Editor');
     const switchRow = (text: string) => [...document.querySelectorAll<HTMLLabelElement>('.settings-switch')].find((l) => l.textContent?.includes(text));
     const on = (text: string) => switchRow(text)?.querySelector('[role="switch"]')?.getAttribute('aria-checked');
     const before = { switch: on('Format on save'), setting: studio.state.settings.formatOnSave };
@@ -4208,18 +4226,6 @@ async function settingControlsChecks() {
     await sleep(100);
     const afterSwitch = { switch: on('Format on save'), setting: studio.state.settings.formatOnSave };
     out.formatOnSave = { before, afterWords, afterSwitch, flips: afterWords.setting !== before.setting && afterSwitch.setting === before.setting };
-    // The send key: → moves the choice, and the note under it says what it means now.
-    const group = document.querySelector<HTMLElement>('.segmented[aria-label="Send a message with"]');
-    const chosen = () => group?.querySelector('[aria-checked="true"]')?.textContent;
-    const note = () => (group?.nextElementSibling as HTMLElement | null)?.textContent;
-    const sendBefore = { chosen: chosen(), note: note(), setting: studio.state.settings.sendKey };
-    group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
-    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    await sleep(100);
-    const sendAfter = { chosen: chosen(), note: note(), setting: studio.state.settings.sendKey, focused: document.activeElement?.textContent };
-    out.sendKey = { before: sendBefore, after: sendAfter, snapshot: await snap('setting-controls-general') };
-    [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Assistant')?.click();
-    await sleep(300);
     // The assistant's marks: a colour each, or "Same as yours" (no mark).
     const colors = (name: string) => document.querySelector<HTMLElement>(`.color-choice[aria-label="${name}"]`);
     const checked = (name: string) => colors(name)?.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') ?? colors(name)?.querySelector('[aria-checked="true"]')?.textContent;
@@ -4258,6 +4264,8 @@ async function settingControlsChecks() {
       sendAfter.setting !== sendBefore.setting &&
       sendAfter.note !== sendBefore.note &&
       sendAfter.focused === sendAfter.chosen &&
+      !(out.assistantHeadings as string[]).some((h) => h.includes('marks')) &&
+      (out.editorHeadings as string[]).includes('The assistant’s marks') &&
       green.changed === 'Green' &&
       green.css === '#3fb950' &&
       arrowed.changed === 'Yellow' &&
@@ -4271,6 +4279,8 @@ async function settingControlsChecks() {
     studio.updateSettings({ formatOnSave, sendKey, markAiEdits, aiEditColor });
     delete (studio as { updateSettings?: unknown }).updateSettings;
     studio.closeSettings();
+    // Closed for real (unmounted) before a later group opens it at another page.
+    await sleep(200);
   }
   return out;
 }
@@ -4303,7 +4313,7 @@ async function explicitDefaultsChecks() {
   await sleep(200);
   out.tools = { git: git?.querySelector('.tool-card-head .settings-help')?.textContent, automatic: text('.tool-list .tool-option'), snapshot: await snap('defaults-tools') };
   document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-  [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'General')?.click();
+  [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Editor')?.click();
   await sleep(300);
   out.textSizeDefault = [...document.querySelectorAll('.settings-content button')].find((b) => b.textContent?.startsWith('Default'))?.textContent;
   studio.closeSettings();
@@ -5063,7 +5073,7 @@ async function textSizeChecks() {
     await sleep(500);
     out[`snapshot${zoom * 100}`] = await snap(`textsize-${zoom * 100}`);
   }
-  studio.openSettings('general');
+  studio.openSettings('editor');
   await sleep(400);
   const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.settings-content button')].find((b) => b.getAttribute('aria-label') === label || b.textContent?.trim() === label);
   out.control = document.querySelector('.settings-content .settings-zoom')?.closest('.settings-field')?.textContent?.slice(0, 80);
@@ -5076,7 +5086,7 @@ async function textSizeChecks() {
   studio.closeSettings();
   await sleep(300);
   out.editorAt14 = { line: line(), cssVar: getComputedStyle(document.documentElement).getPropertyValue('--editor-font-size') };
-  studio.openSettings('general');
+  studio.openSettings('editor');
   await sleep(300);
   button('Default (12 px)')?.click();
   await sleep(200);
