@@ -341,11 +341,18 @@ fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResul
 /// Built by hand, not from tauri.conf.json, so the preview can be a second
 /// webview in the same window.
 fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Window> {
-    let window = WindowBuilder::new(app, label)
+    let builder = WindowBuilder::new(app, label)
         .title("Typst Studio")
         .inner_size(1600.0, 1000.0)
-        .min_inner_size(960.0, 600.0)
-        .build()?;
+        .min_inner_size(960.0, 600.0);
+    // As in VS Code: no native title bar, the page draws its own and the
+    // window's buttons sit in it. The title is still set (Window menu, Mission
+    // Control), just not drawn.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder.build()?;
     let size = window
         .inner_size()?
         .to_logical::<f64>(window.scale_factor()?);

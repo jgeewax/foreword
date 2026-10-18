@@ -52,13 +52,13 @@ pub async fn snapshot_png(webview: &Webview, path: PathBuf) -> Result<(), String
     rx.await.map_err(|_| "snapshot was cancelled".to_string())?
 }
 
-/// Native window/webview geometry (points), for diagnosing how the page maps
-/// onto the window (title bar overlap, content insets).
+/// Native window/webview geometry (points): how the page maps onto the window
+/// (title bar overlap, content insets) and where the window's buttons are.
 pub async fn window_geometry(
     window: &tauri::Window,
     webview: &Webview,
 ) -> Result<serde_json::Value, String> {
-    use objc2_app_kit::{NSWindow, NSWindowStyleMask};
+    use objc2_app_kit::{NSWindow, NSWindowButton, NSWindowStyleMask};
     let ns_window = window.ns_window().map_err(|e| e.to_string())? as usize;
     let (tx, rx) = tokio::sync::oneshot::channel::<serde_json::Value>();
     let tx = Mutex::new(Some(tx));
@@ -72,6 +72,22 @@ pub async fn window_geometry(
             let content = win.contentView().map(|v| v.frame());
             let wk_frame = wk.frame();
             let insets = wk.safeAreaInsets();
+            // Close to zoom, top-down in window points ([left, top, right, bottom]);
+            // null in full screen, where they leave the window with the title bar.
+            let button = |b: NSWindowButton| {
+                let button = win.standardWindowButton(b)?;
+                (!button.isHidden()).then(|| button.convertRect_toView(button.bounds(), None))
+            };
+            let full_screen = win.styleMask().contains(NSWindowStyleMask::FullScreen);
+            let buttons = match (button(NSWindowButton::CloseButton), button(NSWindowButton::ZoomButton)) {
+                (Some(close), Some(zoom)) if !full_screen => Some([
+                    close.origin.x,
+                    frame.size.height - (close.origin.y + close.size.height),
+                    zoom.origin.x + zoom.size.width,
+                    frame.size.height - zoom.origin.y,
+                ]),
+                _ => None,
+            };
             let value = serde_json::json!({
                 "fullSizeContentView": win.styleMask().contains(NSWindowStyleMask::FullSizeContentView),
                 "windowFrame": [frame.size.width, frame.size.height],
@@ -80,6 +96,7 @@ pub async fn window_geometry(
                 "webviewFrame": [wk_frame.origin.x, wk_frame.origin.y, wk_frame.size.width, wk_frame.size.height],
                 "webviewSafeAreaInsets": { "top": insets.top, "left": insets.left, "bottom": insets.bottom, "right": insets.right },
                 "webviewHidden": wk.isHidden(),
+                "windowButtons": buttons,
             });
             if let Some(tx) = tx.lock().unwrap().take() {
                 let _ = tx.send(value);

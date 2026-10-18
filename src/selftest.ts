@@ -3004,51 +3004,92 @@ async function historyAboutChecks() {
   return out;
 }
 
-/** The app's chrome at 67% and 100% zoom: the same size on screen, the pane headers in line. The zoom is put back after. */
+/**
+ * Every surface follows the zoom: at 67%, 100% and 150%, each part's height on
+ * screen is the zoom times its height at 100% (parts are one line, so the
+ * narrower page at 150% doesn't rewrap them), and nothing sets CSS zoom. Opens
+ * and closes the popovers and dialogs; the zoom is put back after.
+ */
 async function chromeChecks() {
-  const out: Record<string, unknown> = {};
   const saved = studio.state.zoom;
+  // Points on screen.
   const onScreen = (sel: string) => {
     const r = document.querySelector(sel)?.getBoundingClientRect();
-    return r ? Math.round(r.height * studio.state.zoom * 10) / 10 : null;
+    return r?.height ? Math.round(r.height * studio.state.zoom * 10) / 10 : null;
   };
-  // The headers along the top (not History's, lower down the sidebar).
-  const bottoms = () => [...document.querySelectorAll('.pane-header, .tabs')].map((e) => e.getBoundingClientRect()).filter((r) => r.top < 150).map((r) => Math.round(r.bottom));
-  for (const zoom of [0.67, 1]) {
-    await studio.setZoom(zoom, { persist: false, write: false });
-    await sleep(500);
-    const key = `at${Math.round(zoom * 100)}`;
-    out[key] = {
-      // Points on screen, the same at both zooms.
-      toolbar: onScreen('.toolbar'),
-      chromeIcon: onScreen('.toolbar .chrome-icon'),
-      activityIcon: onScreen('.activity-bar .chrome-icon'),
-      tabs: onScreen('.tabs'),
-      statusbar: onScreen('.statusbar'),
-      textButton: onScreen('.toolbar button:not(.chrome-icon)'),
-      sendButton: onScreen('.composer-controls button.primary'),
-      headerBottoms: bottoms(),
-      snapshot: await snap(`chrome-${key}`),
-    };
-    // The model list opens above its button, inside the window.
-    const picker = document.querySelectorAll<HTMLButtonElement>('.composer-controls > * button, .composer-controls > button')[1];
-    picker?.click();
-    await sleep(400);
-    const list = document.querySelector('.model-list')?.getBoundingClientRect();
-    (out[key] as Record<string, unknown>).modelList = list && { top: Math.round(list.top), bottom: Math.round(list.bottom), inWindow: list.top >= 0 && list.bottom <= innerHeight, aboveButton: list.bottom <= picker!.getBoundingClientRect().top + 1 };
-    (out[key] as Record<string, unknown>).modelSnapshot = await snap(`model-${key}`);
+  const cssZoomed = () =>
+    [...document.querySelectorAll('*')].filter((e) => !['1', 'normal', ''].includes(getComputedStyle(e).zoom)).map((e) => `${e.tagName.toLowerCase()}.${e.getAttribute('class') ?? ''}`);
+  const dismiss = async () => {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    await sleep(300);
-    studio.openSettings();
+  };
+  const surfaces: { name: string; open?: () => void; close?: () => void; parts: Record<string, string> }[] = [
+    {
+      name: 'window',
+      parts: {
+        // Not the title bar itself: it's as tall as macOS's, whose buttons don't zoom (titlebarPt).
+        titlebarIcon: '.titlebar .chrome-icon',
+        commandCenter: '.command-center',
+        activityIcon: '.activity-bar .chrome-icon',
+        paneHeader: '.pane-header',
+        tabs: '.tabs',
+        fileRow: '.tree-row',
+        editorLine: '.editor-host .view-line',
+        statusbar: '.statusbar',
+        chatControls: '.composer-controls',
+      },
+    },
+    { name: 'modelList', open: () => document.querySelector<HTMLButtonElement>('.composer-controls .model-trigger')?.click(), close: dismiss, parts: { search: '.model-search', option: '.model-option' } },
+    { name: 'settings', open: () => studio.openSettings('general'), close: () => studio.closeSettings(), parts: { header: '.settings .modal-header', close: '.settings .modal-close', nav: '.settings-nav button', label: '.settings-content .settings-label' } },
+    { name: 'quickOpen', open: () => studio.openQuickOpen(), close: () => studio.closeQuickOpen(), parts: { input: '.quick-open input', row: '.quick-open-row' } },
+    { name: 'newBook', open: () => studio.openNewBook(), close: () => studio.closeNewBook(), parts: { header: '.new-book .modal-header', name: '.template-name' } },
+    { name: 'guide', open: () => studio.openGuide(), close: () => studio.closeGuide(), parts: { header: '.guide-header' } },
+  ];
+  const at: Record<number, Record<string, Record<string, unknown>>> = {};
+  const zoomed = new Set<string>();
+  for (const zoom of [0.67, 1, 1.5]) {
+    await studio.setZoom(zoom, { persist: false, write: false });
     await sleep(500);
-    (out[key] as Record<string, unknown>).settingsClose = onScreen('.modal-close');
-    (out[key] as Record<string, unknown>).settingsSnapshot = await snap(`settings-${key}`);
-    studio.closeSettings();
-    await sleep(300);
+    at[zoom] = {};
+    for (const s of surfaces) {
+      s.open?.();
+      await sleep(450);
+      const m: Record<string, unknown> = Object.fromEntries(Object.entries(s.parts).map(([k, sel]) => [k, onScreen(sel)]));
+      if (s.name === 'modelList') {
+        // It opens above its button, inside the window.
+        const list = document.querySelector('.model-list')?.getBoundingClientRect();
+        const button = document.querySelector('.composer-controls .model-trigger')?.getBoundingClientRect();
+        m.placement = list && button && { inWindow: list.top >= 0 && list.bottom <= innerHeight, aboveButton: list.bottom <= button.top + 1 };
+      }
+      if (s.name === 'window') m.titlebarPt = onScreen('.titlebar');
+      cssZoomed().forEach((e) => zoomed.add(e));
+      m.snapshot = await snap(`zoom-${s.name}-at${Math.round(zoom * 100)}`);
+      at[zoom][s.name] = m;
+      s.close?.();
+      await sleep(300);
+    }
   }
   await studio.setZoom(saved, { persist: false, write: false });
-  return out;
+  // Each part against its size at 100%; a part that doesn't scale with the zoom is listed.
+  // Zoomed out, WebKit keeps text of 9 px and up at 9 pt or more on screen, so a part
+  // with small text (12.5 px at 67% is 8.4 pt) comes out up to ~10% taller than zoom × 100%.
+  const notFollowing: string[] = [];
+  const missing: string[] = [];
+  for (const s of surfaces) {
+    for (const part of Object.keys(s.parts)) {
+      const base = at[1][s.name][part] as number | null;
+      if (!base) {
+        missing.push(`${s.name}.${part}`);
+        continue;
+      }
+      for (const zoom of [0.67, 1.5]) {
+        const v = at[zoom][s.name][part] as number | null;
+        const ratio = v ? v / base : 0;
+        if (Math.abs(ratio / zoom - 1) > 0.12) notFollowing.push(`${s.name}.${part} at ${Math.round(zoom * 100)}%: ${v} pt vs ${base} pt at 100%`);
+      }
+    }
+  }
+  return { ok: notFollowing.length === 0 && zoomed.size === 0, notFollowing, cssZoomed: [...zoomed], missing, at67: at[0.67], at100: at[1], at150: at[1.5] };
 }
 
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
@@ -3131,13 +3172,13 @@ async function shotChecks() {
   await waitFor(() => studio.editor, 15000, 'editor').catch(() => {});
   await sleep(1500);
   const out: Record<string, unknown> = { main: await snap('shot-main') };
-  const toolbar = document.querySelector('.toolbar');
-  out.toolbarButtons = [...(toolbar?.querySelectorAll('button') ?? [])].map((b) => {
+  const titlebar = document.querySelector('.titlebar');
+  out.titlebarButtons = [...(titlebar?.querySelectorAll('button') ?? [])].map((b) => {
     const r = b.getBoundingClientRect();
-    return `${b.getAttribute('aria-label') ?? b.title ?? b.textContent}: ${Math.round(r.width)}×${Math.round(r.height)}`;
+    return `${b.getAttribute('aria-label') ?? b.textContent}: ${Math.round(r.width)}×${Math.round(r.height)}`;
   });
   // The pane toggles hide and show their pane, and say so.
-  const toggle = document.querySelector<HTMLButtonElement>('.pane-toggles button[aria-label="Preview"]');
+  const toggle = document.querySelector<HTMLButtonElement>('.titlebar button[aria-label="Preview"]');
   const pressed = () => toggle?.getAttribute('aria-pressed');
   const before = pressed();
   toggle?.click();

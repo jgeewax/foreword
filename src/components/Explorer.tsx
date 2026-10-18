@@ -164,23 +164,41 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
     },
     ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
   ];
+  const guideOpen = useStore(studio.store, (s) => s.guideOpen);
   return (
-    <nav className="activity-bar" role="tablist" aria-label="Sidebar" aria-orientation="vertical">
-      {items.map((it) => (
+    <div className="activity-bar">
+      <nav className="activity-views" role="tablist" aria-label="Sidebar" aria-orientation="vertical">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            role="tab"
+            aria-selected={open && current === it.id}
+            aria-label={it.label}
+            title={open && current === it.id ? `${it.label} (click to hide the sidebar)` : it.label}
+            className={`chrome-icon activity${open && current === it.id ? ' on' : ''}`}
+            onClick={() => onPick(it.id, current)}
+          >
+            <Icon name={it.icon} />
+            {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
+          </button>
+        ))}
+      </nav>
+      {/* At the bottom, as VS Code's Manage: what isn't a view. */}
+      <div className="activity-bottom">
         <button
-          key={it.id}
-          role="tab"
-          aria-selected={open && current === it.id}
-          aria-label={it.label}
-          title={open && current === it.id ? `${it.label} (click to hide the sidebar)` : it.label}
-          className={`chrome-icon activity${open && current === it.id ? ' on' : ''}`}
-          onClick={() => onPick(it.id, current)}
+          className={`chrome-icon${guideOpen ? ' on' : ''}`}
+          title="Typst basics: how to write in Typst"
+          aria-label="Typst basics"
+          aria-pressed={guideOpen}
+          onClick={() => (guideOpen ? studio.closeGuide() : studio.openGuide())}
         >
-          <Icon name={it.icon} />
-          {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
+          <Icon name="help" />
         </button>
-      ))}
-    </nav>
+        <button className="chrome-icon" title="Settings (⌘,)" aria-label="Settings" onClick={() => studio.openSettings()}>
+          <Icon name="settings" />
+        </button>
+      </div>
+    </div>
   );
 }
 

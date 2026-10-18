@@ -10,67 +10,47 @@ const stat = (s: Stat) => (s.n ? `${ms(s.p50)}/${ms(s.p95)} ms` : '–');
 
 type Pane = 'explorer' | 'preview' | 'agent';
 
-export function Toolbar({ onToggle, visible }: { onToggle: (pane: Pane) => void; visible: Record<Pane, boolean> }) {
+/**
+ * The title bar, as VS Code's on macOS: the window's own buttons at the left
+ * (macOS draws them; studio.refreshViewportInset leaves them room), the book's
+ * name in the middle as a search box for its files (⌘P), and the pane toggles
+ * at the right. Everything else is in the menus, the activity bar or the pane
+ * it's about. The bar moves the window, except on its buttons.
+ */
+export function TitleBar({ panes }: { panes?: { visible: Record<Pane, boolean>; onToggle: (pane: Pane) => void } }) {
   const ws = useStore(studio.store, (s) => s.workspace);
-  const exporting = useStore(studio.store, (s) => s.exporting);
-  const guideOpen = useStore(studio.store, (s) => s.guideOpen);
-  const toReview = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status !== 'resolved').length);
   return (
-    <header className="toolbar">
-      <strong className="brand">Typst Studio</strong>
-      {ws && (
-        <>
-          <span className="sep-dot">·</span>
-          <span title={ws.root}>{ws.name}</span>
-          {ws.entry && <span className="muted">entry {ws.entry}</span>}
-        </>
-      )}
-      <span className="spacer" />
-      {ws && (
-        <button title="Review comments: select text and press ⌥⌘M to add one" onClick={() => studio.showReview()}>
-          Review{toReview ? <span className="review-count">{toReview}</span> : null}
-        </button>
-      )}
-      {ws && (
-        <button title="Export the book to PDF (⇧⌘E)" disabled={exporting} onClick={() => void studio.exportPdf()}>
-          {exporting ? (
-            <>
-              <span className="btn-spinner" aria-hidden /> Exporting…
-            </>
-          ) : (
-            'Export PDF…'
-          )}
-        </button>
-      )}
-      <button title="Open folder (⌘O)" onClick={() => void studio.chooseWorkspace()}>
-        Open…
-      </button>
-      <div className="pane-toggles" role="group" aria-label="Panes">
-        {(
-          [
-            ['explorer', 'panelLeft', 'Files and History (⌘B)'],
-            ['preview', 'page', 'Preview'],
-            ['agent', 'panelRight', 'Assistant'],
-          ] as const
-        ).map(([pane, icon, label]) => (
-          <button
-            key={pane}
-            className={`chrome-icon${visible[pane] ? ' on' : ''}`}
-            title={`${visible[pane] ? 'Hide' : 'Show'} ${label}`}
-            aria-label={`${label}`}
-            aria-pressed={visible[pane]}
-            onClick={() => onToggle(pane)}
-          >
-            <Icon name={icon} />
+    <header className="titlebar" data-tauri-drag-region="deep">
+      <div className="titlebar-left" />
+      <div className="titlebar-center">
+        {ws && (
+          <button className="command-center" title={`Go to a file in ${tildePath(ws.root)} (⌘P)`} onClick={() => studio.openQuickOpen()}>
+            <Icon name="search" />
+            <span className="command-center-name">{ws.name}</span>
           </button>
-        ))}
+        )}
       </div>
-      <button className={`chrome-icon${guideOpen ? ' on' : ''}`} title="Typst basics: how to write in Typst" aria-label="Typst basics" onClick={() => (guideOpen ? studio.closeGuide() : studio.openGuide())}>
-        <Icon name="help" />
-      </button>
-      <button className="chrome-icon" title="Settings (⌘,)" aria-label="Settings" onClick={() => studio.openSettings()}>
-        <Icon name="settings" />
-      </button>
+      <div className="titlebar-right">
+        {panes &&
+          (
+            [
+              ['explorer', 'paneLeft', 'Sidebar', '⌘B'],
+              ['preview', 'paneMiddle', 'Preview', '⌥⌘P'],
+              ['agent', 'paneRight', 'Assistant', '⌥⌘B'],
+            ] as const
+          ).map(([pane, icon, label, keys]) => (
+            <button
+              key={pane}
+              className="chrome-icon"
+              title={`${panes.visible[pane] ? 'Hide' : 'Show'} the ${label.toLowerCase()} (${keys})`}
+              aria-label={label}
+              aria-pressed={panes.visible[pane]}
+              onClick={() => panes.onToggle(pane)}
+            >
+              <Icon name={panes.visible[pane] ? `${icon}On` : icon} />
+            </button>
+          ))}
+      </div>
     </header>
   );
 }
@@ -252,55 +232,58 @@ export function Welcome() {
   const recent = useStore(studio.store, (s) => s.recent);
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
   return (
-    <div className="welcome">
-      <div className="welcome-card">
-        <h1>Typst Studio</h1>
-        <p className="welcome-lede">Write books in plain text, with the typeset pages updating beside you as you type, and a writing assistant on hand.</p>
-        {opening ? (
-          <p className="muted">Opening {opening}…</p>
-        ) : (
-          <>
-            <div className="welcome-actions">
-              <button className="primary" onClick={() => studio.openNewBook()}>
-                New Book… <kbd>⇧⌘N</kbd>
-              </button>
-              <button onClick={() => void studio.chooseWorkspace()}>
-                Open Folder… <kbd>⌘O</kbd>
-              </button>
-              {launch?.sampleBook && <button onClick={() => void studio.openWorkspace(launch.sampleBook!)}>Open sample book</button>}
-            </div>
-            {error && <p className="bad">{error}</p>}
-            {recent.length > 0 && (
-              <div className="welcome-recent">
-                <h2>Recent</h2>
-                {recent.map((r) => (
-                  <button key={r} className="recent-row" title={r} onClick={() => void studio.openWorkspace(r)}>
-                    <span className="recent-name">{baseName(r)}</span>
-                    <span className="recent-path">{tildePath(dirName(r))}</span>
-                  </button>
-                ))}
+    <div className="app">
+      <TitleBar />
+      <div className="welcome">
+        <div className="welcome-card">
+          <h1>Typst Studio</h1>
+          <p className="welcome-lede">Write books in plain text, with the typeset pages updating beside you as you type, and a writing assistant on hand.</p>
+          {opening ? (
+            <p className="muted">Opening {opening}…</p>
+          ) : (
+            <>
+              <div className="welcome-actions">
+                <button className="primary" onClick={() => studio.openNewBook()}>
+                  New Book… <kbd>⇧⌘N</kbd>
+                </button>
+                <button onClick={() => void studio.chooseWorkspace()}>
+                  Open Folder… <kbd>⌘O</kbd>
+                </button>
+                {launch?.sampleBook && <button onClick={() => void studio.openWorkspace(launch.sampleBook!)}>Open sample book</button>}
               </div>
-            )}
-          </>
-        )}
-        <div className="welcome-learn">
-          <strong>New to Typst?</strong> It's plain text with a little markup, and the basics take about five minutes.{' '}
-          <button className="link" onClick={() => studio.openGuide()}>
-            Read Typst basics
-          </button>
-        </div>
-        <ul className="setup">
-          <ToolRow label="Live preview" name="Tinymist" tool={tools?.tinymist} install="brew install tinymist" purpose="It typesets the pages you see as you write." />
-          <ToolRow label="Writing assistant" name="OpenCode" tool={tools?.opencode} install="brew install opencode" purpose="It runs the assistant in the right-hand pane." />
-        </ul>
-      </div>
-      {guideOpen && (
-        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeGuide()}>
-          <div className="modal guide-modal" role="dialog" aria-label="Typst basics">
-            <TypstGuide onClose={() => studio.closeGuide()} />
+              {error && <p className="bad">{error}</p>}
+              {recent.length > 0 && (
+                <div className="welcome-recent">
+                  <h2>Recent</h2>
+                  {recent.map((r) => (
+                    <button key={r} className="recent-row" title={r} onClick={() => void studio.openWorkspace(r)}>
+                      <span className="recent-name">{baseName(r)}</span>
+                      <span className="recent-path">{tildePath(dirName(r))}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          <div className="welcome-learn">
+            <strong>New to Typst?</strong> It's plain text with a little markup, and the basics take about five minutes.{' '}
+            <button className="link" onClick={() => studio.openGuide()}>
+              Read Typst basics
+            </button>
           </div>
+          <ul className="setup">
+            <ToolRow label="Live preview" name="Tinymist" tool={tools?.tinymist} install="brew install tinymist" purpose="It typesets the pages you see as you write." />
+            <ToolRow label="Writing assistant" name="OpenCode" tool={tools?.opencode} install="brew install opencode" purpose="It runs the assistant in the right-hand pane." />
+          </ul>
         </div>
-      )}
+        {guideOpen && (
+          <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeGuide()}>
+            <div className="modal guide-modal" role="dialog" aria-label="Typst basics">
+              <TypstGuide onClose={() => studio.closeGuide()} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

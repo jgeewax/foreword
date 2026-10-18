@@ -52,7 +52,7 @@ button.icon { background: transparent; border-color: transparent; padding: 1px 6
 button.icon:hover:not(:disabled) { background: var(--bg-3); border-color: transparent; }
 button.link { background: none; border: none; color: var(--accent); padding: 0; }
 button.small { padding: 1px 8px; font-size: 11.5px; }
-.print-dialog { width: min(720px, calc(92vw / var(--chrome-scale))); }
+.print-dialog { width: min(720px, 92vw); }
 .print-checks { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .print-checks li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; line-height: 1.45; }
 .print-checks .check-icon { flex: none; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--bg); }
@@ -70,17 +70,36 @@ button.small { padding: 1px 8px; font-size: 11.5px; }
 kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 
 .app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
-.toolbar, .statusbar { display: flex; align-items: center; gap: 10px; padding: 0 8px; background: var(--bg-2); white-space: nowrap; overflow: hidden; }
-.toolbar { min-height: 34px; padding-top: 2px; padding-bottom: 2px; border-bottom: 1px solid var(--border); }
+.statusbar { display: flex; align-items: center; gap: 10px; padding: 0 8px; background: var(--bg-2); white-space: nowrap; overflow: hidden; }
 /*
- * The UI zoom (⌘+/⌘−) is for the writing: the editor, the files, the chat. The
- * app's chrome (title bar, pane headers, tabs, sidebar icons, status bar,
- * dialogs) never gets smaller than at 100%, so below 100% it's zoomed back up by
- * 1/zoom, each bar as a whole so its text and icons keep their proportions.
- * WebKit scales vh/vw inside a zoomed element too, so sizes there divide by it.
+ * The title bar, as VS Code's: the window's buttons (drawn by macOS) at the
+ * left, the book's name centred in the window, the pane toggles at the right.
+ * Its height and the buttons' room are in points whatever the zoom, set by
+ * studio.applyTitleBar, because macOS doesn't zoom its buttons; what's in the
+ * bar zooms, and the bar grows if that needs more height.
  */
-:root { --ui-zoom: 1; --chrome-scale: calc(1 / min(var(--ui-zoom), 1)); }
-.toolbar, .statusbar, .pane-header, .tabs, .activity-bar, .modal-backdrop, .composer-controls, .composer-hint { zoom: var(--chrome-scale); }
+.titlebar {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  min-height: var(--titlebar-height, 32px); padding: 0 6px;
+  background: var(--bg-2); border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden;
+}
+.titlebar-left { padding-left: var(--titlebar-buttons, 0px); }
+.titlebar-right { display: flex; justify-content: flex-end; gap: 2px; }
+.titlebar .chrome-icon { width: 26px; height: 24px; }
+.titlebar .chrome-icon .icon-svg { width: 16px; height: 16px; }
+.command-center {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: min(38vw, 520px); min-width: 180px; height: 22px; padding: 0 10px;
+  border-radius: 6px; background: var(--bg); color: var(--muted); font-size: 12px;
+}
+.command-center:hover:not(:disabled) { color: var(--fg); }
+.command-center .icon-svg { flex: none; width: 13px; height: 13px; }
+.command-center-name { overflow: hidden; text-overflow: ellipsis; }
+/*
+ * The UI zoom (⌘+/⌘−) is the webview's own page zoom, so it scales everything:
+ * bars, panes, dialogs, menus. Nothing here may set CSS `zoom` (it breaks
+ * Monaco's hit-testing) or size itself to undo the page zoom.
+ */
 .chrome-icon {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 30px; height: 28px; padding: 0;
@@ -89,8 +108,6 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .chrome-icon .icon-svg { width: 18px; height: 18px; }
 .chrome-icon:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); border-color: transparent; }
 .chrome-icon.on { color: var(--fg); }
-.pane-toggles { display: inline-flex; gap: 1px; padding: 1px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
-.pane-toggles .chrome-icon.on { background: var(--bg-3); }
 .statusbar .zoom-indicator { font-size: 11.5px; }
 .statusbar { height: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .statusbar .status-file { color: var(--fg); }
@@ -122,8 +139,6 @@ button.indicator:hover { background: var(--bg-3); }
   .shimmer, .activity-spinner { animation: none !important; }
   .shimmer { color: var(--muted); background: none; }
 }
-.brand { font-weight: 600; }
-.sep-dot { color: var(--muted); }
 
 .workbench { display: flex; min-height: 0; }
 .workbench > .panes { flex: 1; min-width: 0; min-height: 0; }
@@ -150,6 +165,8 @@ button.indicator:hover { background: var(--bg-3); }
 /* The sidebar's views as icons down its left edge. */
 /* The activity bar, as in VS Code: larger icons, dimmed until hovered or open; the open view gets an accent stripe. */
 .activity-bar { flex: none; display: flex; flex-direction: column; align-items: stretch; padding: 2px 0; border-right: 1px solid var(--border); background: var(--bg-2); }
+.activity-views, .activity-bottom { display: flex; flex-direction: column; }
+.activity-bottom { margin-top: auto; padding-bottom: 2px; }
 .activity-bar .chrome-icon { position: relative; width: 44px; height: 42px; border-radius: 0; color: var(--muted); opacity: 0.85; }
 .activity-bar .chrome-icon .icon-svg { width: 22px; height: 22px; }
 .activity-bar .chrome-icon:hover:not(:disabled) { background: transparent; color: var(--fg); opacity: 1; }
@@ -322,7 +339,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .toast { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .toast-actions { display: inline-flex; gap: 6px; }
 
-.welcome { height: 100%; display: grid; place-items: center; background: var(--bg-2); overflow: auto; }
+.welcome { height: 100%; min-height: 0; display: grid; place-items: center; background: var(--bg-2); overflow: auto; }
 .welcome-card { width: min(520px, calc(100% - 32px)); padding: 24px 0; }
 .welcome h1 { font-size: 24px; margin: 0 0 6px; }
 .welcome-lede { color: var(--muted); margin: 0 0 18px; line-height: 1.45; }
@@ -359,7 +376,6 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .editor-pane .guide-body { padding: 4px max(24px, calc((100% - 720px) / 2)) 32px; font-size: 13px; }
 .guide-title { font-size: 20px; margin: 18px 0 8px; }
 .agent-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.toolbar .icon.on { color: var(--accent); }
 .statusbar .problems { display: inline-flex; gap: 8px; }
 .statusbar .link { font-size: 11.5px; padding: 0; }
 
@@ -389,7 +405,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .task-trigger:hover { border-color: var(--border); background: var(--bg); }
 .task-trigger-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-done-badge { font-size: 10px; font-weight: 600; color: var(--good); border: 1px solid var(--good); border-radius: 8px; padding: 0 5px; }
-.task-popover { position: absolute; top: calc(100% + 4px); left: 0; width: min(380px, calc(80vw / var(--chrome-scale))); max-height: calc(60vh / var(--chrome-scale)); overflow-y: auto; z-index: 50; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); padding: 6px 0; }
+.task-popover { position: absolute; top: calc(100% + 4px); left: 0; width: min(380px, 80vw); max-height: 60vh; overflow-y: auto; z-index: 50; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); padding: 6px 0; }
 .task-popover-actions { display: flex; gap: 6px; align-items: center; padding: 4px 10px 8px; border-bottom: 1px solid var(--border); }
 .task-section { padding: 8px 10px 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .task-row { display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; padding: 4px 10px; }
@@ -412,9 +428,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 /* review */
 .review-panel { overflow-y: auto; flex: 1; padding: 6px 0 12px; }
 .review-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 8px; }
-.review-actions .on, .toolbar button.on { border-color: var(--accent); color: var(--accent); }
-.toolbar .chrome-icon.on { border-color: transparent; color: var(--fg); }
-.toolbar .chrome-icon.on:not(.pane-toggles *) { color: var(--accent); }
+.review-actions .on { border-color: var(--accent); color: var(--accent); }
 .review-empty { padding: 4px 10px; line-height: 1.45; }
 .review-item { margin: 4px 8px; padding: 6px 8px; border-radius: 6px; border-left: 3px solid #e3a008; background: var(--bg); cursor: default; }
 .review-item.resolved { border-left-color: var(--good); opacity: 0.7; }
@@ -457,7 +471,8 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .starter-tips { margin: 8px 0 0; padding-left: 16px; color: var(--muted); line-height: 1.5; font-size: 12px; }
 
 /* dialogs */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; z-index: 100; }
+/* One cell the size of the window: a dialog's % height is of that, not of its own content (which ran past the bottom). */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; z-index: 100; }
 .modal { width: min(560px, calc(100% - 32px)); max-height: calc(100% - 64px); display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); }
 .modal-header h1 { font-size: 14px; margin: 0; }
@@ -493,7 +508,8 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .change-passage { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
 .change-passage:last-child { border-bottom: none; }
 .change-line { flex: none; align-self: flex-start; width: 58px; text-align: right; font-size: 11px; padding-top: 4px; }
-.change-text { flex: 1; min-width: 0; font-family: "Iowan Old Style", "Palatino", Georgia, serif; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The passages are Typst source, so they're set like the editor. */
+.change-text { flex: 1; min-width: 0; font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .change-context { color: var(--muted); }
 .change-body ins { background: var(--add); color: var(--good); text-decoration: none; border-radius: 2px; }
 .change-body del { background: var(--del); color: var(--bad); text-decoration: line-through; border-radius: 2px; }
@@ -569,7 +585,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .model-trigger-chevron { margin-left: auto; color: var(--muted); font-size: 10px; }
 .model-popover { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .model-search { font: inherit; color: var(--fg); background: var(--bg-2); border: none; border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; padding: 8px 10px; outline: none; }
-.model-list { max-height: min(420px, calc(60vh / var(--chrome-scale))); overflow-y: auto; padding: 4px 0; }
+.model-list { max-height: min(420px, 60vh); overflow-y: auto; padding: 4px 0; }
 .model-section { position: sticky; top: 0; background: var(--bg); color: var(--muted); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px 3px; }
 .model-option { display: flex; align-items: baseline; gap: 6px; padding: 4px 10px; white-space: nowrap; }
 .model-option.highlighted { background: var(--sel); }
@@ -593,7 +609,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .perm-trigger.preset-edit { color: var(--accent); }
 .perm-trigger.preset-readonly { color: var(--muted); }
 .perm-trigger.preset-custom { color: var(--milestone); }
-.perm-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; max-height: calc(70vh / var(--chrome-scale)); overflow-y: auto; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
+.perm-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; max-height: 70vh; overflow-y: auto; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .perm-title { font-weight: 650; margin-bottom: 8px; }
 .permissions-editor { display: flex; flex-direction: column; gap: 6px; }
 .perm-presets { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -740,12 +756,11 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .task-row.unread .task-status { color: var(--accent); }
 .task-row.failed .task-status, .task-row.failed .task-doing { color: var(--bad); }
 
-/* Review: groups in the list, the count on the toolbar button, and comment cards in the editor. */
+/* Review: groups in the list and comment cards in the editor. */
 .review-group { margin: 10px 10px 2px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .review-outcome { margin-top: 4px; font-size: 11.5px; color: var(--accent); display: flex; gap: 6px; align-items: center; }
 .review-outcome.declined { color: var(--muted); }
 .review-empty p { margin: 4px 0 8px; }
-.review-count { display: inline-block; min-width: 14px; margin-left: 5px; padding: 0 4px; border-radius: 7px; background: var(--accent); color: var(--accent-fg); font-size: 10px; font-weight: 700; line-height: 14px; text-align: center; }
 .review-highlight.changed { background: rgba(76, 139, 245, 0.16); border-bottom-color: var(--accent); }
 .review-highlight.draft { background: var(--sel); border-bottom-color: var(--accent); }
 .comment-zone { z-index: 5; }
@@ -763,7 +778,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .comment-outcome.declined { color: var(--muted); }
 .comment-who { color: var(--accent); }
 .comment-outcome.declined .comment-who { color: var(--muted); }
-.comment-change { margin-top: 4px; padding: 5px 7px; border-radius: 6px; background: var(--bg); font-family: "Iowan Old Style", Palatino, Georgia, serif; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
+.comment-change { margin-top: 4px; padding: 5px 7px; border-radius: 6px; background: var(--bg); font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
 .comment-change ins { background: var(--add); color: var(--good); text-decoration: none; border-radius: 2px; }
 .comment-change del { background: var(--del); color: var(--bad); border-radius: 2px; }
 .comment-actions { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
@@ -789,10 +804,10 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .slash-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 
 /* ⌘P: go to a file. Near the top, like VS Code's. */
-.quick-open-backdrop { place-items: start center; padding-top: calc(10vh / var(--chrome-scale)); background: rgba(0, 0, 0, 0.25); }
+.quick-open-backdrop { place-items: start center; padding-top: 10vh; background: rgba(0, 0, 0, 0.25); }
 .quick-open { width: min(620px, calc(100% - 32px)); display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); overflow: hidden; animation: pop-in 0.12s ease-out; }
 .quick-open input { margin: 8px; padding: 7px 10px; font-size: 14px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg-2); color: var(--fg); outline: none; }
-.quick-open-list { max-height: calc(50vh / var(--chrome-scale)); overflow: auto; padding: 0 6px 6px; }
+.quick-open-list { max-height: 50vh; overflow: auto; padding: 0 6px 6px; }
 .quick-open-row { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 5px 8px; border: none; border-radius: 5px; background: transparent; text-align: left; }
 .quick-open-row.active { background: var(--sel); }
 .quick-open-main { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--fg); }

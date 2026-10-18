@@ -451,12 +451,14 @@ export class Studio {
   /** Zoom used to convert CSS pixels to window points for the preview webview. */
   zoomFactor = 1;
   /**
-   * Where the page's viewport starts inside the window, in points. On macOS 26
-   * the window has a full-size content view: the main webview spans the title
-   * bar and WebKit insets the page by the title bar height (32 pt). The preview
-   * webview is placed in window coordinates, so it must add this inset.
+   * Where the page's viewport starts inside the window, in points. The main
+   * webview spans the window; WebKit insets the page below an opaque title bar
+   * (32 pt on macOS 26) but not below ours, which is transparent (lib.rs). The
+   * preview webview is placed in window coordinates, so it must add this inset.
    */
   viewportInset = { top: 0, left: 0 };
+  /** The title bar's height and the room its window buttons need, in points. */
+  private titleBar = { height: 32, buttons: 0 };
   private insetTimer: number | undefined;
   private lastZoom = { action: '', at: 0 };
   private jumpWaiters = new Set<() => void>();
@@ -3507,15 +3509,36 @@ export class Studio {
   async refreshViewportInset() {
     try {
       const g = await ipc.nativeGeometry('main');
-      const insets = (g?.webviewSafeAreaInsets ?? {}) as { top?: number; left?: number };
-      const next = { top: insets.top ?? 0, left: insets.left ?? 0 };
+      // Measured, not assumed: the webview less the page's viewport, in points.
+      const [, , width, height] = (g?.webviewFrame ?? []) as number[];
+      const inset = (frame: number | undefined, css: number) => {
+        const d = (frame ?? 0) - css * this.zoomFactor;
+        return d > 2 ? Math.round(d) : 0; // the viewport is whole CSS pixels
+      };
+      const next = { top: inset(height, innerHeight), left: inset(width, innerWidth) };
       if (next.top !== this.viewportInset.top || next.left !== this.viewportInset.left) {
         this.viewportInset = next;
         window.dispatchEvent(new Event('studio-layout'));
       }
+      // As tall as macOS's own title bar (its buttons are centred in that), and
+      // clear of the buttons, which full screen takes away.
+      const safeTop = (g?.webviewSafeAreaInsets as { top?: number } | undefined)?.top;
+      const buttons = g?.windowButtons as [number, number, number, number] | null | undefined;
+      this.titleBar = { height: safeTop || 32, buttons: buttons ? buttons[2] + 10 : 0 };
+      this.applyTitleBar();
     } catch {
-      // Non-macOS or unavailable: no inset.
+      // Non-macOS or unavailable: no inset, and a native title bar above ours.
     }
+  }
+
+  /**
+   * The title bar is sized in points whatever the zoom, since macOS draws the
+   * window's buttons in it at one size; what's in the bar zooms like the rest.
+   */
+  private applyTitleBar() {
+    const style = document.documentElement.style;
+    style.setProperty('--titlebar-height', `${this.titleBar.height / this.zoomFactor}px`);
+    style.setProperty('--titlebar-buttons', `${this.titleBar.buttons / this.zoomFactor}px`);
   }
 
   // ---- settings -------------------------------------------------------------------
@@ -3894,8 +3917,7 @@ export class Studio {
     this.zoomFactor = factor;
     const applied = await ipc.setUiZoom(factor);
     this.zoomFactor = applied;
-    // Zoomed out, CSS keeps the app's chrome at 100% (see --chrome-scale).
-    document.documentElement.style.setProperty('--ui-zoom', String(applied));
+    this.applyTitleBar();
     this.store.set({ zoom: applied });
     if (persist) writeJson(ZOOM_KEY, applied);
     if (write) this.scheduleConfigWrite();

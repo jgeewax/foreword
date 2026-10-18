@@ -248,38 +248,46 @@ pages in order and painted 150 ms after scrolling to the end and back
 - The preview webview is placed in window points, so its pane rect is scaled by
   the zoom. Verified in-app at 125 % and 80 %: within 0.5 pt of the pane.
 
-### Zoom is for the writing; the chrome stays put
+### Zoom applies to everything
 
-- Below 100 %, the page zoom shrinks the writing (editor, file list, chat,
-  History) but not the app's chrome:
-  - the title bar;
-  - pane headers and tabs;
-  - the sidebar's icons;
-  - the status bar;
-  - dialogs;
-  - the chat's controls row (mode, model, permissions, Send).
-- Each of those is zoomed back up as a whole with CSS `zoom: 1/zoom`. Its
-  text, icons and padding then keep their proportions.
-- **The earlier approach was replaced:** it kept only the icons at 100 %, so
-  at 67 % big icons sat beside small labels, and the assistant's header stood
-  taller than the tabs next to it.
-- At 100 % and above, everything zooms together, as before.
-- **Monaco is never inside a CSS-zoomed element,** which is what breaks its
-  hit-testing.
-- **WebKit details,** measured in the app: rects inside a zoomed element come
-  back in page coordinates, so code that positions things keeps working.
-  `vh`/`vw` inside one are scaled by the zoom too, so the few sizes there
-  divide by `--chrome-scale`.
+- **Every surface follows the zoom,** in both directions: the title bar, pane
+  headers and tabs, the sidebar's icons, the status bar, the chat's controls
+  row, popovers and every dialog (Settings, ⌘P, New Book…).
+- **This replaced "zoom is for the writing; the chrome stays put":** below
+  100 % the chrome used to be zoomed back up to 100 % with CSS `zoom: 1/zoom`
+  (`--chrome-scale`), and What changed kept its size on screen. The author
+  zoomed with Settings open and nothing in it changed. Every surface has to
+  follow the zoom.
+- The page zoom is now the only zoom:
+  - No CSS `zoom` anywhere. It's what breaks Monaco's hit-testing, so the
+    side-by-side diff is safe again too.
+  - No sizes that undo the zoom. A popover or dialog sized in `vh`/`vw` is
+    still the same share of the window, because the page zoom shrinks or
+    grows the CSS viewport.
+- What changed's passages are Typst source, so they use the editor's
+  monospace, not a book serif.
+- **What doesn't zoom:** the preview, a separate webview whose pages always fit
+  the pane's width. Native menus, tooltips and file dialogs are drawn by macOS.
 - Close buttons use the line-icon ×, not the text character, which looked
   thin and off-centre:
   - Settings;
   - tabs;
   - message attachments;
   - allowed-command chips.
-- Verified (self-test `chrome`): at 67 % and 100 %, the toolbar, its icons and
-  text buttons, the tabs, the status bar, Send and the Settings close button
-  are the same size on screen. The pane headers' bottoms line up, and the
-  model list opens above its button inside the window.
+- Verified (self-test `chrome`):
+  - The window, the model list, Settings, ⌘P, New Book and Typst basics were
+    opened at 67 %, 100 % and 150 %.
+  - Each part's height on screen is the zoom times its height at 100 %: the
+    title bar's icons and search box, the tabs, the file rows, the editor's
+    lines, the status bar, Send and Settings' header, close button and
+    sections.
+  - No element has CSS `zoom`, and the model list still opens above its
+    button, inside the window.
+- **WebKit's text floor:** zoomed out, WebKit keeps text that is 9 px or more
+  at 9 pt or more on screen, as Safari does. At 67 % the 12.5 px UI text is
+  held at 9 pt instead of 8.4 pt, so a row of it is up to about 10 % taller
+  than the zoom alone gives. Fixed sizes (icons, rows, the editor's lines)
+  scale exactly.
 
 ### Title-bar inset (macOS 26)
 
@@ -289,7 +297,54 @@ in a 1000 pt webview). The preview webview, positioned in window coordinates,
 was therefore 32 pt too high (covering the preview header, leaving a gap at the
 bottom). It now adds the main webview's native safe-area inset, re-read on
 resize (full screen removes the title bar). Verified natively: preview top =
-pane top (off by 0 pt).
+pane top (off by 0 pt). Since the title bar became the page's own (next
+section), the page starts at the window's top and the offset is measured.
+
+### The title bar, as VS Code's
+
+- **One bar, as in VS Code on macOS.** The window has no native title bar
+  (`TitleBarStyle::Overlay`; the title is hidden but still set, for the Window
+  menu and Mission Control). The page draws its own bar and macOS puts the
+  close, minimise and zoom buttons in it.
+  - In the middle, the book's name in a search box. It opens Go to File (⌘P),
+    like VS Code's command centre.
+  - At the right, the pane toggles (sidebar, preview, assistant), drawn like
+    VS Code's layout icons: the window with the pane's column outlined, filled
+    in while the pane shows.
+- **What the old toolbar had went where VS Code keeps it:**
+  - "Typst Studio" and "entry main.typ": gone. The Files view already marks
+    the main file.
+  - Review: the activity bar's Review icon, which has the count.
+  - Export PDF…: the preview's header, beside Open PDF (and Book → Export PDF…,
+    ⇧⌘E).
+  - Open…: File → Open Book… (⌘O) and the welcome screen.
+  - Typst basics (?) and Settings: the bottom of the activity bar, where VS
+    Code has Manage.
+- **It moves the window:** the bar is a `data-tauri-drag-region="deep"`, so
+  anywhere but its buttons drags, and a double-click zooms the window
+  (`core:window:allow-start-dragging`).
+- **Its size is in points.** macOS draws the window's buttons at one size
+  whatever the page zoom. So the bar is as tall as macOS's own title bar (32 pt
+  on macOS 26, the webview's safe-area inset) and leaves the buttons' room
+  (their frame from `native_geometry`, plus 10 pt) at every zoom
+  (`--titlebar-height`, `--titlebar-buttons`, set by `studio.applyTitleBar`).
+  This is the one exception to "Zoom applies to everything":
+  - What's in the bar zooms like the rest. At 150 % it needs more than 32 pt,
+    so the bar grows.
+  - In full screen the buttons leave with the title bar, and so does their
+    room.
+- **The welcome screen has the bar too,** empty. Otherwise the buttons would
+  sit on the page and there'd be nothing to drag the window by.
+- **The page starts at the window's top now.** WebKit insets the page below an
+  opaque title bar (above) but not below a transparent one. So the preview's
+  offset is measured: the webview's height less the page viewport's
+  (`innerHeight` × zoom). The safe-area inset is still 32 pt and would put the
+  preview 32 pt too low.
+- Verified in the app (macOS 26, 75 % zoom):
+  - The buttons are at 9–69 × 9–23 pt, centred in the 32 pt bar.
+  - The preview is within 0.5 pt of its pane.
+  - Self-test `chrome` passes, with the title bar's icons and search box
+    following the zoom. The bar is 32 pt at 67 % and 100 %, 37.5 pt at 150 %.
 
 ### The activity bar stays when the sidebar closes
 
@@ -816,8 +871,8 @@ pane top (off by 0 pt).
     added right after it). **Keep** resolves it. **Undo change** puts the
     passage back (only if it's still exactly as the assistant left it) and
     reopens it. A declined comment stays open, with the reason.
-  - **The list** (the toolbar's Review button, with a count, and always in the
-    sidebar) groups To check, Open and Resolved.
+  - **The list** (the activity bar's Review icon, with a count) groups To
+    check, Open and Resolved.
   - A review turn that ends in the background (another task shown) is handled
     too, by fetching its last reply.
 - **Card placement:** Monaco didn't reliably move view zones when a file
@@ -1068,7 +1123,7 @@ pane top (off by 0 pt).
   with examples, covering paragraphs, emphasis, quotes and dashes, escaping,
   headings, lists, chapter files, footnotes, citations, figures, quotations,
   math, what red squiggles mean, and shortcuts. It opens in the right-hand pane,
-  so the editor and preview stay visible, from the toolbar's ? button or
+  so the editor and preview stay visible, from the activity bar's ? icon or
   Help → Typst Basics. On the welcome screen it's a dialog. Markup patterns get
   "Insert", an undoable edit at the cursor; block examples get their own
   paragraph. The content is JSON so `npm run check-templates` also compiles
@@ -1232,7 +1287,7 @@ pane top (off by 0 pt).
 
 ### Export PDF asks where to save
 
-- **Export PDF…** (⇧⌘E, the toolbar, the Book menu) opens the macOS Save
+- **Export PDF…** (⇧⌘E, the preview's header, the Book menu) opens the macOS Save
   dialog. For each book it starts where that book was last saved. The first
   time it suggests Documents/<title>.pdf, with the title from `#let title` or
   `#set document(title: …)`.
@@ -1558,7 +1613,7 @@ pane top (off by 0 pt).
   - **This book:** `.typst-studio.json`.
   - **Tools:** Tinymist, OpenCode and git, with versions and paths.
 - Open it with Settings… in the app menu (⌘,), as on any Mac app, or the
-  toolbar's settings icon, now full size. The last section shown is
+  settings icon at the bottom of the activity bar. The last section shown is
   remembered.
 
 ### Search in Settings

@@ -3,22 +3,48 @@
 import type { ReactNode } from 'react';
 
 const PATHS: Record<string, ReactNode> = {
-  panelLeft: (
+  // The title bar's pane toggles, as VS Code's layout icons: the window with
+  // the pane's column outlined, filled in while the pane shows.
+  paneLeft: (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="2.5" />
-      <path d="M9.5 4v16" />
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M9 4.5v15" />
     </>
   ),
-  panelRight: (
+  paneLeftOn: (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="2.5" />
-      <path d="M14.5 4v16" />
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M9 4.5H5.5A2.5 2.5 0 0 0 3 7v10a2.5 2.5 0 0 0 2.5 2.5H9z" fill="currentColor" />
     </>
   ),
-  page: (
+  paneMiddle: (
     <>
-      <path d="M6.5 3h8l4 4v14h-12z" />
-      <path d="M14.5 3v4h4M9.5 12h6M9.5 16h6" />
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M10 4.5v15M15.5 4.5v15" />
+    </>
+  ),
+  paneMiddleOn: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M10 4.5h5.5v15H10z" fill="currentColor" />
+    </>
+  ),
+  paneRight: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M15 4.5v15" />
+    </>
+  ),
+  paneRightOn: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M15 4.5h3.5A2.5 2.5 0 0 1 21 7v10a2.5 2.5 0 0 1-2.5 2.5H15z" fill="currentColor" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="M15 15l5 5" />
     </>
   ),
   sparkle: <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9zM18.5 16l.8 2 2 .7-2 .8-.8 2-.7-2-2-.8 2-.7z" />,

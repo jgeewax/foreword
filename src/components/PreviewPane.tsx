@@ -83,9 +83,20 @@ export function PreviewPane() {
           </>
         )}
         {target === 'book' && (
-          <button className="small" title="Open the book’s exported PDF in Preview (⌥⌘E)" onClick={() => void studio.openExportedPdf()}>
-            Open PDF
-          </button>
+          <>
+            <button className="small" title="Export the book to PDF (⇧⌘E)" disabled={exporting} onClick={() => void studio.exportPdf()}>
+              {exporting ? (
+                <>
+                  <span className="btn-spinner" aria-hidden /> Exporting…
+                </>
+              ) : (
+                'Export PDF…'
+              )}
+            </button>
+            <button className="small" title="Open the book’s exported PDF in Preview (⌥⌘E)" onClick={() => void studio.openExportedPdf()}>
+              Open PDF
+            </button>
+          </>
         )}
         {(compile.status === 'compiling' || preview.status === 'starting') && <span className="busy-bar delayed" aria-hidden />}
         <button className="icon" title="Restart preview" onClick={() => void studio.restartTypst()}>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { studio } from './app/studio';
 import { AgentPane } from './components/AgentPane';
-import { StatusBar, Toast, Toolbar, Welcome } from './components/Chrome';
+import { StatusBar, TitleBar, Toast, Welcome } from './components/Chrome';
 import { EditorPane } from './components/EditorPane';
 import { ActivityBar, Explorer, type View } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
@@ -26,7 +26,7 @@ function Workbench() {
   const agent = usePanelRef();
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-panes', storage: localStorage });
 
-  // Which panes are showing (for the toolbar's toggles).
+  // Which panes are showing (for the title bar's toggles).
   const [visible, setVisible] = useState({ explorer: true, preview: true, agent: true });
   const readVisible = useCallback(() => {
     setVisible({ explorer: !explorer.current?.isCollapsed(), preview: !preview.current?.isCollapsed(), agent: !agent.current?.isCollapsed() });
@@ -97,7 +97,7 @@ function Workbench() {
 
   return (
     <div className="app">
-      <Toolbar onToggle={toggle} visible={visible} />
+      <TitleBar panes={{ visible, onToggle: toggle }} />
       <div className="workbench">
         <ActivityBar open={visible.explorer} onPick={pickView} />
         <Group

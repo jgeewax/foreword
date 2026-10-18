@@ -234,7 +234,7 @@ function GeneralPage() {
             </button>
             <button onClick={() => void studio.zoom('reset', 'key')}>Actual size</button>
           </div>
-          <p className="settings-help">⌘= and ⌘− too. Toolbar and sidebar icons never get smaller than they are at 100%.</p>
+          <p className="settings-help">⌘= and ⌘− too, ⌘0 for actual size. Everything in the window follows it except the preview, whose pages always fit the pane.</p>
         </div>
       </Section>
     </>
