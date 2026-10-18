@@ -194,7 +194,7 @@
 
 - [x] thinking needs to be thinking time not waiting time. split them and show both in chat ui...
 
-- [ ] explore ayakaleaf pro (overleaf clone) for inspiration on ideas
+- [x] explore ayakaleaf pro (overleaf clone) for inspiration on ideas
 
 - [ ] make a public-facing website in a gh-pages branch
 
