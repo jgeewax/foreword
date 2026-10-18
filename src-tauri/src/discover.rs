@@ -186,6 +186,14 @@ fn editor_tinymists() -> Vec<(PathBuf, String)> {
     found
 }
 
+/// OpenCode in the app's own Resources (`Contents/Resources/opencode/opencode`),
+/// which `npm run app:build` puts there (scripts/bundle-opencode.mjs).
+fn bundled_opencode() -> Option<PathBuf> {
+    let exe = env::current_exe().ok()?;
+    let p = exe.parent()?.parent()?.join("Resources/opencode/opencode");
+    is_executable(&p).then_some(p)
+}
+
 /// Every copy of `tool` on this Mac, each once, in the order the automatic
 /// choice takes them: `$ENV_VAR`, the search path, then other known places.
 pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
@@ -223,7 +231,10 @@ pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
                 }
             }
         }
-        Tool::OpenCode => {}
+        // A copy inside the app (a release build may bundle one): only when nothing else is found.
+        Tool::OpenCode => {
+            all.extend(bundled_opencode().map(|p| (p, "bundled with Typst Studio".to_string())))
+        }
     }
     let mut seen = HashSet::new();
     all.retain(|(p, _)| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())));

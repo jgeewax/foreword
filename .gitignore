@@ -11,6 +11,7 @@ dist/
 fixtures/stress-book/
 src-tauri/target/
 src-tauri/gen/schemas/
+src-tauri/bundled/
 *.pdf
 
 # The sample book is the self-tests' book, so it's kept; not what the app

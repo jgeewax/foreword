@@ -4176,6 +4176,35 @@ async function modelPickerChecks() {
 }
 
 /**
+ * A release build (npm run app:build): the OpenCode inside the app is listed
+ * last among the copies found, and the assistant runs on it when it's chosen;
+ * the sample books come from the app's Resources. Settings are put back.
+ */
+async function bundleChecks() {
+  const out: Record<string, unknown> = {};
+  await studio.refreshTools();
+  const copies = studio.state.tools?.opencode.copies ?? [];
+  out.copies = copies.map((c) => `${c.version} · ${c.source} · ${c.path}`);
+  const bundled = copies.find((c) => c.source === 'bundled with Typst Studio');
+  if (bundled) {
+    await studio.setToolPath('opencode', bundled.path);
+    await sleep(1000);
+    await waitFor(() => studio.state.agent.status !== 'starting', 60000, 'agent').catch(() => {});
+    await waitFor(() => studio.state.agent.models.length > 0, 30000, 'models').catch(() => {});
+    out.running = { tool: studio.state.tools?.opencode.path, fromSettings: studio.state.tools?.opencode.fromSettings, status: studio.state.agent.status, error: studio.state.agent.error ?? null, models: studio.state.agent.models.length };
+    await studio.setToolPath('opencode', '');
+    await sleep(500);
+  }
+  const original = studio.state.workspace!.root;
+  const parent = `${original.slice(0, original.lastIndexOf('/'))}/bundle-samples-${Date.now().toString(36)}`;
+  await studio.openSample('peter-rabbit', parent);
+  await waitFor(() => studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 1, 60000, 'compile').catch(() => {});
+  out.sample = { root: studio.state.workspace?.root.slice(parent.length), pages: studio.state.compile.pages, pictures: studio.state.workspace?.files.filter((f) => f.endsWith('.jpg')).length };
+  await studio.openWorkspace(original);
+  return out;
+}
+
+/**
  * An assistant over ACP (Settings ▸ Assistant), with real turns: `kind`
  * starts in this book and lists its models; a turn that reads (its lines
  * marked, its words in the chat); an edit it asks about, allowed from the
@@ -4918,6 +4947,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();
+    if (want('bundle')) result.bundle = await bundleChecks();
     if (launch.selftestEdits && want('samples')) result.samples = await sampleChecks();
     if (want('tools')) result.tools = await toolPathChecks();
     for (const kind of ['claude', 'gemini', 'codex'] as const) if (launch.selftestAgent && want(`acp-${kind}`)) result[`acp-${kind}`] = await acpChecks(kind);

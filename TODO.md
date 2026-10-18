@@ -186,7 +186,7 @@
 
 - [x] can we make ti work with codex CLI as well? and not just opencode? (settings choice)
 
-- [ ] what about people who dont have opencode/claude/gemini/codex installed? can we package opencode or something with it so that they could eventually use our own API service?
+- [x] what about people who dont have opencode/claude/gemini/codex installed? can we package opencode or something with it so that they could eventually use our own API service?
 
 - [x] tool finding ui needs work. a button to retrigger a search. choices from dropdown, chooser, textbox, grab from clipboard , etc. make this ui really elegant and useful
 

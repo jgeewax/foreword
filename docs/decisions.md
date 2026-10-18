@@ -2427,6 +2427,41 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   the conversation rebuilt after a switch. After a restart, Codex's replay
   leaves out the stopped turn's partial reply.
 
+### No assistant installed: OpenCode inside the app
+
+- **The question:** what about people who have none of OpenCode, Claude
+  Code, Gemini CLI or Codex? Could the app carry OpenCode, so they could
+  eventually use an API service of ours?
+- **Yes: a release build can carry OpenCode,** in the app's Resources
+  (`Contents/Resources/opencode/`). The app uses it only when it finds no
+  other copy: it's last in the Tools page's list ("bundled with Typst
+  Studio"), and can be chosen there like any copy.
+  - `npm run app:build` runs `scripts/bundle-opencode.mjs`, which copies an
+    installed OpenCode 2.x and its MIT licence to `src-tauri/bundled/opencode/`
+    (git-ignored), then builds with `tauri.bundle.json`, which adds that
+    folder to the Resources. `npm run app` and a plain `tauri build` don't
+    need it.
+  - OpenCode 2.x isn't published as a binary: GitHub and npm have 1.19, the
+    old API the app doesn't speak, and Homebrew builds 2.x from source. So the
+    script copies an installed 2.x. Release builds should use a pinned
+    source build per architecture.
+  - The cost is size: OpenCode is 169 MB for arm64, and a universal app
+    would carry two. The app is 10 MB, the samples 1.9 MB; the release
+    `.app` with OpenCode is 181 MB.
+  - With OpenCode in the app, a person still needs a model: an API key for a
+    provider, or a local model.
+- **An API service of ours** would fit here. OpenCode reads providers from
+  its config, so when the app starts `opencode serve` it could add one more,
+  an OpenAI-compatible endpoint and the person's key, through
+  `OPENCODE_CONFIG_CONTENT`, and make it the default. With the bundled
+  OpenCode, someone with nothing installed would then sign in and write.
+  There's no setting for it yet: there's no service to point it at.
+- Verified in a release build (`tauri build` with the overlay, 1 min 51 s):
+  the Tools page listed Homebrew's OpenCode and then the bundled one. Chosen,
+  the assistant ran on the bundled copy (ready, 80 models). A sample book
+  opened from the app's Resources, which is the release path for samples
+  (Peter Rabbit, 27 pictures, 32 pages).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

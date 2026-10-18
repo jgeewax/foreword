@@ -10,6 +10,7 @@
     "test": "vitest run",
     "tauri": "tauri",
     "app": "tauri dev",
+    "app:build": "node scripts/bundle-opencode.mjs && tauri build --config src-tauri/tauri.bundle.json",
     "stress-book": "node scripts/gen-stress-book.mjs",
     "check-templates": "node scripts/check-templates.mjs"
   },
