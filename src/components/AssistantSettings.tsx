@@ -1,6 +1,7 @@
 // Settings ▸ Assistant: which program is the writing assistant, as cards that
 // say how each would run on this Mac, and a panel for the one chosen: how it
-// is now, its model, its account (with sign-in in Terminal) and its program.
+// is now, its account (with sign-in in Terminal) and its program. Its model is
+// chosen in the chat.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { studio, type StudioState } from '../app/studio';
 import { ASSISTANT_NAMES, ASSISTANTS, type AssistantId } from '../app/settings';
@@ -8,7 +9,6 @@ import { errorMessage, ipc, type AssistantSetup, type AssistantsSetup, type Tool
 import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
-import { ModelPicker } from './ModelPicker';
 import { ToolPicker } from './ToolPicker';
 
 /** Who makes each one, and the account it runs on. */
@@ -259,18 +259,6 @@ export function AssistantPage() {
           {now === 'failed' && agent.error && <p className="assistant-error selectable">{agent.error}</p>}
 
           <div className="assistant-rows">
-            <Row label="Model">
-              {now === 'running' && agent.models.length > 0 ? (
-                <>
-                  <div className="assistant-model">
-                    <ModelPicker />
-                  </div>
-                  <span className="assistant-row-help">Each conversation keeps its own; it’s under the message box too.</span>
-                </>
-              ) : (
-                <span className="muted">{now === 'running' || now === 'starting' ? 'Listed once it’s started' : 'Listed when it’s running'}</span>
-              )}
-            </Row>
             {chosen === 'opencode' ? (
               <Row label="Providers">
                 <span className="assistant-row-actions">
@@ -309,7 +297,7 @@ export function AssistantPage() {
             </Row>
           </div>
         </div>
-        <p className="settings-help">Switching starts a new conversation, with the other assistant.</p>
+        <p className="settings-help">Switching starts a new conversation, with the other assistant. The model is chosen in the chat, under the message box, for each conversation.</p>
       </section>
     </>
   );

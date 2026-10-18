@@ -4082,11 +4082,14 @@ async function agentSettingsChecks() {
     open: studio.state.settingsOpen,
     page: document.querySelector('.settings-nav button.active')?.textContent,
     cards: document.querySelectorAll('.settings .assistant-card').length,
+    // The model is chosen in the chat only.
+    modelPicker: !!document.querySelector('.settings .model-picker'),
+    rows: [...document.querySelectorAll('.settings .assistant-row-label')].map((l) => l.textContent),
     snapshot: await snap('agent-settings'),
   };
   studio.closeSettings();
   await sleep(200);
-  const ok = !!gear && fits && opened.open && opened.page === 'Assistant' && opened.cards === 4;
+  const ok = !!gear && fits && opened.open && opened.page === 'Assistant' && opened.cards === 4 && !opened.modelPicker;
   return { ok, button, fits, headerShot, opened };
 }
 
