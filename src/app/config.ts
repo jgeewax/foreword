@@ -43,6 +43,7 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     formatOnSave: settings.formatOnSave,
     editorFontSize: settings.editorFontSize,
     toolPaths: settings.toolPaths,
+    assistant: settings.assistant,
     zoom: Math.round(zoom * 100) / 100,
     permissions: settings.permissions,
     allowCommands: settings.allowCommands,

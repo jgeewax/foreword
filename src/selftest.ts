@@ -4176,6 +4176,147 @@ async function modelPickerChecks() {
 }
 
 /**
+ * An assistant over ACP (Settings ▸ Assistant), with real turns: `kind`
+ * starts in this book and lists its models; a turn that reads (its lines
+ * marked, its words in the chat); an edit it asks about, allowed from the
+ * card (the file changes); a message queued while it works; the conversation
+ * rebuilt after switching away and back. Settings are put back after.
+ */
+async function acpChecks(kind: 'claude' | 'gemini' | 'codex') {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const items = () => studio.state.agent.items;
+  const tools = () => items().filter((i) => i.kind === 'tool').map((i) => `${(i as any).name}: ${(i as any).summary}${(i as any).note ? ` (${(i as any).note})` : ''} [${(i as any).status}]`);
+  try {
+    studio.updateSettings({ assistant: kind, permissions: PRESETS.ask.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    out.start = {
+      status: studio.state.agent.status,
+      error: studio.state.agent.error ?? null,
+      model: studio.state.agent.model,
+      models: studio.state.agent.models.map((m) => `${m.providerName}: ${m.name}`).slice(0, 8),
+    };
+    if (studio.state.agent.status !== 'ready') return out;
+    // The turns' events, for the record.
+    const t0 = clock();
+    const events: string[] = (out.events = []);
+    const offEvents = studio.agent!.subscribe((e) => {
+      if (/^(permission|turn|inbox|session-renamed|connection)/.test(e.type)) events.push(`${Math.round(clock() - t0)} ms ${e.type} ${JSON.stringify({ ...e, type: undefined, sessionId: undefined, patches: undefined })}`);
+    });
+    // A small, quick model for the test, when there is one (and choosing it is checked).
+    const small = studio.state.agent.models.find((m) => /haiku|flash|mini/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.chose = studio.state.agent.model;
+
+    /**
+     * Answer the cards as they come (the book's own files may be changed; nothing
+     * outside it), until `done`. Returns what was asked and how it was answered.
+     */
+    const asked: string[] = (out.asked = []);
+    const answerCards = async (done: () => boolean, ms = 240000) => {
+      const t1 = clock();
+      while (clock() - t1 < ms && !done()) {
+        const card = items().find((i) => i.kind === 'permission' && i.state === 'pending');
+        if (card?.kind === 'permission') {
+          const decision = card.action === 'edit' ? 'once' : 'reject';
+          asked.push(`${card.action} ${card.resources.join(' ')} → ${decision}`);
+          if (decision === 'once' && !out.snapshotCard) out.snapshotCard = await snap(`acp-${kind}-permission`);
+          await studio.replyPermission(card.id, decision);
+        }
+        await sleep(300);
+      }
+    };
+    const idle = () => !studio.state.agent.running && studio.state.agent.queued.length === 0;
+    const lastReply = () => (items().filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text ?? '';
+
+    // A turn that reads.
+    let t = clock();
+    void studio.send("Read chapters/ch1-vectors.typ and tell me its first heading, in five words or fewer. Don't change anything.");
+    await sleep(1000);
+    await answerCards(idle);
+    out.read = {
+      ms: Math.round(clock() - t),
+      reply: lastReply().slice(0, 200),
+      tools: tools(),
+      reads: studio.aiReadsFor('chapters/ch1-vectors.typ').map((r) => `${r.start}–${r.start + r.lines.length - 1}`),
+      title: studio.state.agent.title,
+      contextTokens: studio.state.agent.contextTokens,
+    };
+
+    // An edit it asks about; while the card waits, a message is queued for after the turn.
+    const file = 'chapters/ch2-eigenvalues.typ';
+    const before = (await ipc.fsRead(file)).text;
+    t = clock();
+    void studio.send(`In ${file}, change the sentence "The two eigenvectors are orthogonal." to "The two eigenvectors are perpendicular." with your edit tool. Then reply with just: done.`);
+    await sleep(1000);
+    const editCard = () => items().find((i) => i.kind === 'permission' && i.state === 'pending' && i.action === 'edit');
+    await answerCards(() => !!editCard() || idle());
+    const card = editCard();
+    if (card?.kind === 'permission') {
+      out.editCard = { resources: card.resources, patch: card.patches[0]?.patch.slice(0, 300) };
+      await studio.send('Then tell me, in one short sentence, what you changed.');
+      out.queued = studio.state.agent.queued.map((q) => q.text);
+    }
+    await answerCards(idle);
+    await sleep(500);
+    const after = (await ipc.fsRead(file)).text;
+    out.edited = {
+      ms: Math.round(clock() - t),
+      changed: after.includes('The two eigenvectors are perpendicular.') && !after.includes('The two eigenvectors are orthogonal.'),
+      kinds: items().map((i) => i.kind),
+      lastReply: lastReply().slice(0, 200),
+      tools: tools().slice(-3),
+    };
+    const now = await ipc.fsRead(file);
+    if (now.text !== before) await ipc.fsWrite(file, before, now.hash);
+
+    // Stop: the turn ends as interrupted, with Resume offered.
+    void studio.send('Count from 1 to 300, one number per line. No tools.');
+    await waitFor(() => studio.state.agent.running && lastReply().includes('12'), 90000, 'counting').catch(() => {});
+    await studio.cancel();
+    await waitFor(() => !studio.state.agent.running, 30000, 'stopped').catch(() => {});
+    await sleep(500);
+    const notice = items().filter((i) => i.kind === 'notice').at(-1) as { text?: string; action?: { label: string } } | undefined;
+    out.stop = { running: studio.state.agent.running, stopped: studio.state.agent.stopped, notice: notice?.text, action: notice?.action?.label, counted: lastReply().split('\n').length };
+    out.snapshotChat = await snap(`acp-${kind}-chat`);
+
+    offEvents();
+    // Away and back: the conversation as kept; then, after a restart, as the agent replays it.
+    const sessionId = studio.state.agent.sessionId!;
+    const shown = items()
+      .filter((i) => i.kind !== 'permission' && i.kind !== 'notice')
+      .map((i) => i.kind)
+      .join(' ');
+    studio.newSession();
+    await sleep(300);
+    out.listed = (await studio.agent!.listSessions(5)).map((x) => `${x.id === sessionId ? '★ ' : ''}${x.title}`);
+    await studio.switchTask(sessionId);
+    await sleep(500);
+    out.reopened = { same: items().map((i) => i.kind).join(' ') === shown, kinds: items().map((i) => i.kind).join(' ') };
+    studio.newSession();
+    await studio.restartAgent();
+    await waitFor(() => studio.state.agent.status === 'ready', 120000, 'restarted').catch(() => {});
+    t = clock();
+    await studio.switchTask(sessionId);
+    await sleep(500);
+    out.replayed = {
+      ms: Math.round(clock() - t),
+      same: items().map((i) => i.kind).join(' ') === shown,
+      kinds: items().map((i) => i.kind).join(' '),
+      firstUser: (items().find((i) => i.kind === 'user') as { text?: string } | undefined)?.text?.slice(0, 80),
+      reads: studio.aiReadsFor('chapters/ch1-vectors.typ').length,
+    };
+    return out;
+  } finally {
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => studio.state.agent.status === 'ready', 120000, 'back').catch(() => {});
+    out.back = { assistant: studio.state.settings.assistant, status: studio.state.agent.status };
+  }
+}
+
+/**
  * Settings ▸ Tools: every copy of each tool found on this Mac, in a list to
  * pick from; a typed path checked as it's typed (nothing there, a folder, the
  * wrong program, the right one); a pasted path (the clipboard is put back);
@@ -4766,6 +4907,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('booksizes')) result.booksizes = await bookSizeChecks();
     if (launch.selftestEdits && want('samples')) result.samples = await sampleChecks();
     if (want('tools')) result.tools = await toolPathChecks();
+    for (const kind of ['claude', 'gemini', 'codex'] as const) if (launch.selftestAgent && want(`acp-${kind}`)) result[`acp-${kind}`] = await acpChecks(kind);
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();

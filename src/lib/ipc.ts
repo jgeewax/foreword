@@ -157,6 +157,10 @@ export const ipc = {
     invoke<AgentResponse>('agent_request', { method, path, body: body ?? null }),
   agentSubscribe: (onEvent: Channel<any>) => invoke<void>('agent_subscribe', { onEvent }),
   agentStop: () => invoke<void>('agent_stop'),
+  /** An assistant over ACP (Claude Code, Gemini CLI, Codex): its JSON-RPC lines arrive on `onMessage`. */
+  acpStart: (kind: string, onMessage: Channel<any>) => invoke<{ program: string; args: string[] }>('acp_start', { kind, onMessage }),
+  acpSend: (line: string) => invoke<void>('acp_send', { line }),
+  acpStop: () => invoke<void>('acp_stop'),
 
   historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
   historyReveal: () => invoke<void>('history_reveal'),

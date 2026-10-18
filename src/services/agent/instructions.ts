@@ -12,6 +12,8 @@ export type InstructionContext = {
   typFiles: string[];
   /** The book has runnable code examples (code.typ). */
   codeExamples?: boolean;
+  /** The book's folder (absolute), for tools that need whole paths. */
+  root?: string;
 };
 
 export const INSTRUCTIONS_KEY = 'typst-studio';
@@ -29,7 +31,7 @@ You are the writing assistant inside Typst Studio, an editor for books and long-
 
 ## The project
 - "${ctx.projectName}" is a book or document written in Typst markup (.typ files).
-- Entry point: ${ctx.entry ? `\`${ctx.entry}\`` : 'not set'}. Other Typst files: ${fileList}.
+- Entry point: ${ctx.entry ? `\`${ctx.entry}\`` : 'not set'}. Other Typst files: ${fileList}.${ctx.root ? `\n- Its folder is \`${ctx.root}\`, exactly as written. Files are named here relative to it; a tool that needs a whole path takes this folder followed by the file's name.` : ''}
 - Your job is the text and its structure: drafting, revising, tightening, restructuring, consistency, citations, figures, and the Typst markup that serves the text.
 
 ## How to work

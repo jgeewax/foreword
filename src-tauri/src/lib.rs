@@ -1,3 +1,4 @@
+mod acp;
 mod agent;
 mod children;
 mod clipboard;
@@ -49,6 +50,8 @@ pub struct WindowState {
     /// Writer queue to Tinymist's stdin; separate so `typst_send` can stay synchronous.
     typst_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>,
     agent: tokio::sync::Mutex<Option<agent::AgentServer>>,
+    /// An assistant spoken to over ACP (Claude Code, Gemini CLI, Codex).
+    acp: tokio::sync::Mutex<Option<acp::AcpProcess>>,
     /// Serializes history (Git) operations on the snapshot repo.
     history: tokio::sync::Mutex<()>,
 }
@@ -140,6 +143,11 @@ impl WindowState {
             && let Some(server) = agent.as_mut()
         {
             server.kill();
+        }
+        if let Ok(mut acp) = self.acp.try_lock()
+            && let Some(process) = acp.as_mut()
+        {
+            process.kill();
         }
     }
 }
@@ -591,6 +599,9 @@ pub fn run() {
             agent::agent_request,
             agent::agent_subscribe,
             agent::agent_stop,
+            acp::acp_start,
+            acp::acp_send,
+            acp::acp_stop,
             history::history_init,
             git::git_status,
             git::git_file,

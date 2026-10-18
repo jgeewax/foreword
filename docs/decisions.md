@@ -2315,6 +2315,60 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Words each open at their first file and compile with 0 errors and 0
   warnings; opening Peter Rabbit again keeps a change made to its copy.
 
+### Claude Code as the assistant, over the Agent Client Protocol
+
+- **Settings ▸ Assistant ▸ Which assistant:** OpenCode (as before) or Claude
+  Code (`assistant` in the settings file). Changing it starts a new
+  conversation with the other program. Gemini CLI and Codex use the same
+  route (next sections).
+- **ACP, not a CLI's own headless mode.** The Agent Client Protocol (Zed's,
+  also used by JetBrains) is JSON-RPC lines on a program's stdin and stdout.
+  Claude Code speaks it through `@agentclientprotocol/claude-agent-acp`
+  (pinned 0.93.0), run with `npx` (Node.js), which signs in with the
+  author's Claude Code login. A permission card needs the agent to *ask*,
+  and ACP has that built in (`session/request_permission`); `claude -p`
+  would need an MCP permission server instead.
+- **Rust only runs the program** (`acp.rs`): in the book's folder, in its own
+  process group (npx starts the agent as its child, so Stop and quit end
+  both), stdout lines to the page, `acp_send` for lines back, registered for
+  cleanup like OpenCode. The search path now includes Node from fnm, nvm and
+  Volta, which a Finder-launched app doesn't inherit.
+- **The page speaks the protocol** (`src/services/agent/acp.ts`), behind the
+  same adapter interface as OpenCode, so the chat, tasks, queue, Stop and
+  Resume work unchanged. What OpenCode keeps on its server is kept here:
+  - each conversation's transcript, in OpenCode's context shape, so switching
+    conversations rebuilds the chat (from `session/load`'s replay after a
+    restart, with the instructions taken back out);
+  - the instructions, sent before the author's message (in
+    `<typst-studio-instructions>`), and again only when they change. The
+    adapter only offers to replace Claude Code's own system prompt;
+  - the permission rules: the agent asks, and the same `sessionRules` answer
+    (allowed, denied, or the card). A command line is checked whole and part
+    by part;
+  - messages sent while it works: queued until the turn ends, or handed to
+    the running turn (Claude Code's `_session/steering`) for "send now".
+- **Its tools in the app's words.** Claude Code's `Read`, `Edit`, `Bash`…
+  become the app's `read`, `edit`, `bash` (inputs renamed, a read's
+  `12\ttext` lines as `12: text`), so the chat says "Read “Vectors”
+  (chapter 1) · lines 1–30" and marks the lines read. Other agents' tools
+  map by name or by ACP's `kind` and locations.
+- **Models** come from the session's `model` option (Default, Opus, Sonnet,
+  Haiku…), in the same picker; a session is made at start for them, and the
+  first conversation takes it. Usage updates give the context meter;
+  `session_info_update` names the conversation; `/compact` compacts.
+- **The instructions now name the book's folder.** Haiku turned this
+  scratch path's `-Users-…/` into `-Users-…-` and read outside the book (the
+  card asked; the test refused); with the folder spelled out it didn't.
+- **Not offered:** OpenCode's question tool (Claude asks in its reply
+  instead), and editing unsaved buffers through ACP's `fs/*` (the app saves
+  before every message, as with OpenCode).
+- Verified: recorded traffic (`__fixtures__/acp-claude.jsonl`, the account
+  lines removed) replayed through the adapter in unit tests. Self-test
+  `acp-claude` with real turns on Haiku 5.5: models listed, a read (lines
+  1–30 marked), an edit asked about with its patch, allowed, the chapter
+  changed, a message queued and delivered after, Stop (interrupted, Resume
+  offered), the conversation rebuilt after switching and after a restart.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

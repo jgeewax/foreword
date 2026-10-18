@@ -63,7 +63,7 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {} });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {}, assistant: 'opencode' });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
     store.set('studio.settings', '{"formatOnSave":false}');
@@ -78,6 +78,10 @@ describe('settings storage', () => {
     }
     store.set('studio.settings', '{"toolPaths":{"git":" /usr/bin/git ","tinymist":"","opencode":7,"python":"/usr/bin/python3"}}');
     expect(loadSettings().toolPaths).toEqual({ git: '/usr/bin/git' });
+    store.set('studio.settings', '{"assistant":"claude"}');
+    expect(loadSettings().assistant).toBe('claude');
+    store.set('studio.settings', '{"assistant":"copilot"}');
+    expect(loadSettings().assistant).toBe('opencode');
     store.set('studio.settings', '{"toolPaths":["/usr/bin/git"]}');
     expect(loadSettings().toolPaths).toEqual({});
     store.set('studio.settings', 'not json');

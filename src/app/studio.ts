@@ -50,6 +50,7 @@ import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsF
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
+import { AcpAdapter } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
@@ -2576,7 +2577,7 @@ export class Studio {
   async restartAgent() {
     if (this.state.agent.running) {
       this.restartAgentWhenIdle = true;
-      this.toast('OpenCode will start again when the assistant finishes.');
+      this.toast('The assistant will start again when it finishes.');
       return;
     }
     await this.agent?.stop().catch(() => {});
@@ -2586,7 +2587,9 @@ export class Studio {
   async startAgent() {
     const ws = this.state.workspace;
     if (!ws) return;
-    const agent = new OpenCodeAdapter(ws.root);
+    // OpenCode, or Claude Code, Gemini CLI or Codex over ACP (Settings ▸ Assistant).
+    const which = this.state.settings.assistant;
+    const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root) : new AcpAdapter(ws.root, which);
     this.agent = agent;
     this.setAgent({ status: 'starting', error: undefined, background: {} });
     this.unsubscribeAgent?.();
@@ -3255,6 +3258,7 @@ export class Studio {
       entry: ws.entry,
       typFiles: ws.files.filter((f) => f.endsWith('.typ')),
       codeExamples: ws.files.includes(OUTPUTS_FILE) || this.state.code.cells.length > 0,
+      root: ws.root,
     });
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
@@ -3673,6 +3677,11 @@ export class Studio {
     this.store.set({ settings });
     if (write) this.scheduleConfigWrite();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions) || settings.allowCommands.join() !== before.allowCommands.join()) void this.applyPermissions();
+    if (settings.assistant !== before.assistant && this.state.workspace) {
+      // Another program's conversations: start a new one with it.
+      this.newSession();
+      void this.restartAgent();
+    }
   }
 
   /** Settings ▸ Tools: check again which programs are in use (e.g. after installing one). */

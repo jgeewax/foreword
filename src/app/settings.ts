@@ -7,6 +7,10 @@ export type SendKey = 'enter' | 'mod-enter';
 /** Where History lives in the left pane: its own tab, or a section below the files. */
 export type HistoryPlacement = 'tab' | 'below';
 
+/** Which program runs the writing assistant: OpenCode, or an agent spoken to over ACP. */
+export type AssistantId = 'opencode' | 'claude' | 'gemini' | 'codex';
+export const ASSISTANTS: AssistantId[] = ['opencode', 'claude', 'gemini', 'codex'];
+
 /** The programs Typst Studio runs itself; Settings ▸ Tools can choose each one. */
 export type ToolName = 'tinymist' | 'opencode' | 'git';
 export const TOOL_NAMES: ToolName[] = ['tinymist', 'opencode', 'git'];
@@ -29,6 +33,8 @@ export type AppSettings = {
   editorFontSize: number;
   /** Programs chosen in Settings ▸ Tools (absent: found automatically). The Rust side reads these from the settings file. */
   toolPaths: Partial<Record<ToolName, string>>;
+  /** Which program runs the writing assistant. */
+  assistant: AssistantId;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -41,6 +47,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   formatOnSave: true,
   editorFontSize: 12,
   toolPaths: {},
+  assistant: 'opencode',
 };
 
 export const EDITOR_FONT_SIZES = { min: 9, max: 24 };
@@ -90,6 +97,7 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const size = raw.editorFontSize;
   if (typeof size === 'number' && size >= EDITOR_FONT_SIZES.min && size <= EDITOR_FONT_SIZES.max) out.editorFontSize = Math.round(size * 2) / 2;
   if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
+  if (ASSISTANTS.includes(raw.assistant as AssistantId)) out.assistant = raw.assistant as AssistantId;
   return out;
 }
 

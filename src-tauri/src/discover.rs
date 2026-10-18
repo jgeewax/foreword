@@ -23,11 +23,46 @@ fn extra_dirs() -> Vec<PathBuf> {
         PathBuf::from("/usr/local/bin"),
     ];
     if let Some(h) = home() {
-        for d in [".cargo/bin", ".local/bin", ".opencode/bin", ".bun/bin"] {
+        for d in [
+            ".cargo/bin",
+            ".local/bin",
+            ".opencode/bin",
+            ".bun/bin",
+            ".volta/bin",
+        ] {
             dirs.push(h.join(d));
         }
+        // Node.js from version managers, which only put it on a shell's PATH:
+        // fnm's default version, and nvm's newest.
+        for d in [
+            ".local/share/fnm/aliases/default/bin",
+            "Library/Application Support/fnm/aliases/default/bin",
+        ] {
+            dirs.push(h.join(d));
+        }
+        dirs.extend(newest_version(&h.join(".nvm/versions/node")).map(|v| v.join("bin")));
     }
     dirs
+}
+
+/// The folder in `dir` named for the highest version ("v24.15.0" over "v9.1.0").
+fn newest_version(dir: &Path) -> Option<PathBuf> {
+    let version = |p: &PathBuf| -> Vec<u64> {
+        let name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        name.trim_start_matches('v')
+            .split('.')
+            .map(|n| n.parse().unwrap_or(0))
+            .collect()
+    };
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .max_by_key(version)
 }
 
 /// PATH for child processes: the inherited PATH plus well-known install dirs.
@@ -484,6 +519,16 @@ mod tests {
         );
         assert_eq!(source_of(Path::new("/opt/homebrew/bin")), "Homebrew");
         assert_eq!(source_of(&home().unwrap().join("tools/bin")), "~/tools/bin");
+    }
+
+    #[test]
+    fn newest_node_version_wins() {
+        let dir = std::env::temp_dir().join(format!("typst-studio-nvm-{}", std::process::id()));
+        for v in ["v9.11.2", "v24.15.0", "v18.20.1"] {
+            std::fs::create_dir_all(dir.join(v)).unwrap();
+        }
+        assert_eq!(newest_version(&dir), Some(dir.join("v24.15.0")));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -9,7 +9,7 @@ import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
-import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type ToolName } from '../app/settings';
+import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type AssistantId, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -275,16 +275,35 @@ function GeneralPage() {
   );
 }
 
+const ASSISTANT_CHOICES: { id: AssistantId; label: string; detail: string }[] = [
+  { id: 'opencode', label: 'OpenCode', detail: 'any model you’ve set up in OpenCode: OpenAI, Anthropic, Google, local models' },
+  { id: 'claude', label: 'Claude Code', detail: 'Anthropic’s Claude, with your Claude subscription or API key' },
+];
+
 function AssistantPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const model = useStore(studio.store, (s) => s.agent.model);
   const guide = useStore(studio.store, (s) => s.styleGuide);
   const ws = useStore(studio.store, (s) => s.workspace);
+  const status = useStore(studio.store, (s) => s.agent.status);
+  const error = useStore(studio.store, (s) => s.agent.error);
   return (
     <>
+      <Section title="Which assistant">
+        <div className="settings-field">
+          {ASSISTANT_CHOICES.map((a) => (
+            <Radio key={a.id} name="assistant" value={a.id} current={settings.assistant} onChange={(v) => studio.updateSettings({ assistant: v })} label={a.label} detail={a.detail} />
+          ))}
+          <p className="settings-help">
+            Claude Code uses your own Claude account: sign in once in Terminal with <code>claude</code>. Typst Studio talks to it through its connector for the Agent Client
+            Protocol, which Node.js runs (the first start downloads it). Changing the assistant starts a new conversation.
+          </p>
+          {status === 'error' && error && <p className="settings-help bad">It didn’t start: {error}</p>}
+        </div>
+      </Section>
       <Section title="Model">
         <p className="settings-help">
-          Now: <strong>{model ? `${model.id} (${model.providerID})` : 'the server’s default'}</strong>. Change it under the chat’s message box; each conversation remembers its own.
+          Now: <strong>{model ? `${model.id} (${model.providerID})` : 'the assistant’s default'}</strong>. Change it under the chat’s message box; each conversation remembers its own.
         </p>
       </Section>
       <Section title="The assistant’s marks in the editor">
