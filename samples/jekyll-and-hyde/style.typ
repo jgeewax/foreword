@@ -28,6 +28,9 @@
   )
   set text(font: "Libertinus Serif", size: 11pt, lang: "en", hyphenate: true)
   set par(justify: true, leading: 0.62em, spacing: 0.62em, first-line-indent: 1.4em)
+  // Headings are set ragged and never hyphenated: a title justified across two lines leaves gaps.
+  show heading: set par(justify: false)
+  show heading: set text(hyphenate: false)
 
   // "= Title" starts a chapter on a new page.
   show heading.where(level: 1): it => {

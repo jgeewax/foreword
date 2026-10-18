@@ -11,11 +11,6 @@
 // The page (trim) size: change both numbers to resize every page.
 #show: book.with(title: title, author: author, width: 5.5in, height: 8.5in)
 
-// Strunk's rules make long headings: keep their words whole and their
-// spacing even.
-#show heading: set text(hyphenate: false)
-#show heading: set par(justify: false)
-
 #title-page(title: title, subtitle: subtitle, author: author)
 
 // The copyright page. The text is in the public domain, so instead of the

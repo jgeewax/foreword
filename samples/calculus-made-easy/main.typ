@@ -11,12 +11,8 @@
 // The page (trim) size: change both numbers to resize every page.
 #show: book.with(title: title, author: author, width: 6in, height: 9in)
 
-// Thompson sends the reader to pages ("see page 5"), which needs page
-// numbers, and never to an equation by its number, so equations go unnumbered.
-#set page(numbering: "1")
+// Thompson never refers to an equation by its number, so equations go unnumbered.
 #set math.equation(numbering: none)
-// Thompson's chapter titles are long: set them ragged-right, not justified.
-#show heading: set par(justify: false)
 
 #title-page(title: title, subtitle: subtitle, author: author, edition: "Second edition")
 

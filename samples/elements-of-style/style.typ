@@ -28,6 +28,9 @@
   )
   set text(font: "Libertinus Serif", size: 11pt, lang: "en")
   set par(justify: true, leading: 0.64em, spacing: 0.64em, first-line-indent: 1.3em)
+  // Headings are set ragged and never hyphenated: a title justified across two lines leaves gaps.
+  show heading: set par(justify: false)
+  show heading: set text(hyphenate: false)
   set heading(numbering: "1")
   set footnote.entry(separator: line(length: 25%, stroke: 0.5pt))
 

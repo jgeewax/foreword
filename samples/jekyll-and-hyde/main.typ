@@ -10,8 +10,6 @@
 // The page (trim) size: change both numbers to resize every page.
 #show: book.with(title: title, author: author, width: 5in, height: 8in)
 
-// Chapter titles that run to two lines stay centred instead of justified.
-#show heading: set par(justify: false)
 // Letters and notes quoted in the story are set apart: indented, a little smaller.
 #show quote.where(block: true): set text(size: 10pt)
 

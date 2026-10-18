@@ -11,6 +11,8 @@
   // The margins below are for 7.5 × 9.25 in; on other sizes they grow or shrink with the page.
   let (x, y) = (width / 7.5in, height / 9.25in)
   set page(
+    // Page numbers for page references (@label, form: "page"); the header and footer print them.
+    numbering: "1",
     width: width,
     height: height,
     margin: (inside: 1in * x, outside: 0.8in * x, top: 0.9in * y, bottom: 0.9in * y),
@@ -39,6 +41,9 @@
   )
   set text(font: "New Computer Modern", size: 10.5pt, lang: "en")
   set par(justify: true, leading: 0.6em, spacing: 1em)
+  // Headings are set ragged and never hyphenated: a title justified across two lines leaves gaps.
+  show heading: set par(justify: false)
+  show heading: set text(hyphenate: false)
   set heading(numbering: "1.1")
   set list(indent: 0.8em)
   set enum(indent: 0.8em)

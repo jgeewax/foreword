@@ -2296,10 +2296,20 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - **Checks:** `npm run check-templates` compiles each sample (no errors or
   warnings); `src/samples.test.ts` checks every folder is listed and
   complete.
-- **The templates' problems the samples found** (worked around in each
-  sample's main.typ for now): two-line chapter titles are justified (novel,
-  non-fiction, textbook), the textbook style has no page numbering for page
-  references, and a novel's chapter 1 can start on a left-hand page.
+- **The templates' problems the samples found, fixed in the templates:**
+  - A chapter title on two lines was justified, with wide gaps ("Remarkable
+    Incident of Dr. / Lanyon"), or hyphenated ("Composi-tion"). Headings are now
+    ragged and never hyphenated, in all four book styles.
+  - The textbook and programming styles had no page numbering, so a page
+    reference (`#ref(<label>, form: "page")`) was an error. The page counter
+    now has a numbering; the header and footer print it as before.
+  - The samples' own workarounds are gone. Every page of every template and
+    sample renders exactly as before (compared image by image), since the
+    templates' own titles fit on one line and the samples had the same rules.
+  - Still open: with a title, copyright and dedication page, a novel's
+    chapter 1 starts on a left-hand page. Jekyll and Hyde adds
+    `#pagebreak(to: "odd")`; the template doesn't, since odd-page breaks
+    give blank pages headers (see Book templates).
 - Verified (self-test `samples`, Rust in a scratch build): the Samples tab
   lists six cards; Peter Rabbit (27 pictures), Jekyll and Hyde and Counting
   Words each open at their first file and compile with 0 errors and 0

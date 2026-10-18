@@ -11,6 +11,8 @@
   // The margins below are for 7.5 × 9.25 in; on other sizes they grow or shrink with the page.
   let (x, y) = (width / 7.5in, height / 9.25in)
   set page(
+    // Page numbers for page references (@label, form: "page"); the header and footer print them.
+    numbering: "1",
     width: width,
     height: height,
     margin: (inside: 1in * x, outside: 0.8in * x, top: 0.9in * y, bottom: 0.9in * y),
@@ -43,6 +45,9 @@
   show raw.where(block: true): block.with(width: 100%, fill: luma(248), inset: (x: 8pt, y: 7pt), radius: 2pt, stroke: 0.5pt + luma(225))
   show raw.where(block: false): box.with(fill: luma(244), inset: (x: 2pt), outset: (y: 2pt), radius: 1.5pt)
   set par(justify: true, leading: 0.6em, spacing: 1em)
+  // Headings are set ragged and never hyphenated: a title justified across two lines leaves gaps.
+  show heading: set par(justify: false)
+  show heading: set text(hyphenate: false)
   set heading(numbering: "1.1")
   set list(indent: 0.8em)
   set enum(indent: 0.8em)
