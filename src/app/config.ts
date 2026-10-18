@@ -49,6 +49,8 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     rulers: settings.rulers,
     toolPaths: settings.toolPaths,
     assistant: settings.assistant,
+    checkForUpdates: settings.checkForUpdates,
+    skippedUpdate: settings.skippedUpdate,
     zoom: Math.round(zoom * 100) / 100,
     permissions: settings.permissions,
     allowCommands: settings.allowCommands,

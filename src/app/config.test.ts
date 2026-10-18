@@ -22,6 +22,11 @@ describe('the settings file', () => {
     expect(JSON.parse(serializeConfig(c.raw, { ...c.settings, rulers: [72] }, 1))).toMatchObject({ wordWrap: 'column', wordWrapColumn: 120, rulers: [72] });
   });
 
+  it('keeps every setting through a write and a read, as at the next launch', () => {
+    const settings = { ...DEFAULT_SETTINGS, checkForUpdates: false, skippedUpdate: '0.2.0', wordWrap: 'off' as const, rulers: [80] };
+    expect(parseConfig(serializeConfig({}, settings, 1)).settings).toEqual(settings);
+  });
+
   it('keeps the programs chosen for the tools', () => {
     const c = parseConfig('{ "toolPaths": { "tinymist": "~/bin/tinymist", "git": "" } }');
     expect(c.settings.toolPaths).toEqual({ tinymist: '~/bin/tinymist' });
