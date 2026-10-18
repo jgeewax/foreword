@@ -2115,6 +2115,28 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   variable What changed's words use; − stops at 9 px; the setting is put back afterwards (local storage is shared
   with the author's app). Pictures at 75 % and 100 %.
 
+### The sample book: kept in Git, and more like a book
+
+- **Kept, not ignored.** `fixtures/sample-book` is the book the self-tests
+  open (as a scratch copy). They look for its files (`ch1-vectors.typ`,
+  `ch2-eigenvalues.typ`), labels, citations and some sentences ("The
+  eigenvalues of…", "so there are at most two eigenvalues"), and use the first
+  three lines of each chapter. It's small on purpose: 9 pages.
+- **Ignored:** every PDF in the repository (exports, the print interior), and
+  the sample book's `.typst-studio/` (the print wrapper and review comments
+  the app writes while the book is open in it).
+- **More like a real book:** a title page with an author, a copyright page,
+  a preface, Contents, and in each chapter a few more sections (linear
+  independence, Cauchy–Schwarz, diagonalization) and exercises. The text is
+  one sentence per line, as the assistant is asked to write, and typstyle-clean
+  with blank lines around headings, so Format on save doesn't change it.
+- The broader samples (a public-domain novel, a paper) are a separate TODO.
+- Verified: `typst compile` without warnings, and the self-test groups that
+  read or edit the book pass on it (preview, typing, format, quickopen,
+  breadcrumbs, selection, typingsync, ctags). `mathdiff` finds no drawn
+  formulas on the old book either: What changed opens on Lines now, and the
+  test still looks for the Words view's formulas.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

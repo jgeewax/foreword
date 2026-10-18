@@ -172,7 +172,7 @@
 
 - [x] text content size and text size for controls in the UI is too big of a difference. the content text is too big. can we shrink that down a bit?
 
-- [ ] should we git ignore the sample book? or not? if so, add to .gitignore. fi not, clean the sample book up to be something more realistic. definitely add the pdf's to gitignore though.
+- [x] should we git ignore the sample book? or not? if so, add to .gitignore. fi not, clean the sample book up to be something more realistic. definitely add the pdf's to gitignore though.
 
 - [ ] add more book sizes (royal, etc). we shoudl have all the common ones for USA, Asia, and Europe.
 

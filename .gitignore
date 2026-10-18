@@ -11,3 +11,8 @@ dist/
 fixtures/stress-book/
 src-tauri/target/
 src-tauri/gen/schemas/
+*.pdf
+
+# The sample book is the self-tests' book, so it's kept; not what the app
+# writes into it while it's open (the print wrapper, review comments).
+fixtures/sample-book/.typst-studio/
