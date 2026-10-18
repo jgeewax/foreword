@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sample-create"
+description = "Enables the sample_create command without any pre-configured scope."
+commands.allow = ["sample_create"]
+
+[[permission]]
+identifier = "deny-sample-create"
+description = "Denies the sample_create command without any pre-configured scope."
+commands.deny = ["sample_create"]

@@ -3,7 +3,7 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { shortPath } from '../lib/paths';
+import { shortPath, tildePath } from '../lib/paths';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
@@ -33,6 +33,7 @@ import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
 import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
+import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
@@ -138,6 +139,7 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
 export type SettingsPage = 'general' | 'assistant' | 'permissions' | 'book' | 'tools';
+export type NewBookTab = 'book' | 'paper' | 'sample';
 
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };
 
@@ -210,6 +212,8 @@ export type StudioState = {
   /** The Settings page to open at (null: the one last shown). */
   settingsPage: SettingsPage | null;
   newBookOpen: boolean;
+  /** The New Book dialog's tab: books from a template, papers, or the samples. */
+  newBookTab: NewBookTab;
   /** "Typst basics" is in front: its tab (or a dialog on the welcome screen). */
   guideOpen: boolean;
   /** Recently opened books, newest first. */
@@ -302,6 +306,7 @@ const initialState: StudioState = {
   settingsOpen: false,
   settingsPage: null,
   newBookOpen: false,
+  newBookTab: 'book',
   guideOpen: false,
   prompt: null,
   recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
@@ -1276,9 +1281,25 @@ export class Studio {
 
   // ---- new book from a template ------------------------------------------------------
 
-  openNewBook() {
-    this.store.set({ newBookOpen: true });
+  openNewBook(tab: NewBookTab = 'book') {
+    this.store.set({ newBookOpen: true, newBookTab: tab });
     this.syncPreviewVisibility();
+  }
+
+  /**
+   * Open a sample book: its copy in ~/Documents/Typst Studio Samples, made
+   * the first time (later, the same copy opens with the author's changes).
+   * Throws (for the dialog) if that fails. `parent` is for self-tests.
+   */
+  async openSample(id: string, parent?: string) {
+    const sample = SAMPLES.find((s) => s.id === id);
+    if (!sample) throw new Error(`Unknown sample ${id}`);
+    parent ??= `${(await documentDir()).replace(/\/$/, '')}/${SAMPLES_FOLDER}`;
+    const root = await ipc.sampleCreate(id, parent, sample.name);
+    this.closeNewBook();
+    await this.openWorkspace(root);
+    await this.openFile(sample.firstFile).catch(() => {});
+    this.toast(`Opened “${sample.name}”, your copy in ${tildePath(parent)}`);
   }
 
   closeNewBook() {

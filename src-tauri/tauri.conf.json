@@ -28,6 +28,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "category": "Productivity"
+    "category": "Productivity",
+    "resources": {
+      "../samples/": "samples/"
+    }
   }
 }

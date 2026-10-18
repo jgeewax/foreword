@@ -63,6 +63,7 @@ export function paletteCommands(studio: Studio): Command[] {
       'File',
       [
         menu('new-book', 'New Book…', { keys: '⇧⌘N', anywhere: true }),
+        { id: 'open-sample', title: 'Open a Sample Book…', keywords: ['example', 'demo'], anywhere: true, run: () => studio.openNewBook('sample') },
         menu('new-chapter', 'New Chapter…', { keys: '⌥⌘N' }),
         menu('new-file', 'New File…', { keys: '⌘N' }),
         { id: 'new-folder', title: 'New Folder…', run: () => studio.newFolder() },

@@ -1,0 +1,299 @@
+{
+  "average": {
+    "code": "lengths = [23, 48, 21, 7, 19, 5, 10, 4, 13, 4, 79, 4, 1, 5]\ntotal = sum(lengths)\naverage = total / len(lengths)\nprint(f\"{len(lengths)} sentences, {total} words\")\nprint(f\"Average: {average:.1f} words\")\nprint(f\"Longest: {max(lengths)}, shortest: {min(lengths)}\")",
+    "lang": "python",
+    "stdout": "14 sentences, 243 words\nAverage: 17.4 words\nLongest: 79, shortest: 1\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.872Z"
+  },
+  "case": {
+    "code": "print(\"It\" == \"it\")\nprint(\"It\".lower() == \"it\")",
+    "lang": "python",
+    "stdout": "False\nTrue\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.664Z"
+  },
+  "clean-words": {
+    "code": "line = '\"Do not you want to know who has taken it?\"'\nwords = []\nfor word in line.split():\n    words.append(word.strip('.,;:!?\"').lower())\nprint(words)",
+    "lang": "python",
+    "stdout": "['do', 'not', 'you', 'want', 'to', 'know', 'who', 'has', 'taken', 'it']\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.678Z"
+  },
+  "collect-long-words": {
+    "code": "sentence = \"\"\"However little known the feelings or views of such a man\nmay be on his first entering a neighbourhood\"\"\"\nlong_words = []\nfor word in sentence.split():\n    if len(word) >= 7:\n        long_words.append(word)\nprint(long_words)",
+    "lang": "python",
+    "stdout": "['However', 'feelings', 'entering', 'neighbourhood']\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.635Z"
+  },
+  "common-words": {
+    "code": "from collections import Counter\n\nwith open(\"texts/opening.txt\", encoding=\"utf-8\") as file:\n    text = file.read()\n\nwords = []\nfor word in text.split():\n    words.append(word.strip('.,;:!?\"').lower())\n\nfor word, count in Counter(words).most_common(8):\n    print(f\"{count:3}  {word}\")",
+    "lang": "python",
+    "stdout": " 10  of\n  9  is\n  8  a\n  8  that\n  8  the\n  7  to\n  6  it\n  6  he\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.784Z"
+  },
+  "count-each-word": {
+    "code": "text = \"Mr. Bennet replied that he had not. Mr. Bennet made no answer.\"\ncounts = {}\nfor word in text.split():\n    word = word.strip('.,;:!?\"').lower()\n    if word in counts:\n        counts[word] += 1\n    else:\n        counts[word] = 1\nprint(counts[\"mr\"])\nprint(counts[\"answer\"])\nprint(len(counts))",
+    "lang": "python",
+    "stdout": "2\n1\n10\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.739Z"
+  },
+  "count-long-words": {
+    "code": "sentence = \"\"\"However little known the feelings or views of such a man\nmay be on his first entering a neighbourhood\"\"\"\nlong_words = 0\nfor word in sentence.split():\n    if len(word) >= 7:\n        long_words += 1\nprint(f\"{long_words} long words\")",
+    "lang": "python",
+    "stdout": "4 long words\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.621Z"
+  },
+  "count-words": {
+    "code": "opening = \"\"\"It is a truth universally acknowledged, that a single\nman in possession of a good fortune, must be in want of a wife.\"\"\"\nwords = opening.split()\nprint(len(words))",
+    "lang": "python",
+    "stdout": "23\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.576Z"
+  },
+  "counter": {
+    "code": "from collections import Counter\n\ntext = \"Mr. Bennet replied that he had not. Mr. Bennet made no answer.\"\nwords = []\nfor word in text.split():\n    words.append(word.strip('.,;:!?\"').lower())\ncounts = Counter(words)\nprint(counts.most_common(3))",
+    "lang": "python",
+    "stdout": "[('mr', 2), ('bennet', 2), ('replied', 1)]\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.754Z"
+  },
+  "dialogue": {
+    "code": "print('\"Mr. Bennet made no answer.\"')",
+    "lang": "python",
+    "stdout": "\"Mr. Bennet made no answer.\"\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.445Z"
+  },
+  "dictionary": {
+    "code": "counts = {\"bennet\": 3, \"dear\": 2}\nprint(counts[\"bennet\"])\ncounts[\"dear\"] += 1\ncounts[\"netherfield\"] = 2\nprint(counts)",
+    "lang": "python",
+    "stdout": "3\n{'bennet': 3, 'dear': 3, 'netherfield': 2}\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.724Z"
+  },
+  "f-strings": {
+    "code": "title = \"Pride and Prejudice\"\nyear = 1813\nprint(f\"{title} was first published in {year}.\")",
+    "lang": "python",
+    "stdout": "Pride and Prejudice was first published in 1813.\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.488Z"
+  },
+  "habit-words": {
+    "code": "from collections import Counter\n\ndraft = \"\"\"She just wanted to go home. It was really late, the party\nwas very loud, and she was really very tired of just smiling.\"\"\"\n\nwords = []\nfor word in draft.split():\n    words.append(word.strip('.,;:!?\"').lower())\ncounts = Counter(words)\n\nfor word in [\"just\", \"really\", \"very\", \"suddenly\"]:\n    print(f\"{word}: {counts[word]}\")",
+    "lang": "python",
+    "stdout": "just: 2\nreally: 2\nvery: 2\nsuddenly: 0\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.815Z"
+  },
+  "hard-words": {
+    "code": "for word in \"Don't stop--it's well-known.\".split():\n    print(word.strip('.,;:!?\"'))",
+    "lang": "python",
+    "stdout": "Don't\nstop--it's\nwell-known\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.693Z"
+  },
+  "hello": {
+    "code": "print(\"Hello, writer.\")",
+    "lang": "python",
+    "stdout": "Hello, writer.\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 16,
+    "ranAt": "2026-10-18T05:18:34.429Z"
+  },
+  "histogram": {
+    "code": "lengths = [23, 48, 21, 7, 19, 5, 10, 4, 13, 4, 79, 4, 1, 5]\nshort = 0\nmedium = 0\nlong = 0\nfor length in lengths:\n    if length < 10:\n        short += 1\n    elif length < 25:\n        medium += 1\n    else:\n        long += 1\nprint(\"short \", \"#\" * short)\nprint(\"medium\", \"#\" * medium)\nprint(\"long  \", \"#\" * long)",
+    "lang": "python",
+    "stdout": "short  #######\nmedium #####\nlong   ##\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.902Z"
+  },
+  "joining": {
+    "code": "print(\"It is a truth \" + \"universally acknowledged,\")\nprint(\"that a single man in possession of a good fortune,\")\nprint(\"must be in want of a wife.\")",
+    "lang": "python",
+    "stdout": "It is a truth universally acknowledged,\nthat a single man in possession of a good fortune,\nmust be in want of a wife.\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.459Z"
+  },
+  "len": {
+    "code": "line = \"Mr. Bennet made no answer.\"\nprint(len(line))",
+    "lang": "python",
+    "stdout": "26\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.517Z"
+  },
+  "list-items": {
+    "code": "words = \"Mr. Bennet made no answer.\".split()\nprint(words[0])\nprint(words[1])\nprint(words[-1])\nprint(len(words))",
+    "lang": "python",
+    "stdout": "Mr.\nBennet\nanswer.\n5\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.591Z"
+  },
+  "loop": {
+    "code": "for word in \"Mr. Bennet made no answer.\".split():\n    print(word, len(word))",
+    "lang": "python",
+    "stdout": "Mr. 3\nBennet 6\nmade 4\nno 2\nanswer. 7\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.606Z"
+  },
+  "methods": {
+    "code": "name = \"Elizabeth Bennet\"\nprint(name.upper())\nprint(name.lower())\nprint(name.replace(\"Bennet\", \"Darcy\"))",
+    "lang": "python",
+    "stdout": "ELIZABETH BENNET\nelizabeth bennet\nElizabeth Darcy\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.547Z"
+  },
+  "naive-split": {
+    "code": "line = \"Mr. Bennet replied that he had not.\"\nprint(line.split(\".\"))",
+    "lang": "python",
+    "stdout": "['Mr', ' Bennet replied that he had not', '']\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 13,
+    "ranAt": "2026-10-18T05:18:34.829Z"
+  },
+  "punctuation": {
+    "code": "line = '\"Is he married or single?\"'\nprint(line.split())",
+    "lang": "python",
+    "stdout": "['\"Is', 'he', 'married', 'or', 'single?\"']\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.650Z"
+  },
+  "read-file": {
+    "code": "with open(\"texts/opening.txt\", encoding=\"utf-8\") as file:\n    text = file.read()\nprint(text[:60])\nprint(len(text.split()), \"words\")",
+    "lang": "python",
+    "stdout": "It is a truth universally acknowledged, that a single man in\n243 words\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.769Z"
+  },
+  "rhythm": {
+    "code": "import math\n\nabbreviations = {\"Mr.\", \"Mrs.\"}\n\nwith open(\"texts/opening.txt\", encoding=\"utf-8\") as file:\n    text = file.read()\n\nlengths = []\ncount = 0\nfor word in text.split():\n    count += 1\n    if word.rstrip('\"')[-1] in \".!?\" and word not in abbreviations:\n        lengths.append(count)\n        count = 0\nif count > 0:\n    lengths.append(count)\n\nfor length in lengths:\n    bar = \"#\" * math.ceil(length / 2)\n    print(f\"{length:3} {bar}\")\nprint(f\"Average: {sum(lengths) / len(lengths):.1f} words\")",
+    "lang": "python",
+    "stdout": " 23 ############\n 48 ########################\n 21 ###########\n  7 ####\n 19 ##########\n  5 ###\n 10 #####\n  4 ##\n 13 #######\n  4 ##\n 79 ########################################\n  4 ##\n  1 #\n  5 ###\nAverage: 17.4 words\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.887Z"
+  },
+  "sentence-ends": {
+    "code": "abbreviations = {\"Mr.\", \"Mrs.\"}\nfor word in ['last?\"', \"Mr.\", \"not.\", 'Bennet,\"', \"enough.\"]:\n    last = word.rstrip('\"')[-1]\n    print(word, last in \".!?\" and word not in abbreviations)",
+    "lang": "python",
+    "stdout": "last?\" True\nMr. False\nnot. True\nBennet,\" False\nenough. True\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.844Z"
+  },
+  "split": {
+    "code": "line = \"It is a truth universally acknowledged\"\nwords = line.split()\nprint(words)",
+    "lang": "python",
+    "stdout": "['It', 'is', 'a', 'truth', 'universally', 'acknowledged']\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.562Z"
+  },
+  "split-sentences": {
+    "code": "abbreviations = {\"Mr.\", \"Mrs.\"}\n\nwith open(\"texts/opening.txt\", encoding=\"utf-8\") as file:\n    text = file.read()\n\nsentences = []\ncurrent = []\nfor word in text.split():\n    current.append(word)\n    if word.rstrip('\"')[-1] in \".!?\" and word not in abbreviations:\n        sentences.append(current)\n        current = []\nif current:\n    sentences.append(current)\n\nprint(len(sentences), \"sentences\")\nfor sentence in sentences:\n    start = \" \".join(sentence[:6])\n    print(f\"{len(sentence):3}  {start}\")",
+    "lang": "python",
+    "stdout": "14 sentences\n 23  It is a truth universally acknowledged,\n 48  However little known the feelings or\n 21  \"My dear Mr. Bennet,\" said his\n  7  Mr. Bennet replied that he had\n 19  \"But it is,\" returned she; \"for\n  5  Mr. Bennet made no answer.\n 10  \"Do not you want to know\n  4  cried his wife impatiently.\n 13  \"You want to tell me, and\n  4  This was invitation enough.\n 79  \"Why, my dear, you must know,\n  4  \"What is his name?\"\n  1  \"Bingley.\"\n  5  \"Is he married or single?\"\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.858Z"
+  },
+  "stop-words": {
+    "code": "from collections import Counter\n\nstop_words = {\n    \"a\", \"and\", \"at\", \"be\", \"been\", \"but\", \"by\", \"for\", \"from\", \"had\",\n    \"has\", \"have\", \"he\", \"her\", \"his\", \"i\", \"in\", \"is\", \"it\", \"me\",\n    \"must\", \"my\", \"no\", \"not\", \"of\", \"on\", \"one\", \"or\", \"she\", \"so\",\n    \"some\", \"that\", \"the\", \"their\", \"this\", \"to\", \"was\", \"who\", \"you\",\n}\n\nwith open(\"texts/opening.txt\", encoding=\"utf-8\") as file:\n    text = file.read()\n\nwords = []\nfor word in text.split():\n    word = word.strip('.,;:!?\"').lower()\n    if word not in stop_words:\n        words.append(word)\n\nfor word, count in Counter(words).most_common(10):\n    print(f\"{count:3}  {word}\")",
+    "lang": "python",
+    "stdout": "  4  mr\n  3  man\n  3  want\n  3  bennet\n  2  truth\n  2  single\n  2  possession\n  2  fortune\n  2  wife\n  2  dear\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 16,
+    "ranAt": "2026-10-18T05:18:34.800Z"
+  },
+  "tagline": {
+    "code": "tagline = \"Five sisters, one rich stranger, and a mother with a plan.\"\nlimit = 50\nprint(f\"{len(tagline)} characters\")\nprint(f\"{len(tagline) - limit} too many\")",
+    "lang": "python",
+    "stdout": "58 characters\n8 too many\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.532Z"
+  },
+  "variables": {
+    "code": "title = \"Pride and Prejudice\"\nauthor = \"Jane Austen\"\nprint(title)\nprint(author)",
+    "lang": "python",
+    "stdout": "Pride and Prejudice\nJane Austen\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 14,
+    "ranAt": "2026-10-18T05:18:34.473Z"
+  },
+  "word-counter": {
+    "code": "draft = \"The rain stopped -- or nearly -- and she went out.\"\ncount = 0\nfor word in draft.split():\n    if word.strip('.,;:!?\"-') != \"\":\n        count += 1\nprint(f\"Splitting at spaces: {len(draft.split())} words\")\nprint(f\"Our counter: {count} words\")",
+    "lang": "python",
+    "stdout": "Splitting at spaces: 11 words\nOur counter: 9 words\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.709Z"
+  },
+  "words-per-day": {
+    "code": "novel = 85000\nper_day = 1000\ndays = novel / per_day\nprint(f\"{days} days\")\nprint(f\"About {round(days / 7)} weeks\")",
+    "lang": "python",
+    "stdout": "85.0 days\nAbout 12 weeks\n",
+    "stderr": "",
+    "exit": 0,
+    "durationMs": 15,
+    "ranAt": "2026-10-18T05:18:34.503Z"
+  }
+}

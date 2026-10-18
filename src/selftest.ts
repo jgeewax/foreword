@@ -4322,6 +4322,59 @@ async function toolPathChecks() {
 }
 
 /**
+ * Sample books: New Book's Samples tab, a card for each; opening two (copies
+ * made next to the scratch book, pictures and all), each compiling without
+ * errors; opening one again gives the same copy with the author's change
+ * kept. Then the scratch book again.
+ */
+async function sampleChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const parent = `${original.slice(0, original.lastIndexOf('/'))}/samples-${Date.now().toString(36)}`;
+  studio.openNewBook('sample');
+  await sleep(400);
+  out.dialog = {
+    title: document.querySelector('.new-book .modal-header h1')?.textContent,
+    tab: document.querySelector('.new-book [role="tab"][aria-selected="true"]')?.textContent,
+    cards: [...document.querySelectorAll('.new-book .template-card')].map((c) => `${c.querySelector('.template-name')?.textContent} — ${c.querySelector('.template-details')?.textContent}`),
+    button: document.querySelector('.new-book button[type="submit"]')?.textContent,
+    titleField: !!document.querySelector('.new-book input[placeholder="The name of your book"]'),
+  };
+  out.snapshotDialog = await snap('samples-dialog');
+  studio.closeNewBook();
+  const opened: Record<string, unknown> = (out.opened = {});
+  for (const id of ['peter-rabbit', 'jekyll-and-hyde', 'counting-words']) {
+    const t = clock();
+    await studio.openSample(id, parent);
+    await waitFor(() => studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 1, 60000, 'compile').catch(() => {});
+    await sleep(800);
+    const ws = studio.state.workspace;
+    opened[id] = {
+      ms: Math.round(clock() - t),
+      root: ws?.root.slice(parent.length),
+      active: studio.state.active,
+      pages: studio.state.compile.pages,
+      errors: studio.state.problems.errors,
+      warnings: studio.state.problems.warnings,
+      files: ws?.files.length,
+      pictures: ws?.files.filter((f) => /\.(jpe?g|png)$/.test(f)).length,
+      snapshot: await snap(`sample-${id}`),
+    };
+  }
+  // Again: the same copy, with the author's change kept.
+  await studio.openSample('peter-rabbit', parent);
+  const first = (await ipc.fsRead('story.typ')).text;
+  const changed = `// The author's note.\n${first}`;
+  await ipc.fsWrite('story.typ', changed, (await ipc.fsRead('story.typ')).hash);
+  await studio.openSample('jekyll-and-hyde', parent);
+  await studio.openSample('peter-rabbit', parent);
+  out.reopened = { root: studio.state.workspace?.root.slice(parent.length), changeKept: (await ipc.fsRead('story.typ')).text === changed };
+  await studio.openWorkspace(original);
+  out.back = studio.state.workspace?.root === original;
+  return out;
+}
+
+/**
  * New Book's page sizes: grouped by region (the US, the UK, continental
  * Europe, ISO, Japan, China, Korea), each template with its own list and
  * default. Read-only: the dialog is closed without creating anything.
@@ -4711,6 +4764,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();
+    if (launch.selftestEdits && want('samples')) result.samples = await sampleChecks();
     if (want('tools')) result.tools = await toolPathChecks();
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();

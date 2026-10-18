@@ -249,7 +249,8 @@ export function Welcome() {
                 <button onClick={() => void studio.chooseWorkspace()}>
                   Open Folder… <kbd>⌘O</kbd>
                 </button>
-                {launch?.sampleBook && <button onClick={() => void studio.openWorkspace(launch.sampleBook!)}>Open sample book</button>}
+                <button onClick={() => studio.openNewBook('sample')}>Open a Sample…</button>
+                {launch?.sampleBook && <button onClick={() => void studio.openWorkspace(launch.sampleBook!)}>Open the test book</button>}
               </div>
               {error && <p className="bad">{error}</p>}
               {recent.length > 0 && (

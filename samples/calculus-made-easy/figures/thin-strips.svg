@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 134 116" width="134pt" height="116pt" font-family="New Computer Modern" font-size="9.5">
+  <!-- Fig. 3: the same square grown by a much smaller dx. -->
+  <rect width="134" height="116" fill="white"/>
+  <!-- the two thin strips, each x by dx -->
+  <rect x="8" y="18" width="90" height="2.5" fill="#1f5fa8" fill-opacity="0.12" stroke="#1f5fa8" stroke-width="0.8"/>
+  <rect x="98" y="20.5" width="2.5" height="90" fill="#1f5fa8" fill-opacity="0.12" stroke="#1f5fa8" stroke-width="0.8"/>
+  <!-- the corner square, too small to see -->
+  <rect x="98" y="18" width="2.5" height="2.5" fill="#b35c00" fill-opacity="0.2" stroke="#b35c00" stroke-width="0.8"/>
+  <!-- the original square -->
+  <rect x="8" y="20.5" width="90" height="90" fill="none" stroke="#444" stroke-width="1"/>
+  <text x="53" y="69" text-anchor="middle"><tspan font-style="italic">x</tspan><tspan dy="-4" font-size="7">2</tspan></text>
+  <text x="53" y="13" text-anchor="middle"><tspan font-style="italic">x</tspan>·<tspan font-style="italic">dx</tspan></text>
+  <text x="104" y="69"><tspan font-style="italic">x</tspan>·<tspan font-style="italic">dx</tspan></text>
+  <text x="103" y="13">(<tspan font-style="italic">dx</tspan>)<tspan dy="-4" font-size="7">2</tspan></text>
+</svg>

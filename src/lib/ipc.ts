@@ -94,6 +94,8 @@ export const ipc = {
   fsRead: (path: string) => invoke<FileContent>('fs_read', { path }),
   fsHash: (path: string) => invoke<string | null>('fs_hash', { path }),
   /** New book: create `parent/name` with these files (never into an existing folder). Returns its path. */
+  /** A sample book's copy in `parent/name`: made the first time, then the same one. */
+  sampleCreate: (id: string, parent: string, name: string) => invoke<string>('sample_create', { id, parent, name }),
   projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
     invoke<string>('project_create', { parent, name, files }),
   /** Run one code example in the book folder (only for trusted books). */

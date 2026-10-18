@@ -2253,6 +2253,58 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Automatic; Esc closed only the list; Search again. Rust tests for the list
   and the probe.
 
+### Sample books, one of each kind
+
+- **Six finished books** in `samples/<id>/`, each made as the app would make
+  it: the template's `style.typ` unchanged (a test checks), its `main.typ`
+  layout, a filled-in `WRITING_STYLE.md`, the Makefile, `.typst-studio.json`
+  and `.gitignore` a new book gets.
+  - **Novel:** Stevenson's *Strange Case of Dr Jekyll and Mr Hyde* (1886),
+    complete: 10 chapters, the dedication, the letters set apart; 90 pages at
+    5 × 8 in. Checked word for word against two transcriptions; three
+    scanning errors fixed from the other one.
+  - **Non-fiction:** Strunk's *The Elements of Style* (1920 edition of the 1918
+    book), complete: wrong/right pairs as two-column tables, the misused words
+    as a term list; 57 pages at 5.5 × 8.5 in.
+  - **Textbook:** Thompson's *Calculus Made Easy* (1914), the Prologue and
+    Chapters I–V with their maths, redrawn figures, exercises and answers;
+    34 pages at 6 × 9 in.
+  - **Programming book:** *Counting Words*, written for the app: Python for
+    writers in four chapters, 33 runnable examples. Their real outputs ship in
+    `code-output/outputs.json`, so every one shows its output and 30 show ✓.
+    The text they analyse is the opening of *Pride and Prejudice*, checked
+    against the 1813 edition.
+  - **Picture book:** Potter's *The Tale of Peter Rabbit* (1902), complete
+    with her 27 illustrations (1.3 MB); 32 pages at 8 × 10 in.
+  - **Research paper:** *Attention Is All You Need* in the NeurIPS template
+    package. The paper's text isn't openly licensed: Google allows only its
+    tables and figures, with credit, in journalistic or scholarly works. So
+    this sample restates it in its own words, with the same structure,
+    equations, results and references, and its own CeTZ figures. The author
+    block and a first-page note say so and link the original. An n-gram check
+    against the original found no shared run longer than table labels, terms
+    and names.
+  - Public-domain texts carry no trace of where they were downloaded (a test
+    checks), and each copyright page says when the book was first published.
+- **Opening one:** New Book has a Samples tab (also the welcome screen's Open
+  a Sample… and the palette's Open a Sample Book…). It copies the sample to
+  `~/Documents/Typst Studio Samples/<title>` and opens it at its first
+  chapter. The author can change anything; opening it again opens the same
+  copy, as it is. The copy is made in Rust (`sample_create`), so the pictures
+  come along: the repo's `samples/` in a dev build, the app's resources when
+  bundled (`bundle.resources`). tauri-build requires that folder to exist.
+- **Checks:** `npm run check-templates` compiles each sample (no errors or
+  warnings); `src/samples.test.ts` checks every folder is listed and
+  complete.
+- **The templates' problems the samples found** (worked around in each
+  sample's main.typ for now): two-line chapter titles are justified (novel,
+  non-fiction, textbook), the textbook style has no page numbering for page
+  references, and a novel's chapter 1 can start on a left-hand page.
+- Verified (self-test `samples`, Rust in a scratch build): the Samples tab
+  lists six cards; Peter Rabbit (27 pictures), Jekyll and Hyde and Counting
+  Words each open at their first file and compile with 0 errors and 0
+  warnings; opening Peter Rabbit again keeps a change made to its copy.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

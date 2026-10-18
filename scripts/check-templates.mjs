@@ -2,7 +2,8 @@
 // Compile every book template in src/templates with the installed `typst`,
 // with a title that needs escaping, every cover style in src/cover (thin and
 // thick spines, checking the wrap's size), Figures mode's figure style file,
-// and every example in the Typst basics guide (src/help/typst-basics.json).
+// every example in the Typst basics guide (src/help/typst-basics.json), and
+// the sample books in samples/.
 // Fails on any error or warning.
 // Usage: npm run check-templates [-- --png <dir>]  (also renders page images)
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -148,6 +149,25 @@ for (const item of guide.sections.flatMap((s) => s.items)) {
 rmSync(work, { recursive: true, force: true });
 console.log(`ok   ${examples} guide examples`);
 
+// The sample books (samples/<id>), compiled as they are, each in a copy.
+const samplesRoot = new URL('../samples/', import.meta.url).pathname;
+for (const id of readdirSync(samplesRoot).filter((n) => statSync(join(samplesRoot, n)).isDirectory())) {
+  const work = mkdtempSync(join(tmpdir(), `typst-sample-${id}-`));
+  cpSync(join(samplesRoot, id), work, { recursive: true });
+  const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', '--root', '.', 'main.typ', 'out.pdf'], { cwd: work, encoding: 'utf8' });
+  const output = `${run.stdout}${run.stderr}`.trim();
+  if (run.status !== 0 || /warning/i.test(output)) {
+    failed++;
+    console.log(`FAIL sample ${id}\n${output}`);
+  } else {
+    // Page objects, not /Pages or /PageLabel.
+    const pages = (readFileSync(join(work, 'out.pdf'), 'latin1').match(/\/Type\s*\/Page(?![A-Za-z])/g) ?? []).length;
+    console.log(`ok   sample ${id} (${pages} pages)`);
+    if (pngDir) execFileSync('typst', ['compile', '--root', '.', '--format', 'png', '--ppi', '40', 'main.typ', join(pngDir, `sample-${id}-{0p}.png`)], { cwd: work });
+  }
+  rmSync(work, { recursive: true, force: true });
+}
+
 // --papers: the research-paper templates (downloads packages; missing-font warnings are expected).
 if (process.argv.includes('--papers')) {
   const src = readFileSync(new URL('../src/templates/index.ts', import.meta.url), 'utf8');
@@ -164,5 +184,5 @@ if (process.argv.includes('--papers')) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-console.log(`${version}: ${failed ? `${failed} failed` : 'all templates and guide examples compile'}`);
+console.log(`${version}: ${failed ? `${failed} failed` : 'all templates, guide examples and samples compile'}`);
 process.exit(failed ? 1 : 0);

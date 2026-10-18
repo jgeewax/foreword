@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 156 168" width="156pt" height="168pt" font-family="New Computer Modern" font-size="9">
+  <!-- Fig. 6a: the graph of dy/dx = 14x, for x from -3 to 5. -->
+  <rect width="156" height="168" fill="white"/>
+  <!-- dashed lines from each plotted point to the axes -->
+  <g fill="none" stroke="#888" stroke-width="0.6" stroke-dasharray="3 2.5">
+    <path d="M 17 118 V 145.3 H 62"/>
+    <path d="M 32 118 V 136.2 H 62"/>
+    <path d="M 47 118 V 127.1 H 62"/>
+    <path d="M 77 118 V 108.9 H 62"/>
+    <path d="M 92 118 V 99.8 H 62"/>
+    <path d="M 107 118 V 90.7 H 62"/>
+    <path d="M 122 118 V 81.6 H 62"/>
+    <path d="M 137 118 V 72.5 H 62"/>
+  </g>
+  <!-- the axes -->
+  <line x1="6" y1="118" x2="146" y2="118" stroke="#444" stroke-width="1"/>
+  <line x1="62" y1="154" x2="62" y2="13" stroke="#444" stroke-width="1"/>
+  <text x="150" y="121" font-size="9.5" font-style="italic">x</text>
+  <g font-size="9.5" font-style="italic" text-anchor="middle">
+    <text x="77" y="11">dy</text>
+    <text x="77" y="23">dx</text>
+  </g>
+  <line x1="70.5" y1="14" x2="83.5" y2="14" stroke="#000" stroke-width="0.5"/>
+  <g stroke="#444" stroke-width="0.6">
+    <line x1="58" y1="150.5" x2="66" y2="150.5"/>
+    <line x1="60" y1="144" x2="64" y2="144"/>
+    <line x1="60" y1="137.5" x2="64" y2="137.5"/>
+    <line x1="60" y1="131" x2="64" y2="131"/>
+    <line x1="60" y1="124.5" x2="64" y2="124.5"/>
+    <line x1="60" y1="111.5" x2="64" y2="111.5"/>
+    <line x1="60" y1="105" x2="64" y2="105"/>
+    <line x1="60" y1="98.5" x2="64" y2="98.5"/>
+    <line x1="60" y1="92" x2="64" y2="92"/>
+    <line x1="58" y1="85.5" x2="66" y2="85.5"/>
+    <line x1="60" y1="79" x2="64" y2="79"/>
+    <line x1="60" y1="72.5" x2="64" y2="72.5"/>
+    <line x1="60" y1="66" x2="64" y2="66"/>
+    <line x1="60" y1="59.5" x2="64" y2="59.5"/>
+    <line x1="58" y1="53" x2="66" y2="53"/>
+    <line x1="60" y1="46.5" x2="64" y2="46.5"/>
+    <line x1="60" y1="40" x2="64" y2="40"/>
+    <line x1="60" y1="33.5" x2="64" y2="33.5"/>
+    <line x1="60" y1="27" x2="64" y2="27"/>
+    <line x1="58" y1="20.5" x2="66" y2="20.5"/>
+  </g>
+  <text x="56" y="88.5" text-anchor="end">50</text>
+  <text x="56" y="56" text-anchor="end">100</text>
+  <text x="56" y="23.5" text-anchor="end">150</text>
+  <g stroke="#444" stroke-width="0.6">
+    <line x1="17" y1="116" x2="17" y2="120"/>
+    <line x1="32" y1="116" x2="32" y2="120"/>
+    <line x1="47" y1="116" x2="47" y2="120"/>
+    <line x1="77" y1="116" x2="77" y2="120"/>
+    <line x1="92" y1="116" x2="92" y2="120"/>
+    <line x1="107" y1="116" x2="107" y2="120"/>
+    <line x1="122" y1="116" x2="122" y2="120"/>
+    <line x1="137" y1="116" x2="137" y2="120"/>
+  </g>
+  <text x="77" y="129" text-anchor="middle">1</text>
+  <text x="92" y="129" text-anchor="middle">2</text>
+  <text x="107" y="129" text-anchor="middle">3</text>
+  <text x="122" y="129" text-anchor="middle">4</text>
+  <text x="137" y="129" text-anchor="middle">5</text>
+  <text x="17" y="113" text-anchor="middle">−3</text>
+  <text x="32" y="113" text-anchor="middle">−2</text>
+  <text x="47" y="113" text-anchor="middle">−1</text>
+  <text x="65" y="129">0</text>
+  <!-- the line -->
+  <line x1="15.5" y1="146.21" x2="140" y2="70.68" stroke="#1f5fa8" stroke-width="1.6"/>
+</svg>

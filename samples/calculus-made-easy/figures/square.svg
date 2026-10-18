@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 114 112" width="114pt" height="112pt" font-family="New Computer Modern" font-size="9.5">
+  <!-- Fig. 1: a square of side x. -->
+  <rect width="114" height="112" fill="white"/>
+  <rect x="8" y="16" width="90" height="90" fill="none" stroke="#444" stroke-width="1"/>
+  <text x="53" y="11" text-anchor="middle" font-style="italic">x</text>
+  <text x="103" y="64" font-style="italic">x</text>
+</svg>

@@ -1,0 +1,44 @@
+// How the book looks. You don't need this file to write: the story uses
+// #story-page and #picture-page (see story.typ). Change the page size, the
+// typeface or the text size here and every page follows.
+
+#let book(title: "", author: "", width: 8.5in, height: 8.5in, body) = {
+  set document(title: title, author: author)
+  // No page numbers; the size is set in main.typ.
+  set page(width: width, height: height, margin: 0.55in)
+  // Rounded, friendly type; falls back to the bundled serif if missing.
+  set text(font: ("Avenir Next", "Helvetica Neue", "Libertinus Serif"), size: 21pt, lang: "en")
+  set par(leading: 0.75em, spacing: 1.1em, justify: false)
+  body
+}
+
+#let cover(title: "", author: "", picture: none) = page(margin: 0.6in)[
+  #set align(center)
+  #v(0.2in)
+  #text(size: 40pt, weight: "bold", title)
+  #v(1fr)
+  #if picture != none { image(picture, height: 55%) }
+  #v(1fr)
+  #text(size: 18pt, author)
+]
+
+/// One page of the story: a picture on top, a few lines of text below.
+#let story-page(picture: none, body) = page[
+  #set align(center)
+  #if picture != none {
+    block(height: 66%, width: 100%, align(center + horizon, image(picture, height: 100%)))
+  }
+  #v(1fr)
+  #body
+  #v(1fr)
+]
+
+/// A page that is all picture, for a big moment in the story. When the book is
+/// printed (with bleed), the picture runs past the page edge into the bleed,
+/// so no white edge shows after cutting.
+#let picture-page(picture) = page(margin: 0pt, context {
+  let b = if type(page.bleed) == dictionary { 0pt } else { page.bleed }
+  place(top + left, dx: -b, dy: -b, image(picture, width: 100% + 2 * b, height: 100% + 2 * b, fit: "cover"))
+})
+
+#let the-end() = page(align(center + horizon, text(size: 34pt, weight: "bold")[The End]))

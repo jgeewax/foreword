@@ -1,9 +1,11 @@
 import { documentDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
-import { AUTHOR_KEY, NEW_BOOK_PARENT, studio } from '../app/studio';
+import { AUTHOR_KEY, NEW_BOOK_PARENT, studio, type NewBookTab } from '../app/studio';
 import { errorMessage } from '../lib/ipc';
 import { tildePath as tilde } from '../lib/paths';
+import { useStore } from '../lib/store';
+import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { bookFolderName, PAPER_TEMPLATES, sizesByRegion, TEMPLATES, typstLength } from '../templates';
 
 const stored = (key: string) => {
@@ -15,7 +17,10 @@ const stored = (key: string) => {
 };
 
 export function NewBookDialog() {
-  const [kind, setKind] = useState<'book' | 'paper'>('book');
+  const tab = useStore(studio.store, (s) => s.newBookTab);
+  const [kind, setKind] = useState<NewBookTab>(tab);
+  useEffect(() => setKind(tab), [tab]);
+  const [sampleId, setSampleId] = useState(SAMPLES[0].id);
   const [template, setTemplate] = useState(TEMPLATES[0].id);
   const [paperId, setPaperId] = useState(PAPER_TEMPLATES[0].id);
   const chosen = TEMPLATES.find((t) => t.id === template)!;
@@ -50,7 +55,8 @@ export function NewBookDialog() {
     setError(null);
     setCreating(true);
     try {
-      if (kind === 'paper') await studio.createBook(paper.id, { title: title.trim(), author: author.trim() }, parent);
+      if (kind === 'sample') await studio.openSample(sampleId);
+      else if (kind === 'paper') await studio.createBook(paper.id, { title: title.trim(), author: author.trim() }, parent);
       else await studio.createBook(template, { title: title.trim(), author: author.trim(), size: size ?? undefined }, parent);
     } catch (e) {
       setError(errorMessage(e));
@@ -59,7 +65,7 @@ export function NewBookDialog() {
   };
 
   const folder = bookFolderName(title);
-  const ready = !!title.trim() && !!parent && (kind === 'paper' || !!size) && !creating;
+  const ready = kind === 'sample' ? !creating : !!title.trim() && !!parent && (kind === 'paper' || !!size) && !creating;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !creating && studio.closeNewBook()}>
       <form
@@ -72,13 +78,16 @@ export function NewBookDialog() {
         }}
       >
         <div className="modal-header">
-          <h1>{kind === 'paper' ? 'New paper' : 'New book'}</h1>
+          <h1>{kind === 'paper' ? 'New paper' : kind === 'sample' ? 'Sample books' : 'New book'}</h1>
           <div className="kind-switch" role="tablist">
             <button type="button" role="tab" aria-selected={kind === 'book'} className={kind === 'book' ? 'active' : ''} onClick={() => setKind('book')}>
               Books
             </button>
             <button type="button" role="tab" aria-selected={kind === 'paper'} className={kind === 'paper' ? 'active' : ''} onClick={() => setKind('paper')}>
               Research papers
+            </button>
+            <button type="button" role="tab" aria-selected={kind === 'sample'} className={kind === 'sample' ? 'active' : ''} onClick={() => setKind('sample')}>
+              Samples
             </button>
           </div>
           <span className="spacer" />
@@ -87,6 +96,34 @@ export function NewBookDialog() {
           </button>
         </div>
         <div className="modal-body">
+          {kind === 'sample' ? (
+            <>
+              <div className="template-grid" role="radiogroup" aria-label="Sample book">
+                {SAMPLES.map((s) => (
+                  <button
+                    type="button"
+                    key={s.id}
+                    role="radio"
+                    aria-checked={sampleId === s.id}
+                    className={`template-card${sampleId === s.id ? ' selected' : ''}`}
+                    onClick={() => setSampleId(s.id)}
+                    onDoubleClick={() => !creating && void create()}
+                  >
+                    <span className="template-name">{s.name}</span>
+                    <span className="template-description">{s.description}</span>
+                    <span className="template-details">
+                      {s.kind} · {s.source}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="settings-help">
+                A finished book of each kind, to look through and to try the assistant on. It opens as your own copy, in <code>~/Documents/{SAMPLES_FOLDER}</code>, so you can change
+                anything; opening it again later opens the same copy.
+              </p>
+            </>
+          ) : (
+            <>
           {kind === 'paper' ? (
             <div className="template-grid papers" role="radiogroup" aria-label="Paper template">
               {PAPER_TEMPLATES.map((t) => (
@@ -187,6 +224,8 @@ export function NewBookDialog() {
             Creates a folder with the book’s files, a writing style guide to fill in (WRITING_STYLE.md), and an <code>export</code> folder setting for PDFs. You can
             change the title and author later in <code>main.typ</code>.
           </p>
+            </>
+          )}
           {error && <p className="bad">{error}</p>}
         </div>
         <div className="modal-footer">
@@ -195,7 +234,17 @@ export function NewBookDialog() {
             Cancel
           </button>
           <button type="submit" className="primary" disabled={!ready}>
-            {creating ? (kind === 'paper' ? 'Downloading the template…' : 'Creating…') : kind === 'paper' ? 'Create paper' : 'Create book'}
+            {kind === 'sample'
+              ? creating
+                ? 'Opening…'
+                : 'Open Sample'
+              : creating
+                ? kind === 'paper'
+                  ? 'Downloading the template…'
+                  : 'Creating…'
+                : kind === 'paper'
+                  ? 'Create paper'
+                  : 'Create book'}
           </button>
         </div>
       </form>

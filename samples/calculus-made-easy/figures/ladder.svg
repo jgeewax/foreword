@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 136 162" width="136pt" height="162pt" font-family="New Computer Modern" font-size="9.5">
+  <!-- Fig. 5: a ladder AB against a wall; its foot pulled a little further out. -->
+  <rect width="136" height="162" fill="white"/>
+  <!-- the wall and the ground -->
+  <line x1="28" y1="136" x2="28" y2="6" stroke="#444" stroke-width="1"/>
+  <line x1="28" y1="136" x2="130" y2="136" stroke="#444" stroke-width="1"/>
+  <!-- the ladder AB, and the same ladder with its foot pulled out -->
+  <line x1="108" y1="136" x2="28" y2="16" stroke="#444" stroke-width="1.2"/>
+  <line x1="118" y1="136" x2="28" y2="23.31" stroke="#1f5fa8" stroke-width="1.2"/>
+  <!-- the braces for y and x -->
+  <path d="M 24 16 Q 20 16 20 20 L 20 72 Q 20 76 16 76 Q 20 76 20 80 L 20 132 Q 20 136 24 136" fill="none" stroke="#444" stroke-width="0.7"/>
+  <path d="M 31 139 Q 31 143 35 143 L 64 143 Q 68 143 68 147 Q 68 143 72 143 L 101 143 Q 105 143 105 139" fill="none" stroke="#444" stroke-width="0.7"/>
+  <text x="12" y="79" text-anchor="end" font-style="italic">y</text>
+  <text x="68" y="157" text-anchor="middle" font-style="italic">x</text>
+  <text x="25" y="148" text-anchor="end" font-style="italic">O</text>
+  <text x="107" y="149" font-style="italic">A</text>
+  <text x="32" y="14" font-style="italic">B</text>
+</svg>

@@ -443,6 +443,88 @@ pub fn create_project_bytes(
     Ok(root)
 }
 
+/// The sample books that come with the app: the repo's samples/ folder in a
+/// dev build, the app's resources in a bundled one.
+fn samples_dir(app: &tauri::AppHandle) -> CmdResult<PathBuf> {
+    let dir = if cfg!(debug_assertions) {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../samples")
+    } else {
+        app.path()
+            .resource_dir()
+            .map_err(|e| CmdError::Unavailable(e.to_string()))?
+            .join("samples")
+    };
+    if dir.is_dir() {
+        Ok(dir)
+    } else {
+        Err(CmdError::Unavailable(
+            "the sample books aren't there".into(),
+        ))
+    }
+}
+
+/// Every regular file under `dir` (no links, no .DS_Store), as (relative path, bytes).
+fn read_tree(dir: &Path, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) -> CmdResult<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let rel = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            read_tree(&entry.path(), &rel, out)?;
+        } else if kind.is_file() && name != ".DS_Store" {
+            out.push((rel, fs::read(entry.path())?));
+        }
+    }
+    Ok(())
+}
+
+/// A copy of sample book `id` in `parent/name` (folders made as needed), to
+/// change as the author likes; if that copy exists already, it's kept as it is.
+pub fn copy_sample(samples: &Path, id: &str, parent: &Path, name: &str) -> CmdResult<PathBuf> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err(CmdError::Invalid(format!("not a sample: {id:?}")));
+    }
+    let src = samples.join(id);
+    if !src.is_dir() {
+        return Err(CmdError::NotFound(format!("no sample called {id}")));
+    }
+    fs::create_dir_all(parent)?;
+    let existing = parent.join(name);
+    if existing.is_dir() && !name.is_empty() && !name.contains(['/', '\0']) {
+        return Ok(existing.canonicalize()?);
+    }
+    let mut files = vec![];
+    read_tree(&src, "", &mut files)?;
+    create_project_bytes(parent, name, &files)
+}
+
+/// Open a sample book: a copy of it in `parent`, made the first time.
+#[tauri::command]
+pub async fn sample_create(
+    app: tauri::AppHandle,
+    id: String,
+    parent: String,
+    name: String,
+) -> CmdResult<String> {
+    if !Path::new(&parent).is_absolute() {
+        return Err(CmdError::Invalid(format!("not a folder: {parent}")));
+    }
+    Ok(
+        copy_sample(&samples_dir(&app)?, &id, Path::new(&parent), &name)?
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
 #[tauri::command]
 pub async fn project_create(
     parent: String,
@@ -574,6 +656,38 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
             .collect();
         assert!(leftovers.is_empty(), "no temp files left behind");
+    }
+
+    #[test]
+    fn samples_are_copied_once_with_their_pictures() {
+        let samples = temp_root();
+        fs::create_dir_all(samples.join("tale/illustrations")).unwrap();
+        fs::write(samples.join("tale/main.typ"), "= Hello").unwrap();
+        fs::write(
+            samples.join("tale/illustrations/01.jpg"),
+            [0xff, 0xd8, 0x00, 0x01],
+        )
+        .unwrap();
+        fs::write(samples.join("tale/.DS_Store"), "x").unwrap();
+        let parent = temp_root().join("Typst Studio Samples");
+        let copy = copy_sample(&samples, "tale", &parent, "The Tale").unwrap();
+        assert_eq!(
+            fs::read(copy.join("illustrations/01.jpg")).unwrap(),
+            [0xff, 0xd8, 0x00, 0x01]
+        );
+        assert!(!copy.join(".DS_Store").exists());
+        // The second time, the author's copy is opened as it is.
+        fs::write(copy.join("main.typ"), "= Changed").unwrap();
+        assert_eq!(
+            copy_sample(&samples, "tale", &parent, "The Tale").unwrap(),
+            copy
+        );
+        assert_eq!(
+            fs::read_to_string(copy.join("main.typ")).unwrap(),
+            "= Changed"
+        );
+        assert!(copy_sample(&samples, "../tale", &parent, "X").is_err());
+        assert!(copy_sample(&samples, "nope", &parent, "X").is_err());
     }
 
     #[test]

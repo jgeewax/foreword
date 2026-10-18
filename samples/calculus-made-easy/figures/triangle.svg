@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 184 116" width="184pt" height="116pt" font-family="New Computer Modern" font-size="9.5">
+  <!-- Fig. 4: a right-angled triangle with a 30° slope, grown by dx and dy. -->
+  <rect width="184" height="116" fill="white"/>
+  <!-- the little triangle, similar to the big one -->
+  <path d="M 138 24.94 L 164 24.94 L 164 9.93 Z" fill="#1f5fa8" fill-opacity="0.12" stroke="#1f5fa8" stroke-width="1"/>
+  <!-- the grown triangle and the original height y -->
+  <path d="M 8 100 L 164 100 L 164 9.93 Z" fill="none" stroke="#444" stroke-width="1" stroke-linejoin="round"/>
+  <line x1="138" y1="100" x2="138" y2="24.94" stroke="#444" stroke-width="1"/>
+  <!-- the 30° angle -->
+  <path d="M 42 100 A 34 34 0 0 0 37.44 83" fill="none" stroke="#b35c00" stroke-width="0.8"/>
+  <text x="46" y="95">30°</text>
+  <text x="73" y="112" text-anchor="middle" font-style="italic">x</text>
+  <text x="151" y="112" text-anchor="middle" font-style="italic">dx</text>
+  <text x="133" y="66" text-anchor="end" font-style="italic">y</text>
+  <text x="168" y="66" font-style="italic">y</text>
+  <text x="168" y="20.7" font-style="italic">dy</text>
+</svg>

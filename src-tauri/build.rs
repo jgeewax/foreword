@@ -24,6 +24,7 @@ fn main() {
             "fs_hash",
             "fs_write",
             "project_create",
+            "sample_create",
             "project_create_from_package",
             "reveal_in_finder",
             "fs_mkdir",
