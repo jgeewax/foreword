@@ -1,7 +1,6 @@
 import { appDataDir } from '@tauri-apps/api/path';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { exportFolderOf, PROJECT_FILE, typstRootOf } from '../app/project-settings';
+import { PROJECT_FILE } from '../app/project-settings';
 import { studio, type SettingsPage } from '../app/studio';
 import type { ToolInfo } from '../lib/ipc';
 import { useStore } from '../lib/store';
@@ -11,6 +10,7 @@ import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { AssistantPage } from './AssistantSettings';
+import { BookFilesPage } from './BookFilesSettings';
 import { Choice, ColorChoice, SwitchRow } from './SettingControls';
 import { ToolPicker } from './ToolPicker';
 import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, MARK_COLORS, type ToolName } from '../app/settings';
@@ -21,143 +21,6 @@ export function Section({ title, children }: { title: string; children: ReactNod
       <h2>{title}</h2>
       {children}
     </section>
-  );
-}
-
-function ProjectSection() {
-  const ws = useStore(studio.store, (s) => s.workspace);
-  const project = useStore(studio.store, (s) => s.project);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [outputDir, setOutputDir] = useState(project.settings.outputDir ?? '');
-  useEffect(() => setOutputDir(project.settings.outputDir ?? ''), [project.settings.outputDir]);
-  const [root, setRoot] = useState(project.settings.root ?? '');
-  useEffect(() => setRoot(project.settings.root ?? ''), [project.settings.root]);
-  if (!ws) return null;
-
-  const typFiles = ws.files.filter((f) => f.endsWith('.typ'));
-  const fonts = project.settings.fontPaths ?? [];
-  const locked = !!project.error;
-  const save = async (patch: Parameters<typeof studio.updateProjectSettings>[0]) => setErrors(await studio.updateProjectSettings(patch));
-  const entry = project.settings.entryPoint ?? ws.entry ?? '';
-  const pdfName = (entry.split('/').pop() ?? 'main.typ').replace(/\.typ$/, '.pdf');
-  const entryDir = entry.includes('/') ? entry.slice(0, entry.lastIndexOf('/')) : '';
-  // A folder of the book (relative to it, or absolute) by its full path: a default is said exactly.
-  const full = (rel: string) => {
-    const r = rel.trim().replace(/^\.\/+/, '').replace(/\/+$/, '');
-    return tildePath(r.startsWith('/') ? r : r && r !== '.' ? `${ws.root}/${r}` : ws.root);
-  };
-  const rootSet = !!project.settings.root?.trim();
-  const mainFolder = entryDir ? `the main file’s folder, ${full(entryDir)}` : `the book’s folder, ${full('')}`;
-  const outputExample = `${full(exportFolderOf({ outputDir }, entry))}/${pdfName}`;
-
-  const addFontFolder = async () => {
-    const picked = await openDialog({ directory: true, multiple: false, defaultPath: ws.root, title: 'Choose a font folder' });
-    if (typeof picked !== 'string') return;
-    const rel = picked === ws.root ? '.' : picked.startsWith(ws.root + '/') ? picked.slice(ws.root.length + 1) : picked;
-    if (!fonts.includes(rel)) await save({ fontPaths: [...fonts, rel] });
-  };
-
-  return (
-    <Section title="The book’s files">
-      {project.error && (
-        <p className="bad">
-          {project.error}{' '}
-          <button
-            className="link"
-            onClick={() => {
-              studio.closeSettings();
-              void studio.openFile(PROJECT_FILE);
-            }}
-          >
-            Open the file
-          </button>
-        </p>
-      )}
-      <div className="settings-field">
-        <label className="settings-label" htmlFor="project-entry">
-          Main file
-        </label>
-        <select id="project-entry" value={entry} disabled={locked} onChange={(e) => void save({ entryPoint: e.target.value })}>
-          {typFiles.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
-        <p className="settings-help">The file the preview and PDF export start from; chapters are included from it.</p>
-      </div>
-      <div className="settings-field">
-        <label className="settings-label" htmlFor="project-root">
-          Book folder (Typst root)
-        </label>
-        <input
-          id="project-root"
-          className="settings-input"
-          value={root}
-          placeholder={`Default: ${mainFolder}`}
-          disabled={locked}
-          onChange={(e) => setRoot(e.target.value)}
-          onBlur={() => root.trim() !== (project.settings.root ?? '') && void save({ root: root.trim() })}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        />
-        <p className="settings-help settings-in-use">
-          In use: <code className="selectable">{full(typstRootOf(project.settings, entry))}</code>
-          {rootSet ? ', set here.' : `, ${entryDir ? 'the main file’s folder' : 'the book’s folder'} (the default).`}
-        </p>
-        <p className="settings-help">
-          Where paths starting with <code>/</code> begin, like <code>image("/figures/map.png")</code>, and the folder Typst may read. For a book kept in a subfolder such as{' '}
-          <code>src/</code>, the main file’s folder is used unless you set it here.
-        </p>
-      </div>
-      <div className="settings-field">
-        <label className="settings-label" htmlFor="project-output">
-          PDF output folder
-        </label>
-        <input
-          id="project-output"
-          className="settings-input"
-          value={outputDir}
-          placeholder={`Default: next to the main file, in ${full(entryDir)}`}
-          disabled={locked}
-          onChange={(e) => setOutputDir(e.target.value)}
-          onBlur={() => outputDir.trim() !== (project.settings.outputDir ?? '') && void save({ outputDir: outputDir.trim() })}
-          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        />
-        <p className="settings-help">
-          Export PDF (⇧⌘E) builds <code className="selectable">{outputExample}</code>
-          {outputDir.trim() ? '' : ' (next to the main file, the default)'}, then saves a copy where you choose.
-        </p>
-      </div>
-      <div className="settings-field">
-        <div className="settings-label">Extra font folders</div>
-        {fonts.length === 0 && (
-          <p className="settings-help">
-            None. Fonts installed on this Mac are always available (those in <code>~/Library/Fonts</code>, <code>/Library/Fonts</code> and <code>/System/Library/Fonts</code>), and
-            the ones Typst comes with.
-          </p>
-        )}
-        {fonts.map((f) => (
-          <div className="settings-list-row" key={f}>
-            <span className="settings-font-folder">
-              <code>{f}</code>
-              {!f.startsWith('/') && <code className="muted selectable">{full(f)}</code>}
-            </span>
-            <button className="link" disabled={locked} onClick={() => void save({ fontPaths: fonts.filter((x) => x !== f) })}>
-              Remove
-            </button>
-          </div>
-        ))}
-        <button disabled={locked} onClick={() => void addFontFolder()}>
-          Add folder…
-        </button>
-        <p className="settings-help">Folders with .otf/.ttf files this book uses (for example a fonts/ folder in the project).</p>
-      </div>
-      {errors.map((e) => (
-        <p className="bad" key={e}>
-          {e}
-        </p>
-      ))}
-    </Section>
   );
 }
 
@@ -678,7 +541,7 @@ export function SettingsDialog() {
   }, [query]);
 
   const pageContent = (id: Page) =>
-    ({ general: <GeneralPage />, editor: <EditorPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage goToAssistant={() => (setQuery(''), setPage('assistant'))} />, book: <ProjectSection />, 'book-assistant': <BookAssistantPage /> })[id];
+    ({ general: <GeneralPage />, editor: <EditorPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage goToAssistant={() => (setQuery(''), setPage('assistant'))} />, book: <BookFilesPage />, 'book-assistant': <BookAssistantPage /> })[id];
   const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (

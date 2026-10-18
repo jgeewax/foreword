@@ -166,9 +166,9 @@ async function projectSettingsChecks() {
   };
   out.initial = { settings: studio.state.project.settings, entry: studio.state.workspace?.entry, pages: await compiled() };
 
-  studio.openSettings();
+  studio.openSettings('book');
   await sleep(500);
-  out.sectionShown = !!document.querySelector('#project-entry');
+  out.sectionShown = !!document.querySelector('.file-card-main .picker-trigger');
   try {
     out.snapshot = await ipc.previewSnapshot('project-settings', 'main');
   } catch (e) {
@@ -4289,6 +4289,89 @@ async function settingControlsChecks() {
 }
 
 /**
+ * Settings ▸ This book ▸ Files: a card per setting, menus instead of path
+ * boxes; the main file's menu, a typed output folder, and a book's own font
+ * folder offered and used. Saves .typst-studio.json (put back at the end), so
+ * a scratch book only, with a font in fonts/.
+ */
+async function filesPageChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { ...studio.state.project.settings };
+  const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const card = (kind: string) => document.querySelector(`.file-card-${kind}`);
+  const options = () => [...document.querySelectorAll('.tool-list [role="option"]')].map((o) => (o.getAttribute('aria-selected') === 'true' ? '✓ ' : '') + text(o));
+  const key = (el: Element | null | undefined, k: string) => el?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  // A window behind others doesn't run animations, so the dialog's fade-in would stay transparent in the pictures.
+  const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
+  studio.openSettings('book');
+  await sleep(500);
+  out.cards = [...document.querySelectorAll('.file-card')].map((c) => ({
+    head: text(c.querySelector('.file-card-head')),
+    trigger: text(c.querySelector('.picker-trigger')),
+    menu: !!c.querySelector('.picker-trigger:not(:disabled)'),
+  }));
+  out.noTextBoxes = !document.querySelector('.settings-content input, .settings-content select');
+  out.focused = text(document.activeElement);
+  out.snapshot = await snap('filespage');
+
+  // The main file's menu: every .typ file, the book's folder first; Esc closes it and leaves Settings open.
+  const mainTrigger = card('main')?.querySelector<HTMLButtonElement>('.picker-trigger');
+  mainTrigger?.click();
+  await sleep(250);
+  out.mainMenu = { options: options(), sections: [...document.querySelectorAll('.tool-list-section')].map(text), filter: !!document.querySelector('.picker-filter'), snapshot: await snap('filespage-main-menu') };
+  out.focusInMenu = mainTrigger?.closest('.picker')?.contains(document.activeElement);
+  key(document.activeElement, 'Escape');
+  await sleep(150);
+  out.escClosesMenu = { menuOpen: !!document.querySelector('.tool-list'), settingsOpen: !!document.querySelector('.modal.settings'), focusOnTrigger: document.activeElement === mainTrigger };
+
+  // The book's folder: only folders that hold the main file (none to choose when it's in the book's folder).
+  const rootTrigger = card('root')?.querySelector<HTMLButtonElement>('.picker-trigger');
+  if (rootTrigger?.disabled) out.rootMenu = 'one choice';
+  else {
+    rootTrigger?.click();
+    await sleep(250);
+    out.rootMenu = { options: options(), snapshot: await snap('filespage-root-menu') };
+    key(rootTrigger, 'Escape');
+    await sleep(150);
+  }
+
+  // The output folder: Type a folder name…, a bad one is refused, a good one used.
+  card('output')?.querySelector<HTMLButtonElement>('.picker-trigger')?.click();
+  await sleep(250);
+  out.outputMenu = options();
+  [...document.querySelectorAll<HTMLElement>('.tool-list [role="option"]')].find((o) => o.textContent?.includes('Type a folder name'))?.click();
+  await sleep(250);
+  const box = card('output')?.querySelector<HTMLInputElement>('.tool-typing input');
+  const type = async (value: string) => {
+    if (!box) return;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(box, value);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+  };
+  await type('../elsewhere');
+  out.typedBad = { probe: text(card('output')?.querySelector('.tool-probe')), useDisabled: card('output')?.querySelector<HTMLButtonElement>('.tool-typing button.primary')?.disabled };
+  await type('build/pdf');
+  out.typedGood = { probe: text(card('output')?.querySelector('.tool-probe')), snapshot: await snap('filespage-output-typing') };
+  key(box, 'Enter');
+  await sleep(600);
+  out.outputAfter = { setting: studio.state.project.settings.outputDir, head: text(card('output')?.querySelector('.file-card-head')), trigger: text(card('output')?.querySelector('.picker-trigger')), boxGone: !card('output')?.querySelector('.tool-typing') };
+
+  // Fonts: the book's fonts/ folder is offered; Use them adds it, with its count.
+  out.fontsBefore = [...document.querySelectorAll('.font-list > *')].map(text);
+  card('fonts')?.querySelector<HTMLButtonElement>('.font-row.suggested button')?.click();
+  await sleep(600);
+  out.fontsAfter = { setting: studio.state.project.settings.fontPaths, rows: [...document.querySelectorAll('.font-list > *')].map(text), snapshot: await snap('filespage-fonts') };
+
+  await studio.updateProjectSettings({ outputDir: saved.outputDir ?? '', fontPaths: saved.fontPaths ?? [] });
+  await sleep(300);
+  out.restored = { outputDir: studio.state.project.settings.outputDir ?? null, fontPaths: studio.state.project.settings.fontPaths ?? null };
+  studio.closeSettings();
+  still.remove();
+  await sleep(200);
+  return out;
+}
+
+/**
  * Defaults are said exactly: wherever a folder is "the main file's" or "Typst
  * Studio's own", its full path is there too (Settings, History, New File).
  */
@@ -4299,14 +4382,11 @@ async function explicitDefaultsChecks() {
   const out: Record<string, unknown> = { book };
   studio.openSettings('book');
   await sleep(400);
-  const field = (id: string) => document.getElementById(id)?.closest('.settings-field');
   out.files = {
     banner: text('.settings-scope'),
-    rootPlaceholder: document.querySelector<HTMLInputElement>('#project-root')?.placeholder,
-    rootInUse: field('project-root')?.querySelector('.settings-in-use')?.textContent,
-    outputPlaceholder: document.querySelector<HTMLInputElement>('#project-output')?.placeholder,
-    output: [...(field('project-output')?.querySelectorAll('.settings-help') ?? [])].map((p) => p.textContent).join(' '),
-    fonts: [...document.querySelectorAll('.settings-label')].find((l) => l.textContent === 'Extra font folders')?.parentElement?.querySelector('.settings-help')?.textContent,
+    root: text('.file-card-root .file-card-head') + ' ' + text('.file-card-root .picker-trigger'),
+    output: text('.file-card-output .file-card-head') + ' ' + text('.file-card-output .picker-trigger'),
+    fonts: text('.file-card-fonts .font-empty'),
     snapshot: await snap('defaults-files'),
   };
   [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Tools')?.click();
@@ -4342,11 +4422,11 @@ async function explicitDefaultsChecks() {
   const tools = out.tools as Record<string, string>;
   out.ok =
     files.banner.includes(`${book}/.typst-studio.json`) &&
-    !!files.rootPlaceholder?.includes(book) &&
-    !!files.rootInUse?.includes(book) &&
-    !!files.outputPlaceholder?.includes(book) &&
+    files.root.includes('Default') &&
+    files.root.includes(book) &&
+    files.output.includes('Default') &&
     files.output.includes(`${book}/`) &&
-    !!files.fonts?.includes('~/Library/Fonts') &&
+    files.fonts.includes('~/Library/Fonts') &&
     /history\/\w+\.git/.test(tools.git ?? '') &&
     /\/(tinymist)\b/.test(tools.automatic ?? '') &&
     out.textSizeDefault === 'Default (12 px)' &&
@@ -5417,6 +5497,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('assistantmenu')) result.assistantmenu = await assistantMenuChecks();
     if (want('settingcontrols')) result.settingcontrols = await settingControlsChecks();
     if (want('defaults')) result.defaults = await explicitDefaultsChecks();
+    if (launch.selftestEdits && want('filespage')) result.filespage = await filesPageChecks();
     // It starts Claude Code: only when asked for.
     if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();

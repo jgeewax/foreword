@@ -217,3 +217,11 @@
 - [x] im confused why opencode is in the tools section of settings while also in the agent section. i think it should probably go from the tool section?
 
 - [x] no model picker in the agent settings for opencode. that is something we leave to just the ai chatbox
+
+- [x] make settings -> files screen much prettier. its really ugly
+
+- [ ] add support for antigravity CLI? (or is that gemini?)
+
+- [ ] make a really pretty README.md for the github repo
+
+- [ ] in settings modal, X in top right corner isnt centered properly (visible when hovering)

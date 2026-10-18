@@ -942,6 +942,55 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .command-chip.editable button { padding: 0 5px; }
 .command-list { display: flex; flex-direction: column; gap: 6px; }
 .command-list .settings-row .settings-input { max-width: 240px; }
+/* A menu of one of many (Settings' Picker), in the Tools picker's look. */
+.picker-trigger { min-height: 32px; padding: 6px 8px 6px 9px; }
+.picker-trigger.static:disabled { opacity: 1; }
+.picker-trigger .file-icon { align-self: flex-start; margin-top: 1px; }
+.picker-trigger > .icon-svg:first-child { flex: none; align-self: flex-start; margin-top: 1px; color: var(--muted); }
+.picker-value { flex: none; font-weight: 600; }
+.picker-option-icon { flex: none; display: inline-grid; margin: 1px 4px 0 0; color: var(--muted); }
+.picker-filter { display: block; width: calc(100% - 16px); margin: 4px 8px 6px; padding: 4px 8px; font: inherit; color: var(--fg); background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+.picker-filter:focus { border-color: var(--accent); }
+.picker-none { padding: 6px 12px 6px 30px; color: var(--muted); }
+/* A path said exactly: its folders, then the last part in bold; long ones wrap. */
+.path-text { flex: 1; min-width: 0; font: 11.5px "SF Mono", Menlo, monospace; line-height: 1.45; overflow-wrap: anywhere; }
+.path-parent { color: var(--muted); }
+.path-leaf { color: var(--fg); font-weight: 600; }
+/* Settings ▸ This book ▸ Files: a card per setting, with a tile of its own colour. */
+.file-card { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 12px 14px 13px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.settings-section > .file-card + .file-card { margin-top: 10px; }
+.file-card-icon { --tile: var(--accent); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: color-mix(in srgb, var(--tile) 15%, transparent); color: var(--tile); }
+.file-card-main .file-card-icon { --tile: #239dad; }
+.file-card-output .file-card-icon { --tile: #cc3e44; }
+.file-card-fonts .file-card-icon { --tile: #a074c4; }
+.file-card-icon .file-icon { width: 18px; height: 18px; color: inherit; font-size: 19px; }
+.file-card-glyph { font: 600 14px/1 Georgia, "Times New Roman", serif; }
+.file-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 22px; margin: 5px 0 8px; }
+.file-card-title { color: var(--fg); font-size: 13px; font-weight: 650; }
+.file-card-note { color: var(--muted); font-size: 11.5px; }
+.file-card-chip { padding: 1px 7px; border-radius: 9px; background: var(--bg-3); color: var(--muted); font-size: 10.5px; font-weight: 600; }
+.file-card-chip.set { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.file-card-actions { margin-left: auto; }
+.file-card-add { display: inline-flex; align-items: center; gap: 4px; }
+.settings-content .file-card-help { margin-top: 7px; }
+.file-card-error { margin: 7px 0 0; color: var(--bad); font-size: 12px; }
+.file-alert { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--bad) 8%, transparent); color: var(--bad); }
+.file-alert span { flex: 1; }
+.font-list { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2); }
+.font-list:has(> .font-empty:only-child) { border-style: dashed; background: transparent; }
+.font-empty { padding: 9px 12px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.font-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 11px; }
+.font-row + .font-row, .font-empty + .font-row { border-top: 1px solid var(--border); }
+.font-row > .icon-svg { flex: none; color: var(--muted); }
+.font-row-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.font-row-name { font-weight: 600; }
+.settings-section .font-row code { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.font-count { flex: none; padding: 1px 7px; border-radius: 9px; background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.font-count.none { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.font-remove { flex: none; color: var(--muted); }
+.font-remove:hover:not(:disabled) { color: var(--fg); }
+.font-row.suggested { background: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+.font-row.suggested > .icon-svg { color: var(--accent); }
 
 /* Tasks at work in the background. */
 .task-count { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 0 6px; height: 16px; border-radius: 8px; font-size: 10.5px; font-weight: 700; }

@@ -1,7 +1,8 @@
-// Settings' own controls, in place of the browser's checkboxes and radio
-// buttons: a switch for on or off, a segmented control for one of a few,
-// and a colour picker.
-import { useRef, type CSSProperties, type ReactNode } from 'react';
+// Settings' own controls, in place of the browser's checkboxes, radio
+// buttons and selects: a switch for on or off, a segmented control for one
+// of a few, a colour picker, and a menu for one of many.
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Icon } from './icons';
 
 /**
  * An on/off setting, as in macOS's System Settings: what it does, then the
@@ -95,6 +96,143 @@ export function ColorChoice({ label, on, color, colors, onChange }: { label: str
       <button type="button" className="swatch-none" title="No mark: these lines look like the ones you wrote" {...radio(none)} onClick={() => pick(none)}>
         Same as yours
       </button>
+    </div>
+  );
+}
+
+export type PickerRow = {
+  key: string;
+  /** What it is, more about it, and a path (in type, as Tools' copies). */
+  title: ReactNode;
+  detail?: ReactNode;
+  path?: string;
+  icon?: ReactNode;
+  selected?: boolean;
+  /** A heading above this row (once for a run of rows with the same one). */
+  section?: string;
+  /** Another way to choose (Choose a folder…), under a line, rather than a choice. */
+  action?: boolean;
+  run: () => void;
+};
+
+/**
+ * One of many, in a menu under a button that shows the choice, as Settings ▸
+ * Tools' program picker: arrows open it and move, Enter picks, Esc closes the
+ * menu (not Settings). With `filter`, a box at the top narrows a long list.
+ * `disabled` with one choice shows it, without a menu.
+ */
+export function Picker({ label, trigger, rows, disabled = false, filter }: { label: string; trigger: ReactNode; rows: PickerRow[]; disabled?: boolean; filter?: (row: PickerRow, query: string) => boolean }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [highlight, setHighlight] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const shown = filter && query.trim() ? rows.filter((r) => r.action || filter(r, query.trim().toLowerCase())) : rows;
+  const close = (refocus = true) => {
+    setOpen(false);
+    setQuery('');
+    if (refocus) triggerRef.current?.focus();
+  };
+  const pick = (row: PickerRow | undefined) => {
+    if (!row) return;
+    close();
+    row.run();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    setHighlight(Math.max(0, rows.findIndex((r) => r.selected)));
+    // Keys go to the menu (a click doesn't focus a button in WebKit), so Esc closes it rather than Settings.
+    if (!filter) triggerRef.current?.focus();
+    // The whole menu in view, in Settings' scrolling page.
+    listRef.current?.scrollIntoView({ block: 'nearest' });
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) close(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setHighlight(0), [query]);
+  useLayoutEffect(() => {
+    listRef.current?.querySelector(`[data-row="${highlight}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [highlight]);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => (h + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % Math.max(1, shown.length));
+    } else if (e.key === 'Enter' || (e.key === ' ' && !(e.target instanceof HTMLInputElement))) {
+      e.preventDefault();
+      pick(shown[highlight]);
+    } else if (e.key === 'Escape') {
+      // Closes the menu, not Settings.
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
+  };
+  const firstAction = shown.findIndex((r) => r.action);
+
+  return (
+    <div className="tool-picker picker" ref={rootRef} onKeyDown={onKeyDown}>
+      <button
+        ref={triggerRef}
+        className={`tool-trigger picker-trigger${disabled ? ' static' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => (open ? close() : setOpen(true))}
+      >
+        {trigger}
+        {!disabled && <Icon name="chevronDown" size={14} />}
+      </button>
+      {open && (
+        <div className="tool-list" role="listbox" aria-label={label} ref={listRef}>
+          {filter && (
+            <input
+              className="picker-filter"
+              placeholder="Filter"
+              aria-label={`Filter: ${label}`}
+              spellCheck={false}
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
+          {query.trim() && shown.every((r) => r.action) && <div className="picker-none">Nothing matches “{query.trim()}”.</div>}
+          {shown.map((r, i) => (
+            <div key={r.key}>
+              {i === firstAction && i > 0 && <div className="tool-list-divider" />}
+              {r.section && !r.action && r.section !== shown[i - 1]?.section && <div className="tool-list-section">{r.section}</div>}
+              <div
+                role="option"
+                aria-selected={!!r.selected}
+                data-row={i}
+                className={`tool-option${r.action ? ' tool-action' : ''}${i === highlight ? ' highlighted' : ''}`}
+                onMouseEnter={() => setHighlight(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(r)}
+              >
+                <span className="tool-option-check">{r.selected && <Icon name="check" size={13} />}</span>
+                {r.icon && <span className="picker-option-icon">{r.icon}</span>}
+                <span className="tool-option-body">
+                  <span className="tool-option-title">{r.title}</span>
+                  {r.detail && <span className="tool-option-detail">{r.detail}</span>}
+                  {r.path && <span className="tool-option-path">{r.path}</span>}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
