@@ -198,7 +198,7 @@
 
 - [x] make a public-facing website in a gh-pages branch
 
-- [ ] use gh to create a repository and push remotely to github. jgeewax/typststudio
+- [x] use gh to create a repository and push remotely to github. jgeewax/typststudio
 
 - [x] get rid of checkboxes in the settings. those are dangerous. healthy UI controls only for settings.
 
