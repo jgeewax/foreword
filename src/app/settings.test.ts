@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRESETS } from '../services/agent/permissions';
-import { composerKeyAction, loadSettings, saveSettings } from './settings';
+import { composerKeyAction, editorLineHeight, loadSettings, saveSettings } from './settings';
 
 const enter = (mods: Partial<{ shift: boolean; meta: boolean; ctrl: boolean; alt: boolean; composing: boolean }> = {}) => ({
   key: 'Enter',
@@ -63,14 +63,28 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [], formatOnSave: true });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, allowCommands: [], formatOnSave: true, editorFontSize: 12 });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
     store.set('studio.settings', '{"formatOnSave":false}');
     expect(loadSettings().formatOnSave).toBe(false);
     store.set('studio.settings', '{"formatOnSave":"no"}');
     expect(loadSettings().formatOnSave).toBe(true);
+    store.set('studio.settings', '{"editorFontSize":14}');
+    expect(loadSettings().editorFontSize).toBe(14);
+    for (const bad of ['"14"', '4', '40', 'null']) {
+      store.set('studio.settings', `{"editorFontSize":${bad}}`);
+      expect(loadSettings().editorFontSize).toBe(12);
+    }
     store.set('studio.settings', 'not json');
     expect(loadSettings().sendKey).toBe('enter');
+  });
+});
+
+describe('editorLineHeight', () => {
+  it('is VS Code\'s on macOS: 1.5 times the text size, rounded', () => {
+    expect(editorLineHeight(12)).toBe(18);
+    expect(editorLineHeight(13)).toBe(20);
+    expect(editorLineHeight(14)).toBe(21);
   });
 });

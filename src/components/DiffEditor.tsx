@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { languageFor, monaco } from '../editor/monaco';
+import { studio } from '../app/studio';
+import { editorTextOptions, languageFor, monaco } from '../editor/monaco';
+import { useStore } from '../lib/store';
 
 /**
  * One file's change in Monaco's diff editor (read-only), as VS Code shows it:
@@ -10,6 +12,8 @@ import { languageFor, monaco } from '../editor/monaco';
 export function DiffEditor({ path, before, after }: { path: string; before: string | null; after: string | null }) {
   const host = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(80);
+  const fontSize = useStore(studio.store, (s) => s.settings.editorFontSize);
+  const diffEditor = useRef<monaco.editor.IStandaloneDiffEditor | null>(null);
 
   useEffect(() => {
     const language = languageFor(path);
@@ -30,12 +34,12 @@ export function DiffEditor({ path, before, after }: { path: string; before: stri
       scrollBeyondLastLine: false,
       // The list scrolls, not each editor.
       scrollbar: { vertical: 'hidden', horizontal: 'hidden', alwaysConsumeMouseWheel: false },
-      fontSize: 13,
-      lineHeight: 20,
+      ...editorTextOptions(studio.state.settings.editorFontSize),
       fontFamily: '"SF Mono", Menlo, Monaco, monospace',
       unicodeHighlight: { ambiguousCharacters: false },
     });
     editor.setModel({ original, modified });
+    diffEditor.current = editor;
     const sides = [editor.getOriginalEditor(), editor.getModifiedEditor()];
     const fit = () => {
       // Monaco 0.57 stops wrapping the original side when it goes inline (it's hidden then), and
@@ -47,11 +51,15 @@ export function DiffEditor({ path, before, after }: { path: string; before: stri
     fit();
     return () => {
       subscriptions.forEach((s) => s.dispose());
+      diffEditor.current = null;
       editor.dispose();
       original.dispose();
       modified.dispose();
     };
   }, [path, before, after]);
+
+  // The editor's text size (Settings ▸ General ▸ Editor).
+  useEffect(() => diffEditor.current?.updateOptions(editorTextOptions(fontSize)), [fontSize]);
 
   return <div className="diff-editor" ref={host} style={{ height }} />;
 }

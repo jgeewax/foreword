@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createRoot, type Root } from 'react-dom/client';
 import { CommentCard, CommentComposer } from './CommentCard';
 import { studio } from '../app/studio';
-import { monaco } from '../editor/monaco';
+import { editorTextOptions, monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
@@ -93,8 +93,7 @@ export function EditorPane() {
       automaticLayout: true,
       wordWrap: 'on',
       minimap: { enabled: false },
-      fontSize: 13,
-      lineHeight: 20,
+      ...editorTextOptions(studio.state.settings.editorFontSize),
       fontFamily: '"SF Mono", Menlo, Monaco, monospace',
       scrollBeyondLastLine: false,
       renderLineHighlight: 'line',
@@ -415,8 +414,17 @@ export function EditorPane() {
     editor.onDidChangeModel(() => studio.onEditorSelection());
     studio.attachEditor(editor);
     const off = studio.events.on('focus-editor', () => editor.focus());
+    // The text size (Settings ▸ General ▸ Editor).
+    let lastSize = studio.state.settings.editorFontSize;
+    const offSize = studio.store.subscribe(() => {
+      const size = studio.state.settings.editorFontSize;
+      if (size === lastSize) return;
+      lastSize = size;
+      editor.updateOptions(editorTextOptions(size));
+    });
     return () => {
       off();
+      offSize();
       offAi();
       clearTimeout(aiTimer);
       clearTimeout(outlineTimer);

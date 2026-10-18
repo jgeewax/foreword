@@ -8,7 +8,7 @@ import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
-import { isCommandName } from '../app/settings';
+import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -199,6 +199,7 @@ function SettingsFileSection() {
 function GeneralPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const zoom = useStore(studio.store, (s) => s.zoom);
+  const setTextSize = (px: number) => studio.updateSettings({ editorFontSize: Math.min(EDITOR_FONT_SIZES.max, Math.max(EDITOR_FONT_SIZES.min, Math.round(px))) });
   return (
     <>
       <Section title="Chat">
@@ -210,6 +211,22 @@ function GeneralPage() {
         </div>
       </Section>
       <Section title="Editor">
+        <div className="settings-field">
+          <div className="settings-label">Text size</div>
+          <div className="settings-row">
+            <button onClick={() => setTextSize(settings.editorFontSize - 1)} disabled={settings.editorFontSize <= EDITOR_FONT_SIZES.min} aria-label="Smaller text">
+              −
+            </button>
+            <span className="settings-zoom">{settings.editorFontSize} px</span>
+            <button onClick={() => setTextSize(settings.editorFontSize + 1)} disabled={settings.editorFontSize >= EDITOR_FONT_SIZES.max} aria-label="Bigger text">
+              +
+            </button>
+            <button onClick={() => setTextSize(DEFAULT_SETTINGS.editorFontSize)} disabled={settings.editorFontSize === DEFAULT_SETTINGS.editorFontSize}>
+              Default
+            </button>
+          </div>
+          <p className="settings-help">The text you write, in the editor and in What changed. Size of everything (⌘= and ⌘−) scales the whole window, this text included.</p>
+        </div>
         <div className="settings-field">
           <label className="settings-option">
             <input type="checkbox" checked={settings.formatOnSave} onChange={(e) => studio.updateSettings({ formatOnSave: e.target.checked })} />

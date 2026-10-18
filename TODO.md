@@ -169,3 +169,21 @@
 - [x] file tabs should have file type icon like vs code
 
 - [x] git diffs and history diffs show up as a modal. i want them both to show up like regular files as a tab. if width allows, side by side. if not , inline diffs. just like vs code.
+
+- [x] text content size and text size for controls in the UI is too big of a difference. the content text is too big. can we shrink that down a bit?
+
+- [ ] should we git ignore the sample book? or not? if so, add to .gitignore. fi not, clean the sample book up to be something more realistic. definitely add the pdf's to gitignore though.
+
+- [ ] add more book sizes (royal, etc). we shoudl have all the common ones for USA, Asia, and Europe.
+
+- [ ] settings for tools doesnt allow any configuration. what if we want to change which tinymist/opencode/git to use?
+
+- [ ] better sample books , one for each type. a novel in the public domain. the transformers paper (attn is all you need), etc.
+
+- [ ] can we make this wokr with gemini CLI rather than opencode? (settings choice)
+
+- [ ] can we make ti work with claude code CLI as well? and not just opencode? (settings choice)
+
+- [ ] can we make ti work with codex CLI as well? and not just opencode? (settings choice)
+
+- [ ] what about people who dont have opencode/claude/gemini/codex installed? can we package opencode or something with it so that they could eventually use our own API service?

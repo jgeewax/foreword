@@ -2099,6 +2099,22 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   book's first ⌘S tidies those files. Formatting the templates needs care with
   their `{{placeholders}}`.
 
+### The editor's text size
+
+- **The author found the writing too big next to the controls.** The editor
+  was 13 px SF Mono on 20 px lines, while the UI is 11–12.5 px system text, and
+  a monospace face looks bigger than a proportional one at the same size.
+- **Now 12 px on 18 px lines,** VS Code's own editor default on macOS (its
+  line height is 1.5 times the size, rounded). The side-by-side diffs and What
+  changed's words are set the same way, since they're Typst source too.
+- **Settings ▸ General ▸ Editor ▸ Text size** changes it (9–24 px, − / + /
+  Default), as VS Code's `editor.fontSize`; `editorFontSize` in the settings
+  file. ⌘= and ⌘− still scale the whole window, this text included.
+- Verified (self-test `textsize`): 12 px text on 18 px lines by default; two
+  clicks on + give 14 px on 21 px lines in the editor, and 14 px in the
+  variable What changed's words use; − stops at 9 px; the setting is put back afterwards (local storage is shared
+  with the author's app). Pictures at 75 % and 100 %.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

@@ -244,6 +244,9 @@ export function App() {
   const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
   const printOpen = useStore(studio.store, (s) => s.print.open);
   const quickOpen = useStore(studio.store, (s) => s.quickOpen);
+  // Typst source outside the editor (What changed's words) is set like the editor.
+  const editorFontSize = useStore(studio.store, (s) => s.settings.editorFontSize);
+  useEffect(() => document.documentElement.style.setProperty('--editor-font-size', `${editorFontSize}px`), [editorFontSize]);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}

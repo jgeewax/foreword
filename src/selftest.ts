@@ -4175,6 +4175,58 @@ async function modelPickerChecks() {
   return out;
 }
 
+/**
+ * The editor's text size: 12px on 18px lines by default (VS Code's on macOS),
+ * and Settings ▸ General ▸ Text size changes the editor and What changed's
+ * words. Pictures at 75% and 100% to compare with the chrome. The setting is
+ * put back (it's shared with the author's app through local storage).
+ */
+async function textSizeChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { size: studio.state.settings.editorFontSize, zoom: studio.state.zoom };
+  const line = () => {
+    const el = document.querySelector<HTMLElement>('.editor-host .view-line');
+    return el ? { height: el.getBoundingClientRect().height, font: getComputedStyle(el).fontSize } : null;
+  };
+  const ui = () => getComputedStyle(document.querySelector('.statusbar') ?? document.body).fontSize;
+  studio.updateSettings({ editorFontSize: 12 }, { write: false });
+  await sleep(300);
+  out.byDefault = { line: line(), cssVar: getComputedStyle(document.documentElement).getPropertyValue('--editor-font-size'), statusBar: ui() };
+  for (const zoom of [0.75, 1]) {
+    await studio.setZoom(zoom, { persist: false, write: false });
+    await sleep(500);
+    out[`snapshot${zoom * 100}`] = await snap(`textsize-${zoom * 100}`);
+  }
+  studio.openSettings('general');
+  await sleep(400);
+  const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.settings-content button')].find((b) => b.getAttribute('aria-label') === label || b.textContent?.trim() === label);
+  out.control = document.querySelector('.settings-content .settings-zoom')?.closest('.settings-field')?.textContent?.slice(0, 80);
+  out.defaultDisabled = button('Default')?.disabled;
+  for (let i = 0; i < 2; i++) {
+    button('Bigger text')?.click();
+    await sleep(150);
+  }
+  out.afterTwoBigger = { setting: studio.state.settings.editorFontSize, shown: document.querySelector('.settings-content .settings-zoom')?.textContent };
+  studio.closeSettings();
+  await sleep(300);
+  out.editorAt14 = { line: line(), cssVar: getComputedStyle(document.documentElement).getPropertyValue('--editor-font-size') };
+  studio.openSettings('general');
+  await sleep(300);
+  button('Default')?.click();
+  await sleep(200);
+  for (let i = 0; i < 5; i++) {
+    button('Smaller text')?.click();
+    await sleep(150);
+  }
+  out.smallest = { setting: studio.state.settings.editorFontSize, smallerDisabled: button('Smaller text')?.disabled };
+  studio.closeSettings();
+  studio.updateSettings({ editorFontSize: saved.size }, { write: false });
+  await studio.setZoom(saved.zoom, { persist: false, write: false });
+  await sleep(300);
+  out.restored = { setting: studio.state.settings.editorFontSize, line: line() };
+  return out;
+}
+
 /** Settings dialog hides the native preview; the composer honours the send-key setting (TODO #2). */
 async function settingsChecks() {
   const out: Record<string, unknown> = {};
@@ -4472,6 +4524,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
+    if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();

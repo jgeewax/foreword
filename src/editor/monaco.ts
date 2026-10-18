@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import JsonWorker from 'monaco-editor/language/json/json.worker?worker';
 import { registerTypst } from './typst-language';
+import { editorLineHeight } from '../app/settings';
 
 self.MonacoEnvironment = {
   getWorker(_id: string, label: string) {
@@ -75,6 +76,9 @@ applyTheme();
 export const typstReady = registerTypst(THEME_PREFIXES).catch((e) => {
   void import('../lib/ipc').then(({ ipc }) => ipc.uiLog(`Typst highlighting unavailable: ${e?.stack ?? e}`));
 });
+
+/** Monaco's text size options for a text size in px (Settings ▸ General ▸ Editor). */
+export const editorTextOptions = (fontSize: number) => ({ fontSize, lineHeight: editorLineHeight(fontSize) });
 
 export function languageFor(path: string): string {
   const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase();

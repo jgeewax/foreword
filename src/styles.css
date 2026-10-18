@@ -551,7 +551,7 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .change-passage:last-child { border-bottom: none; }
 .change-line { flex: none; align-self: flex-start; width: 58px; text-align: right; font-size: 11px; padding-top: 4px; }
 /* The passages are Typst source, so they're set like the editor. */
-.change-text { flex: 1; min-width: 0; font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.change-text { flex: 1; min-width: 0; font-family: "SF Mono", Menlo, Monaco, monospace; font-size: var(--editor-font-size, 12px); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .change-context { color: var(--muted); }
 .change-body ins { background: var(--add); color: var(--good); text-decoration: none; border-radius: 2px; }
 .change-body del { background: var(--del); color: var(--bad); text-decoration: line-through; border-radius: 2px; }

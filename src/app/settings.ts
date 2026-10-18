@@ -21,6 +21,8 @@ export type AppSettings = {
   allowCommands: string[];
   /** Format Typst files (typstyle, through Tinymist) when the author saves them. */
   formatOnSave: boolean;
+  /** The editor's text size in px (before the UI zoom), as VS Code's editor.fontSize. */
+  editorFontSize: number;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -31,7 +33,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markAiReads: true,
   allowCommands: [],
   formatOnSave: true,
+  editorFontSize: 12,
 };
+
+export const EDITOR_FONT_SIZES = { min: 9, max: 24 };
+
+/** The editor's line height for a text size: VS Code's on macOS (1.5 times, rounded). */
+export const editorLineHeight = (fontSize: number) => Math.round(fontSize * 1.5);
 
 const KEY = 'studio.settings';
 
@@ -72,6 +80,8 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
   if (Array.isArray(raw.allowCommands)) out.allowCommands = sanitizeCommands(raw.allowCommands);
   if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
+  const size = raw.editorFontSize;
+  if (typeof size === 'number' && size >= EDITOR_FONT_SIZES.min && size <= EDITOR_FONT_SIZES.max) out.editorFontSize = Math.round(size * 2) / 2;
   return out;
 }
 

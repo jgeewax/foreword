@@ -41,6 +41,7 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     markAiEdits: settings.markAiEdits,
     markAiReads: settings.markAiReads,
     formatOnSave: settings.formatOnSave,
+    editorFontSize: settings.editorFontSize,
     zoom: Math.round(zoom * 100) / 100,
     permissions: settings.permissions,
     allowCommands: settings.allowCommands,
