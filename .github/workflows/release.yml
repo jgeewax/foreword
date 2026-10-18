@@ -7,6 +7,12 @@
 # The app carries OpenCode and Tinymist (scripts/bundle-*.mjs), so a Mac
 # needs nothing else for the preview, or for an assistant to sign in to.
 #
+# A release is also an update: the app checks the latest release's
+# latest.json (tauri.conf.json's plugins.updater), and installs the update
+# only if it's signed with the updater key, kept in the TAURI_SIGNING_PRIVATE_KEY
+# and TAURI_SIGNING_PRIVATE_KEY_PASSWORD secrets (and ~/.tauri on JJ's Mac).
+# npm run release -- 0.2.0 sets the version everywhere and pushes its tag.
+#
 # Without Apple signing secrets it's signed ad hoc: the first time, macOS asks
 # (System Settings ▸ Privacy & Security ▸ Open Anyway). `gh release download`
 # and `gh run download` don't mark the DMG as from the internet, so a copy
@@ -37,6 +43,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commits since the last version, for its notes.
+          fetch-depth: 0
 
       - name: The tag is the app's version
         if: github.ref_type == 'tag'
@@ -46,6 +55,17 @@ jobs:
             echo "::error::The tag is $GITHUB_REF_NAME, but tauri.conf.json's version is $version. Tag v$version, or change the version first."
             exit 1
           fi
+
+      - name: What's new since the last version
+        id: notes
+        if: github.ref_type == 'tag'
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            echo 'body<<__NOTES__'
+            git log --no-merges --format='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME" | grep -v -E '^- (TODO|Version )' | head -40
+            echo '__NOTES__'
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
         with:
@@ -87,21 +107,26 @@ jobs:
             { echo "$name<<__VALUE__"; printf '%s\n' "${!name}"; echo "__VALUE__"; } >> "$GITHUB_ENV"
           done
 
-      - name: Build the app and its DMG
+      - name: Build the app, its DMG and its update
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CI: true
         with:
-          args: --config src-tauri/tauri.bundle.json
-          # A tag makes a release with the DMG; a run from the Actions tab only builds.
+          args: --config src-tauri/tauri.bundle.json --config src-tauri/tauri.updates.json
+          # A tag makes a release with the DMG and the update; a run from the Actions tab only builds.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: Typst Studio ${{ github.ref_name }}
+          # The notes are what the app's update dialog shows under What's new.
           releaseBody: |
-            Typst Studio for Macs with Apple Silicon. Open the DMG and drag Typst Studio to Applications.
+            ${{ steps.notes.outputs.body }}
 
-            If macOS says it can't check the app, open System Settings ▸ Privacy & Security and click Open Anyway, once. Or download it with `gh release download ${{ github.ref_name }} --repo ${{ github.repository }}`, which macOS doesn't ask about.
-          prerelease: true
+            **Install:** open the DMG and drag Typst Studio to Applications. If macOS says it can't check the app, open System Settings ▸ Privacy & Security and click Open Anyway, once. Already have it? Typst Studio offers the update itself.
+          # The latest release (not a prerelease) is the one the app's update feed points at.
+          prerelease: false
+          includeUpdaterJson: true
 
       - name: Keep the DMG with the run
         uses: actions/upload-artifact@v4

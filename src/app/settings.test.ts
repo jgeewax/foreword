@@ -63,7 +63,7 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {}, assistant: 'opencode' });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, historyPlacement: 'tab', markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', allowCommands: [], formatOnSave: true, editorFontSize: 12, toolPaths: {}, assistant: 'opencode', checkForUpdates: true, skippedUpdate: '' });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
     store.set('studio.settings', '{"aiEditColor":"#3FB950","aiReadColor":"blue"}');
@@ -84,6 +84,10 @@ describe('settings storage', () => {
     expect(loadSettings().assistant).toBe('claude');
     store.set('studio.settings', '{"assistant":"copilot"}');
     expect(loadSettings().assistant).toBe('opencode');
+    store.set('studio.settings', '{"checkForUpdates":false,"skippedUpdate":"0.2.0"}');
+    expect(loadSettings()).toMatchObject({ checkForUpdates: false, skippedUpdate: '0.2.0' });
+    store.set('studio.settings', '{"checkForUpdates":"no","skippedUpdate":"0.2.0; rm -rf"}');
+    expect(loadSettings()).toMatchObject({ checkForUpdates: true, skippedUpdate: '' });
     store.set('studio.settings', '{"toolPaths":["/usr/bin/git"]}');
     expect(loadSettings().toolPaths).toEqual({});
     store.set('studio.settings', 'not json');

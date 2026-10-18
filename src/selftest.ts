@@ -4289,6 +4289,67 @@ async function settingControlsChecks() {
 }
 
 /**
+ * Updates, end to end, in a release build of an older version run with
+ * TYPST_STUDIO_UPDATE_URL at a feed of a newer one. `updater`: the dialog
+ * offers it with what's new, Install Now downloads (with progress), installs
+ * and restarts; the new version, started with the same environment, runs this
+ * group again and finds itself up to date. `updater-quit`: Install When I
+ * Quit, then the self-test quits and the update goes in on the way out (the
+ * shell checks the app's version afterwards). Each step goes to the log too,
+ * since the restart replaces the results file.
+ */
+async function updaterChecks(onQuit: boolean) {
+  const out: Record<string, unknown> = {};
+  const text = (sel: string) => document.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  const say = (line: string) => void ipc.uiLog(`UPDATER ${line}`).catch(() => {});
+  const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
+  const dialog = () => ({ status: document.querySelector('.update-dialog')?.getAttribute('data-status'), title: text('.update-dialog h1'), body: text('.update-text'), buttons: [...document.querySelectorAll('.update-buttons button')].map((b) => b.textContent) });
+  const update = await ipc.updateState();
+  out.current = update.current;
+  say(`running ${update.current}, installable ${update.installable}`);
+  await studio.checkForUpdates({ dialog: true });
+  await waitFor(() => studio.state.update && studio.state.update.status !== 'checking', 30000, 'check').catch(() => {});
+  await sleep(400);
+  out.checked = { ...dialog(), state: studio.state.update, snapshot: await snap(`updater-checked-${update.current.replace(/\./g, '-')}`) };
+  say(`checked: ${studio.state.update?.status} ${studio.state.update?.version ?? ''}`);
+  if (studio.state.update?.status !== 'available') {
+    still.remove();
+    studio.closeUpdateDialog();
+    return out;
+  }
+  const click = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.update-buttons button')].find((b) => b.textContent === label)?.click();
+  if (onQuit) {
+    click('Install When I Quit');
+    await waitFor(() => studio.state.update?.status === 'downloaded', 120000, 'download').catch(() => {});
+    studio.openSettings('general');
+    await sleep(600);
+    document.querySelector('.update-settings')?.scrollIntoView();
+    await sleep(200);
+    out.waiting = { state: studio.state.update, settings: text('.update-settings'), toast: studio.state.toast?.text, snapshot: await snap('updater-on-quit') };
+    say(`downloaded, onQuit ${studio.state.update?.onQuit}: quitting`);
+    studio.closeSettings();
+    still.remove();
+    return out;
+  }
+  click('Install Now');
+  await waitFor(() => (studio.state.update?.received ?? 0) > 20e6, 60000, 'download progress').catch(() => {});
+  await sleep(1200);
+  out.downloading = { ...dialog(), figures: text('.update-figures'), bar: document.querySelector('.update-bar')?.getAttribute('aria-valuenow'), snapshot: await snap('updater-downloading') };
+  say(`downloading: ${out.downloading && (out.downloading as Record<string, unknown>).figures}`);
+  await waitFor(() => ['installing', 'restarting', 'error'].includes(studio.state.update?.status ?? ''), 120000, 'install').catch(() => {});
+  out.installing = { ...dialog(), steps: [...document.querySelectorAll('.install-step')].map((s) => `${s.className.replace('install-step ', '')}: ${s.textContent}`), snapshot: await snap('updater-installing') };
+  say(`installing: ${JSON.stringify((out.installing as Record<string, unknown>).steps)} ${studio.state.update?.error ?? ''}`);
+  await waitFor(() => studio.state.update?.status === 'restarting' || studio.state.update?.status === 'error', 60000, 'restart').catch(() => {});
+  out.restarting = { ...dialog(), snapshot: await snap('updater-restarting') };
+  say(`then: ${studio.state.update?.status} ${studio.state.update?.error ?? ''}`);
+  // The app restarts into the new version now; if it doesn't, this times out and says so.
+  await sleep(15000);
+  out.stillHere = studio.state.update?.status;
+  still.remove();
+  return out;
+}
+
+/**
  * Antigravity in Settings ▸ Assistant: its card, Download from Google with
  * progress, then a start that's signed out with Sign in with Google (not
  * clicked: that opens the browser). Downloads 113 MB: only when asked for,
@@ -5588,6 +5649,9 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('closebutton')) result.closebutton = await closeButtonChecks();
     // Downloads Antigravity's connector (113 MB): only when asked for, into TYPST_STUDIO_ASSISTANTS_DIR.
     if (only?.includes('antigravity')) result.antigravity = await antigravityChecks();
+    // A release build with TYPST_STUDIO_UPDATE_URL at a local feed: it installs over itself.
+    if (only?.includes('updater')) result.updater = await updaterChecks(false);
+    if (only?.includes('updater-quit')) result.updaterQuit = await updaterChecks(true);
     // It starts Claude Code: only when asked for.
     if (only?.includes('assistantswitch')) result.assistantswitch = await assistantMenuChecks(true);
     if (want('export')) result.export = await exportChecks();

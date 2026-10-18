@@ -1,5 +1,6 @@
 // App controller: owns the workspace, documents, Typst service, preview
 // webview and agent adapter, and exposes UI state through a Store.
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -11,7 +12,7 @@ import { monaco } from '../editor/monaco';
 import { jumpCandidates } from '../editor/preview-sync';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
-import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type Version, type WorkspaceInfo } from '../lib/ipc';
+import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
 import {
@@ -232,6 +233,9 @@ export type StudioState = {
   zoom: number;
   settings: AppSettings;
   settingsOpen: boolean;
+  /** Typst Studio's update (the same in every window), and whether its dialog is open. */
+  update: UpdateState | null;
+  updateDialog: boolean;
   /** The Settings page to open at (null: the one last shown). */
   settingsPage: SettingsPage | null;
   newBookOpen: boolean;
@@ -329,6 +333,8 @@ const initialState: StudioState = {
   zoom: 1,
   settings: loadSettings(),
   settingsOpen: false,
+  update: null,
+  updateDialog: false,
   settingsPage: null,
   newBookOpen: false,
   newBookTab: 'book',
@@ -545,6 +551,8 @@ export class Studio {
       }
     });
     void getCurrentWebview().listen<string>('menu', (e) => void this.menuCommand(e.payload));
+    // The update is the app's: any window's check, download or install shows in all of them.
+    void listen<UpdateState>('update', (e) => this.store.set({ update: e.payload }));
     void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
@@ -564,6 +572,7 @@ export class Studio {
   /** What each item of the menu bar does (src-tauri/src/menu.rs lists the ids). */
   readonly menuCommands: Record<string, () => unknown> = {
     settings: () => this.openSettings(),
+    'check-updates': () => this.checkForUpdates({ dialog: true }),
     // File
     'new-book': () => this.openNewBook(),
     'new-chapter': () => this.newChapter(),
@@ -684,6 +693,13 @@ export class Studio {
       this.insetTimer = window.setTimeout(() => void this.refreshViewportInset(), 100);
     });
     ipc.toolsStatus().then((tools) => this.store.set({ tools }));
+    void ipc.updateState().then((update) => {
+      this.store.set({ update });
+      // At start, once (the first window), a few seconds in: a new version offered, unless it was skipped.
+      if (getCurrentWebview().label === 'main' && !launch.selftestOut && !launch.fresh && update.installable && this.state.settings.checkForUpdates && update.status === 'idle') {
+        window.setTimeout(() => void this.checkForUpdates({ dialog: false }), 4000);
+      }
+    });
     // A new window starts on the welcome screen, not the last book (open in the first window).
     // After Reload Window, the window's own book ('' for none).
     const reloaded = takeSession(RELOAD_KEY);
@@ -2533,7 +2549,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || !!s.quickOpen;
+    return s.settingsOpen || s.updateDialog || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || !!s.quickOpen;
   }
 
   private syncPreviewVisibility() {
@@ -2664,6 +2680,48 @@ export class Studio {
     } catch (e) {
       this.store.set({ assistantDownload: { kind, error: errorMessage(e) } });
     }
+  }
+
+  /**
+   * Is there a newer Typst Studio? From the menu, the dialog opens at once and
+   * says (up to date, or what's new). At start, it opens only for a version
+   * that wasn't skipped; Settings shows the answer in place.
+   */
+  async checkForUpdates({ dialog, inPlace = false }: { dialog: boolean; inPlace?: boolean }) {
+    if (dialog) this.store.set({ updateDialog: true });
+    const update = await ipc.updateCheck().catch((e) => ({ ...(this.state.update as UpdateState), status: 'error' as const, error: errorMessage(e) }));
+    this.store.set({ update });
+    if (!dialog && !inPlace && update.status === 'available' && update.version !== this.state.settings.skippedUpdate) this.store.set({ updateDialog: true });
+  }
+
+  closeUpdateDialog() {
+    this.store.set({ updateDialog: false });
+  }
+
+  /** Download, install and restart, with the dialog showing each step. */
+  async installUpdateNow() {
+    this.store.set({ updateDialog: true });
+    // It restarts the app when it's done; it returns only if something went wrong (the dialog says what).
+    await ipc.updateInstall().catch((e) => console.warn('update', e));
+  }
+
+  /** Download now and install when the app quits. */
+  async installUpdateOnQuit() {
+    const version = this.state.update?.version;
+    this.closeUpdateDialog();
+    this.toast(`Typst Studio ${version} is downloading, and installs when you quit.`);
+    await ipc.updateInstallOnQuit().catch((e) => this.toast(`The update didn’t download: ${errorMessage(e)}`, 'error'));
+  }
+
+  async cancelUpdateOnQuit() {
+    this.store.set({ update: await ipc.updateCancelOnQuit() });
+  }
+
+  /** Don't offer this version at start again (a newer one still is). */
+  skipUpdate() {
+    const version = this.state.update?.version;
+    if (version) this.updateSettings({ skippedUpdate: version });
+    this.closeUpdateDialog();
   }
 
   /** Settings ▸ Assistant: start Antigravity with its sign-in, a Google account, in the browser. */

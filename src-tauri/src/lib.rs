@@ -19,6 +19,7 @@ mod print;
 mod render;
 #[cfg(target_os = "macos")]
 mod snapshot;
+mod updater;
 mod workspace;
 
 use std::{
@@ -474,6 +475,7 @@ fn menu_outline(app: tauri::AppHandle) -> CmdResult<Vec<(String, Vec<String>)>> 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(menu::build)
         .on_menu_event(|app, event| {
             // The menu bar is the app's: it acts on the window in front.
@@ -606,6 +608,11 @@ pub fn run() {
             acp::assistants_status,
             acp::assistant_sign_in,
             acp::assistant_download,
+            updater::update_state,
+            updater::update_check,
+            updater::update_install,
+            updater::update_install_on_quit,
+            updater::update_cancel_on_quit,
             history::history_init,
             git::git_status,
             git::git_file,
@@ -624,13 +631,20 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building Typst Studio")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
+        .run(|app, event| match event {
+            // An update to install at quit goes in first; the app quits once it has.
+            RunEvent::ExitRequested { api, .. } => {
+                if updater::hold_exit_for_install(app) {
+                    api.prevent_exit();
+                }
+            }
+            RunEvent::Exit => {
                 app.state::<AppState>().kill_children();
                 // Also anything whose lock was busy (e.g. OpenCode still starting).
                 children::kill_all();
                 children::clear();
             }
+            _ => {}
         });
 }
 

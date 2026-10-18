@@ -196,7 +196,12 @@ fn editor_tinymists() -> Vec<(PathBuf, String)> {
 /// scripts/bundle-tinymist.mjs): found only after every other copy.
 fn bundled(name: &str) -> Vec<(PathBuf, String)> {
     let found = env::current_exe().ok().and_then(|exe| {
-        let p = exe.parent()?.parent()?.join("Resources").join(name).join(name);
+        let p = exe
+            .parent()?
+            .parent()?
+            .join("Resources")
+            .join(name)
+            .join(name);
         is_executable(&p).then_some(p)
     });
     found

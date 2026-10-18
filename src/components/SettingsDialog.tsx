@@ -2,7 +2,7 @@ import { appDataDir } from '@tauri-apps/api/path';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { PROJECT_FILE } from '../app/project-settings';
 import { studio, type SettingsPage } from '../app/studio';
-import type { ToolInfo } from '../lib/ipc';
+import { ipc, type ToolInfo } from '../lib/ipc';
 import { useStore } from '../lib/store';
 import { tildePath } from '../lib/paths';
 import { hasWords, searchWords, wordSpans } from '../lib/word-search';
@@ -13,6 +13,8 @@ import { AssistantPage } from './AssistantSettings';
 import { BookFilesPage } from './BookFilesSettings';
 import { Choice, ColorChoice, SwitchRow } from './SettingControls';
 import { ToolPicker } from './ToolPicker';
+import { DownloadProgress, InstallSteps, RELEASES } from './UpdateDialog';
+import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, MARK_COLORS, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -172,7 +174,107 @@ function GeneralPage() {
           <p className="settings-help">⌘= and ⌘− too, ⌘0 for actual size. Everything in the window follows it except the preview, whose pages always fit the pane.</p>
         </div>
       </Section>
+      <UpdatesSection />
     </>
+  );
+}
+
+/** Typst Studio's version and updates: check now, install, and whether to check at start. */
+function UpdatesSection() {
+  const update = useStore(studio.store, (s) => s.update);
+  const settings = useStore(studio.store, (s) => s.settings);
+  if (!update) return null;
+  const { status, version } = update;
+  const at = update.checkedAt ? new Date(update.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+  const line = {
+    idle: 'Not checked yet.',
+    checking: 'Checking…',
+    none: `Up to date${at ? `, checked at ${at}` : ''}.`,
+    available: `Typst Studio ${version} is available.`,
+    downloading: `Downloading ${version}…`,
+    downloaded: update.onQuit ? `${version} installs when you quit.` : `${version} is downloaded.`,
+    installing: `Installing ${version}…`,
+    restarting: 'Restarting…',
+    error: update.error ?? 'Something went wrong.',
+  }[status];
+  const working = status === 'checking' || status === 'downloading' || status === 'installing' || status === 'restarting';
+  return (
+    <Section title="Updates">
+      <div className="settings-field update-settings">
+        <div className="update-row">
+          <img src={appIcon} alt="" width={40} height={40} />
+          <span className="settings-switch-text">
+            <span className="settings-switch-label">Typst Studio {update.current}</span>
+            <span className={`settings-help${status === 'error' ? ' bad' : ''}`}>{line}</span>
+          </span>
+          <button className="small" disabled={working} onClick={() => void studio.checkForUpdates({ dialog: false, inPlace: true })}>
+            {status === 'checking' ? 'Checking…' : 'Check Now'}
+          </button>
+        </div>
+        {status === 'available' && (
+          <div className="update-actions">
+            <button className="link" onClick={() => studio.store.set({ updateDialog: true })}>
+              What’s new in {version}
+            </button>
+            <span className="spacer" />
+            {update.installable ? (
+              <>
+                <button className="small" onClick={() => studio.skipUpdate()}>
+                  Skip This Version
+                </button>
+                <button className="small" onClick={() => void studio.installUpdateOnQuit()}>
+                  Install When I Quit
+                </button>
+                <button className="small primary" onClick={() => void studio.installUpdateNow()}>
+                  Install Now
+                </button>
+              </>
+            ) : (
+              <button className="small" onClick={() => void ipc.openUrl(`${RELEASES}/tag/v${version}`)}>
+                Open the Release Page
+              </button>
+            )}
+          </div>
+        )}
+        {status === 'downloading' && <DownloadProgress update={update} />}
+        {status === 'downloaded' && (
+          <div className="update-actions">
+            <span className="spacer" />
+            {update.onQuit && (
+              <button className="small" onClick={() => void studio.cancelUpdateOnQuit()}>
+                Don’t Install at Quit
+              </button>
+            )}
+            <button className="small primary" onClick={() => void studio.installUpdateNow()}>
+              Install Now
+            </button>
+          </div>
+        )}
+        {(status === 'installing' || status === 'restarting') && <InstallSteps update={update} />}
+      </div>
+      <div className="settings-field">
+        <SwitchRow checked={settings.checkForUpdates} onChange={(checkForUpdates) => studio.updateSettings({ checkForUpdates })}>
+          <span className="settings-switch-label">Check for updates when Typst Studio starts</span>
+          <span className="settings-help">A new version is offered once: install it now, when you quit, or skip it, and only a newer one is offered after.</span>
+        </SwitchRow>
+        {settings.skippedUpdate && (
+          <p className="settings-help">
+            You skipped {settings.skippedUpdate}.{' '}
+            <button className="link" onClick={() => studio.updateSettings({ skippedUpdate: '' })}>
+              Offer it again
+            </button>
+          </p>
+        )}
+        <p className="settings-help">
+          From Typst Studio’s releases on GitHub,{' '}
+          <button className="link" onClick={() => void ipc.openUrl(RELEASES)}>
+            github.com/jgeewax/typststudio/releases
+          </button>
+          , each checked against its signature before it’s installed.
+          {update.installable ? '' : ' This copy runs from source (npm run app), so it can’t replace itself: updates are for Typst Studio installed from its DMG.'}
+        </p>
+      </div>
+    </Section>
   );
 }
 

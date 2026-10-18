@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-install-on-quit"
+description = "Enables the update_install_on_quit command without any pre-configured scope."
+commands.allow = ["update_install_on_quit"]
+
+[[permission]]
+identifier = "deny-update-install-on-quit"
+description = "Denies the update_install_on_quit command without any pre-configured scope."
+commands.deny = ["update_install_on_quit"]

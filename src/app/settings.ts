@@ -49,6 +49,10 @@ export type AppSettings = {
   toolPaths: Partial<Record<ToolName, string>>;
   /** Which program runs the writing assistant. */
   assistant: AssistantId;
+  /** Look for a new version of Typst Studio when it starts. */
+  checkForUpdates: boolean;
+  /** A version the author chose to skip: not offered at start ('' for none). */
+  skippedUpdate: string;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -64,6 +68,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   editorFontSize: 12,
   toolPaths: {},
   assistant: 'opencode',
+  checkForUpdates: true,
+  skippedUpdate: '',
 };
 
 export const EDITOR_FONT_SIZES = { min: 9, max: 24 };
@@ -128,6 +134,8 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (typeof size === 'number' && size >= EDITOR_FONT_SIZES.min && size <= EDITOR_FONT_SIZES.max) out.editorFontSize = Math.round(size * 2) / 2;
   if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
   if (ASSISTANTS.includes(raw.assistant as AssistantId)) out.assistant = raw.assistant as AssistantId;
+  if (typeof raw.checkForUpdates === 'boolean') out.checkForUpdates = raw.checkForUpdates;
+  if (typeof raw.skippedUpdate === 'string' && /^[\w.+-]{0,40}$/.test(raw.skippedUpdate)) out.skippedUpdate = raw.skippedUpdate;
   return out;
 }
 

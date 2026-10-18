@@ -54,6 +54,27 @@ export type AssistantSetup = {
   download: { url: string; bytes: number; version: string } | null;
 };
 export type AssistantsSetup = { node: boolean; opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup; antigravity: AssistantSetup };
+/** Typst Studio's own update, the same in every window (updater.rs). */
+export type UpdateState = {
+  status: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'restarting' | 'error';
+  /** The version running, and the one offered with its notes and date. */
+  current: string;
+  version: string | null;
+  notes: string | null;
+  date: string | null;
+  /** Bytes downloaded, of `total`. */
+  received: number;
+  total: number | null;
+  /** While installing: verifying, installing, restarting. */
+  phase: 'verifying' | 'installing' | 'restarting' | null;
+  /** It installs when the app quits. */
+  onQuit: boolean;
+  error: string | null;
+  /** This copy runs from a .app, so it can be replaced (not `npm run app`). */
+  installable: boolean;
+  /** When the last check finished (ms). */
+  checkedAt: number | null;
+};
 /** A download's progress, in bytes; `unpacking` once it's all here. */
 export type DownloadProgress = { received: number; total: number | null; unpacking?: boolean };
 export type LaunchOptions = {
@@ -183,6 +204,12 @@ export const ipc = {
   assistantsStatus: () => invoke<AssistantsSetup>('assistants_status'),
   /** Open Terminal on the assistant's sign-in command. */
   assistantSignIn: (kind: string) => invoke<void>('assistant_sign_in', { kind }),
+  /** Typst Studio's update: what's known, a check, install now (then it restarts), or at quit. Changes arrive as `update` events. */
+  updateState: () => invoke<UpdateState>('update_state'),
+  updateCheck: () => invoke<UpdateState>('update_check'),
+  updateInstall: () => invoke<void>('update_install'),
+  updateInstallOnQuit: () => invoke<UpdateState>('update_install_on_quit'),
+  updateCancelOnQuit: () => invoke<UpdateState>('update_cancel_on_quit'),
   /** Download an assistant's connector (Antigravity's, from Google): progress on `onProgress`; the program's path. */
   assistantDownload: (kind: string, onProgress: Channel<DownloadProgress>) => invoke<string>('assistant_download', { kind, onProgress }),
 

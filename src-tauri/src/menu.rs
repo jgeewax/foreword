@@ -20,6 +20,7 @@ use tauri::{
 /// "close-window", which the app handles itself).
 pub const COMMANDS: &[&str] = &[
     "settings",
+    "check-updates",
     // File
     "new-book",
     "new-chapter",
@@ -96,6 +97,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &PredefinedMenuItem::about(handle, Some(&format!("About {name}")), Some(about))?,
+            &item("check-updates", "Check for Updates…", None)?,
             &sep()?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
             &sep()?,

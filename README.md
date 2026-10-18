@@ -125,6 +125,8 @@ Each version tag (`v0.1.0`) builds a DMG for Macs with Apple Silicon and attache
 
 The app isn't notarized yet, so the first time macOS may ask: open System Settings ▸ Privacy & Security and click **Open Anyway**. A copy fetched with `gh release download` opens without asking.
 
+After that it keeps itself up to date. When a new version is out, Typst Studio offers it as it starts: install it now (it downloads, installs and starts again), when you quit, or skip that version. **Settings ▸ General ▸ Updates** and **Typst Studio ▸ Check for Updates…** check any time. Every update is checked against its signature before it's installed.
+
 ## Run it from source
 
 It runs on macOS (Apple Silicon first) and needs Xcode's command line tools, Rust, Node.js and [Tinymist](https://github.com/Myriad-Dreamin/tinymist), which typesets the preview.
@@ -161,6 +163,8 @@ npm run check-templates # every template still compiles
 npm run app:build       # the app and its DMG, with OpenCode and Tinymist inside
 (cd src-tauri && cargo test)
 ```
+
+To release a version, `npm run release -- 0.2.0`: it sets the version, tags it and pushes the tag, and the release build publishes the DMG and the update that every installed copy is offered. Updates are signed with the key in the `TAURI_SIGNING_PRIVATE_KEY` secret; keep its copy safe, since installed copies accept updates signed with that key only.
 
 The self-tests drive the real app, in a second window beside yours (once `npm run app` has built it). Point one at a scratch copy of a book, name the groups to run (see `src/selftest.ts`), and it writes its results and screenshots next to `out.json`:
 
