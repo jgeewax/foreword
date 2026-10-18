@@ -191,12 +191,18 @@ fn editor_tinymists() -> Vec<(PathBuf, String)> {
     found
 }
 
-/// OpenCode in the app's own Resources (`Contents/Resources/opencode/opencode`),
-/// which `npm run app:build` puts there (scripts/bundle-opencode.mjs).
-fn bundled_opencode() -> Option<PathBuf> {
-    let exe = env::current_exe().ok()?;
-    let p = exe.parent()?.parent()?.join("Resources/opencode/opencode");
-    is_executable(&p).then_some(p)
+/// A program in the app's own Resources (`Contents/Resources/<name>/<name>`),
+/// which `npm run app:build` puts there (scripts/bundle-opencode.mjs and
+/// scripts/bundle-tinymist.mjs): found only after every other copy.
+fn bundled(name: &str) -> Vec<(PathBuf, String)> {
+    let found = env::current_exe().ok().and_then(|exe| {
+        let p = exe.parent()?.parent()?.join("Resources").join(name).join(name);
+        is_executable(&p).then_some(p)
+    });
+    found
+        .map(|p| (p, "bundled with Typst Studio".to_string()))
+        .into_iter()
+        .collect()
 }
 
 /// Every copy of `tool` on this Mac, each once, in the order the automatic
@@ -215,7 +221,10 @@ pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
         }
     }
     match tool {
-        Tool::Tinymist => all.extend(editor_tinymists()),
+        Tool::Tinymist => {
+            all.extend(editor_tinymists());
+            all.extend(bundled("tinymist"));
+        }
         Tool::Git => {
             for (p, source) in [
                 (
@@ -236,10 +245,8 @@ pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
                 }
             }
         }
-        // A copy inside the app (a release build may bundle one): only when nothing else is found.
-        Tool::OpenCode => {
-            all.extend(bundled_opencode().map(|p| (p, "bundled with Typst Studio".to_string())))
-        }
+        // A copy inside the app (a release build bundles one): only when nothing else is found.
+        Tool::OpenCode => all.extend(bundled("opencode")),
     }
     let mut seen = HashSet::new();
     all.retain(|(p, _)| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())));

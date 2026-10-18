@@ -1,0 +1,111 @@
+# Typst Studio as a DMG to download: open it and drag the app to Applications.
+#
+# Run it from the Actions tab (Release build ▸ Run workflow) for a build of a
+# branch, kept with the run for 30 days; or push a version tag that matches
+# tauri.conf.json (v0.1.0) for a GitHub Release with the DMG attached.
+#
+# The app carries OpenCode and Tinymist (scripts/bundle-*.mjs), so a Mac
+# needs nothing else for the preview, or for an assistant to sign in to.
+#
+# Without Apple signing secrets it's signed ad hoc: the first time, macOS asks
+# (System Settings ▸ Privacy & Security ▸ Open Anyway). `gh release download`
+# and `gh run download` don't mark the DMG as from the internet, so a copy
+# fetched with them opens without asking. With a Developer ID certificate,
+# Tauri signs and notarizes it; set these repository secrets:
+#   APPLE_CERTIFICATE           the Developer ID Application .p12, base64
+#   APPLE_CERTIFICATE_PASSWORD  its password
+#   APPLE_SIGNING_IDENTITY      "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID, APPLE_PASSWORD (an app-specific password), APPLE_TEAM_ID
+name: Release build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mac:
+    name: macOS (Apple Silicon)
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag is the app's version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::The tag is $GITHUB_REF_NAME, but tauri.conf.json's version is $version. Tag v$version, or change the version first."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: OpenCode and Tinymist, to go inside the app
+        run: |
+          brew install opencode
+          node scripts/bundle-opencode.mjs
+          node scripts/bundle-tinymist.mjs
+
+      - name: Apple signing, if it's set up
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "No APPLE_CERTIFICATE secret, so the app is signed ad hoc."
+            exit 0
+          fi
+          # Tauri reads these from the environment; unset, they'd be empty and stop the build.
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            { echo "$name<<__VALUE__"; printf '%s\n' "${!name}"; echo "__VALUE__"; } >> "$GITHUB_ENV"
+          done
+
+      - name: Build the app and its DMG
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+        with:
+          args: --config src-tauri/tauri.bundle.json
+          # A tag makes a release with the DMG; a run from the Actions tab only builds.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: Typst Studio ${{ github.ref_name }}
+          releaseBody: |
+            Typst Studio for Macs with Apple Silicon. Open the DMG and drag Typst Studio to Applications.
+
+            If macOS says it can't check the app, open System Settings ▸ Privacy & Security and click Open Anyway, once. Or download it with `gh release download ${{ github.ref_name }} --repo ${{ github.repository }}`, which macOS doesn't ask about.
+          prerelease: true
+
+      - name: Keep the DMG with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: typst-studio-macos-arm64
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

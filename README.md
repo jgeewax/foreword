@@ -117,9 +117,15 @@ Each conversation is its own task, and several can run at once. Settings ▸ Ass
 - **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest.
 - **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code, formatting on save, and a window for each book.
 
-## Get started
+## Download
 
-Typst Studio is in early development, and there's no download yet. It runs on macOS (Apple Silicon first) and needs Xcode's command line tools, Rust, Node.js and [Tinymist](https://github.com/Myriad-Dreamin/tinymist), which typesets the preview.
+Each version tag (`v0.1.0`) builds a DMG for Macs with Apple Silicon and attaches it to a [release](https://github.com/jgeewax/typststudio/releases). Open it and drag Typst Studio to Applications. It carries Tinymist and OpenCode, so it needs nothing else installed. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
+
+The app isn't notarized yet, so the first time macOS may ask: open System Settings ▸ Privacy & Security and click **Open Anyway**. A copy fetched with `gh release download` opens without asking.
+
+## Run it from source
+
+It runs on macOS (Apple Silicon first) and needs Xcode's command line tools, Rust, Node.js and [Tinymist](https://github.com/Myriad-Dreamin/tinymist), which typesets the preview.
 
 ```sh
 # the tools (and xcode-select --install, if you haven't)
@@ -150,7 +156,7 @@ npm run app             # run it, reloading as you edit (tauri dev)
 npm test                # unit tests (Vitest)
 npm run typecheck       # TypeScript
 npm run check-templates # every template still compiles
-npm run app:build       # a release build, with OpenCode inside
+npm run app:build       # the app and its DMG, with OpenCode and Tinymist inside
 (cd src-tauri && cargo test)
 ```
 
