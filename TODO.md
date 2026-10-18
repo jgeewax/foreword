@@ -176,7 +176,7 @@
 
 - [x] add more book sizes (royal, etc). we shoudl have all the common ones for USA, Asia, and Europe.
 
-- [ ] settings for tools doesnt allow any configuration. what if we want to change which tinymist/opencode/git to use?
+- [x] settings for tools doesnt allow any configuration. what if we want to change which tinymist/opencode/git to use?
 
 - [ ] better sample books , one for each type. a novel in the public domain. the transformers paper (attn is all you need), etc.
 

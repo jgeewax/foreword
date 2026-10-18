@@ -24,7 +24,7 @@ import {
   validateProjectSettings,
   type ProjectSettings,
 } from './project-settings';
-import { loadSettings, saveSettings, type AppSettings } from './settings';
+import { loadSettings, saveSettings, type AppSettings, type ToolName } from './settings';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
@@ -451,6 +451,8 @@ export class Studio {
   private pendingDisk = new Set<string>();
   private diskTimer: number | undefined;
   private unsubscribeAgent: (() => void) | null = null;
+  /** A new OpenCode was chosen while the assistant worked: start it once the turn is over. */
+  private restartAgentWhenIdle = false;
   /** Errors already shown for the current turn (OpenCode reports a failure more than once). */
   private turnErrors = new Set<string>();
   /** Tool calls in flight: name and input, for when their result arrives. */
@@ -2536,6 +2538,10 @@ export class Studio {
         return this.refreshAiEdits();
       });
       void this.code.afterAgentTurn();
+      if (this.restartAgentWhenIdle) {
+        this.restartAgentWhenIdle = false;
+        void this.restartAgent();
+      }
     }
   }
 
@@ -2543,6 +2549,17 @@ export class Studio {
   private setActivity(next: Omit<Activity, 'since'>) {
     if (!this.state.agent.running) return;
     this.setAgent((a) => ({ activity: { since: a.activity?.since ?? Date.now(), ...next } }));
+  }
+
+  /** Start OpenCode again (another program was chosen for it); after the turn, if the assistant is working. */
+  async restartAgent() {
+    if (this.state.agent.running) {
+      this.restartAgentWhenIdle = true;
+      this.toast('OpenCode will start again when the assistant finishes.');
+      return;
+    }
+    await this.agent?.stop().catch(() => {});
+    await this.startAgent();
   }
 
   async startAgent() {
@@ -3636,6 +3653,40 @@ export class Studio {
     if (write) this.scheduleConfigWrite();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions) || settings.allowCommands.join() !== before.allowCommands.join()) void this.applyPermissions();
   }
+
+  /** Settings ▸ Tools: check again which programs are in use (e.g. after installing one). */
+  async refreshTools() {
+    this.store.set({ tools: await ipc.toolsStatus() });
+  }
+
+  /**
+   * Settings ▸ Tools: run this program for a tool ('' to find it automatically).
+   * The Rust side reads the path from the settings file, so that's written at
+   * once; then whatever runs the tool starts again with it, in the background
+   * and one restart at a time.
+   */
+  async setToolPath(tool: ToolName, path: string) {
+    const p = path.trim();
+    if (p === (this.state.settings.toolPaths[tool] ?? '')) return;
+    if (this.state.configFile?.error) {
+      this.toast('The settings file has a mistake (see Settings ▸ General), so this can’t be saved until it’s fixed.', 'error');
+      return;
+    }
+    const { [tool]: _, ...others } = this.state.settings.toolPaths;
+    this.updateSettings({ toolPaths: p ? { ...others, [tool]: p } : others }, { write: false });
+    window.clearTimeout(this.configTimer);
+    await this.writeConfig();
+    await this.refreshTools();
+    if (!this.state.workspace) return;
+    if (tool === 'git') {
+      if (this.state.history.status === 'unavailable') void this.history.start(this.historyExcludes());
+      this.scheduleGitRefresh(0);
+      return;
+    }
+    const restart = tool === 'tinymist' ? () => this.restartTypst() : () => this.restartAgent();
+    this.toolRestarts = this.toolRestarts.then(restart).catch(() => {});
+  }
+  private toolRestarts = Promise.resolve();
 
   /** Commands the assistant may run without asking: from the settings file and from this book's. */
   allowedCommands(): string[] {

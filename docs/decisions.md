@@ -2176,6 +2176,40 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   `booksizes` reads the grouped list for four templates and picks a Japanese
   size.
 
+### Choosing which Tinymist, OpenCode and Git to use
+
+- **Settings ▸ Tools** shows, for each tool, the program in use and whether it
+  was found automatically or chosen. A path box with Choose… (a file picker)
+  sets another, and Automatic goes back. Typing applies on Enter or on leaving
+  the box; Esc puts the path back first.
+- **Kept in the settings file** as `toolPaths` (`{ "tinymist": "~/…" }`; `~`
+  allowed). The Rust side reads it from the file each time it looks for a
+  tool, so every window, and a hand edit, agree. The app writes the file at
+  once when a path changes (not after the usual 300 ms), then:
+  - Tinymist: the preview starts again with it;
+  - OpenCode: the assistant starts again (after the turn, if it's working; the
+    conversation carries on, since OpenCode keeps sessions on disk);
+  - Git: nothing to restart. Each command looks it up; History starts if it
+    was unavailable.
+  Restarts run in the background, one at a time.
+- **Order:** the chosen path, then the old environment variables
+  (`TINYMIST_PATH`, `OPENCODE_PATH`, `TYPST_STUDIO_GIT`), then the search path
+  (with Homebrew's folders), then VS Code's Tinymist.
+- **A chosen path with no program there** isn't an error: the automatic one
+  runs, and the page says "There's no program at …". A mistyped path shouldn't
+  stop the preview.
+- **A bug found by the self-test:** starting a restart disabled the box,
+  which blurred it, and the blur applied the box's stale text, putting back the
+  path just cleared. Now leaving the box applies only what was typed, and the
+  box is never disabled.
+- Verified (self-test `tools`, with the Rust side in a scratch build):
+  VS Code's Tinymist 0.15.10 typed with `~` (the preview ran on it, the file
+  kept `~`); `/nowhere/tinymist` (the warning, Homebrew's 0.15.8 in use);
+  Automatic; Git at `/usr/bin/git` (History and Source Control ready); OpenCode
+  at its own path (the assistant went starting → ready, and again for
+  Automatic). It ends with every tool automatic. Rust unit test: paths read
+  from the settings file, with `~`, empty and malformed values.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

@@ -58,39 +58,101 @@ pub fn find(name: &str, env_var: &str) -> Option<PathBuf> {
         .find(|p| is_executable(p))
 }
 
-/// Tinymist: override, search path, then the binary bundled with the VS Code extension.
+/// The programs Typst Studio runs itself. Settings ▸ Tools can choose each one.
+#[derive(Clone, Copy)]
+pub enum Tool {
+    Tinymist,
+    OpenCode,
+    Git,
+}
+
+impl Tool {
+    /// Its key under `toolPaths` in the settings file.
+    fn key(self) -> &'static str {
+        match self {
+            Tool::Tinymist => "tinymist",
+            Tool::OpenCode => "opencode",
+            Tool::Git => "git",
+        }
+    }
+
+    /// Found without the settings: `$ENV_VAR`, the search path and, for
+    /// Tinymist, the binary bundled with the VS Code extension.
+    fn automatic(self) -> Option<PathBuf> {
+        match self {
+            Tool::Tinymist => find("tinymist", "TINYMIST_PATH").or_else(vscode_tinymist),
+            Tool::OpenCode => find("opencode", "OPENCODE_PATH"),
+            Tool::Git => find("git", "TYPST_STUDIO_GIT"),
+        }
+    }
+}
+
+fn vscode_tinymist() -> Option<PathBuf> {
+    let ext = home()?.join(".vscode/extensions");
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(ext)
+        .ok()?
+        .flatten()
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("myriad-dreamin.tinymist-")
+        })
+        .map(|e| e.path().join("out/tinymist"))
+        .filter(|p| is_executable(p))
+        .collect();
+    candidates.sort();
+    candidates.pop()
+}
+
+/// The path the author chose for `tool` (`toolPaths` in the settings file),
+/// with `~` expanded; read each time, so a change applies to the next start.
+fn configured(tool: Tool) -> Option<PathBuf> {
+    let text = crate::config::read_at(&crate::config::config_file()).ok()??;
+    configured_in(&text, tool)
+}
+
+fn configured_in(settings: &str, tool: Tool) -> Option<PathBuf> {
+    let value: serde_json::Value = serde_json::from_str(settings).ok()?;
+    let raw = value.get("toolPaths")?.get(tool.key())?.as_str()?.trim();
+    match raw.strip_prefix("~/") {
+        _ if raw.is_empty() => None,
+        Some(rest) => Some(home()?.join(rest)),
+        None => Some(PathBuf::from(raw)),
+    }
+}
+
+/// The chosen program if it can run, otherwise the one found automatically.
+pub fn locate(tool: Tool) -> Option<PathBuf> {
+    configured(tool)
+        .filter(|p| is_executable(p))
+        .or_else(|| tool.automatic())
+}
+
 pub fn find_tinymist() -> Option<PathBuf> {
-    find("tinymist", "TINYMIST_PATH").or_else(|| {
-        let ext = home()?.join(".vscode/extensions");
-        let mut candidates: Vec<PathBuf> = std::fs::read_dir(ext)
-            .ok()?
-            .flatten()
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("myriad-dreamin.tinymist-")
-            })
-            .map(|e| e.path().join("out/tinymist"))
-            .filter(|p| is_executable(p))
-            .collect();
-        candidates.sort();
-        candidates.pop()
-    })
+    locate(Tool::Tinymist)
 }
 
 pub fn find_opencode() -> Option<PathBuf> {
-    find("opencode", "OPENCODE_PATH")
+    locate(Tool::OpenCode)
 }
 
 /// Git, for History and Source Control.
 pub fn find_git() -> Option<PathBuf> {
-    find("git", "TYPST_STUDIO_GIT")
+    locate(Tool::Git)
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolInfo {
+    /// The program in use, if any.
     pub path: Option<String>,
     pub version: Option<String>,
+    /// The path chosen in Settings, if any, whether or not it can run.
+    pub configured: Option<String>,
+    /// `path` is the chosen one (not found automatically).
+    pub from_settings: bool,
+    /// What would be used without a choice.
+    pub automatic: Option<String>,
 }
 
 fn version_of(bin: &Path) -> Option<String> {
@@ -127,10 +189,19 @@ fn cellar_version(path: &Path) -> Option<String> {
     parts.get(i + 2).map(|v| v.to_string())
 }
 
-pub fn tool_info(bin: Option<PathBuf>) -> ToolInfo {
+pub fn tool_info(tool: Tool) -> ToolInfo {
+    let configured = configured(tool);
+    let automatic = tool.automatic();
+    let chosen = configured.clone().filter(|p| is_executable(p));
+    let from_settings = chosen.is_some();
+    let bin = chosen.or_else(|| automatic.clone());
+    let text = |p: PathBuf| p.to_string_lossy().into_owned();
     ToolInfo {
         version: bin.as_deref().and_then(version_of),
-        path: bin.map(|p| p.to_string_lossy().into_owned()),
+        path: bin.map(text),
+        configured: configured.map(text),
+        from_settings,
+        automatic: automatic.map(text),
     }
 }
 
@@ -168,5 +239,25 @@ mod tests {
             Some("0.15.8")
         );
         assert_eq!(cellar_version(Path::new("/usr/local/bin/tinymist")), None);
+    }
+
+    #[test]
+    fn chosen_paths_come_from_the_settings_file() {
+        let settings = r#"{ "toolPaths": { "tinymist": " /opt/tm/tinymist ", "git": "~/bin/git", "opencode": "" } }"#;
+        assert_eq!(
+            configured_in(settings, Tool::Tinymist),
+            Some(PathBuf::from("/opt/tm/tinymist"))
+        );
+        assert_eq!(
+            configured_in(settings, Tool::Git),
+            Some(home().unwrap().join("bin/git"))
+        );
+        assert_eq!(configured_in(settings, Tool::OpenCode), None);
+        assert_eq!(configured_in(r#"{ "sendKey": "enter" }"#, Tool::Git), None);
+        assert_eq!(
+            configured_in(r#"{ "toolPaths": { "git": 3 } }"#, Tool::Git),
+            None
+        );
+        assert_eq!(configured_in("{ not json", Tool::Git), None);
     }
 }

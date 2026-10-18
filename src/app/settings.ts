@@ -7,6 +7,10 @@ export type SendKey = 'enter' | 'mod-enter';
 /** Where History lives in the left pane: its own tab, or a section below the files. */
 export type HistoryPlacement = 'tab' | 'below';
 
+/** The programs Typst Studio runs itself; Settings ▸ Tools can choose each one. */
+export type ToolName = 'tinymist' | 'opencode' | 'git';
+export const TOOL_NAMES: ToolName[] = ['tinymist', 'opencode', 'git'];
+
 export type AppSettings = {
   /** Which key sends a chat message. */
   sendKey: SendKey;
@@ -23,6 +27,8 @@ export type AppSettings = {
   formatOnSave: boolean;
   /** The editor's text size in px (before the UI zoom), as VS Code's editor.fontSize. */
   editorFontSize: number;
+  /** Programs chosen in Settings ▸ Tools (absent: found automatically). The Rust side reads these from the settings file. */
+  toolPaths: Partial<Record<ToolName, string>>;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -34,6 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   allowCommands: [],
   formatOnSave: true,
   editorFontSize: 12,
+  toolPaths: {},
 };
 
 export const EDITOR_FONT_SIZES = { min: 9, max: 24 };
@@ -82,6 +89,17 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
   const size = raw.editorFontSize;
   if (typeof size === 'number' && size >= EDITOR_FONT_SIZES.min && size <= EDITOR_FONT_SIZES.max) out.editorFontSize = Math.round(size * 2) / 2;
+  if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
+  return out;
+}
+
+/** Paths for the known tools only: non-empty strings, trimmed. */
+export function sanitizeToolPaths(raw: Record<string, unknown>): Partial<Record<ToolName, string>> {
+  const out: Partial<Record<ToolName, string>> = {};
+  for (const tool of TOOL_NAMES) {
+    const p = raw[tool];
+    if (typeof p === 'string' && p.trim() && p.length <= 1024) out[tool] = p.trim();
+  }
   return out;
 }
 

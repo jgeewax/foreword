@@ -26,7 +26,7 @@ pub fn config_dir() -> PathBuf {
         .join(".typst-studio")
 }
 
-fn config_file() -> PathBuf {
+pub fn config_file() -> PathBuf {
     config_dir().join("settings.json")
 }
 

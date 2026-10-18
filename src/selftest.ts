@@ -4176,6 +4176,108 @@ async function modelPickerChecks() {
 }
 
 /**
+ * Settings ▸ Tools: choosing the program for each tool. Tinymist from VS Code's
+ * extension (typed with ~), a path with nothing there (the automatic one runs,
+ * with a warning), then Automatic again; Git at /usr/bin/git; OpenCode at its own
+ * path. Each change reaches the settings file and restarts what runs the tool.
+ * Ends with every tool automatic again.
+ */
+async function toolPathChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.agent.status === 'ready', 60000, 'agent').catch(() => {});
+  // Every tool automatic to start with (the settings are shared through local storage).
+  if (Object.keys(studio.state.settings.toolPaths).length) {
+    out.leftOver = studio.state.settings.toolPaths;
+    for (const tool of ['tinymist', 'opencode', 'git'] as const) await studio.setToolPath(tool, '');
+    await waitFor(() => studio.state.agent.status === 'ready' && studio.state.preview.status === 'ready', 60000, 'restarted').catch(() => {});
+  }
+  studio.openSettings('tools');
+  await sleep(500);
+  const input = (label: string) => document.querySelector<HTMLInputElement>(`.settings-content input[aria-label="${label} program"]`);
+  const row = (label: string) => input(label)?.closest('.tool-status-row');
+  const enter = async (label: string, value: string) => {
+    const el = input(label)!;
+    el.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(50);
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  };
+  const automatic = async (label: string) => {
+    [...(row(label)?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Automatic')?.click();
+  };
+  const file = async () => JSON.parse((await ipc.configRead()).text ?? '{}').toolPaths;
+  const shown = (label: string) => ({
+    inUse: row(label)?.querySelector('.tool-in-use')?.textContent,
+    warning: row(label)?.querySelector('.settings-help.bad')?.textContent ?? null,
+    automaticButton: [...(row(label)?.querySelectorAll('button') ?? [])].some((b) => b.textContent === 'Automatic'),
+  });
+  const previewBack = () => waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 30000, 'preview').catch(() => 'timed out');
+  // What happened when, for the record.
+  const t0 = performance.now();
+  const timeline: string[] = (out.timeline = []);
+  let last = '';
+  const offTimeline = studio.store.subscribe(() => {
+    const s = studio.state;
+    const now = `preview ${s.preview.status} · tinymist ${studio.typst.bin.split('/').slice(-3).join('/')} · agent ${s.agent.status} · paths ${JSON.stringify(s.settings.toolPaths)}`;
+    if (now !== last) timeline.push(`${Math.round(performance.now() - t0)} ms: ${(last = now)}`);
+  });
+  const mark = (step: string) => timeline.push(`${Math.round(performance.now() - t0)} ms: — ${step}`);
+  out.before = { tinymist: shown('Tinymist'), opencode: shown('OpenCode'), git: shown('Git'), bin: studio.typst.bin };
+
+  // Tinymist from VS Code's extension, typed with ~.
+  const vscode = '~/.vscode/extensions/myriad-dreamin.tinymist-0.15.10-darwin-arm64/out/tinymist';
+  mark('Tinymist: VS Code’s');
+  await enter('Tinymist', vscode);
+  await waitFor(() => studio.state.tools?.tinymist.fromSettings && studio.typst.bin.includes('.vscode'), 20000, 'tinymist chosen').catch(() => {});
+  out.tinymistChosen = { status: studio.state.tools?.tinymist, row: shown('Tinymist'), file: await file(), previewBack: await previewBack(), bin: studio.typst.bin };
+  out.snapshotChosen = await snap('tools-chosen');
+
+  // Nothing at that path: the automatic one runs, and the page says so.
+  mark('Tinymist: nothing there');
+  await enter('Tinymist', '/nowhere/tinymist');
+  await waitFor(() => studio.state.tools?.tinymist.configured === '/nowhere/tinymist' && studio.typst.bin === studio.state.tools.tinymist.automatic, 20000, 'bad path').catch(() => {});
+  out.tinymistMissing = { status: studio.state.tools?.tinymist, row: shown('Tinymist'), previewBack: await previewBack(), bin: studio.typst.bin };
+  out.snapshotMissing = await snap('tools-missing');
+  mark('Tinymist: automatic');
+  await automatic('Tinymist');
+  await waitFor(() => !studio.state.settings.toolPaths.tinymist && !studio.state.tools?.tinymist.configured, 10000, 'automatic').catch(() => {});
+  out.tinymistAutomatic = { status: studio.state.tools?.tinymist, row: shown('Tinymist'), file: await file(), previewBack: await previewBack(), bin: studio.typst.bin };
+
+  // Git.
+  mark('Git');
+  await enter('Git', '/usr/bin/git');
+  await waitFor(() => studio.state.tools?.git.fromSettings, 10000, 'git chosen').catch(() => {});
+  await sleep(500);
+  out.git = { status: studio.state.tools?.git, history: studio.state.history.status, gitStatus: studio.state.git.status, row: shown('Git') };
+  await automatic('Git');
+  await waitFor(() => !studio.state.tools?.git.configured, 10000, 'git automatic').catch(() => {});
+
+  // OpenCode at its own path: the assistant starts again with it.
+  const opencode = studio.state.tools?.opencode.path;
+  if (opencode) {
+    const seen: string[] = [];
+    const off = studio.store.subscribe(() => {
+      if (seen.at(-1) !== studio.state.agent.status) seen.push(studio.state.agent.status);
+    });
+    mark('OpenCode');
+    await enter('OpenCode', opencode);
+    const starts = () => seen.filter((s) => s === 'starting').length;
+    await waitFor(() => studio.state.tools?.opencode.fromSettings && starts() === 1 && studio.state.agent.status === 'ready', 60000, 'opencode restarted').catch(() => {});
+    out.opencode = { status: studio.state.tools?.opencode, agent: studio.state.agent.status, seen: [...seen], file: await file() };
+    mark('OpenCode: automatic');
+    await automatic('OpenCode');
+    await waitFor(() => !studio.state.tools?.opencode.configured && starts() === 2 && studio.state.agent.status === 'ready', 60000, 'opencode automatic').catch(() => {});
+    off();
+    out.opencodeAutomatic = { status: studio.state.tools?.opencode, agent: studio.state.agent.status, seen };
+  }
+  out.after = { settings: studio.state.settings.toolPaths, file: await file() };
+  offTimeline();
+  studio.closeSettings();
+  return out;
+}
+
+/**
  * New Book's page sizes: grouped by region (the US, the UK, continental
  * Europe, ISO, Japan, China, Korea), each template with its own list and
  * default. Read-only: the dialog is closed without creating anything.
@@ -4565,6 +4667,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();
+    if (want('tools')) result.tools = await toolPathChecks();
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();

@@ -785,6 +785,11 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .tool-status-row { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .tool-status-row:last-child { border-bottom: none; }
 .tool-status-row code { font-size: 11px; color: var(--muted); }
+.tool-in-use { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 2px; }
+.tool-in-use .muted { font-size: 11.5px; }
+.tool-path { margin-top: 6px; }
+.tool-path .settings-input { flex: 1; min-width: 0; font: 11.5px "SF Mono", Menlo, monospace; }
+.tool-path button { flex: none; }
 .command-chip.editable { display: inline-flex; align-items: center; gap: 2px; padding-right: 0; }
 .command-chip.editable button { padding: 0 5px; }
 .command-list { display: flex; flex-direction: column; gap: 6px; }

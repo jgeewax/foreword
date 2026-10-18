@@ -16,6 +16,12 @@ describe('the settings file', () => {
     expect(text.endsWith('}\n')).toBe(true);
   });
 
+  it('keeps the programs chosen for the tools', () => {
+    const c = parseConfig('{ "toolPaths": { "tinymist": "~/bin/tinymist", "git": "" } }');
+    expect(c.settings.toolPaths).toEqual({ tinymist: '~/bin/tinymist' });
+    expect(JSON.parse(serializeConfig(c.raw, { ...c.settings, toolPaths: { git: '/usr/bin/git' } }, 1)).toolPaths).toEqual({ git: '/usr/bin/git' });
+  });
+
   it('says where a mistake is, and never accepts a non-object', () => {
     expect(parseConfig('{\n  "sendKey": "enter",\n  "zoom": 1,,\n}').error).toMatch(/isn.t valid JSON/);
     expect(parseConfig('[1]').error).toMatch(/JSON object/);

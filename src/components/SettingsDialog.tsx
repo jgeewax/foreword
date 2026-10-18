@@ -8,7 +8,7 @@ import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
-import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName } from '../app/settings';
+import { DEFAULT_SETTINGS, EDITOR_FONT_SIZES, isCommandName, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -414,11 +414,35 @@ function PermissionsPage() {
   );
 }
 
-function ToolsPage() {
-  const tools = useStore(studio.store, (s) => s.tools);
-  const history = useStore(studio.store, (s) => s.history);
-  const row = (label: string, purpose: string, info: ToolInfo | undefined, install: string, error?: string) => (
-    <div className="tool-status-row" key={label}>
+/** One tool: the program in use, and a path to choose another (empty: found automatically). */
+function ToolRow({ tool, label, purpose, info, install, error }: { tool: ToolName; label: string; purpose: string; info: ToolInfo | undefined; install: string; error?: string }) {
+  const chosen = useStore(studio.store, (s) => s.settings.toolPaths[tool] ?? '');
+  const [draft, setDraft] = useState(chosen);
+  const [busy, setBusy] = useState(false);
+  // Typed in the box and not applied yet (leaving the box applies it).
+  const edited = useRef(false);
+  useEffect(() => {
+    edited.current = false;
+    setDraft(chosen);
+  }, [chosen]);
+  const apply = async (path: string) => {
+    edited.current = false;
+    if (path.trim() === chosen) return setDraft(chosen);
+    setBusy(true);
+    try {
+      await studio.setToolPath(tool, path);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const choose = async () => {
+    const picked = await openDialog({ directory: false, multiple: false, defaultPath: info?.path ?? undefined, title: `Choose the ${label} program` });
+    if (typeof picked === 'string') await apply(picked);
+  };
+  // A path was chosen, but there's no program there: the one found automatically runs instead.
+  const unusable = !!info?.configured && info.fromSettings === false;
+  return (
+    <div className="tool-status-row">
       <span className={info ? (info.path ? 'ok' : 'bad') : 'muted'} title={info ? (info.path ? 'Installed' : 'Not installed') : 'Checking…'}>
         {info ? (info.path ? '✓' : '✕') : '…'}
       </span>
@@ -427,22 +451,81 @@ function ToolsPage() {
           {label} {info?.version && <span className="muted">{info.version}</span>}
         </div>
         <div className="settings-help">{purpose}</div>
-        {info?.path ? <code className="selectable">{info.path}</code> : info && <div className="settings-help">Not installed. In Terminal: <code className="selectable">{install}</code>, then restart Typst Studio.</div>}
+        {info?.path ? (
+          <div className="tool-in-use">
+            <code className="selectable">{info.path}</code>
+            <span className="muted">{info.fromSettings ? 'your choice' : 'found automatically'}</span>
+          </div>
+        ) : (
+          info && (
+            <div className="settings-help">
+              Not installed. In Terminal: <code className="selectable">{install}</code>, then restart Typst Studio. Or choose where it is.
+            </div>
+          )
+        )}
+        <div className="settings-row tool-path">
+          <input
+            className="settings-input"
+            aria-label={`${label} program`}
+            placeholder="Found automatically; or type or choose a path"
+            spellCheck={false}
+            value={draft}
+            onChange={(e) => {
+              edited.current = true;
+              setDraft(e.target.value);
+            }}
+            onBlur={() => edited.current && void apply(draft)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void apply(draft);
+              else if (e.key === 'Escape' && draft !== chosen) {
+                // Esc puts the path back first; the next one closes Settings.
+                e.stopPropagation();
+                edited.current = false;
+                setDraft(chosen);
+              }
+            }}
+          />
+          <button className="small" disabled={busy} onClick={() => void choose()}>
+            Choose…
+          </button>
+          {chosen && (
+            <button className="small" disabled={busy} onClick={() => void apply('')}>
+              Automatic
+            </button>
+          )}
+        </div>
+        {unusable && (
+          <div className="settings-help bad">
+            There’s no program at {info.configured}, so Typst Studio uses {info.path ? 'the one it found automatically' : 'none'}.
+          </div>
+        )}
         {error && <div className="settings-help bad">{error}</div>}
       </div>
     </div>
   );
+}
+
+function ToolsPage() {
+  const tools = useStore(studio.store, (s) => s.tools);
+  const history = useStore(studio.store, (s) => s.history);
+  // A tool may have been installed or moved since the app started.
+  useEffect(() => void studio.refreshTools().catch(() => {}), []);
   return (
     <Section title="Tools Typst Studio uses">
-      {row('Tinymist', 'Typesets the live preview and exports PDFs.', tools?.tinymist, 'brew install tinymist')}
-      {row('OpenCode', 'Runs the writing assistant.', tools?.opencode, 'brew install opencode')}
-      {row(
-        'Git',
-        'Keeps History, in Typst Studio’s own folder. If your book is in a Git repository, Source Control uses it too.',
-        tools?.git,
-        'xcode-select --install',
-        tools?.git?.path ? history.error : undefined,
-      )}
+      <p className="settings-help">
+        Typst Studio finds these by itself (Homebrew, your PATH, and for Tinymist, VS Code’s Typst extension). To use another copy, type or choose its path; the preview, the assistant or History
+        starts again with it.
+      </p>
+      <ToolRow tool="tinymist" label="Tinymist" purpose="Typesets the live preview and exports PDFs." info={tools?.tinymist} install="brew install tinymist" />
+      <ToolRow tool="opencode" label="OpenCode" purpose="Runs the writing assistant." info={tools?.opencode} install="brew install opencode" />
+      <ToolRow
+        tool="git"
+        label="Git"
+        purpose="Keeps History, in Typst Studio’s own folder. If your book is in a Git repository, Source Control uses it too."
+        info={tools?.git}
+        install="xcode-select --install"
+        error={tools?.git?.path ? history.error : undefined}
+      />
     </Section>
   );
 }

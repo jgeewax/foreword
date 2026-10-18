@@ -72,7 +72,7 @@ pub async fn agent_start(state: Win) -> CmdResult<AgentInfo> {
     }
     let bin = discover::find_opencode().ok_or_else(|| {
         CmdError::Unavailable(
-            "opencode not found (brew install opencode, or set OPENCODE_PATH)".into(),
+            "opencode not found (brew install opencode, or choose it in Settings ▸ Tools)".into(),
         )
     })?;
     let port = free_port()?;

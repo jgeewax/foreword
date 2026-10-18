@@ -154,9 +154,9 @@ struct ToolsStatus {
 #[tauri::command]
 async fn tools_status() -> ToolsStatus {
     ToolsStatus {
-        tinymist: discover::tool_info(discover::find_tinymist()),
-        opencode: discover::tool_info(discover::find_opencode()),
-        git: discover::tool_info(discover::find_git()),
+        tinymist: discover::tool_info(discover::Tool::Tinymist),
+        opencode: discover::tool_info(discover::Tool::OpenCode),
+        git: discover::tool_info(discover::Tool::Git),
     }
 }
 

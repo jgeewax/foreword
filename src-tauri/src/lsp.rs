@@ -81,7 +81,7 @@ pub async fn typst_start(
     let root = state.root()?;
     let bin: PathBuf = discover::find_tinymist().ok_or_else(|| {
         CmdError::Unavailable(
-            "tinymist not found (brew install tinymist, or set TINYMIST_PATH)".into(),
+            "tinymist not found (brew install tinymist, or choose it in Settings ▸ Tools)".into(),
         )
     })?;
 
