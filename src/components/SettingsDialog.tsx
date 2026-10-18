@@ -36,7 +36,6 @@ function Radio<T extends string>({ name, value, current, onChange, label, detail
 function ProjectSection() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const project = useStore(studio.store, (s) => s.project);
-  const code = useStore(studio.store, (s) => s.code);
   const [errors, setErrors] = useState<string[]>([]);
   const [outputDir, setOutputDir] = useState(project.settings.outputDir ?? '');
   useEffect(() => setOutputDir(project.settings.outputDir ?? ''), [project.settings.outputDir]);
@@ -61,10 +60,7 @@ function ProjectSection() {
   };
 
   return (
-    <Section title={`Project · ${ws.name}`}>
-      <p className="settings-help">
-        Saved in <code>{PROJECT_FILE}</code> in the project folder, so these travel with the book.
-      </p>
+    <Section title="The book’s files">
       {project.error && (
         <p className="bad">
           {project.error}{' '}
@@ -150,16 +146,94 @@ function ProjectSection() {
           {e}
         </p>
       ))}
-      {code.trusted && (
+    </Section>
+  );
+}
+
+/** The assistant in this book: its style guide, the commands it may run here, and its code examples. */
+function BookAssistantPage() {
+  const ws = useStore(studio.store, (s) => s.workspace);
+  const project = useStore(studio.store, (s) => s.project);
+  const guide = useStore(studio.store, (s) => s.styleGuide);
+  const code = useStore(studio.store, (s) => s.code);
+  if (!ws) return null;
+  return (
+    <>
+      <Section title="Writing style guide">
+        <p className="settings-help">
+          {guide.exists ? (
+            <>
+              Every message follows <code>WRITING_STYLE.md</code>.{' '}
+              <button
+                className="link"
+                onClick={() => {
+                  studio.closeSettings();
+                  void studio.openFile('WRITING_STYLE.md');
+                }}
+              >
+                Open it
+              </button>
+            </>
+          ) : (
+            'This book has no style guide yet: the chat offers to draft one from your chapters.'
+          )}
+        </p>
+      </Section>
+      <Section title="Commands to run without asking, in this book">
+        <p className="settings-help">On top of those allowed in every book (Typst Studio ▸ Permissions), for the tools this book needs, like a book’s own scripts.</p>
         <div className="settings-field">
-          <div className="settings-label">Code examples</div>
+          <CommandList
+            commands={project.settings.allowCommands ?? []}
+            disabled={!!project.error}
+            onChange={(allowCommands) => void studio.updateProjectSettings({ allowCommands })}
+          />
+        </div>
+      </Section>
+      {code.trusted && (
+        <Section title="Code examples">
           <div className="settings-list-row">
             <span>Typst Studio may run this book’s code examples.</span>
             <button onClick={() => studio.code.revokeTrust()}>Stop allowing</button>
           </div>
-        </div>
+        </Section>
       )}
-    </Section>
+    </>
+  );
+}
+
+/** Where a page's settings are kept: Typst Studio's settings file, or the book's own. */
+function ScopeBanner({ scope }: { scope: 'app' | 'book' }) {
+  const file = useStore(studio.store, (s) => s.configFile);
+  const ws = useStore(studio.store, (s) => s.workspace);
+  if (scope === 'app') {
+    return (
+      <div className="settings-scope">
+        <span>
+          <strong>For every book.</strong> Saved in <code className="selectable">{file?.path ?? '~/.typst-studio/settings.json'}</code>; edit it by hand if you like, and changes apply when
+          you come back to Typst Studio.{' '}
+          <button className="link" onClick={() => void studio.openConfigFile()}>
+            Open in text editor
+          </button>
+        </span>
+        {file?.error && <span className="bad">The file can’t be read: {file.error} Typst Studio keeps your last settings and won’t change the file until it’s fixed.</span>}
+      </div>
+    );
+  }
+  return (
+    <div className="settings-scope book">
+      <span>
+        <strong>For {ws?.name ?? 'this book'} only.</strong> Saved in <code>{PROJECT_FILE}</code> in the book’s folder, so it travels with the book.{' '}
+        <button
+          className="link"
+          onClick={() => {
+            studio.closeSettings();
+            void studio.openFile(PROJECT_FILE);
+          }}
+        >
+          Open the file
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -169,33 +243,10 @@ const PAGE_KEY = 'studio.settingsPage';
 function readPage(): Page {
   try {
     const p = localStorage.getItem(PAGE_KEY);
-    return p === 'general' || p === 'assistant' || p === 'permissions' || p === 'book' || p === 'tools' ? p : 'general';
+    return p === 'general' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-assistant' ? p : 'general';
   } catch {
     return 'general';
   }
-}
-
-/** Where all of these are kept: a file the author can edit by hand. */
-function SettingsFileSection() {
-  const file = useStore(studio.store, (s) => s.configFile);
-  if (!file) return null;
-  return (
-    <Section title="Settings file">
-      <div className="settings-row">
-        <code className="selectable">{file.path}</code>
-        <button className="small" onClick={() => void studio.openConfigFile()}>
-          Open in text editor
-        </button>
-      </div>
-      {file.error ? (
-        <p className="settings-help bad">
-          The file can’t be read: {file.error} Typst Studio keeps your last settings and won’t change the file until it’s fixed.
-        </p>
-      ) : (
-        <p className="settings-help">Everything here is kept in this file. Edit it by hand if you like: changes apply when you come back to Typst Studio.</p>
-      )}
-    </Section>
-  );
 }
 
 function GeneralPage() {
@@ -243,7 +294,6 @@ function GeneralPage() {
           </p>
         </div>
       </Section>
-      <SettingsFileSection />
       <Section title="Layout">
         <div className="settings-field">
           <div className="settings-label">History</div>
@@ -286,8 +336,6 @@ const ASSISTANT_CHOICES: { id: AssistantId; label: string; detail: string }[] = 
 function AssistantPage() {
   const settings = useStore(studio.store, (s) => s.settings);
   const model = useStore(studio.store, (s) => s.agent.model);
-  const guide = useStore(studio.store, (s) => s.styleGuide);
-  const ws = useStore(studio.store, (s) => s.workspace);
   const status = useStore(studio.store, (s) => s.agent.status);
   const error = useStore(studio.store, (s) => s.agent.error);
   return (
@@ -335,28 +383,6 @@ function AssistantPage() {
           </label>
         </div>
       </Section>
-      {ws && (
-        <Section title="Writing style guide">
-          <p className="settings-help">
-            {guide.exists ? (
-              <>
-                Every message follows <code>WRITING_STYLE.md</code>.{' '}
-                <button
-                  className="link"
-                  onClick={() => {
-                    studio.closeSettings();
-                    void studio.openFile('WRITING_STYLE.md');
-                  }}
-                >
-                  Open it
-                </button>
-              </>
-            ) : (
-              'This book has no style guide yet: the chat offers to draft one from your chapters.'
-            )}
-          </p>
-        </Section>
-      )}
     </>
   );
 }
@@ -401,7 +427,6 @@ function CommandList({ commands, onChange, disabled = false }: { commands: strin
 
 function PermissionsPage() {
   const settings = useStore(studio.store, (s) => s.settings);
-  const project = useStore(studio.store, (s) => s.project);
   const ws = useStore(studio.store, (s) => s.workspace);
   return (
     <>
@@ -418,28 +443,15 @@ function PermissionsPage() {
           ))}
         </div>
       </Section>
-      <Section title="More commands to run without asking">
+      <Section title="More commands to run without asking, in every book">
         <p className="settings-help">
           Tools your books use, like <code>python3</code> or <code>Rscript</code>. A command line still asks if any part of it isn’t allowed, writes with &gt;, or
           deletes; building the book stays blocked.
         </p>
         <div className="settings-field">
-          <div className="settings-label">In every book</div>
           <CommandList commands={settings.allowCommands} onChange={(allowCommands) => studio.updateSettings({ allowCommands })} />
+          {ws && <p className="settings-help">Those for one book only are in that book’s settings (This book ▸ Assistant).</p>}
         </div>
-        {ws && (
-          <div className="settings-field">
-            <div className="settings-label">In this book only</div>
-            <CommandList
-              commands={project.settings.allowCommands ?? []}
-              disabled={!!project.error}
-              onChange={(allowCommands) => void studio.updateProjectSettings({ allowCommands })}
-            />
-            <p className="settings-help">
-              Saved in <code>{PROJECT_FILE}</code>, so it travels with the book.
-            </p>
-          </div>
-        )}
       </Section>
     </>
   );
@@ -787,13 +799,20 @@ export function SettingsDialog() {
       // Only a convenience.
     }
   };
-  const pages: { id: Page; label: string; icon: IconName }[] = [
-    { id: 'general', label: 'General', icon: 'settings' },
-    { id: 'assistant', label: 'Assistant', icon: 'sparkle' },
-    { id: 'permissions', label: 'Permissions', icon: 'shield' },
-    ...(ws ? [{ id: 'book' as const, label: 'This book', icon: 'book' as const }] : []),
-    { id: 'tools', label: 'Tools', icon: 'code' },
+  // Typst Studio's own settings (every book), then this book's (saved with it), as VS Code's User and Workspace.
+  const pages: { id: Page; label: string; icon: IconName; scope: 'app' | 'book' }[] = [
+    { id: 'general', label: 'General', icon: 'settings', scope: 'app' },
+    { id: 'assistant', label: 'Assistant', icon: 'sparkle', scope: 'app' },
+    { id: 'permissions', label: 'Permissions', icon: 'shield', scope: 'app' },
+    { id: 'tools', label: 'Tools', icon: 'code', scope: 'app' },
+    ...(ws
+      ? [
+          { id: 'book' as const, label: 'Files', icon: 'book' as const, scope: 'book' as const },
+          { id: 'book-assistant' as const, label: 'Assistant', icon: 'sparkle' as const, scope: 'book' as const },
+        ]
+      : []),
   ];
+  const groupTitle = (scope: 'app' | 'book') => (scope === 'app' ? 'Typst Studio' : `This book · ${ws?.name ?? ''}`);
   const current = pages.some((p) => p.id === page) ? page : 'general';
   const total = pages.reduce((n, p) => n + (counts[p.id] ?? 0), 0);
 
@@ -824,7 +843,8 @@ export function SettingsDialog() {
     if (shownPage.current === current) return;
     shownPage.current = current;
     const root = dialogRef.current;
-    (root?.querySelector<HTMLElement>('.settings-content input:checked') ?? root?.querySelector<HTMLElement>('.settings-content input, .settings-content select, .settings-content button'))?.focus();
+    // The page's first setting, not the line saying where it's saved.
+    (root?.querySelector<HTMLElement>('.settings-section input:checked') ?? root?.querySelector<HTMLElement>('.settings-section input, .settings-section select, .settings-section button'))?.focus();
   }, [current]);
   useLayoutEffect(() => {
     const scroller = contentRef.current;
@@ -850,7 +870,8 @@ export function SettingsDialog() {
   }, [query]);
 
   const pageContent = (id: Page) =>
-    ({ general: <GeneralPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, book: <ProjectSection />, tools: <ToolsPage /> })[id];
+    ({ general: <GeneralPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage />, book: <ProjectSection />, 'book-assistant': <BookAssistantPage /> })[id];
+  const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeSettings()}>
@@ -870,7 +891,12 @@ export function SettingsDialog() {
         </header>
         <div className="settings-layout">
           <nav className="settings-nav" role="tablist" aria-orientation="vertical">
-            {pages.map((p) =>
+            {pages.map((p, i) => [
+              pages[i - 1]?.scope !== p.scope && (
+                <div key={`${p.scope}-title`} className="settings-nav-group" title={p.scope === 'book' ? 'Saved in the book’s folder, so they travel with it' : 'For every book'}>
+                  {groupTitle(p.scope)}
+                </div>
+              ),
               searching ? (
                 // While searching, every page is shown: its name goes to its matches, with their count.
                 <button
@@ -889,7 +915,7 @@ export function SettingsDialog() {
                   {p.label}
                 </button>
               ),
-            )}
+            ])}
           </nav>
           <div className="settings-content" role="tabpanel" ref={contentRef}>
             {searching ? (
@@ -902,7 +928,9 @@ export function SettingsDialog() {
                 <div className="settings-results" ref={resultsRef}>
                   {pages.map((p) => (
                     <div key={p.id} className="settings-page" data-page={p.id}>
-                      <h1 className="settings-page-title">{p.label}</h1>
+                      <h1 className="settings-page-title">
+                        {p.scope === 'book' ? `This book · ${p.label}` : p.label}
+                      </h1>
                       {pageContent(p.id)}
                     </div>
                   ))}
@@ -910,7 +938,10 @@ export function SettingsDialog() {
                 {total === 0 && <p className="settings-none muted">No settings match “{query.trim()}”.</p>}
               </>
             ) : (
-              pageContent(current)
+              <>
+                <ScopeBanner scope={scopeOf(current)} />
+                {pageContent(current)}
+              </>
             )}
           </div>
         </div>

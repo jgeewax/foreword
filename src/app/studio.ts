@@ -139,7 +139,8 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 /** Identifies a selection for "leave it out" (same place and same text). */
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
-export type SettingsPage = 'general' | 'assistant' | 'permissions' | 'book' | 'tools';
+/** Settings' pages: Typst Studio's own (every book), then this book's (saved with it). */
+export type SettingsPage = 'general' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant';
 export type NewBookTab = 'book' | 'paper' | 'sample';
 
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };

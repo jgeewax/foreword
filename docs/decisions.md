@@ -2462,6 +2462,36 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   opened from the app's Resources, which is the release path for samples
   (Peter Rabbit, 27 pictures, 32 pages).
 
+### Settings: Typst Studio's, and this book's
+
+- **Asked for:** "separate settings for your app config vs book config". The
+  book's settings were one page among the app's, and the Permissions page
+  mixed commands allowed in every book with those for this book only.
+- **Two groups, as VS Code's User and Workspace settings,** split by where
+  they're saved:
+  - **Typst Studio** (General, Assistant, Permissions, Tools), for every book,
+    in `~/.typst-studio/settings.json`;
+  - **This book · <name>** (Files, Assistant), in the book's
+    `.typst-studio.json`, so they travel with it. Files has the main file, the
+    Typst root, the PDF folder and the font folders. Assistant has the
+    writing style guide, the commands allowed in this book only, and trust in
+    its code examples.
+- **Each page starts by saying where it's saved:** "For every book. Saved in
+  ~/.typst-studio/settings.json…" with Open in text editor (and the file's
+  problem, if it can't be read), or "For <book> only. Saved in
+  .typst-studio.json in the book's folder…" with Open the file. This
+  replaces the Settings file section on General.
+- Search still shows every page of both groups, a book's pages titled "This
+  book · …". A page's name counts toward its matches, so the book's first
+  page is "Files": named "Files and fonts", every setting on it matched
+  "font".
+- Opening a page puts the cursor on its first setting, not on the banner's
+  link.
+- Verified (self-test `settings`): six pages in two groups, each with its
+  banner and the cursor on its first setting; "font" finds Extra font
+  folders on Files (1 setting), "ALLOW python" the commands for every book on
+  Permissions, "enter send" the send key on General.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

@@ -190,6 +190,6 @@
 
 - [x] tool finding ui needs work. a button to retrigger a search. choices from dropdown, chooser, textbox, grab from clipboard , etc. make this ui really elegant and useful
 
-- [ ] separate settings for your app config vs book config
+- [x] separate settings for your app config vs book config
 
 - [ ] thinking needs to be thinking time not waiting time. split them and show both in chat ui...

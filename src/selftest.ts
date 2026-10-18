@@ -4663,12 +4663,16 @@ async function settingsChecks() {
   // Every page, with a picture.
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')];
   out.pages = {} as Record<string, unknown>;
-  for (const t of tabs) {
+  for (const [i, t] of tabs.entries()) {
     t.click();
     await sleep(250);
-    (out.pages as Record<string, unknown>)[t.textContent ?? '?'] = {
+    // Typst Studio's pages, then this book's (two have the same name).
+    const name = `${i + 1}-${(t.textContent ?? 'page').toLowerCase().replace(/\s+/g, '-')}`;
+    (out.pages as Record<string, unknown>)[name] = {
       headings: [...document.querySelectorAll('.settings-content h2')].map((h) => h.textContent),
-      snapshot: await snap(`settings-${(t.textContent ?? 'page').toLowerCase().replace(/\s+/g, '-')}`),
+      scope: document.querySelector('.settings-scope')?.textContent?.slice(0, 60),
+      focused: document.activeElement?.closest('.settings-scope') ? 'the banner' : document.activeElement?.tagName,
+      snapshot: await snap(`settings-${name}`),
     };
   }
   tabs[0]?.click();
