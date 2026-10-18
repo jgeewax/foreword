@@ -24,7 +24,7 @@ export function TitleBar({ panes }: { panes?: { visible: Record<Pane, boolean>; 
       <div className="titlebar-left" />
       <div className="titlebar-center">
         {ws && (
-          <button className="command-center" title={`Go to a file in ${tildePath(ws.root)} (⌘P)`} onClick={() => studio.openQuickOpen()}>
+          <button className="command-center" title={`Go to a file in ${tildePath(ws.root)} (⌘P), or run a command (⇧⌘P)`} onClick={() => studio.openQuickOpen()}>
             <Icon name="search" />
             <span className="command-center-name">{ws.name}</span>
           </button>

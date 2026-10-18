@@ -187,11 +187,14 @@ export class Documents {
     if (edit) {
       const start = doc.model.getPositionAt(edit.start);
       const end = doc.model.getPositionAt(edit.end);
+      // An undo step of its own: ⌘Z takes off the reload, not the typing before it too.
+      doc.model.pushStackElement();
       doc.model.pushEditOperations(
         [],
         [{ range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column), text: edit.text }],
         () => null,
       );
+      doc.model.pushStackElement();
     }
     doc.diskHash = hash;
     doc.savedAltVersion = doc.model.getAlternativeVersionId();

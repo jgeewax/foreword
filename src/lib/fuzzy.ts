@@ -43,6 +43,50 @@ export function fuzzyMatch(query: string, text: string): { score: number; positi
   return { score, positions };
 }
 
+/**
+ * Stricter, for commands (as VS Code's command palette): the query is the
+ * start of words in the text, in order ("show conv" finds Show Conversations,
+ * "exppdf" Export PDF), or is in it whole ("port" finds Export). Letters
+ * scattered through it don't count: "save" doesn't find "Restart Preview".
+ * Scored as `fuzzyMatch` scores.
+ */
+export function wordMatch(query: string, text: string): { score: number; positions: number[] } | null {
+  const q = query.toLowerCase().replace(/\s+/g, '');
+  if (!q) return { score: 0, positions: [] };
+  const t = text.toLowerCase();
+  const whole = t.indexOf(q);
+  const positions = whole >= 0 ? Array.from(q, (_, k) => whole + k) : wordStarts(q, text, t);
+  if (!positions) return null;
+  let score = whole >= 0 ? 12 + (isWordStart(text, whole) ? 8 : 0) : 0;
+  positions.forEach((p, k) => {
+    score += 1 + (isWordStart(text, p) ? 8 : 0) + (k > 0 && p === positions[k - 1] + 1 ? 5 : 0);
+    if (k > 0) score -= Math.min(3, (p - positions[k - 1] - 1) * 0.1);
+  });
+  return { score: score - text.length * 0.02, positions };
+}
+
+/** Each character of `q` right after the one before, or at a later word start (null if it can't be done). */
+function wordStarts(q: string, text: string, t: string): number[] | null {
+  const failed = new Set<string>();
+  const go = (k: number, prev: number): number[] | null => {
+    if (k === q.length) return [];
+    if (failed.has(`${k}:${prev}`)) return null;
+    if (prev >= 0 && t[prev + 1] === q[k]) {
+      const rest = go(k + 1, prev + 1);
+      if (rest) return [prev + 1, ...rest];
+    }
+    // (Right after the one before was tried above.)
+    for (let j = t.indexOf(q[k], prev < 0 ? 0 : prev + 2); j >= 0; j = t.indexOf(q[k], j + 1)) {
+      if (!isWordStart(text, j)) continue;
+      const rest = go(k + 1, j);
+      if (rest) return [j, ...rest];
+    }
+    failed.add(`${k}:${prev}`);
+    return null;
+  };
+  return go(0, -1);
+}
+
 function isWordStart(text: string, i: number): boolean {
   if (i === 0) return true;
   const prev = text[i - 1];

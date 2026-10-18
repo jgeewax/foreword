@@ -240,8 +240,8 @@ export type StudioState = {
   coverDialogOpen: boolean;
   /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
   names: BookNames;
-  /** ⌘P: go to a file by name. */
-  quickOpen: boolean;
+  /** ⌘P: go to a file by name; ⇧⌘P: run a command. What it was opened for (false: closed). */
+  quickOpen: false | 'files' | 'commands';
   /** The settings file: where it is, and why it can't be used (if so). */
   configFile: { path: string; error: string | null } | null;
   /** Bumped when the assistant's marks change (the editor repaints them). */
@@ -329,6 +329,8 @@ const MODEL_KEY = 'studio.model';
 const ZOOM_KEY = 'studio.zoom';
 const RECENT_KEY = 'studio.recentWorkspaces';
 export const NEW_BOOK_PARENT = 'studio.newBookParent';
+/** The window's book across Reload Window (sessionStorage: this window's page only). */
+const RELOAD_KEY = 'studio.reloadWorkspace';
 /** Per book: where its PDF was last exported (the Save dialog starts there). */
 const EXPORT_TARGETS_KEY = 'studio.exportTargets';
 
@@ -358,6 +360,16 @@ function writeJson(key: string, value: unknown) {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {}
 }
+/** A sessionStorage value, removed as it's read (null: none). */
+function takeSession(key: string): string | null {
+  try {
+    const v = sessionStorage.getItem(key);
+    sessionStorage.removeItem(key);
+    return v;
+  } catch {
+    return null;
+  }
+}
 
 export class Studio {
   readonly store = new Store<StudioState>(initialState);
@@ -369,6 +381,8 @@ export class Studio {
     'show-agent-pane': [];
     'show-explorer': [];
     'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
+    /** ⌘P or ⇧⌘P, pressed again while the box is open: it starts over in that mode. */
+    'quick-open': [mode: 'files' | 'commands'];
   }>();
   readonly perf = new PerfTracker();
   readonly typst = new TypstService();
@@ -522,6 +536,7 @@ export class Studio {
     'open-book': () => this.chooseWorkspace(),
     'go-to-file': () => this.openQuickOpen(),
     save: () => this.save(),
+    'save-all': () => this.saveAll(),
     'close-tab': () => this.tabCommand('close'),
     'reopen-tab': () => this.tabCommand('reopen'),
     // Edit
@@ -530,6 +545,7 @@ export class Studio {
     'format-document': () => this.formatDocument(),
     'add-comment': () => this.addComment(),
     // View
+    'command-palette': () => this.openCommandPalette(),
     'toggle-sidebar': () => this.events.emit('toggle-pane', 'explorer'),
     'toggle-preview': () => this.events.emit('toggle-pane', 'preview'),
     'toggle-assistant': () => this.events.emit('toggle-pane', 'agent'),
@@ -566,7 +582,7 @@ export class Studio {
   };
 
   /** Commands that need a book open do nothing without one (the menu bar can't grey them out). */
-  private static readonly WITHOUT_A_BOOK = new Set(['settings', 'new-book', 'open-book', 'zoom-in', 'zoom-out', 'zoom-reset', 'typst-guide', 'toggle-sidebar', 'toggle-preview', 'toggle-assistant']);
+  private static readonly WITHOUT_A_BOOK = new Set(['settings', 'command-palette', 'new-book', 'open-book', 'zoom-in', 'zoom-out', 'zoom-reset', 'typst-guide', 'toggle-sidebar', 'toggle-preview', 'toggle-assistant']);
 
   async menuCommand(id: string) {
     if (!this.state.workspace && !Studio.WITHOUT_A_BOOK.has(id)) return;
@@ -578,13 +594,13 @@ export class Studio {
   }
 
   /** A sidebar view, showing the sidebar if it was hidden. */
-  private revealSidebar(view: StudioState['sidebar']) {
+  revealSidebar(view: StudioState['sidebar']) {
     this.events.emit('show-explorer');
     this.showSidebar(view);
   }
 
-  /** Run one of the editor's own actions (Find, Replace) from the menu bar. */
-  private editorAction(id: string) {
+  /** Run one of the editor's own actions (Find, Replace) from the menu bar or the command palette. */
+  editorAction(id: string) {
     const editor = this.editor;
     if (!editor) return;
     editor.focus();
@@ -634,7 +650,9 @@ export class Studio {
     });
     ipc.toolsStatus().then((tools) => this.store.set({ tools }));
     // A new window starts on the welcome screen, not the last book (open in the first window).
-    const initial = launch.workspace ?? (launch.fresh ? null : localStorage.getItem(LAST_WORKSPACE));
+    // After Reload Window, the window's own book ('' for none).
+    const reloaded = takeSession(RELOAD_KEY);
+    const initial = reloaded !== null ? reloaded || null : (launch.workspace ?? (launch.fresh ? null : localStorage.getItem(LAST_WORKSPACE)));
     if (initial) await this.openWorkspace(initial);
   }
 
@@ -1426,7 +1444,15 @@ export class Studio {
 
   /** ⌘P: go to a file. */
   openQuickOpen() {
-    if (this.state.workspace) this.store.set({ quickOpen: true });
+    if (!this.state.workspace) return;
+    this.store.set({ quickOpen: 'files' });
+    this.events.emit('quick-open', 'files');
+  }
+
+  /** ⇧⌘P: the command palette (the same box, with ">" typed). It works without a book too. */
+  openCommandPalette() {
+    this.store.set({ quickOpen: 'commands' });
+    this.events.emit('quick-open', 'commands');
   }
 
   closeQuickOpen() {
@@ -2347,12 +2373,47 @@ export class Studio {
     else if (outcome === 'unavailable') this.toast('Not formatted: Tinymist isn’t running.', 'error');
   }
 
+  /** Save All (⌥⌘S): every file with unsaved changes. */
+  async saveAll() {
+    for (const path of Object.keys(this.state.dirty).filter((p) => this.state.dirty[p])) await this.save(path);
+  }
+
   async reloadFromDisk(path: string) {
     try {
       await this.docs?.reload(path);
     } catch (e) {
       this.toast(`Reload failed: ${errorMessage(e)}`, 'error');
     }
+  }
+
+  /** Revert File: the file as saved, without the unsaved changes. It's one edit, so ⌘Z brings them back. */
+  async revertFile(path = this.state.active) {
+    if (!path) return;
+    await this.reloadFromDisk(path);
+    if (!this.state.dirty[path]) this.toast(`${path.split('/').pop()} is as it was saved. ⌘Z brings your changes back.`);
+  }
+
+  /**
+   * Reload Window, as VS Code's: the page starts over with the same book (its
+   * tabs come back), and Tinymist and the preview start again. Unsaved changes
+   * are saved first, if the author agrees.
+   */
+  async reloadWindow() {
+    const dirty = Object.keys(this.state.dirty).filter((p) => this.state.dirty[p]);
+    if (dirty.length) {
+      const which = dirty.length === 1 ? `${dirty[0]} has` : `${dirty.length} files have`;
+      if (!(await this.confirmAction(`${which} unsaved changes. Save, then reload the window?`, 'Unsaved changes', 'Save and Reload'))) return;
+      await this.saveAll();
+      if (Object.values(this.state.dirty).some(Boolean)) return; // a save failed (and said why)
+    } else if (this.state.agent.running && !(await this.confirmAction('The assistant is still working. It carries on, but this window stops following it. Reload anyway?', 'Reload window', 'Reload'))) {
+      return;
+    }
+    // This window's book, not the last one opened in any window (a second window has none of its own).
+    try {
+      sessionStorage.setItem(RELOAD_KEY, this.state.workspace?.root ?? '');
+    } catch {}
+    await ipc.previewClose().catch(() => {});
+    location.reload();
   }
 
   private onDiagnostics(uri: string, list: LspDiagnostic[]) {
@@ -2414,7 +2475,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || s.quickOpen;
+    return s.settingsOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || !!s.quickOpen;
   }
 
   private syncPreviewVisibility() {

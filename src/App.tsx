@@ -177,6 +177,13 @@ export function App() {
         studio.openQuickOpen();
         return;
       }
+      // The command palette: ⇧⌘P, or F1 as in VS Code (taken before Monaco's own F1 palette).
+      if ((e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyP') || (e.key === 'F1' && !e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+        studio.openCommandPalette();
+        return;
+      }
       if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'e') {
         e.preventDefault();
         e.stopPropagation();

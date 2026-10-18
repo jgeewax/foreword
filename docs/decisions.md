@@ -734,11 +734,12 @@ section), the page starts at the window's top and the offset is measured.
   - **File:**
     - New Book / Chapter / File;
     - Open Book… (⌘O), Go to File… (⌘P);
-    - Save (⌘S);
+    - Save (⌘S), Save All (⌥⌘S);
     - Close Tab (⌘W), Reopen Closed Tab, Close Window (⇧⌘W).
   - **Edit:** Undo…Select All; Find (⌘F), Find and Replace (⌥⌘F); Add
     Comment (⌥⌘M).
   - **View:**
+    - Command Palette… (⇧⌘P; see "Command palette");
     - Toggle Sidebar (⌘B), Preview (⌥⌘P), Assistant (⌥⌘B);
     - Files, Review, History;
     - Show in Preview;
@@ -1537,6 +1538,62 @@ section), the page starts at the window's top and the offset is measured.
 - Verified (self-test `quickopen`): ⌘P from the editor, ranking, a match by
   heading, no matches, ⏎ opening a file, ↓, Esc, and the preview hidden then
   shown again.
+
+### Command palette (⇧⌘P)
+
+- Everything the app does, found by name, as in VS Code. It's the Go to
+  File box with ">" typed: ⇧⌘P (or F1, or View → Command Palette…) opens it
+  that way; typing ">" in ⌘P switches to commands, and deleting it switches
+  back. It works on the welcome screen too, with what needs no book (New
+  Book, Open Book, Open Recent, Settings, zoom, Typst Basics, New Window).
+- **The commands** (`src/app/commands.ts`, about 120):
+  - Every menu bar item, by the same id, doing what the item does
+    (self-test `palette` checks none is missing).
+  - What's only in a pane or a right-click menu: close other, saved or all
+    tabs, copy path, reveal, rename, duplicate, trash, use as main file;
+    restart the preview, show the cover or the book, update and export the
+    cover; explain the selection, three versions of it, compact, resume, the
+    four modes; Source Control's commit, stage and unstage all, pull, push;
+    run code examples; clear resolved comments.
+  - New ones: Save All, Save Without Formatting, Revert File, Reload Window,
+    Close Window, Toggle Full Screen, Turn Format on Save Off/On, Open
+    Recent for each recent book, and Settings pages.
+  - Editor commands from Monaco: Go to Line (⌃G), toggle comments, fold and
+    unfold, trim whitespace, change case, sort, join, delete, copy and move
+    lines, select all occurrences, cursors at line ends, expand and shrink
+    the selection.
+- **Each is filed under its menu** ("File: Save", "Book: Export PDF…"), or
+  under its pane when it isn't in one ("Source Control: Push"), and shows
+  its shortcut. It's listed only when it applies: Save with a file in
+  front, Add Comment with a selection, Stop while the assistant works,
+  Source Control with a repository. The shortcuts shown for Monaco's
+  commands are checked against Monaco's own.
+- **Matching** is stricter than for files (`wordMatch`): the query is the
+  start of words in order ("show conv", "exp pdf"), or appears whole
+  ("port" finds Export). Letters scattered through a label don't match:
+  "save" doesn't find "Restart Preview". Commands also have a few other
+  words ("reload" finds Revert File and Restart Preview), which rank below
+  a match in the label. Typing nothing lists the recently used commands
+  first (8, newest first, kept on this machine), then the rest by name.
+- ⏎ runs the command and closes the box; the keyboard goes back to what
+  had it (the editor), unless the command took it (Find, a dialog).
+- **Revert File** puts back the file as saved. It's one edit, so ⌘Z brings
+  the changes back. A reload from disk is now an undo step of its own; it
+  could merge with the typing before it.
+- **Reload Window** starts the page again with the same book and tabs
+  (sessionStorage holds the window's book, so a second window gets its own
+  back), and Tinymist and the preview start over. It offers to save
+  unsaved changes first, and asks if the assistant is working. It's for
+  when the page gets into a bad state, or for a dev build.
+- ⌃P isn't Go to File: in the editor it's the line above, as in every Mac
+  text field.
+- Verified (self-test `palette`, and `reloadwindow` in a second window): ⇧⌘P
+  and F1 from the editor, the menu item, ">" in ⌘P and back, ⇧⌘P while
+  open; ranking; ⏎ running a command, Monaco's Go to Line, and focus coming
+  back; recently used; Add Comment only with a selection; Revert File and
+  ⌘Z; Save All writing both files; the welcome screen's list; Reload Window
+  reopening the second window's book; Close Window from that window's
+  palette.
 
 ### Resume after Stop (or a failure)
 

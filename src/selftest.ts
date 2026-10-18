@@ -5,6 +5,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 // Scripted end-to-end check run inside the real app (WKWebView, Tinymist,
 // OpenCode) when TYPST_STUDIO_SELFTEST=<out.json> is set. Never saves files;
 // agent edit requests are rejected.
+import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
 import { studio } from './app/studio';
 import { monaco } from './editor/monaco';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
@@ -2544,6 +2545,189 @@ async function quickOpenChecks() {
   return out;
 }
 
+/**
+ * The command palette (⇧⌘P, F1, or ">" in Go to File): every menu bar item is
+ * in it, the editor's actions it lists exist with the shortcuts it shows, what
+ * doesn't apply isn't listed, ⏎ runs the command and the editor gets the keys
+ * back, and recently used commands come first; Revert File; Save All (`edits`:
+ * it writes two files, then puts them back). The recently used list is put back after.
+ */
+async function paletteChecks(edits: boolean) {
+  const out: Record<string, unknown> = {};
+  const savedRecent = localStorage.getItem('studio.recentCommands');
+  localStorage.removeItem('studio.recentCommands');
+  const saved = { sidebar: studio.state.sidebar, tabs: [...studio.state.tabs], active: studio.state.active };
+  const key = (target: EventTarget, init: KeyboardEventInit) => target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+  const input = () => document.querySelector<HTMLInputElement>('.quick-open input');
+  const typeIn = async (value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input()!, value);
+    input()!.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+  };
+  const labels = () => [...document.querySelectorAll('.quick-open-row.command .quick-open-main')].map((e) => e.textContent ?? '');
+  const shiftCmdP = () => key(document.activeElement ?? document.body, { key: 'P', code: 'KeyP', metaKey: true, shiftKey: true });
+  await studio.openFile('chapters/ch1-vectors.typ');
+  await waitFor(() => studio.editor?.getModel(), 10000, 'editor');
+  const editor = studio.editor!;
+  editor.setPosition({ lineNumber: 1, column: 1 });
+  editor.focus();
+  await sleep(200);
+
+  // Every command the menu bar has (but the palette itself), by the same id.
+  const all = paletteCommands(studio);
+  const ids = new Set(all.map((c) => c.id));
+  out.count = { all: all.length, now: available(all).length };
+  out.menuItemsMissing = Object.keys(studio.menuCommands).filter((id) => id !== 'command-palette' && !ids.has(id));
+  out.duplicateIds = all.map((c) => c.id).filter((id, i, a) => a.indexOf(id) !== i);
+  out.duplicateLabels = all.map(commandLabel).filter((l, i, a) => a.indexOf(l) !== i);
+  // The editor's actions it lists: Monaco has each, with the shortcut shown (modifiers in either order).
+  const glyphs = '⌃⌥⇧⌘';
+  const norm = (k: string) => k.split(' ').map((part) => [...part].filter((ch) => glyphs.includes(ch)).sort().join('') + [...part].filter((ch) => !glyphs.includes(ch)).join('')).join(' ');
+  const keybindings = (editor as unknown as { _standaloneKeybindingService?: { lookupKeybinding(id: string): { getLabel(): string | null } | undefined } })._standaloneKeybindingService;
+  out.editorActions = all
+    .filter((c) => c.id.startsWith('editor.'))
+    .map((c) => {
+      const label = keybindings?.lookupKeybinding(c.id)?.getLabel() ?? undefined;
+      return { id: c.id, exists: !!editor.getAction(c.id), keys: c.keys, monaco: label, same: norm(c.keys ?? '') === norm(label ?? '') };
+    })
+    .filter((a) => !a.exists || !a.same);
+  // What comes first for words an author might type (to judge the ranking).
+  out.samples = Object.fromEntries(['save', 'export', 'format', 'reload', 'git', 'zoom', 'comment', 'preview', 'close', 'mode'].map((q) => [q, rankCommands(available(all), q, []).slice(0, 5).map((r) => r.label)]));
+
+  // ⇧⌘P from the editor, as you'd press it while writing.
+  shiftCmdP();
+  await sleep(300);
+  out.opened = { value: input()?.value, focused: document.activeElement === input(), dialog: document.querySelector('.quick-open')?.getAttribute('aria-label') };
+  out.previewHidden = (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+  out.rows = labels().length;
+  out.firstRows = labels().slice(0, 3);
+  out.withKeys = [...document.querySelectorAll('.quick-open-row.command')].filter((r) => r.querySelector('kbd')).length;
+  // What doesn't apply now isn't there: no selection, the assistant isn't working.
+  out.notListed = ['Edit: Add Comment…', 'Assistant: Stop', 'Preview: Show the Book'].filter((l) => labels().includes(l));
+  await typeIn('>format');
+  out.format = { first: labels()[0], keys: [...(document.querySelector('.quick-open-row.command.active .quick-open-keys')?.querySelectorAll('kbd') ?? [])].map((k) => k.textContent), highlighted: [...document.querySelectorAll('.quick-open-row.command.active b')].map((b) => b.textContent).join('') };
+  await typeIn('>reload');
+  out.reload = labels();
+  await typeIn('>zzzq');
+  out.none = document.querySelector('.quick-open-empty')?.textContent;
+  await typeIn('>pdf');
+  out.snapshot = await snap('command-palette');
+  // ⏎ runs it: the palette closes, the sidebar shows the conversations, and the editor has the keys again.
+  await typeIn('>show conv');
+  out.showConversations = { first: labels()[0] };
+  key(input()!, { key: 'Enter' });
+  await sleep(400);
+  Object.assign(out.showConversations as object, { closed: !studio.state.quickOpen && !input(), sidebar: studio.state.sidebar, editorFocused: editor.hasTextFocus() });
+  studio.showSidebar(saved.sidebar);
+  // It's remembered: first, marked "recently used".
+  shiftCmdP();
+  await sleep(300);
+  out.recent = { first: labels()[0], note: document.querySelector('.quick-open-row.command .quick-open-note')?.textContent, stored: localStorage.getItem('studio.recentCommands') };
+  // One of the editor's own: Go to Line opens Monaco's box.
+  await typeIn('>go to line');
+  out.goToLine = { first: labels()[0] };
+  key(input()!, { key: 'Enter' });
+  await sleep(500);
+  const lineBox = document.querySelector<HTMLElement>('.monaco-editor .quick-input-widget');
+  Object.assign(out.goToLine as object, { opened: !!lineBox && lineBox.style.display !== 'none' });
+  // Monaco reads keyCode, which a made-up event has only if given.
+  key(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape', keyCode: 27 } as KeyboardEventInit);
+  await sleep(200);
+  Object.assign(out.goToLine as object, { closedByEsc: !lineBox || lineBox.style.display === 'none' });
+  if (lineBox && lineBox.style.display !== 'none') editor.focus();
+  // A selection: Add Comment is listed.
+  editor.setSelection(new monaco.Range(1, 1, 1, 6));
+  editor.focus();
+  shiftCmdP();
+  await sleep(300);
+  await typeIn('>add comment');
+  out.withSelection = labels()[0];
+  key(input()!, { key: 'Escape' });
+  await sleep(200);
+  editor.setPosition({ lineNumber: 1, column: 1 });
+  // ">" in Go to File switches to commands, and back when it's deleted; ⇧⌘P while it's open starts over in commands.
+  studio.openQuickOpen();
+  await sleep(200);
+  const fileRows = () => document.querySelectorAll('.quick-open-row:not(.command)').length;
+  out.goToFile = { fileRows: fileRows() };
+  await typeIn('>');
+  Object.assign(out.goToFile as object, { commandRows: labels().length, dialog: document.querySelector('.quick-open')?.getAttribute('aria-label') });
+  await typeIn('');
+  Object.assign(out.goToFile as object, { backToFiles: fileRows() });
+  await typeIn('ch1');
+  key(input()!, { key: 'P', code: 'KeyP', metaKey: true, shiftKey: true });
+  await sleep(200);
+  Object.assign(out.goToFile as object, { shiftCmdPWhileOpen: input()?.value });
+  // Esc closes, and the editor has the keys again.
+  key(input()!, { key: 'Escape' });
+  await sleep(300);
+  out.esc = { closed: !studio.state.quickOpen, editorFocused: editor.hasTextFocus(), previewBack: !(await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden };
+  // F1, as in VS Code (not Monaco's own palette), and the View menu's item.
+  editor.focus();
+  key(document.activeElement ?? document.body, { key: 'F1', code: 'F1' });
+  await sleep(300);
+  out.f1 = { ours: input()?.value, monacos: !!document.querySelector('.monaco-editor .quick-input-widget:not([style*="display: none"])') };
+  studio.closeQuickOpen();
+  await sleep(200);
+  await studio.menuCommand('command-palette');
+  await sleep(200);
+  out.fromMenu = input()?.value;
+  studio.closeQuickOpen();
+  await sleep(200);
+
+  // File: Revert File drops what isn't saved, as one edit: ⌘Z brings it back. (Nothing is written.)
+  const path = studio.state.active!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: 'Not saved. ' }]);
+  await sleep(200);
+  shiftCmdP();
+  await sleep(300);
+  await typeIn('>revert');
+  out.revert = { first: labels()[0], dirtyBefore: !!studio.state.dirty[path] };
+  key(input()!, { key: 'Enter' });
+  await waitFor(() => !studio.state.dirty[path], 5000, 'reverted').catch(() => {});
+  Object.assign(out.revert as object, { asSaved: model.getValue() === original, dirtyAfter: !!studio.state.dirty[path], toast: studio.state.toast?.text });
+  await model.undo();
+  Object.assign(out.revert as object, { undoBringsBack: model.getValue().startsWith('Not saved. ') && !!studio.state.dirty[path] });
+  await model.undo();
+  await studio.revertFile(path); // the text is as saved again; this marks it so
+  Object.assign(out.revert as object, { cleanAgain: model.getValue() === original && !studio.state.dirty[path] });
+
+  // File: Save All (⌥⌘S), with two files changed (scratch books only; Format on save off, so only the change is written).
+  if (edits) {
+    const two = ['chapters/ch1-vectors.typ', 'chapters/ch2-eigenvalues.typ'];
+    const before: Record<string, string> = {};
+    const format = studio.state.settings.formatOnSave;
+    studio.store.set((s) => ({ settings: { ...s.settings, formatOnSave: false } }));
+    for (const p of two) {
+      await studio.openFile(p);
+      before[p] = (await ipc.fsRead(p)).text;
+      studio.editor!.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// saved by Save All\n' }]);
+    }
+    shiftCmdP();
+    await sleep(300);
+    await typeIn('>save all');
+    out.saveAll = { first: labels()[0], keys: document.querySelector('.quick-open-row.command.active kbd')?.textContent, dirtyBefore: two.filter((p) => studio.state.dirty[p]).length };
+    key(input()!, { key: 'Enter' });
+    await waitFor(() => two.every((p) => !studio.state.dirty[p]), 5000, 'saved').catch(() => {});
+    const written = await Promise.all(two.map(async (p) => (await ipc.fsRead(p)).text === `// saved by Save All\n${before[p]}`));
+    Object.assign(out.saveAll as object, { dirtyAfter: two.filter((p) => studio.state.dirty[p]).length, written });
+    // As it was: the files' text back, on disk and in the editor.
+    for (const p of two) {
+      await ipc.fsWrite(p, before[p], await ipc.fsHash(p));
+      await studio.reloadFromDisk(p);
+    }
+    studio.store.set((s) => ({ settings: { ...s.settings, formatOnSave: format } }));
+  }
+
+  if (savedRecent === null) localStorage.removeItem('studio.recentCommands');
+  else localStorage.setItem('studio.recentCommands', savedRecent);
+  for (const t of [...studio.state.tabs]) if (!saved.tabs.includes(t)) await studio.closeTab(t);
+  if (saved.active) await studio.openFile(saved.active);
+  return out;
+}
+
 /** Tagged comments (// TODO:, // NOTE: …) shown as coloured labels, with the cursor still in step. (Undone after.) */
 async function commentTagChecks() {
   const out: Record<string, unknown> = {};
@@ -2899,6 +3083,100 @@ async function windowsChecks() {
   const closed = await windows();
   out.closed = { gone: !closed.some((w) => w.label === label), labels: closed.map((w) => w.label), mainBook: closed.find((w) => w.label === 'main')?.root === own };
   out.reopenAfterClose = !(await ipc.workspaceElsewhere(other)); // the closed window let go of its book
+  return out;
+}
+
+/**
+ * Reload Window, in a second window with a book of its own: the page starts
+ * over (a mark left on it is gone) with that book open again, not the first
+ * window's. (Needs scratchpad/book-in-src next to the self-test output.)
+ */
+async function reloadWindowChecks() {
+  const out: Record<string, unknown> = {};
+  const other = `${studio.state.launch!.selftestOut!.replace(/[^/]+$/, '')}book-in-src`;
+  // The second window isn't the self-test's: opening a book there makes it the author's last and recent book, and its
+  // palette remembers Close Window. (Windows share these.) Put them back after.
+  const kept = ['studio.lastWorkspace', 'studio.recentWorkspaces', 'studio.recentCommands'].map((k) => [k, localStorage.getItem(k)] as const);
+  const windows = () => ipc.selftestWindows();
+  const until = async (check: (ws: Awaited<ReturnType<typeof windows>>) => boolean, ms: number) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(200)) if (check(await windows())) return true;
+    return false;
+  };
+  // The second window says what it has in the app's log (self-test eval returns nothing).
+  const report = (label: string, tag: string) =>
+    ipc.selftestEval(
+      label,
+      `window.__TAURI_INTERNALS__.invoke('ui_log', { line: ${JSON.stringify(`${tag} `)} + JSON.stringify({ mark: window.__reloadMark ?? null, root: window.__studio?.state.workspace?.root ?? null, tabs: window.__studio?.state.tabs ?? null }) })`,
+    );
+  const reported = async (tag: string) => {
+    for (let i = 0; i < 50; i++) {
+      const line = (await ipc.logs('ui')).map((l) => l.line).find((l) => l.startsWith(`${tag} `));
+      if (line) return JSON.parse(line.slice(tag.length + 1)) as { mark: number | null; root: string | null; tabs: string[] | null };
+      await sleep(200);
+    }
+    return null;
+  };
+  const label = await ipc.windowNew();
+  await until((ws) => ws.some((w) => w.label === label), 10000);
+  await sleep(3000);
+  // On the welcome screen (no book yet), ⇧⌘P has what works without one.
+  await ipc.selftestEval(
+    label,
+    `(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', code: 'KeyP', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 400));
+      const rows = [...document.querySelectorAll('.quick-open-row.command .quick-open-main')].map((e) => e.textContent);
+      window.__TAURI_INTERNALS__.invoke('ui_log', { line: 'palette-welcome ' + JSON.stringify({ value: document.querySelector('.quick-open input')?.value ?? null, rows }) });
+      window.__studio.closeQuickOpen();
+    })()`,
+  );
+  const welcome = (await (async () => {
+    for (let i = 0; i < 25; i++) {
+      const line = (await ipc.logs('ui')).map((l) => l.line).find((l) => l.startsWith('palette-welcome '));
+      if (line) return JSON.parse(line.slice('palette-welcome '.length));
+      await sleep(200);
+    }
+    return null;
+  })()) as { value: string | null; rows: string[] } | null;
+  out.welcome = welcome && { value: welcome.value, count: welcome.rows.length, rows: welcome.rows, needsBook: welcome.rows.filter((r) => /^(File: Save|Book:|Edit:|Assistant:)/.test(r)) };
+  await ipc.selftestEval(label, `window.__studio.openWorkspace(${JSON.stringify(other)})`);
+  out.opened = await until((ws) => !!ws.find((w) => w.label === label)?.root, 20000);
+  await sleep(1500);
+  await ipc.selftestEval(label, `window.__reloadMark = 1`);
+  await report(label, 'reload-before');
+  out.before = await reported('reload-before');
+  await ipc.selftestEval(label, `window.__studio.reloadWindow()`);
+  // The page loads again and opens its book.
+  let after: Awaited<ReturnType<typeof reported>> = null;
+  for (let i = 0; i < 20 && !after?.root; i++) {
+    await sleep(1000);
+    await report(label, `reload-after-${i}`);
+    after = await reported(`reload-after-${i}`);
+  }
+  out.after = after;
+  out.reloaded =!!after && after.mark === null && !!after.root && after.root === (out.before as { root: string } | null)?.root;
+  out.mainKeptItsBook = (await windows()).find((w) => w.label === 'main')?.root === studio.state.workspace?.root;
+  // Window: Close Window, from that window's palette (typed and ⏎, as the author would).
+  await ipc.selftestEval(
+    label,
+    `(async () => {
+      window.__studio.openCommandPalette();
+      await new Promise((r) => setTimeout(r, 300));
+      const input = document.querySelector('.quick-open input');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '>close window');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 200));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    })()`,
+  );
+  out.closedFromPalette = await until((ws) => !ws.some((w) => w.label === label), 5000);
+  if (!out.closedFromPalette) await ipc.selftestCloseWindow(label);
+  await sleep(1500);
+  out.closed = !(await windows()).some((w) => w.label === label);
+  for (const [k, v] of kept) {
+    if (v === null) localStorage.removeItem(k);
+    else localStorage.setItem(k, v);
+  }
   return out;
 }
 
@@ -4046,12 +4324,14 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('breadcrumbs')) result.breadcrumbs = await breadcrumbChecks();
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();
+    if (want('palette')) result.palette = await paletteChecks(launch.selftestEdits);
     if (want('chrome')) result.chrome = await chromeChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (want('activity')) result.activity = await activityChecks();
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
+    if (want('reloadwindow')) result.reloadwindow = await reloadWindowChecks();
     if (want('git')) result.git = await gitChecks();
     if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();

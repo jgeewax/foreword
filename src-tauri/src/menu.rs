@@ -27,6 +27,7 @@ pub const COMMANDS: &[&str] = &[
     "open-book",
     "go-to-file",
     "save",
+    "save-all",
     "close-tab",
     "reopen-tab",
     // Edit
@@ -35,6 +36,7 @@ pub const COMMANDS: &[&str] = &[
     "format-document",
     "add-comment",
     // View
+    "command-palette",
     "toggle-sidebar",
     "toggle-preview",
     "toggle-assistant",
@@ -121,6 +123,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &item("go-to-file", "Go to File…", Some("CmdOrCtrl+P"))?,
             &sep()?,
             &item("save", "Save", Some("CmdOrCtrl+S"))?,
+            &item("save-all", "Save All", Some("CmdOrCtrl+Alt+S"))?,
             &sep()?,
             // ⌘W closes the tab, as in Safari and VS Code; the window gets ⇧⌘W.
             &item("close-tab", "Close Tab", Some("CmdOrCtrl+W"))?,
@@ -156,6 +159,13 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "View",
         true,
         &[
+            // Every command by name, as VS Code's (the page lists them: app/commands.ts).
+            &item(
+                "command-palette",
+                "Command Palette…",
+                Some("CmdOrCtrl+Shift+P"),
+            )?,
+            &sep()?,
             &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?,
             &item("toggle-preview", "Toggle Preview", Some("CmdOrCtrl+Alt+P"))?,
             &item(

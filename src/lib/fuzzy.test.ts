@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fuzzyMatch } from './fuzzy';
+import { fuzzyMatch, wordMatch } from './fuzzy';
 
 const rank = (query: string, items: string[]) =>
   items
@@ -31,5 +31,37 @@ describe('fuzzy matching', () => {
 
   it('works on chapter titles too', () => {
     expect(rank('storm', ['The Lighthouse Keeper', 'The Storm', 'Stories of the Moor'])[0]).toBe('The Storm');
+  });
+});
+
+describe('word matching (commands)', () => {
+  const at = (query: string, text: string) => wordMatch(query, text)?.positions.map((p) => text[p]).join('') ?? null;
+
+  it('takes the starts of words, in order', () => {
+    expect(at('show conv', 'View: Show Conversations')).toBe('ShowConv');
+    expect(at('exppdf', 'Book: Export PDF…')).toBe('ExpPDF');
+    expect(at('file save', 'File: Save')).toBe('FileSave');
+    expect(at('v', 'View: Zoom In')).toBe('V');
+  });
+
+  it('takes the query whole, anywhere', () => {
+    expect(at('port', 'Book: Export PDF…')).toBe('port');
+  });
+
+  it("doesn't take letters scattered through words", () => {
+    expect(wordMatch('save', 'Preview: Restart Preview')).toBeNull();
+    expect(wordMatch('git', 'Edit: Trim Trailing Whitespace')).toBeNull();
+    expect(wordMatch('xp', 'Book: Export PDF…')).not.toBeNull(); // whole, in "Export"
+    expect(wordMatch('xpdf', 'Book: Export PDF…')).toBeNull();
+  });
+
+  it('backtracks when the first way fails', () => {
+    // Not the "S" of "Stop" (no word after it starts with "a"), but that of "Sa".
+    expect(wordMatch('sab', 'Stop Sa Bar')!.positions).toEqual([5, 6, 8]);
+  });
+
+  it('ranks word starts and whole words higher, and shorter texts', () => {
+    expect(wordMatch('save', 'File: Save')!.score).toBeGreaterThan(wordMatch('save', 'File: Close Saved Tabs')!.score);
+    expect(wordMatch('zoom', 'View: Zoom In')!.score).toBeGreaterThan(wordMatch('zi', 'View: Zoom In')!.score);
   });
 });
