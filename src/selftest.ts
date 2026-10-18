@@ -4038,6 +4038,32 @@ async function shotChecks() {
   return out;
 }
 
+/** The preview's ✕ hides it (and its native page view); the title bar's toggle brings it back. */
+async function previewCloseChecks() {
+  const layoutKey = 'react-resizable-panels:studio-panes';
+  const savedLayout = localStorage.getItem(layoutKey);
+  const toggle = () => document.querySelector<HTMLButtonElement>('.titlebar button[aria-label="Preview"]');
+  const state = async () => ({
+    width: Math.round(document.querySelector('.preview-pane')?.getBoundingClientRect().width ?? 0),
+    toggle: toggle()?.getAttribute('aria-pressed'),
+    nativeHidden: (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden,
+  });
+  const before = await state();
+  const shot = await snap('preview-open');
+  const close = document.querySelector<HTMLButtonElement>('.preview-pane .preview-close');
+  const button = close && { label: close.getAttribute('aria-label'), title: close.title, last: close === close.parentElement?.lastElementChild };
+  close?.click();
+  await sleep(600);
+  const closed = { ...(await state()), snapshot: await snap('preview-closed') };
+  toggle()?.click();
+  await sleep(800);
+  const shownAgain = await state();
+  if (savedLayout) localStorage.setItem(layoutKey, savedLayout);
+  const ok =
+    !!close && before.width > 0 && closed.width === 0 && closed.toggle === 'false' && closed.nativeHidden === true && shownAgain.width > 0 && shownAgain.toggle === 'true' && shownAgain.nativeHidden === false;
+  return { ok, before, shot, button, closed, shownAgain };
+}
+
 async function layoutChecks() {
   const saved = studio.state.settings.historyPlacement;
   studio.updateSettings({ historyPlacement: 'below' });
@@ -5085,6 +5111,7 @@ export async function runSelftest(launch: LaunchOptions) {
       result.journey = await journeyChecks();
     }
     if (want('shot')) result.shot = await shotChecks();
+    if (want('previewclose')) result.previewclose = await previewCloseChecks();
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('selectall')) result.selectall = await selectAllChecks();

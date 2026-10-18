@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { studio } from '../app/studio';
 import { COVER_PREVIEW } from '../cover';
 import { useStore } from '../lib/store';
+import { Icon } from './icons';
 
 /**
  * Placeholder for the preview. The preview itself is a separate native webview
@@ -99,8 +100,12 @@ export function PreviewPane() {
           </>
         )}
         {(compile.status === 'compiling' || preview.status === 'starting') && <span className="busy-bar delayed" aria-hidden />}
-        <button className="icon" title="Restart preview" onClick={() => void studio.restartTypst()}>
-          ↻
+        <button className="icon pane-action" title="Restart preview" aria-label="Restart preview" onClick={() => void studio.restartTypst()}>
+          <Icon name="refresh" size={15} />
+        </button>
+        {/* Back with the title bar's middle button, or ⌥⌘P. */}
+        <button className="icon pane-action preview-close" title="Hide the preview (⌥⌘P)" aria-label="Hide the preview" onClick={() => studio.events.emit('toggle-pane', 'preview')}>
+          <Icon name="close" size={15} />
         </button>
       </header>
       <div className="preview-body" ref={bodyRef}>

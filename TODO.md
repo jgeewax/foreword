@@ -193,3 +193,19 @@
 - [x] separate settings for your app config vs book config
 
 - [x] thinking needs to be thinking time not waiting time. split them and show both in chat ui...
+
+- [ ] explore ayakaleaf pro (overleaf clone) for inspiration on ideas
+
+- [ ] make a public-facing website in a gh-pages branch
+
+- [ ] use gh to create a repository and push remotely to github. jgeewax/typststudio
+
+- [ ] get rid of checkboxes in the settings. those are dangerous. healthy UI controls only for settings.
+
+- [ ] for defaults, be explicit. you can say "this folder" but then must include the exact path so that its clear
+
+- [ ] add a way to change ai providers (opencode/codex/etc) from the ai chat panel
+
+- [ ] add a way to open the agent settings form the ai chat panel
+
+- [x] add an X button on the preview pane to make it go away
