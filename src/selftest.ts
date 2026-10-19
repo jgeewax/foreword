@@ -4293,6 +4293,64 @@ async function historyAboutChecks() {
 }
 
 /**
+ * Preview → source puts the clicked text about 15% down the editor, not in
+ * the middle; text already in view stays where it is. Through the jump
+ * handler (to lines off screen and on screen), then with a real click in the
+ * preview, part way through the book. Best on the stress book (long chapters).
+ */
+async function previewJumpChecks() {
+  const out: Record<string, unknown> = {};
+  const ws = studio.state.workspace!;
+  const editor = () => studio.editor!;
+  const where = () => {
+    const e = editor();
+    const sel = e.getSelection()!;
+    const at = (e.getTopForLineNumber(sel.startLineNumber) - e.getScrollTop()) / e.getLayoutInfo().height;
+    return { file: studio.state.active, line: sel.startLineNumber, at: Math.round(at * 100) / 100 };
+  };
+  const jump = (path: string, line: number) => (studio as unknown as { revealSource(j: object): Promise<void> }).revealSource({ filepath: `${ws.root}/${path}`, start: [line - 1, 0], end: [line - 1, 8] });
+  const chapter = ws.files.filter((f) => /^chapters\/.*\.typ$/.test(f)).sort()[Math.floor(ws.files.filter((f) => /^chapters\/.*\.typ$/.test(f)).length / 2)] ?? ws.entry!;
+  await studio.openFile(chapter);
+  const lines = editor().getModel()!.getLineCount();
+  editor().setScrollTop(0);
+  editor().render(true);
+  await sleep(300);
+  out.chapter = { chapter, lines, viewHeight: editor().getLayoutInfo().height };
+  // Just below the view (the end of a file can't scroll that far up).
+  const below = Math.min(lines, editor().getVisibleRanges()[0].endLineNumber + 8);
+  await jump(chapter, below);
+  await sleep(500);
+  out.offScreen = where();
+  // A line a third of the way down the view: in view, so it stays there.
+  const e = editor();
+  const visible = e.getVisibleRanges()[0];
+  const mid = Math.round(visible.startLineNumber + (visible.endLineNumber - visible.startLineNumber) / 3);
+  const scrollBefore = e.getScrollTop();
+  await jump(chapter, mid);
+  await sleep(300);
+  out.inView = { ...where(), scrolled: editor().getScrollTop() !== scrollBefore };
+
+  // A real click: part way into the book, low on the preview's screen.
+  await studio.openFile(ws.entry!);
+  editor().setScrollTop(0);
+  await sleep(300);
+  await ipc.previewEval(`(() => { const c = document.getElementById('typst-container-main'); if (c) c.scrollTop = c.scrollHeight * 0.55; })()`);
+  await sleep(1500);
+  await ipc.previewEval(`(() => {
+    const texts = [...document.querySelectorAll('.typst-text')].filter((t) => { const r = t.getBoundingClientRect(); return r.top > innerHeight * 0.55 && r.bottom < innerHeight * 0.9 && r.width > 20; });
+    const t = texts[Math.floor(texts.length / 2)];
+    if (!t) return;
+    const r = t.getBoundingClientRect();
+    t.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+  })();`);
+  await sleep(2000);
+  editor().render(true);
+  out.click = where();
+  out.snapshot = await snap('preview-jump');
+  return out;
+}
+
+/**
  * History's versions fold out as the file tree's folders do: a chevron that
  * turns, aria-expanded, a guide line under the open one, and files that show
  * they open in a tab. ⏎ folds a row too. Saves a file once (scratch book only).
@@ -6567,6 +6625,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('changeszoom')) result.changeszoom = await changesZoomChecks();
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
+    if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);

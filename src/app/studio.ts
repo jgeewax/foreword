@@ -9,7 +9,7 @@ import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
-import { jumpCandidates } from '../editor/preview-sync';
+import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
 import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
@@ -2455,7 +2455,11 @@ export class Studio {
     if (!editor || this.state.active !== path) return;
     const range = new monaco.Range(jump.start[0] + 1, jump.start[1] + 1, jump.end[0] + 1, jump.end[1] + 1);
     editor.setSelection(range);
-    editor.revealRangeInCenterIfOutsideViewport(range);
+    // Near the top of the editor (15% down), so what follows the clicked text is in view.
+    const top = editor.getTopForLineNumber(range.startLineNumber);
+    const bottom = editor.getTopForLineNumber(range.endLineNumber) + editor.getOption(monaco.editor.EditorOption.lineHeight);
+    const to = jumpScrollTop(top, bottom, editor.getScrollTop(), editor.getLayoutInfo().height);
+    if (to !== null) editor.setScrollTop(to);
     // The click gave the preview webview keyboard focus; hand it back to the editor.
     await ipc.focusMain().catch(() => {});
     editor.focus();

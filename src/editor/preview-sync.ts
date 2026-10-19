@@ -1,4 +1,4 @@
-// Source → preview sync helpers.
+// Source ↔ preview sync helpers.
 //
 // Tinymist's `scrollPreview`/`panelScrollTo` only jumps when a position maps to
 // rendered content, and failures are silent. Measured: column 0 never maps;
@@ -85,4 +85,19 @@ export function jumpCandidates(lineAt: (n: number) => string | null, line: numbe
     const k = `${p.line}:${p.character}`;
     return !seen.has(k) && (seen.add(k), true);
   });
+}
+
+/** Preview → source: where the clicked text lands, as a share of the editor's height from the top. */
+export const JUMP_AT = 0.15;
+
+/**
+ * Where to scroll the editor (its scrollTop) to show the text a preview click
+ * found, given where that text is (px from the document's top, `top` to
+ * `bottom`) and the view (`scrollTop`, `height`): its first line about 15% down,
+ * so what follows is in view (centred, half the screen is what came before).
+ * Null when it's in view already, short of the last 15% (no needless jump).
+ */
+export function jumpScrollTop(top: number, bottom: number, scrollTop: number, height: number, at = JUMP_AT): number | null {
+  if (top >= scrollTop && bottom <= scrollTop + height * (1 - at)) return null;
+  return Math.max(0, Math.round(top - height * at));
 }

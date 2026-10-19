@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { jumpCandidates } from './preview-sync';
+import { jumpCandidates, jumpScrollTop } from './preview-sync';
 
 const doc = [
   '= Eigenvalues <ch-eigen>', // 0
@@ -51,5 +51,24 @@ describe('jumpCandidates (best first)', () => {
   it('handles empty documents and clamps past the end of the line', () => {
     expect(jumpCandidates(() => null, 0, 0)).toEqual([]);
     expect(at(6, 999)[0]).toEqual({ line: 6, character: doc[6].length });
+  });
+});
+
+describe('jumpScrollTop: preview → source puts the text near the top', () => {
+  it('scrolls text below the view to 15% down, not to the middle', () => {
+    // A 1000 px editor at the top; the text is at 3000–3018 px.
+    expect(jumpScrollTop(3000, 3018, 0, 1000)).toBe(2850);
+  });
+  it('and text above the view too', () => {
+    expect(jumpScrollTop(200, 218, 2000, 1000)).toBe(50);
+  });
+  it('never above the start', () => {
+    expect(jumpScrollTop(40, 58, 2000, 1000)).toBe(0);
+  });
+  it('leaves text that’s in view alone, unless it’s down in the last 15%', () => {
+    expect(jumpScrollTop(1400, 1418, 1000, 1000)).toBeNull();
+    expect(jumpScrollTop(1900, 1918, 1000, 1000)).toBe(1750);
+    // Starting above the view (cut off at the top): scrolled.
+    expect(jumpScrollTop(990, 1100, 1000, 1000)).toBe(840);
   });
 });
