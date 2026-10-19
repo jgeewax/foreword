@@ -62,7 +62,10 @@ const PATHS: Record<string, ReactNode> = {
       <circle cx="9" cy="17" r="2" />
     </>
   ),
-  // The sidebar's views, shaped like VS Code's (codicons): files, history, comments, to-do list.
+  // The sidebar's views, each its own shape so none reads as another: pages
+  // (files), a clock turning back (history), a comment (review), branches
+  // (source control), </> (code examples), ticked boxes (to do). Their
+  // bottom-right corners are light, where a count's badge sits.
   files: (
     <>
       <path d="M9 7.5h5.5l4 4V20a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z" />
@@ -77,11 +80,14 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M12 8v4.2l2.8 1.8" />
     </>
   ),
-  code: <path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5" />,
+  code: <path d="M8 7.5L3.5 12 8 16.5M16 7.5l4.5 4.5-4.5 4.5M13.6 5l-3.2 14" />,
   todos: (
     <>
-      <path d="M4 6.5l1.5 1.5L8 5.5M4 12.5l1.5 1.5L8 11.5M4 18.5l1.5 1.5L8 17.5" />
-      <path d="M11 7h9M11 13h9M11 19h9" />
+      <rect x="3.5" y="4" width="6.5" height="6.5" rx="1.6" />
+      <path d="M5.2 7.3l1.3 1.3 2-2.3" />
+      <rect x="3.5" y="13.5" width="6.5" height="6.5" rx="1.6" />
+      {/* The open box's line is left out: the view only shows with a count, whose badge sits there. */}
+      <path d="M13.5 7.25h7" />
     </>
   ),
   // Source control (VS Code's): branches joining.
@@ -93,10 +99,11 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7 7.5v9M17 9.5c0 4.5-10 3-10 7" />
     </>
   ),
+  // Review: a comment on the text.
   comments: (
     <>
-      <path d="M3.5 4.5h11v8H9l-3 2.5v-2.5H3.5z" />
-      <path d="M17.5 9h3v8h-2.5v2.5l-3-2.5h-4.5v-2" />
+      <path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-7.5L7 20.5v-4H5A1.5 1.5 0 0 1 3.5 15V6A1.5 1.5 0 0 1 5 4.5z" />
+      <path d="M7.5 9h9M7.5 12.5h5.5" />
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,

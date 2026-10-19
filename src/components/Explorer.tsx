@@ -160,15 +160,17 @@ function useViews() {
 export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
   const current = useSidebarView();
   const { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged } = useViews();
+  // The views that are always there first, so they never move: the book's files, its
+  // review comments, its history. Then those that come and go, the most fleeting last.
   const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
     { id: 'files', icon: 'files', label: 'Files' },
+    ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
     { id: 'history', icon: 'history', label: 'History: saved versions of the book' },
     ...(hasGit
       ? [{ id: 'git' as const, icon: 'branch' as const, label: `Source control: ${gitChanged ? `${gitChanged} file${gitChanged === 1 ? '' : 's'} not committed` : 'everything committed'}`, badge: gitChanged || undefined }]
       : []),
     ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples' }] : []),
     ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'todos' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
-    ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
   ];
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
   return (
@@ -181,7 +183,7 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
             aria-selected={open && current === it.id}
             aria-label={it.label}
             title={open && current === it.id ? `${it.label} (click to hide the sidebar)` : it.label}
-            className={`chrome-icon activity${open && current === it.id ? ' on' : ''}`}
+            className={`chrome-icon activity-view${open && current === it.id ? ' on' : ''}`}
             onClick={() => onPick(it.id, current)}
           >
             <Icon name={it.icon} />

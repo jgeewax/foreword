@@ -2819,6 +2819,39 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   toggle and not the shown one's. `palette` (Show History through ⏎ now),
   `layout`, `activity`, `menubar` and `menus` pass.
 
+### The activity bar's icons, each its own
+
+- **Asked for:** "left side panel icons seem to have a lot of overlap. can
+  we rethink and make sure these are the best icons for the jobs?". Two
+  kinds of overlap: Review's two speech bubbles and Conversations' one
+  (gone, above) read as the same thing; and the count badges, 14 px at the
+  icon's lower right, covered a third of Source control's and To do's
+  icons (To do's bottom line ran under its badge).
+- **Now:** one shape per job, on the same 24 px grid and stroke:
+  - Files: pages, as VS Code's. History: a clock turning back.
+    Source control: branches. These stay.
+  - Review: one comment bubble with lines of text (a note on the text, as
+    in a word processor), not a conversation.
+  - Code examples: `</>`, the usual sign for code, instead of `< >`.
+  - To do: ticked boxes, one ticked with a line, one open. Its view only
+    shows when there are TODOs, so its badge always sits by the open box,
+    where a second line would be covered.
+- **Badges** are 13 px in the icon's empty lower right, with a 2 px ring of
+  the bar's colour cutting them out of the icon.
+- **Order:** the views that are always there first (Files, Review,
+  History), then those that come and go (Source control, Code examples,
+  To do, the most fleeting last). Before, Review sat under To do and moved
+  whenever a TODO was added or removed.
+- **Fixed on the way:** the bar's buttons had the class `activity`, which
+  is also the chat's live line, with a rise-in animation. An icon that
+  appeared mid-session (To do after typing a TODO, Source control after
+  `git init`) faded in like a chat line, and in a window in the
+  background, where animations don't advance, stayed invisible. They're
+  `activity-view` now.
+- Verified: in the app at 75 % and 200 % with every view showing, natively
+  captured; self-tests `activity`, `chrome`, `layout` and `conversations`
+  pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
