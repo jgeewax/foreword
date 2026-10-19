@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { available, paletteCommands, rankCommands, recentCommands, runCommand, type CommandRow } from '../app/commands';
 import { studio } from '../app/studio';
-import { chapterNumber, type BookNames } from '../app/tool-labels';
+import { numberedTitle } from '../app/tool-labels';
 import { fileTabs } from '../app/view-tabs';
 import { fuzzyMatch } from '../lib/fuzzy';
 import { useStore } from '../lib/store';
@@ -16,13 +16,6 @@ function Marked({ text, at }: { text: string; at: number[] }) {
       {[...text].map((ch, i) => (set.has(i) ? <b key={i}>{ch}</b> : ch))}
     </>
   );
-}
-
-/** A file's title in the list: its heading, after its number if it's a chapter ("17. The Harbour"). */
-function titleOf(path: string, names: BookNames): string | undefined {
-  const title = names.titles[path];
-  const n = title ? chapterNumber(path, names) : null;
-  return n ? `${n}. ${title}` : title;
 }
 
 /** Without a book (the welcome screen): one array, so the store's selector returns the same value each time. */
@@ -76,12 +69,12 @@ export function QuickOpen() {
         .reverse()
         .filter((t) => t !== active);
       const rest = candidates.filter((f) => !recent.includes(f) && f !== active).sort();
-      return [...recent, ...rest, ...(active ? [active] : [])].map((path) => ({ path, title: titleOf(path, names), score: 0, positions: [], inTitle: false }));
+      return [...recent, ...rest, ...(active ? [active] : [])].map((path) => ({ path, title: numberedTitle(path, names), score: 0, positions: [], inTitle: false }));
     }
     const out: Row[] = [];
     for (const path of candidates) {
       const byPath = fuzzyMatch(query, path);
-      const title = titleOf(path, names);
+      const title = numberedTitle(path, names);
       const byTitle = title ? fuzzyMatch(query, title) : null;
       const best = byTitle && (!byPath || byTitle.score > byPath.score) ? { m: byTitle, inTitle: true } : byPath ? { m: byPath, inTitle: false } : null;
       if (best) out.push({ path, title, score: best.m.score + (tabs.includes(path) ? 1 : 0), positions: best.m.positions, inTitle: best.inTitle });

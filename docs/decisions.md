@@ -2767,6 +2767,31 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   the name when narrow); self-tests `changes`, `difftabs`, `changeszoom`
   and `historyabout` pass.
 
+### The To do tab: rows that keep their shape
+
+- **Asked for:** "hovering over items in the todo list built from TODO:
+  comments changes vertical height... thats never ok, it makes click
+  targets complicated. can you rethink the todo tab?". Hover swapped the
+  line number (`display: none`) for the Ask and Done links, which were
+  wider, so a TODO's text rewrapped and its row grew or shrank under the
+  pointer.
+- **Now:** a row is a fixed grid (circle, text, a 22 px end box), and hover
+  only changes colours and `visibility`, which moves nothing.
+  - The circle is Done, as in a to-do app: hover fills it with a green
+    check, a click takes the `// TODO` out (⌘Z in the editor puts it back).
+    A TODO that Done can't remove by itself (a block comment, a `#todo`
+    call) has a dashed circle that says to remove it in the editor.
+  - Ask is the ✦ icon, in the line number's place in the same box.
+  - A click on the row still goes to the line; ⏎ or space on a focused row
+    too, and Tab reaches Done and Ask.
+  - TODOs sit under their chapter's name ("3. On Relative Growings", as in
+    Go to File) with the file name beside it, instead of a bare path.
+- Verified: self-test `todos` (found as typed, listed, Done removes the
+  FIXME, and `steadyRows`: every row's height and text width are the same
+  in the hover look); in the app with a three-line TODO and a block
+  comment. The test's fixture line lookup was fixed on the way (the
+  sentence it looked for no longer starts a line).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

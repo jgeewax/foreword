@@ -65,6 +65,13 @@ export function chapterNumber(path: string, names: BookNames): number | null {
   return null;
 }
 
+/** A file's heading, after its number if it's a chapter ("17. The Harbour"); undefined without a heading. */
+export function numberedTitle(path: string, names: BookNames): string | undefined {
+  const title = names.titles[path];
+  const n = title ? chapterNumber(path, names) : null;
+  return n ? `${n}. ${title}` : title;
+}
+
 /** A file as the author knows it: “Heading” (chapter 2), the main file, the style guide, or its path. */
 export function fileName(path: string, names: BookNames): string {
   if (path === names.entry) return 'the main file';

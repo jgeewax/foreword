@@ -2722,7 +2722,7 @@ async function todoChecks(withAgent: boolean) {
   await studio.openFile(file);
   const editor = studio.editor!;
   const model = editor.getModel()!;
-  const line = model.getLinesContent().findIndex((l) => l.startsWith('stated otherwise.')) + 1;
+  const line = model.getLinesContent().findIndex((l) => l.endsWith('stated otherwise.')) + 1;
   const end = { lineNumber: line, column: model.getLineMaxColumn(line) };
   editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: '\n// TODO: add one sentence saying a vector with length one is called a unit vector\n// FIXME tidy this paragraph' }]);
   await sleep(800);
@@ -2735,6 +2735,15 @@ async function todoChecks(withAgent: boolean) {
   out.tab = [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label'));
   out.title = document.querySelector('.explorer-main .pane-title')?.textContent;
   out.panel = [...document.querySelectorAll('.todo-row .todo-text')].map((e) => e.textContent);
+  // A row is the same shape under the pointer: hover's look (Ask in the line number's place) moves nothing.
+  const rowBoxes = () => [...document.querySelectorAll('.todo-row')].map((r) => `${Math.round(r.getBoundingClientRect().height)}/${Math.round(r.querySelector('.todo-text')!.getBoundingClientRect().width)}`);
+  const resting = rowBoxes();
+  const hovered = document.createElement('style');
+  hovered.textContent = '.todo-row .todo-ask { visibility: visible !important; } .todo-row .todo-line { visibility: hidden !important; } .todo-row { background: var(--bg-3); }';
+  document.head.append(hovered);
+  await sleep(50);
+  out.steadyRows = { resting, hovered: rowBoxes(), same: rowBoxes().join() === resting.join(), ask: document.querySelectorAll('.todo-row .todo-ask').length, done: document.querySelectorAll('.todo-row .todo-check').length };
+  hovered.remove();
   out.suggestions = [...document.querySelectorAll('.suggestion.todo')].map((e) => e.textContent);
   out.snapshot = await snap('todos');
 

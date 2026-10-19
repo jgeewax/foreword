@@ -489,15 +489,30 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 /* todos */
 .todo-panel { overflow-y: auto; flex: 1; padding: 4px 0 12px; }
 .todo-panel.empty { padding: 12px; line-height: 1.45; }
-.todo-row { display: flex; gap: 6px; align-items: baseline; padding: 3px 8px 3px 10px; cursor: default; }
+/* A chapter's TODOs: its title, then its file. */
+.todo-file + .todo-file { margin-top: 4px; }
+.todo-file-head { display: flex; align-items: baseline; gap: 6px; padding: 6px 10px 3px; font-size: 11.5px; }
+.todo-file-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.todo-file-path { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 10.5px "SF Mono", Menlo, monospace; }
+/*
+ * A TODO: circle, text, line number. Hover changes colours and swaps the
+ * line number for Ask in the same box (visibility, not display), so a row is
+ * the same height and its text wraps the same with the pointer on it or not.
+ */
+.todo-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 22px; column-gap: 8px; align-items: start; padding: 4px 8px 4px 10px; cursor: default; }
 .todo-row:hover { background: var(--bg-3); }
-.todo-box { color: var(--muted); }
-.todo-text { flex: 1; min-width: 0; line-height: 1.35; }
-.todo-line { font-size: 10.5px; color: var(--muted); }
-.todo-actions { display: none; gap: 8px; }
-.todo-row:hover .todo-actions { display: inline-flex; }
-.todo-row:hover .todo-line { display: none; }
-.todo-actions .link { font-size: 11.5px; }
+.todo-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.todo-check { display: grid; place-items: center; width: 14px; height: 14px; margin-top: 2px; padding: 0; border-radius: 50%; border: 1.3px solid var(--muted); background: transparent; color: transparent; }
+.todo-check:hover:not(:disabled) { border-color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.todo-check.fixed { border-style: dashed; opacity: 0.6; }
+.todo-text { line-height: 18px; overflow-wrap: anywhere; }
+.todo-end { display: grid; height: 18px; }
+.todo-line, .todo-ask { grid-area: 1 / 1; justify-self: end; }
+.todo-line { font-size: 10.5px; line-height: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.todo-ask { display: grid; place-items: center; width: 22px; height: 18px; padding: 0; border: none; border-radius: 4px; background: transparent; color: var(--accent); visibility: hidden; }
+.todo-ask:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.todo-row:hover .todo-ask, .todo-row:focus-visible .todo-ask, .todo-ask:focus-visible { visibility: visible; }
+.todo-row:hover .todo-line, .todo-row:focus-visible .todo-line, .todo-row:has(.todo-ask:focus-visible) .todo-line { visibility: hidden; }
 .suggestion.todo { display: flex; gap: 8px; justify-content: space-between; border-style: dashed; }
 .suggestion-where { color: var(--muted); font-size: 11px; white-space: nowrap; }
 
