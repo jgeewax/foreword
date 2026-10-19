@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { uncommitted } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
@@ -151,61 +152,149 @@ function useViews() {
   return { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged, branch };
 }
 
-/** The sidebar's views as a column of icons on its left edge, each with room for its own title. */
+/** What an activity bar icon's hover card says: its name, what it's for, and how things stand. */
+type Tip = { name: string; about: string; note?: string; keys?: string };
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The hover card beside an activity bar icon, as VS Code's: it comes after
+ * a moment, at once when moving from icon to icon, and on keyboard focus.
+ * It's in the page (not a native tooltip), so it zooms with everything else.
+ */
+function useViewTips() {
+  const [shown, setShown] = useState<{ id: string; tip: Tip; top: number; left: number } | null>(null);
+  const timer = useRef(0);
+  // When a card last closed: the next icon's comes at once if that was a moment ago.
+  const closed = useRef(0);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = (id: string, tip: Tip, el: HTMLElement, now = false) => {
+    clearTimeout(timer.current);
+    const open = () => {
+      const r = el.getBoundingClientRect();
+      setShown({ id, tip, top: r.top + r.height / 2, left: r.right + 6 });
+    };
+    if (now || shown || Date.now() - closed.current < 400) open();
+    else timer.current = window.setTimeout(open, 450);
+  };
+  const hide = () => {
+    clearTimeout(timer.current);
+    if (shown) closed.current = Date.now();
+    setShown(null);
+  };
+  // Hover, keyboard focus, and a click (which does what the card says) closes it.
+  const props = (id: string, tip: Tip) => ({
+    'aria-describedby': shown?.id === id ? 'view-tip' : undefined,
+    onMouseEnter: (e: ReactMouseEvent<HTMLElement>) => show(id, tip, e.currentTarget),
+    onMouseLeave: hide,
+    onFocus: (e: FocusEvent<HTMLElement>) => e.currentTarget.matches(':focus-visible') && show(id, tip, e.currentTarget, true),
+    onBlur: hide,
+    onMouseDown: hide,
+  });
+  // In the page's top layer, over the sidebar and the editor beside the bar.
+  const card =
+    shown &&
+    createPortal(
+      <div className="view-tip" id="view-tip" role="tooltip" style={{ top: shown.top, left: shown.left }}>
+        <div className="view-tip-name">
+          {shown.tip.name}
+          {shown.tip.keys && <kbd>{shown.tip.keys}</kbd>}
+        </div>
+        <div className="view-tip-about">{shown.tip.about}</div>
+        {shown.tip.note && <div className="view-tip-note">{shown.tip.note}</div>}
+      </div>,
+      document.body,
+    );
+  return { props, card };
+}
+
 /**
  * The sidebar's views, as icons on the window's left edge. It stays when the
  * sidebar is closed, as in VS Code: the open view's icon closes the sidebar,
- * any icon opens it at that view.
+ * any icon opens it at that view. Hovering one says what it's for.
  */
 export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
   const current = useSidebarView();
   const { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged } = useViews();
   // The views that are always there first, so they never move: the book's files, its
   // review comments, its history. Then those that come and go, the most fleeting last.
-  const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
-    { id: 'files', icon: 'files', label: 'Files' },
-    ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
-    { id: 'history', icon: 'history', label: 'History: saved versions of the book' },
-    ...(hasGit
-      ? [{ id: 'git' as const, icon: 'branch' as const, label: `Source control: ${gitChanged ? `${gitChanged} file${gitChanged === 1 ? '' : 's'} not committed` : 'everything committed'}`, badge: gitChanged || undefined }]
+  const items: { id: View; icon: IconName; label: string; badge?: number; tip: Tip }[] = [
+    { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. Right-click one to rename it, add a chapter, and more.' } },
+    ...(hasReview
+      ? [
+          {
+            id: 'review' as const,
+            icon: 'comments' as const,
+            label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`,
+            badge: reviewOpen || undefined,
+            tip: { name: 'Review', about: 'Comments on passages of the text, for you or the assistant to work through, and the assistant’s changes to check.', note: reviewOpen ? `${plural(reviewOpen, 'comment')} open` : 'No open comments. Select some text and press ⌥⌘M to add one.' },
+          },
+        ]
       : []),
-    ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples' }] : []),
-    ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'todos' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
+    { id: 'history', icon: 'history', label: 'History: saved versions of the book', tip: { name: 'History', about: 'Versions of the book, saved as you work and around every change the assistant makes. See what changed, or go back to any of them.' } },
+    ...(hasGit
+      ? [
+          {
+            id: 'git' as const,
+            icon: 'branch' as const,
+            label: `Source control: ${gitChanged ? `${gitChanged} file${gitChanged === 1 ? '' : 's'} not committed` : 'everything committed'}`,
+            badge: gitChanged || undefined,
+            tip: { name: 'Source control', about: 'The book’s own Git repository: what changed since the last commit, and commit, pull and push.', note: gitChanged ? `${plural(gitChanged, 'file')} not committed` : 'Everything is committed' },
+          },
+        ]
+      : []),
+    ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples', tip: { name: 'Code examples', about: 'The book’s runnable code, and what it printed. Run one, or all of them.' } }] : []),
+    ...(todoCount > 0
+      ? [
+          {
+            id: 'todos' as const,
+            icon: 'todos' as const,
+            label: `To do: ${todoCount} left in the book`,
+            badge: todoCount,
+            tip: { name: 'To do', about: 'Notes you left yourself in the text with // TODO:. Tick one off, or hand it to the assistant.', note: `${todoCount} left in the book` },
+          },
+        ]
+      : []),
   ];
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
+  const tips = useViewTips();
   return (
     <div className="activity-bar">
       <nav className="activity-views" role="tablist" aria-label="Sidebar" aria-orientation="vertical">
-        {items.map((it) => (
-          <button
-            key={it.id}
-            role="tab"
-            aria-selected={open && current === it.id}
-            aria-label={it.label}
-            title={open && current === it.id ? `${it.label} (click to hide the sidebar)` : it.label}
-            className={`chrome-icon activity-view${open && current === it.id ? ' on' : ''}`}
-            onClick={() => onPick(it.id, current)}
-          >
-            <Icon name={it.icon} />
-            {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
-          </button>
-        ))}
+        {items.map((it) => {
+          const on = open && current === it.id;
+          return (
+            <button
+              key={it.id}
+              role="tab"
+              aria-selected={on}
+              aria-label={it.label}
+              className={`chrome-icon activity-view${on ? ' on' : ''}`}
+              onClick={() => onPick(it.id, current)}
+              {...tips.props(it.id, on ? { ...it.tip, note: [it.tip.note, 'Click to hide the sidebar.'].filter(Boolean).join(' · ') } : it.tip)}
+            >
+              <Icon name={it.icon} />
+              {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
+            </button>
+          );
+        })}
       </nav>
       {/* At the bottom, as VS Code's Manage: what isn't a view. */}
       <div className="activity-bottom">
         <button
           className={`chrome-icon${guideOpen ? ' on' : ''}`}
-          title="Typst basics: how to write in Typst"
           aria-label="Typst basics"
           aria-pressed={guideOpen}
           onClick={() => (guideOpen ? studio.closeGuide() : studio.openGuide())}
+          {...tips.props('guide', { name: 'Typst basics', about: 'How to write in Typst: headings, emphasis, lists, maths, pictures and references. About five minutes.' })}
         >
           <Icon name="help" />
         </button>
-        <button className="chrome-icon" title="Settings (⌘,)" aria-label="Settings" onClick={() => studio.openSettings()}>
+        <button className="chrome-icon" aria-label="Settings" onClick={() => studio.openSettings()} {...tips.props('settings', { name: 'Settings', keys: '⌘,', about: 'Typst Studio’s settings, and this book’s: the editor, the assistant, permissions, fonts and more.' })}>
           <Icon name="settings" />
         </button>
       </div>
+      {tips.card}
     </div>
   );
 }

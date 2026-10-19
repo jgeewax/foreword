@@ -4566,6 +4566,31 @@ async function activityChecks() {
   out.clickOther = await click('Review');
   await click('Review');
   out.whileClosedOther = await click('Files');
+  // Hovering an icon says what it's for, in a card beside it: after a moment, then at once on the
+  // next icon; leaving or clicking closes it. React makes enter and leave from the mouseout of what's left.
+  const move = (from: Element, to: Element) => from.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: to }));
+  const away = document.querySelector('.statusbar')!;
+  const card = () => document.querySelector<HTMLElement>('.view-tip');
+  const read = () => card() && { name: card()!.querySelector('.view-tip-name')?.textContent, about: card()!.querySelector('.view-tip-about')?.textContent, note: card()!.querySelector('.view-tip-note')?.textContent ?? null };
+  move(away, icon('History')!);
+  const atOnce = !!card();
+  await sleep(600);
+  const history = read();
+  const r = card()?.getBoundingClientRect();
+  const i = icon('History')!.getBoundingClientRect();
+  move(icon('History')!, icon('Review')!);
+  await sleep(30);
+  const review = read();
+  move(icon('Review')!, away);
+  await sleep(30);
+  const closedOnLeave = !card();
+  move(away, icon('Settings')!);
+  await sleep(600);
+  const settings = read();
+  icon('Settings')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  await sleep(30);
+  out.tips = { atOnce, history, review, closedOnLeave, settings, closedOnClick: !card(), besideIcon: !!r && r.left >= i.right && Math.abs(r.top + r.height / 2 - (i.top + i.height / 2)) < 2, noNativeTitle: !document.querySelector('.activity-bar button[title]') };
+  move(icon('Settings')!, away);
   studio.showSidebar(saved);
   return out;
 }

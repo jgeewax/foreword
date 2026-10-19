@@ -2852,6 +2852,33 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   captured; self-tests `activity`, `chrome`, `layout` and `conversations`
   pass.
 
+### The activity bar says what each icon is for
+
+- **Asked for:** "when you hover on the left side panel icons, show help
+  text so people know what they mean?". The icons had native `title`
+  tooltips: a bare label, after macOS's long delay, drawn by macOS at its
+  own size whatever the zoom.
+- **Now:** hovering an icon shows a card beside it, pointing at it, as VS
+  Code's activity bar does, with more to say:
+  - the view's name (and shortcut: Settings ⌘,);
+  - a line on what it's for, for someone who hasn't used it ("Notes you
+    left yourself in the text with // TODO:. Tick one off, or hand it to
+    the assistant.");
+  - how things stand, where there's something to say: "2 comments open"
+    (or how to add one), "3 files not committed", "4 left in the book",
+    and "Click to hide the sidebar" on the open view.
+- It comes after 450 ms, then at once while you move from icon to icon (as
+  menus do), and at once on keyboard focus. Leaving the icon or clicking
+  it closes it. The icons' `aria-label`s stay, and `aria-describedby`
+  points at the card while it shows.
+- The card is in the page (a portal on `body`), so it zooms with the rest
+  (see "Zoom applies to everything"). Its class is `view-tip`: the chat
+  already has an `.activity-tip` ("Tip · …").
+- Verified: self-test `activity` (`tips`: not at once, then History's card
+  beside its icon; Review's at once on moving down; closed on leaving and
+  on a click; Settings with ⌘,; no native titles left); in the app at
+  125 %, natively captured, over the sidebar and the editor.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
