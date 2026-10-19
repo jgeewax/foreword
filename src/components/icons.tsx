@@ -163,6 +163,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M13 3.5v5h5M9 14.5h6.5M13 12l2.5 2.5L13 17" />
     </>
   ),
+  // Two versions side by side.
+  sideBySide: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M12 4.5v15M6 9h3.5M6 12h3.5M14.5 9h3.5M14.5 12h3.5" />
+    </>
+  ),
   target: (
     <>
       <circle cx="12" cy="12" r="7.5" />

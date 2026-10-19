@@ -2750,6 +2750,23 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   ("2. Eigenvalues" found by "eigenval"); in the app on Calculus Made Easy:
   Prologue, 1.–5., Answers.
 
+### What changed: a file's actions on one line
+
+- **Asked for:** "in the diff viewer from "what changed", the "restore file"
+  button is way too big and weird". In a narrow editor pane the file's
+  header squeezed its buttons: Side by side and Restore file wrapped into
+  blocks two and three lines tall, and the path was cut to "chapter…".
+- **Now:** a file's actions are quiet words with line icons (Open, Side by
+  side, Restore), grey until hovered, at the right of its header. They
+  never wrap; when there isn't room, they move under the name together.
+  - The name comes first, then its folder (as in History's rows), so a
+    narrow tab cuts the folder, not the name.
+  - The single-file diff's "Restore this file" is the same quiet Restore,
+    and no button in a changes tab wraps its words.
+- Verified: in the app at 380 and 640 px wide (actions 22 px tall, under
+  the name when narrow); self-tests `changes`, `difftabs`, `changeszoom`
+  and `historyabout` pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

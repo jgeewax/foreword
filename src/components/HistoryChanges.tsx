@@ -5,7 +5,7 @@ import { studio } from '../app/studio';
 import { HISTORY_TAB } from '../app/view-tabs';
 import { useStore } from '../lib/store';
 import { DiffEditor } from './DiffEditor';
-import { FileIcon } from './icons';
+import { FileIcon, Icon, type IconName } from './icons';
 import { TypstSnippet } from './TypstSnippet';
 
 const KIND_TITLE: Record<string, string> = {
@@ -127,14 +127,32 @@ export function ChangesModeSwitch({ mode, onChange }: { mode: ChangesMode; onCha
   );
 }
 
-/** One file in a "what changed" tab: its name and counts, then its changes as lines or words. */
+/** A file's action in a "what changed" tab: an icon and a word, quiet until hovered, on one line. */
+export function ChangeAction({ icon, label, title, disabled, onClick }: { icon: IconName; label: string; title: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button className="change-action" title={title} disabled={disabled} onClick={onClick}>
+      <Icon name={icon} size={14} />
+      {label}
+    </button>
+  );
+}
+
+/**
+ * One file in a "what changed" tab: its name, folder and counts, its actions
+ * (below the name when the tab is narrow), then its changes as lines or words.
+ */
 export function ChangedFileSection({ file, mode, latest, actions }: { file: ChangedFile; mode: ChangesMode; latest: boolean; actions?: ReactNode }) {
   const d = file.diff;
+  const slash = file.path.lastIndexOf('/');
   return (
     <section className="change-file">
       <header>
         <FileIcon path={file.path} />
-        <span className="history-path">{file.path}</span>
+        {/* The name first, then its folder: a narrow tab cuts the folder, not the name. */}
+        <span className="history-path" title={file.path}>
+          {file.path.slice(slash + 1)}
+          {slash > 0 && <span className="history-folder"> {file.path.slice(0, slash)}</span>}
+        </span>
         {file.status === 'A' && <span className="pill">new</span>}
         {file.status === 'D' && <span className="pill bad">deleted</span>}
         {d && (
@@ -142,13 +160,10 @@ export function ChangedFileSection({ file, mode, latest, actions }: { file: Chan
             <span className="add-n">+{d.added}</span> <span className="del-n">−{d.removed}</span> words
           </span>
         )}
-        <span className="spacer" />
-        {latest && file.status !== 'D' && (
-          <button className="small" title="Open the file" onClick={() => void studio.openFile(file.path)}>
-            Open
-          </button>
-        )}
-        {actions}
+        <span className="change-actions">
+          {latest && file.status !== 'D' && <ChangeAction icon="goToFile" label="Open" title="Open the file" onClick={() => void studio.openFile(file.path)} />}
+          {actions}
+        </span>
       </header>
       {file.note && <div className="muted">{file.note}</div>}
       {d && !d.hunks.length && <div className="muted">Only spacing or line endings changed.</div>}
@@ -243,16 +258,8 @@ export function HistoryChanges() {
             actions={
               view.mode === 'version' && (
                 <>
-                  {mode === 'words' && f.diff && (
-                    <button className="small" title="This file's change side by side, in its own tab" onClick={() => void studio.history.showDiff(v, f.path)}>
-                      Side by side
-                    </button>
-                  )}
-                  {f.status !== 'D' && (
-                    <button className="small" disabled={busy} title="Write this file back as it was right after this version" onClick={() => void studio.history.restoreFile(v, f.path)}>
-                      Restore file
-                    </button>
-                  )}
+                  {mode === 'words' && f.diff && <ChangeAction icon="sideBySide" label="Side by side" title="This file's change side by side, in its own tab" onClick={() => void studio.history.showDiff(v, f.path)} />}
+                  {f.status !== 'D' && <ChangeAction icon="undo" label="Restore" disabled={busy} title="Write this file back as it was right after this version" onClick={() => void studio.history.restoreFile(v, f.path)} />}
                 </>
               )
             }

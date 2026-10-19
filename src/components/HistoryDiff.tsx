@@ -1,6 +1,7 @@
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
 import { DiffEditor } from './DiffEditor';
+import { ChangeAction } from './HistoryChanges';
 import { FileIcon } from './icons';
 
 /** What one version changed in one file, in its own tab: the diff editor (read-only). */
@@ -23,14 +24,13 @@ export function HistoryDiff() {
             {diff.after === null && ' · deleted'}
           </div>
         </div>
-        <button
-          className="small"
+        <ChangeAction
+          icon="undo"
+          label="Restore"
           disabled={busy || diff.after === null || !!diff.error}
           title="Write this file back as it was right after this version (your current text is saved in History first)"
           onClick={() => void studio.history.restoreFile(diff.version, diff.path)}
-        >
-          Restore this file
-        </button>
+        />
       </div>
       <div className="changes-body">{diff.error ? <p className="bad">{diff.error}</p> : <DiffEditor path={diff.path} before={diff.before} after={diff.after} />}</div>
     </div>
