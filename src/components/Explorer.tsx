@@ -10,6 +10,7 @@ import { TodoPanel } from './TodoPanel';
 import { ReviewPanel } from './ReviewPanel';
 import { SourceControlPanel } from './SourceControlPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { SearchPanel } from './SearchPanel';
 import { Icon, type IconName } from './icons';
 
 function FileTree() {
@@ -136,7 +137,7 @@ function SourceControlActions() {
   );
 }
 
-export type View = 'files' | 'history' | 'code' | 'todos' | 'review' | 'git';
+export type View = 'files' | 'search' | 'history' | 'code' | 'todos' | 'review' | 'git';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
 function useViews() {
@@ -220,6 +221,7 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
   // review comments, its history. Then those that come and go, the most fleeting last.
   const items: { id: View; icon: IconName; label: string; badge?: number; tip: Tip }[] = [
     { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. Right-click one to rename it, add a chapter, and more.' } },
+    { id: 'search', icon: 'search', label: 'Search the book', tip: { name: 'Search', keys: '⇧⌘F', about: 'Find words, or a pattern, in every chapter at once, and replace them all.' } },
     ...(hasReview
       ? [
           {
@@ -306,6 +308,8 @@ function ViewHeader({ view }: { view: View }) {
   const title =
     view === 'files'
       ? (ws?.name ?? 'Files')
+      : view === 'search'
+        ? 'Search'
       : view === 'history'
         ? 'History'
         : view === 'code'
@@ -335,6 +339,8 @@ function ViewHeader({ view }: { view: View }) {
 function ViewBody({ view }: { view: View }) {
   return view === 'files' ? (
     <FileTree />
+  ) : view === 'search' ? (
+    <SearchPanel />
   ) : view === 'history' ? (
     <HistoryPanel />
   ) : view === 'code' ? (
@@ -353,7 +359,7 @@ function useSidebarView(): View {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
   const { hasCode, todoCount, hasReview, hasGit } = useViews();
   const available =
-    sidebar === 'files' || sidebar === 'history' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+    sidebar === 'files' || sidebar === 'search' || sidebar === 'history' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
   return available ? sidebar : 'files';
 }
 

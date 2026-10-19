@@ -34,6 +34,7 @@ pub const COMMANDS: &[&str] = &[
     "reopen-tab",
     // Edit
     "find",
+    "find-in-book",
     "replace",
     "format-document",
     "add-comment",
@@ -148,6 +149,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             &item("find", "Find…", Some("CmdOrCtrl+F"))?,
             &item("replace", "Find and Replace…", Some("CmdOrCtrl+Alt+F"))?,
+            &item("find-in-book", "Find in Book…", Some("CmdOrCtrl+Shift+F"))?,
             &sep()?,
             &item("format-document", "Format Document", Some("Shift+Alt+F"))?,
             &sep()?,

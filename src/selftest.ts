@@ -4606,6 +4606,56 @@ async function tourChecks() {
   return out;
 }
 
+/**
+ * Search (⇧⌘F): every chapter searched as typed, results under each chapter's
+ * name, a result opens its file with the match selected, a bad pattern says
+ * why; with `edits`, Replace All (it asks, then replaces in every file; the
+ * files are put back).
+ */
+async function searchChecks(edits: boolean) {
+  const out: Record<string, unknown> = {};
+  const saved = { sidebar: studio.state.sidebar, search: studio.state.search };
+  const input = () => document.querySelector<HTMLInputElement>('.search-box input');
+  const type = async (value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input()!, value);
+    input()!.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(600);
+    await waitFor(() => !studio.state.search.searching, 10000, 'the search').catch(() => {});
+  };
+  studio.showSearch();
+  await sleep(300);
+  out.view = { sidebar: studio.state.sidebar, focused: document.activeElement === input(), icon: !!document.querySelector('.activity-bar button[aria-label="Search the book"]') };
+  await type('eigen');
+  out.found = { total: studio.state.search.total, files: studio.state.search.results?.map((f) => f.path), heads: [...document.querySelectorAll('.search-file-name')].map((e) => e.textContent), summary: document.querySelector('.search-summary')?.textContent, marks: document.querySelectorAll('.search-match mark').length };
+  out.snapshot = await snap('search');
+  document.querySelector<HTMLButtonElement>('.search-match')?.click();
+  await sleep(500);
+  const ed = studio.editor;
+  out.opened = { file: studio.state.active, selected: ed?.getModel()?.getValueInRange(ed.getSelection()!) };
+  document.querySelector<HTMLButtonElement>('.search-toggle[aria-label^="A pattern"]')?.click();
+  await type('eigen(');
+  out.badPattern = studio.state.search.error;
+  document.querySelector<HTMLButtonElement>('.search-toggle[aria-label^="A pattern"]')?.click();
+  if (edits) {
+    const files = (studio.state.search.results ?? []).map((f) => f.path);
+    await type('eigenvalue');
+    const originals = await Promise.all((studio.state.search.results ?? []).map(async (f) => [f.path, (await ipc.fsRead(f.path)).text] as const));
+    const confirm = studio.confirmAction;
+    const asked: string[] = [];
+    studio.confirmAction = async (m) => (asked.push(m), true);
+    studio.setSearch({ replace: 'characteristic value' });
+    const before = studio.state.search.total;
+    await studio.replaceAll();
+    studio.confirmAction = confirm;
+    out.replaceAll = { before, after: studio.state.search.total, asked, files: files.length };
+    for (const [path, text] of originals) await ipc.fsWrite(path, text, await ipc.fsHash(path));
+    await sleep(500);
+  }
+  studio.store.set({ search: saved.search });
+  studio.showSidebar(saved.sidebar);
+  return out;
+}
+
 /** The activity bar: the open view's icon hides the sidebar, any icon brings it back at that view. */
 async function activityChecks() {
   const out: Record<string, unknown> = {};
@@ -7400,6 +7450,7 @@ export async function runSelftest(launch: LaunchOptions) {
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingsask-${kind}`)) result[`settingsask-${kind}`] = await settingsAskChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
     if (want('tour')) result.tour = await tourChecks();
+    if (want('search')) result.search = await searchChecks(launch.selftestEdits);
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();

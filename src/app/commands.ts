@@ -109,6 +109,7 @@ export function paletteCommands(studio: Studio): Command[] {
       [
         menu('find', 'Find', { keys: '⌘F', when: file }),
         menu('replace', 'Find and Replace', { keys: '⌥⌘F', when: file }),
+        menu('find-in-book', 'Find in Book…', { keys: '⇧⌘F', keywords: ['search', 'replace all', 'everywhere', 'all chapters'] }),
         menu('format-document', 'Format Document', { keys: '⌥⇧F', keywords: ['typstyle', 'tidy'], when: typ }),
         menu('add-comment', 'Add Comment…', { keys: '⌥⌘M', keywords: ['review'], when: selection }),
         editor('editor.action.gotoLine', 'Go to Line…', '⌃G'),

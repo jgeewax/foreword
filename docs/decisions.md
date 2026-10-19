@@ -3005,6 +3005,34 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   seen afterwards and put back); `menubar` (Help has it) and `palette`
   (every menu item is a command).
 
+### Search across the book
+
+- **Asked for:** "add a search tab".
+- **Now:** a Search view, as VS Code's, second in the activity bar (it's
+  always there). Edit ▸ Find in Book… (⇧⌘F, also in the page's own keys)
+  opens it with the box focused and the editor's selection in it.
+  - The box searches as you type (200 ms after), every text file of the
+    book (Typst, Markdown, bibliography, data, scripts; not pictures, PDFs
+    or the exports), each open one as it is in the editor. Toggles in the
+    box: Aa (match case), ab (whole words, by Unicode letters), .* (a
+    pattern; one that doesn't parse, or matches empty text, says so).
+  - Results are under each file's name, in reading order (the main file,
+    its chapters as it includes them, then the rest), chapters by their
+    number and heading as in Go to File, each folding up; each match shows
+    its line with a few words before it and the match highlighted. A click
+    opens the file with the match selected. Up to 2,000 matches.
+  - Results follow the text: they're searched again 0.5 s after an edit,
+    and after changes on disk.
+  - Replace (the chevron by the box): Replace All asks first ("Replace 9
+    matches in 2 files with …?"), makes a History version of the book as
+    it was, then replaces in each file, open ones through the editor (so
+    ⌘Z there undoes it). A pattern's replacement may use $1, $2.
+- Verified: unit tests (case, whole words, patterns, the shortened line,
+  the limit, replacing with groups); self-test `search` (found in reading
+  order under "2. Eigenvalues", a click selects the match, a bad pattern,
+  Replace All asking once and leaving no matches, files put back); in the
+  app with Calculus Made Easy (19 results in 4 files).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

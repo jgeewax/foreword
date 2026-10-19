@@ -101,6 +101,10 @@ function Workbench() {
       } else if (key === 's' && !e.shiftKey) {
         e.preventDefault();
         void studio.save();
+      } else if (key === 'f' && e.shiftKey) {
+        // Find in Book (the menu has it too; showing Search twice is harmless).
+        e.preventDefault();
+        studio.showSearch();
       } else if (key === 'i' && !e.shiftKey && !(e.target as HTMLElement)?.closest?.('.monaco-editor')) {
         e.preventDefault();
         void studio.attachSelection();

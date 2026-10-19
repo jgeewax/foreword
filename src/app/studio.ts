@@ -41,6 +41,7 @@ import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
 import { shouldStartTour, TOUR_SEEN_KEY, TOUR_STEPS } from './tour';
+import { replaceText, searchPattern, searchText, SEARCHABLE, type FileMatches, type SearchMatch, type SearchOptions } from './book-search';
 import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
@@ -203,6 +204,26 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
 /** Settings' pages: Typst Studio's own (every book), then this book's (saved with it). */
+/** The Search view's state. */
+export type SearchState = {
+  query: string;
+  replace: string;
+  options: SearchOptions;
+  /** What it found, file by file in reading order (null: no search). */
+  results: FileMatches[] | null;
+  total: number;
+  /** It stopped at SEARCH_LIMIT matches. */
+  capped: boolean;
+  searching: boolean;
+  /** A pattern that doesn't parse. */
+  error: string | null;
+};
+
+const initialSearch: SearchState = { query: '', replace: '', options: { matchCase: false, wholeWord: false, regex: false }, results: null, total: 0, capped: false, searching: false, error: null };
+
+/** The most matches Search lists. */
+const SEARCH_LIMIT = 2000;
+
 /** Whether the tour has run here before (finished or skipped). */
 function tourSeen(): boolean {
   try {
@@ -370,7 +391,9 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review' | 'git';
+  sidebar: 'files' | 'search' | 'history' | 'code' | 'todos' | 'review' | 'git';
+  /** The Search view: what's searched for, how, and what it found. */
+  search: SearchState;
 };
 
 const initialState: StudioState = {
@@ -419,6 +442,7 @@ const initialState: StudioState = {
   settings: loadSettings(),
   settingsOpen: false,
   tour: null,
+  search: initialSearch,
   update: null,
   updateDialog: false,
   aboutOpen: false,
@@ -504,6 +528,8 @@ export class Studio {
   readonly store = new Store<StudioState>(initialState);
   readonly events = new Emitter<{
     'focus-composer': [];
+    /** ⇧⌘F: the Search view's box, with this text in it if any (the editor's selection). */
+    'focus-search': [text: string | null];
     'focus-editor': [];
     'fill-composer': [text: string];
     'find-in-settings': [];
@@ -688,6 +714,7 @@ export class Studio {
     'reopen-tab': () => this.tabCommand('reopen'),
     // Edit
     find: () => (this.state.settingsOpen ? this.events.emit('find-in-settings') : this.editorAction('actions.find')),
+    'find-in-book': () => this.showSearch(),
     replace: () => this.editorAction('editor.action.startFindReplaceAction'),
     'format-document': () => this.formatDocument(),
     'add-comment': () => this.addComment(),
@@ -846,6 +873,8 @@ export class Studio {
     this.docs = new Documents(info.root, this.typst, {
       onEdit: (p) => {
         this.perf.edit(() => this.publishPerf());
+        // What Search found follows the text as it changes.
+        if (this.state.search.query) this.scheduleSearch(500);
         if (p.endsWith('.typ')) {
           clearTimeout(this.codeScanTimer);
           this.codeScanTimer = window.setTimeout(() => {
@@ -901,6 +930,101 @@ export class Studio {
     if (active) await this.openFile(active);
     // Someone new (this is the only book they've opened): the tour, once the window has settled.
     if (!this.state.launch?.selftestOut && shouldStartTour(tourSeen(), this.state.recent.length)) setTimeout(() => this.state.workspace?.root === info.root && this.startTour(), 1500);
+  }
+
+  // ---- search (the Search view, ⇧⌘F) ------------------------------------------------------
+
+  private searchTimer = 0;
+  private searchRun = 0;
+
+  /** ⇧⌘F: the Search view, its box focused, with the editor's selection in it (one line of it). */
+  showSearch() {
+    this.revealSidebar('search');
+    const selection = this.editor?.hasTextFocus() ? this.editor.getModel()?.getValueInRange(this.editor.getSelection()!) : '';
+    this.events.emit('focus-search', selection && !selection.includes('\n') ? selection : null);
+  }
+
+  /** What to search for, and how: the book is searched again a moment after typing, at once for an option. */
+  setSearch(patch: Partial<Pick<SearchState, 'query' | 'replace' | 'options'>>) {
+    this.store.set((s) => ({ search: { ...s.search, ...patch } }));
+    if ('query' in patch || 'options' in patch) this.scheduleSearch('query' in patch ? 200 : 0);
+  }
+
+  private scheduleSearch(delay: number) {
+    clearTimeout(this.searchTimer);
+    this.searchTimer = window.setTimeout(() => void this.runSearch(), delay);
+  }
+
+  /** The book's text files in reading order: the main file, its chapters as it includes them, then the rest by name. */
+  private searchFiles(): string[] {
+    const ws = this.state.workspace;
+    if (!ws) return [];
+    const skip = this.historyExcludes();
+    const files = ws.files.filter((f) => SEARCHABLE.test(f) && !f.startsWith('.typst-studio/') && f !== PROJECT_FILE && !skip.some((x) => `/${f}`.startsWith(x)));
+    const first = [ws.entry, ...this.state.names.chapters].filter((f): f is string => !!f && files.includes(f));
+    return [...new Set([...first, ...files.filter((f) => !first.includes(f)).sort()])];
+  }
+
+  /** Search the book's text (open files as they are in the editor), up to SEARCH_LIMIT matches. */
+  async runSearch() {
+    const run = ++this.searchRun;
+    const { query, options } = this.state.search;
+    const re = searchPattern(query, options);
+    const done = (patch: Partial<SearchState>) => run === this.searchRun && this.store.set((s) => ({ search: { ...s.search, searching: false, ...patch } }));
+    if (!re) return done({ results: null, error: null, total: 0, capped: false });
+    if ('error' in re) return done({ results: null, error: re.error, total: 0, capped: false });
+    this.store.set((s) => ({ search: { ...s.search, searching: true, error: null } }));
+    const results: FileMatches[] = [];
+    let total = 0;
+    for (const path of this.searchFiles()) {
+      const text = await this.currentText(path);
+      if (run !== this.searchRun) return;
+      const matches = text == null ? [] : searchText(text, re, SEARCH_LIMIT - total);
+      if (matches.length) results.push({ path, matches });
+      total += matches.length;
+      if (total >= SEARCH_LIMIT) break;
+    }
+    done({ results, total, capped: total >= SEARCH_LIMIT });
+  }
+
+  /** A match: its file in front, the match selected. */
+  async revealMatch(path: string, match: SearchMatch) {
+    await this.openFile(path);
+    const editor = this.editor;
+    if (!editor) return;
+    const range = new monaco.Range(match.line, match.column, match.line, match.column + match.length);
+    editor.setSelection(range);
+    editor.revealRangeInCenterIfOutsideViewport(range);
+    editor.focus();
+  }
+
+  /**
+   * Replace every match in the book, after asking. History keeps a version of
+   * the book from just before; open files can be undone in the editor too.
+   */
+  async replaceAll() {
+    const { query, replace, options, results, total } = this.state.search;
+    const re = searchPattern(query, options);
+    if (!re || 'error' in re || !results?.length) return;
+    const files = results.length;
+    const what = `${total} match${total === 1 ? '' : 'es'} in ${files} file${files === 1 ? '' : 's'}`;
+    const ok = await this.confirmAction(`Replace ${what} with “${replace}”?\n\nHistory keeps the book as it is now, so you can go back.`, 'Replace All', 'Replace All');
+    if (!ok) return;
+    await this.history.checkpoint().catch(() => null);
+    let count = 0;
+    for (const { path } of results) {
+      try {
+        await this.editFile(path, (text) => {
+          const r = replaceText(text, re, replace, options);
+          count += r.count;
+          return r.text;
+        });
+      } catch (e) {
+        this.toast(`Couldn't replace in ${path}: ${errorMessage(e)}`, 'error');
+      }
+    }
+    this.toast(`Replaced ${count} match${count === 1 ? '' : 'es'} in ${files} file${files === 1 ? '' : 's'}.`);
+    await this.runSearch();
   }
 
   // ---- the tour -----------------------------------------------------------------------
@@ -2320,6 +2444,7 @@ export class Studio {
         void this.refreshNames(batch);
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
         if (batch.includes(VSCODE_SETTINGS)) void this.loadPeacockColor();
+        if (this.state.search.query) this.scheduleSearch(300);
       });
       this.history.scheduleSave();
       this.scheduleGitRefresh();
