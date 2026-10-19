@@ -9,6 +9,7 @@ import { ActivityBar, Explorer, type View } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { CoverDialog } from './components/CoverDialog';
 import { StyleTemplatesDialog } from './components/StyleTemplatesDialog';
+import { Tour } from './components/Tour';
 import { EpubDialog } from './components/EpubDialog';
 import { NewBookDialog } from './components/NewBookDialog';
 import { PrintDialog } from './components/PrintDialog';
@@ -156,6 +157,7 @@ function Workbench() {
       </div>
       <StatusBar />
       <Toast />
+      <Tour />
     </div>
   );
 }

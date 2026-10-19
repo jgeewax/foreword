@@ -283,7 +283,7 @@ export function paletteCommands(studio: Studio): Command[] {
         },
       ],
     ],
-    ['Help', [menu('typst-guide', 'Typst Basics', { keywords: ['help', 'syntax', 'markup', 'guide'], anywhere: true })]],
+    ['Help', [menu('typst-guide', 'Typst Basics', { keywords: ['help', 'syntax', 'markup', 'guide'], anywhere: true }), menu('take-tour', 'Take the Tour', { keywords: ['tutorial', 'welcome', 'getting started', 'help', 'introduction'] })]],
     [
       'Window',
       [

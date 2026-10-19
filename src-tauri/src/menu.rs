@@ -74,6 +74,7 @@ pub const COMMANDS: &[&str] = &[
     "next-tab",
     // Help
     "typst-guide",
+    "take-tour",
 ];
 
 pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -246,7 +247,10 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         HELP_SUBMENU_ID,
         "Help",
         true,
-        &[&item("typst-guide", "Typst Basics", None)?],
+        &[
+            &item("typst-guide", "Typst Basics", None)?,
+            &item("take-tour", "Take the Tour", None)?,
+        ],
     )?;
 
     Menu::with_items(

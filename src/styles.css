@@ -1644,3 +1644,25 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
   .strip-chip.tone-look, .trace-step.tone-look.live .step-verb { color: color-mix(in srgb, var(--look) 62%, #000); }
   .strip-chip.tone-change, .trace-step.tone-change.live .step-verb, .permission-line { color: color-mix(in srgb, var(--change) 70%, #000); }
 }
+
+/*
+ * The tour: the window dimmed but for the part a step is about (a hole cut by
+ * the spot's shadow), and a card beside it. Above everything but the dialogs.
+ */
+.tour { position: fixed; inset: 0; z-index: 95; }
+.tour-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); animation: appear 0.2s ease-out; }
+.tour-spot {
+  position: absolute; border-radius: 9px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), inset 0 0 0 2px var(--accent);
+  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; pointer-events: none;
+}
+.tour-card {
+  position: absolute; width: 320px; padding: 14px 16px 12px; border-radius: 12px;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  transition: left 0.25s ease, top 0.25s ease; animation: pop-in 0.18s ease-out;
+}
+.tour-step { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.tour-card h2 { margin: 4px 0 6px; font-size: 15px; }
+.tour-card p { margin: 0 0 12px; line-height: 1.5; color: var(--muted); }
+.tour-actions { display: flex; align-items: center; gap: 6px; }
+.tour-actions .tour-skip { color: var(--muted); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .tour-spot, .tour-card { transition: none; } }

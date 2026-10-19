@@ -4545,6 +4545,67 @@ async function conversationsChecks() {
   return out;
 }
 
+/**
+ * The tour: each step lights up its part of the window (or none) with its card
+ * beside it, inside the window; a hidden pane's step is passed over; →, ← and
+ * Esc; the preview shows on its own step only. "Seen" is put back after.
+ */
+async function tourChecks() {
+  const out: Record<string, unknown> = {};
+  const seen = localStorage.getItem('studio.tourSeen');
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  const previewHidden = async () => (await ipc.nativeGeometry('preview').catch(() => ({}) as Record<string, unknown>)).webviewHidden;
+  const box = (sel: string) => {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    return r && { left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) };
+  };
+  try {
+    studio.startTour();
+    const steps: Record<string, unknown>[] = [];
+    for (let i = 0; i < 12 && studio.state.tour !== null; i++) {
+      await sleep(300);
+      const card = box('.tour-card');
+      steps.push({ step: studio.state.tour, title: document.querySelector('.tour-card h2')?.textContent, spot: box('.tour-spot') ?? null, cardInWindow: !!card && card.left >= 0 && card.top >= 0 && card.right <= innerWidth && card.bottom <= innerHeight, previewHidden: await previewHidden() });
+      if (i === 1) out.snapshot = await snap('tour-files');
+      document.querySelector<HTMLButtonElement>('.tour-card .primary')?.click();
+    }
+    out.steps = steps;
+    await sleep(100);
+    out.ended = studio.state.tour === null && !document.querySelector('.tour');
+    out.seen = localStorage.getItem('studio.tourSeen');
+    // Keys, and a step about a hidden pane (the assistant's) passed over.
+    studio.events.emit('toggle-pane', 'agent');
+    await sleep(300);
+    studio.startTour();
+    await sleep(200);
+    const key = (k: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    key('ArrowRight');
+    await sleep(150);
+    key('ArrowLeft');
+    await sleep(150);
+    out.keys = { back: studio.state.tour };
+    for (let i = 0; i < 5; i++) {
+      key('ArrowRight');
+      await sleep(200);
+    }
+    out.passedHiddenPane = { at: studio.state.tour, title: document.querySelector('.tour-card h2')?.textContent };
+    key('Escape');
+    await sleep(150);
+    out.escEnds = studio.state.tour === null;
+    studio.events.emit('toggle-pane', 'agent');
+    await sleep(300);
+    out.previewBack = !(await previewHidden());
+  } finally {
+    studio.endTour();
+    still.remove();
+    if (seen === null) localStorage.removeItem('studio.tourSeen');
+    else localStorage.setItem('studio.tourSeen', seen);
+  }
+  return out;
+}
+
 /** The activity bar: the open view's icon hides the sidebar, any icon brings it back at that view. */
 async function activityChecks() {
   const out: Record<string, unknown> = {};
@@ -7338,6 +7399,7 @@ export async function runSelftest(launch: LaunchOptions) {
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingstools-${kind}`)) result[`settingstools-${kind}`] = await settingsToolsChecks(kind);
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingsask-${kind}`)) result[`settingsask-${kind}`] = await settingsAskChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
+    if (want('tour')) result.tour = await tourChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();

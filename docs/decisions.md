@@ -2974,6 +2974,37 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   once after two quick changes, clearing it back to Peacock's; self-tests
   `settings` (the Colour page among the book's) and `palette` pass.
 
+### A tour for someone new
+
+- **Asked for:** "can we create a tutorial of some sort for first-time
+  users?". Someone new met a window of five parts and an activity bar, with
+  only the welcome screen's Typst basics link to go on.
+- **Now:** a tour of nine short steps. Each dims the window but for one
+  part (a spot with an accent edge, its shadow the dimming) and puts a card
+  beside it: what the part is for, in a sentence or two, with Back, Next
+  and Skip the tour. → or ⏎ is next, ← back, Esc leaves.
+  - The steps: a welcome; the files; the views down the side; where you
+    write (with a word on Typst's markup and where Typst basics is); the
+    typeset pages (click a word to go to it); the assistant (⌘I, and that
+    its changes are marked and can be undone); finding anything (⌘P, ⇧⌘P);
+    the status bar; and an ending that points at Export PDF.
+  - The card goes beside its part, inside the window: right, else left,
+    below, above (`placeCard`, tested). A step whose pane is hidden is
+    passed over in the direction you're going.
+  - The preview is a native view over the page, which the dimming can't
+    cover: it's hidden during the tour, as for a dialog, except on its own
+    step.
+- **When:** it starts by itself, once, 1.5 s after someone opens a book
+  when it's the only book they've ever opened (so not for the author,
+  with their many books), never in a self-test. Finishing or skipping
+  marks it seen (`studio.tourSeen`, a convenience in the page's storage).
+  Help ▸ Take the Tour and the palette's Take the Tour run it again.
+- Verified: unit tests (when it starts, where the card goes); self-test
+  `tour` (each step's spot and card inside the window, the preview hidden
+  but on its step, a hidden assistant's step passed over, the keys, Esc,
+  seen afterwards and put back); `menubar` (Help has it) and `palette`
+  (every menu item is a command).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

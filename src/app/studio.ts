@@ -40,6 +40,7 @@ import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLA
 import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
+import { shouldStartTour, TOUR_SEEN_KEY, TOUR_STEPS } from './tour';
 import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
@@ -202,6 +203,15 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
 /** Settings' pages: Typst Studio's own (every book), then this book's (saved with it). */
+/** Whether the tour has run here before (finished or skipped). */
+function tourSeen(): boolean {
+  try {
+    return localStorage.getItem(TOUR_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** VS Code's settings for the book's folder, where Peacock keeps its colour. */
 const VSCODE_SETTINGS = '.vscode/settings.json';
 
@@ -291,6 +301,8 @@ export type StudioState = {
   zoom: number;
   settings: AppSettings;
   settingsOpen: boolean;
+  /** The tour's step, while it's on (see app/tour.ts). */
+  tour: number | null;
   /** Typst Studio's update (the same in every window), and whether its dialog is open. */
   update: UpdateState | null;
   updateDialog: boolean;
@@ -406,6 +418,7 @@ const initialState: StudioState = {
   zoom: 1,
   settings: loadSettings(),
   settingsOpen: false,
+  tour: null,
   update: null,
   updateDialog: false,
   aboutOpen: false,
@@ -714,6 +727,7 @@ export class Studio {
     'prev-tab': () => this.tabCommand('prev'),
     'next-tab': () => this.tabCommand('next'),
     'typst-guide': () => this.openGuide(),
+    'take-tour': () => this.startTour(),
   };
 
   /** Commands that need a book open do nothing without one (the menu bar can't grey them out). */
@@ -885,6 +899,35 @@ export class Studio {
     for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
     const active = saved?.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
     if (active) await this.openFile(active);
+    // Someone new (this is the only book they've opened): the tour, once the window has settled.
+    if (!this.state.launch?.selftestOut && shouldStartTour(tourSeen(), this.state.recent.length)) setTimeout(() => this.state.workspace?.root === info.root && this.startTour(), 1500);
+  }
+
+  // ---- the tour -----------------------------------------------------------------------
+
+  /** The tour from its first step (Help ▸ Take the Tour, and a new author's first book). */
+  startTour() {
+    if (!this.state.workspace) return;
+    this.store.set({ tour: 0, quickOpen: false, settingsOpen: false, guideOpen: false });
+  }
+
+  /** The next step (1) or the one before (−1); past the last, the tour ends. */
+  tourStep(direction: 1 | -1) {
+    const at = this.state.tour;
+    if (at === null) return;
+    const next = at + direction;
+    if (next >= TOUR_STEPS.length) return this.endTour();
+    this.store.set({ tour: Math.max(0, next) });
+  }
+
+  /** The tour is over (finished or skipped): it won't start by itself again. */
+  endTour() {
+    this.store.set({ tour: null });
+    try {
+      localStorage.setItem(TOUR_SEEN_KEY, '1');
+    } catch {
+      // Then it may offer itself again next time: harmless.
+    }
   }
 
   /** Put text in the message box (without sending). */
@@ -2769,7 +2812,9 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.styleTemplatesOpen || s.epubOpen || s.print.open || !!s.quickOpen;
+    // The tour too, but on its preview step, which is about the preview.
+    const tour = s.tour !== null && !TOUR_STEPS[s.tour]?.preview;
+    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.styleTemplatesOpen || s.epubOpen || s.print.open || !!s.quickOpen || tour;
   }
 
   private syncPreviewVisibility() {
