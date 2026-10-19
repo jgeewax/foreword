@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from 'react-resizable-panels';
+import { bookPalette, effectiveBookColor } from './app/book-color';
 import { studio } from './app/studio';
 import { AgentPane } from './components/AgentPane';
 import { StatusBar, TitleBar, Toast, Welcome } from './components/Chrome';
@@ -24,7 +25,28 @@ const notifyLayout = () => {
   window.dispatchEvent(new Event('studio-layout'));
 };
 
+/**
+ * The book's colour on the window's title, activity and status bars, as VS
+ * Code's Peacock: its shades as CSS variables, and `data-book-color` on the
+ * page, which styles.css colours the bars by. Gone with the book.
+ */
+function useBookColor() {
+  const color = useStore(studio.store, (s) => effectiveBookColor(s.project.settings.color, s.peacockColor));
+  useEffect(() => {
+    if (!color) return;
+    const root = document.documentElement;
+    const palette = bookPalette(color);
+    for (const [name, value] of Object.entries(palette)) root.style.setProperty(name, value);
+    root.dataset.bookColor = color;
+    return () => {
+      for (const name of Object.keys(palette)) root.style.removeProperty(name);
+      delete root.dataset.bookColor;
+    };
+  }, [color]);
+}
+
 function Workbench() {
+  useBookColor();
   const explorer = usePanelRef();
   const preview = usePanelRef();
   const agent = usePanelRef();

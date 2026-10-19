@@ -9,6 +9,12 @@ describe('parseProjectSettings', () => {
     expect(p.error).toBeNull();
   });
 
+  it('reads the book’s colour: a hex colour, or none', () => {
+    expect(parseProjectSettings('{"color":"#00AD9F"}').settings.color).toBe('#00ad9f');
+    expect(parseProjectSettings('{"color":"none"}').settings.color).toBe('none');
+    expect(parseProjectSettings('{"color":"teal"}').settings.color).toBeUndefined();
+  });
+
   it('treats a missing or empty file as defaults, and reports bad JSON instead of guessing', () => {
     expect(parseProjectSettings(null)).toEqual({ settings: {}, raw: {}, error: null });
     expect(parseProjectSettings('  ')).toEqual({ settings: {}, raw: {}, error: null });

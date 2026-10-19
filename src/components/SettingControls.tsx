@@ -52,15 +52,30 @@ export function Choice<T extends string>({ label, value, options, onChange }: { 
  * or none: "Same as yours", the lines looking like the ones you wrote. Arrows
  * move along, as in a radio group.
  */
-export function ColorChoice({ label, on, color, colors, onChange }: { label: string; on: boolean; color: string; colors: { color: string; name: string }[]; onChange: (choice: { on: boolean; color?: string }) => void }) {
+export function ColorChoice({
+  label,
+  on,
+  color,
+  colors,
+  onChange,
+  none: noneChoice = { label: 'Same as yours', title: 'No mark: these lines look like the ones you wrote' },
+}: {
+  label: string;
+  on: boolean;
+  color: string;
+  colors: { color: string; name: string }[];
+  onChange: (choice: { on: boolean; color?: string }) => void;
+  /** What "none" says (for a mark: the lines look like yours). */
+  none?: { label: string; title: string };
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   // The swatches, then another colour (the one chosen, if it isn't a swatch's), then none.
   const other = colors.length;
-  const none = colors.length + 1;
+  const noneAt = colors.length + 1;
   const preset = colors.findIndex((c) => c.color === color);
-  const at = !on ? none : preset >= 0 ? preset : other;
-  const pick = (i: number) => onChange(i === none ? { on: false } : { on: true, color: i === other ? color : colors[i].color });
+  const at = !on ? noneAt : preset >= 0 ? preset : other;
+  const pick = (i: number) => onChange(i === noneAt ? { on: false } : { on: true, color: i === other ? color : colors[i].color });
   const openPicker = () => {
     const input = pickerRef.current;
     if (!input) return;
@@ -71,9 +86,9 @@ export function ColorChoice({ label, on, color, colors, onChange }: { label: str
     const step = STEPS[e.key];
     if (!step) return;
     e.preventDefault();
-    let to = (at + step + none + 1) % (none + 1);
+    let to = (at + step + noneAt + 1) % (noneAt + 1);
     // Arrows pass "another colour" until there is one (choosing one opens the picker).
-    if (to === other && preset >= 0) to = (to + step + none + 1) % (none + 1);
+    if (to === other && preset >= 0) to = (to + step + noneAt + 1) % (noneAt + 1);
     pick(to);
     ref.current?.querySelectorAll<HTMLElement>('[role="radio"]')[to]?.focus();
   };
@@ -93,8 +108,8 @@ export function ColorChoice({ label, on, color, colors, onChange }: { label: str
         onClick={openPicker}
       />
       <input ref={pickerRef} type="color" className="color-picker-input" tabIndex={-1} aria-hidden value={color} onChange={(e) => onChange({ on: true, color: e.target.value })} />
-      <button type="button" className="swatch-none" title="No mark: these lines look like the ones you wrote" {...radio(none)} onClick={() => pick(none)}>
-        Same as yours
+      <button type="button" className="swatch-none" title={noneChoice.title} {...radio(noneAt)} onClick={() => pick(noneAt)}>
+        {noneChoice.label}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import { appDataDir } from '@tauri-apps/api/path';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { BOOK_COLORS, effectiveBookColor, randomBookColor } from '../app/book-color';
 import { PROJECT_FILE } from '../app/project-settings';
 import { studio, type SettingsPage } from '../app/studio';
 import { ipc, type ToolInfo } from '../lib/ipc';
@@ -23,6 +24,52 @@ export function Section({ title, children }: { title: string; children: ReactNod
       <h2>{title}</h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * This book's colour on its window, as VS Code's Peacock gives a folder: a
+ * swatch, any colour, none, or one at random. A book with Peacock's colour
+ * in its VS Code settings wears that until it has its own.
+ */
+function BookColorPage() {
+  const ws = useStore(studio.store, (s) => s.workspace);
+  const own = useStore(studio.store, (s) => s.project.settings.color);
+  const peacock = useStore(studio.store, (s) => s.peacockColor);
+  if (!ws) return null;
+  const color = effectiveBookColor(own, peacock);
+  return (
+    <Section title="The book’s colour">
+      <p className="settings-help">The window wears it on its title bar, its icons down the left and its status bar, so a glance tells this book’s window from another’s.</p>
+      <div className="settings-field book-color-choice">
+        <ColorChoice
+          label="Book colour"
+          on={!!color}
+          color={color ?? BOOK_COLORS[5].color}
+          colors={BOOK_COLORS}
+          none={{ label: 'None', title: 'The window’s usual colours' }}
+          onChange={(c) => studio.setBookColor(c.on ? c.color! : peacock ? 'none' : null)}
+        />
+        <button className="small" title="A colour of its own, at random" onClick={() => studio.setBookColor(randomBookColor())}>
+          Surprise me
+        </button>
+      </div>
+      {peacock && (
+        <p className="settings-help">
+          VS Code’s Peacock gives this book <span className="swatch-inline" style={{ '--swatch': peacock } as CSSProperties} /> <code>{peacock}</code>, in <code>.vscode/settings.json</code>
+          {own ? (
+            <>
+              .{' '}
+              <button className="link" onClick={() => studio.setBookColor(null)}>
+                Use Peacock’s
+              </button>
+            </>
+          ) : (
+            ', so the window wears it here too.'
+          )}
+        </p>
+      )}
+    </Section>
   );
 }
 
@@ -120,7 +167,7 @@ const PAGE_KEY = 'studio.settingsPage';
 function readPage(): Page {
   try {
     const p = localStorage.getItem(PAGE_KEY);
-    return p === 'general' || p === 'editor' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-assistant' ? p : 'general';
+    return p === 'general' || p === 'editor' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-assistant' || p === 'book-color' ? p : 'general';
   } catch {
     return 'general';
   }
@@ -639,6 +686,7 @@ export function SettingsDialog() {
       ? [
           { id: 'book' as const, label: 'Files', icon: 'book' as const, scope: 'book' as const },
           { id: 'book-assistant' as const, label: 'Assistant', icon: 'sparkle' as const, scope: 'book' as const },
+          { id: 'book-color' as const, label: 'Colour', icon: 'palette' as const, scope: 'book' as const },
         ]
       : []),
   ];
@@ -703,7 +751,7 @@ export function SettingsDialog() {
   }, [query]);
 
   const pageContent = (id: Page) =>
-    ({ general: <GeneralPage />, editor: <EditorPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage goToAssistant={() => (setQuery(''), setPage('assistant'))} />, book: <BookFilesPage />, 'book-assistant': <BookAssistantPage /> })[id];
+    ({ general: <GeneralPage />, editor: <EditorPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage goToAssistant={() => (setQuery(''), setPage('assistant'))} />, book: <BookFilesPage />, 'book-assistant': <BookAssistantPage />, 'book-color': <BookColorPage /> })[id];
   const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (

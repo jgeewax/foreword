@@ -40,6 +40,7 @@ import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLA
 import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
+import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
 import { CodeRunner, initialCode, type CodeState } from '../code/runner';
@@ -201,7 +202,10 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
 /** Settings' pages: Typst Studio's own (every book), then this book's (saved with it). */
-export type SettingsPage = 'general' | 'editor' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant';
+/** VS Code's settings for the book's folder, where Peacock keeps its colour. */
+const VSCODE_SETTINGS = '.vscode/settings.json';
+
+export type SettingsPage = 'general' | 'editor' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant' | 'book-color';
 export type NewBookTab = 'book' | 'paper' | 'sample';
 
 /** How the style guide is being written: from the chapters, again from them, or from the author's answers. */
@@ -305,6 +309,8 @@ export type StudioState = {
   prompt: PromptRequest | null;
   /** `.typst-studio.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
+  /** The colour VS Code's Peacock gives the book (`peacock.color` in its .vscode/settings.json), if any. */
+  peacockColor: string | null;
   exporting: boolean;
   /**
    * WRITING_STYLE.md: whether it exists, and whether the user dismissed the
@@ -410,6 +416,7 @@ const initialState: StudioState = {
   prompt: null,
   recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
   project: { settings: {}, raw: {}, hash: null, error: null },
+  peacockColor: null,
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null, draftKind: 'draft' },
   history: initialHistory,
@@ -859,6 +866,7 @@ export class Studio {
     this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false });
 
     await this.loadProjectSettings();
+    void this.loadPeacockColor();
     await this.loadStyleGuide();
     this.aiEdits.clear();
     this.aiReads = [];
@@ -2268,6 +2276,7 @@ export class Studio {
         void this.scanTodos();
         void this.refreshNames(batch);
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
+        if (batch.includes(VSCODE_SETTINGS)) void this.loadPeacockColor();
       });
       this.history.scheduleSave();
       this.scheduleGitRefresh();
@@ -4344,6 +4353,35 @@ export class Studio {
     this.store.set({ project: { settings: parsed.settings, raw: parsed.raw, hash, error: parsed.error } });
     if (restartIfNeeded && needsRestart(before, parsed.settings)) await this.applyEntryAndRestart(parsed.settings);
     if ((before.allowCommands ?? []).join() !== (parsed.settings.allowCommands ?? []).join()) void this.applyPermissions();
+  }
+
+  /** The colour VS Code's Peacock gives the book, which the window wears until the book has its own. */
+  async loadPeacockColor() {
+    const root = this.state.workspace?.root;
+    const text = await ipc
+      .fsRead(VSCODE_SETTINGS)
+      .then((f) => f.text)
+      .catch(() => null);
+    if (this.state.workspace?.root === root) this.store.set({ peacockColor: peacockColor(text) });
+  }
+
+  private bookColorTimer = 0;
+
+  /**
+   * The book's colour: a colour, "none", or null for VS Code's Peacock colour
+   * (if any). The window wears it at once; it's saved in the book's settings a
+   * moment later, so dragging in the colour picker writes the file once.
+   */
+  setBookColor(color: string | null) {
+    this.store.set((s) => ({ project: { ...s.project, settings: { ...s.project.settings, color: color ?? undefined } } }));
+    clearTimeout(this.bookColorTimer);
+    this.bookColorTimer = window.setTimeout(async () => {
+      const errors = await this.updateProjectSettings({ color: color ?? undefined });
+      if (!errors.length) return;
+      this.toast(errors.join(' '), 'error');
+      // Back to what the file says.
+      this.store.set((s) => ({ project: { ...s.project, settings: parseProjectSettings(JSON.stringify(s.project.raw)).settings } }));
+    }, 400);
   }
 
   /** Save project settings; returns validation or write errors (empty on success). */

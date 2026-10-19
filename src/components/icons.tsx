@@ -163,6 +163,15 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M13 3.5v5h5M9 14.5h6.5M13 12l2.5 2.5L13 17" />
     </>
   ),
+  // A book's colour: a painter's palette.
+  palette: (
+    <>
+      <path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 2-.9 2-1.9 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.8 1.8-1.8h2.1a3.8 3.8 0 0 0 3.8-3.8C20.5 6.6 16.7 3.5 12 3.5z" />
+      <circle cx="7.6" cy="11" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.4" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.4" cy="7.4" r="1.1" fill="currentColor" stroke="none" />
+    </>
+  ),
   // Two versions side by side.
   sideBySide: (
     <>

@@ -21,7 +21,7 @@ export { STUDIO_TOOLS } from '../services/agent/studio-tool';
 import { STUDIO_TOOLS } from '../services/agent/studio-tool';
 
 /** The Settings pages open_settings can open. */
-export const SETTINGS_PAGES = ['general', 'editor', 'assistant', 'permissions', 'tools', 'book', 'book-assistant'] as const;
+export const SETTINGS_PAGES = ['general', 'editor', 'assistant', 'permissions', 'tools', 'book', 'book-assistant', 'book-color'] as const;
 export type ToolsSettingsPage = (typeof SETTINGS_PAGES)[number];
 
 /** Model and effort to use once an assistant is switched to (or now): a model's id or part of its name ("default": its own), an effort level. */
@@ -322,7 +322,7 @@ export const TOOLS: Tool[] = [
     name: 'open_settings',
     title: 'Open Settings for the author',
     description:
-      'Open Typst Studio’s Settings at a page, for the author to see or change something themselves (the only way to change permissions or the programs it runs). Pages: general, editor, assistant, permissions, tools, book (this book’s settings), book-assistant (this book’s assistant permissions).',
+      'Open Typst Studio’s Settings at a page, for the author to see or change something themselves (the only way to change permissions or the programs it runs). Pages: general, editor, assistant, permissions, tools, book (this book’s settings), book-assistant (this book’s assistant permissions), book-color (the colour this book’s window wears).',
     inputSchema: { type: 'object', properties: { page: { type: 'string', enum: [...SETTINGS_PAGES] } }, additionalProperties: false },
     run: (input, host) => {
       const page = words(input.page) as ToolsSettingsPage;

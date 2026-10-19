@@ -1,5 +1,6 @@
 // Project settings: `.typst-studio.json` in the project root (SPEC §4). Only
 // non-secret, per-book settings. Unknown keys are preserved when saving.
+import { normalizeHex } from './book-color';
 import { sanitizeCommands } from './settings';
 
 export const PROJECT_FILE = '.typst-studio.json';
@@ -21,6 +22,11 @@ export type ProjectSettings = {
   fontPaths?: string[];
   /** Commands the assistant may run in this book without asking (e.g. "python3"). */
   allowCommands?: string[];
+  /**
+   * The window's colour for this book ("#00ad9f"), on its title, activity and
+   * status bars; "none" for none, even where VS Code's Peacock gives it one.
+   */
+  color?: string;
 };
 
 export type ParsedProjectSettings = {
@@ -48,6 +54,8 @@ export function parseProjectSettings(text: string | null): ParsedProjectSettings
   if (typeof r.outputDir === 'string') settings.outputDir = r.outputDir;
   if (Array.isArray(r.fontPaths)) settings.fontPaths = r.fontPaths.filter((p): p is string => typeof p === 'string');
   if (Array.isArray(r.allowCommands)) settings.allowCommands = sanitizeCommands(r.allowCommands);
+  const color = r.color === 'none' ? 'none' : normalizeHex(r.color);
+  if (color) settings.color = color;
   return { settings, raw: r, error: null };
 }
 

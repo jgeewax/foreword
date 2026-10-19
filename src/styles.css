@@ -211,6 +211,28 @@ button.indicator:hover { background: var(--bg-3); }
 .view-tip-name kbd { color: var(--muted); }
 .view-tip-about { margin-top: 2px; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
 .view-tip-note { margin-top: 4px; font-size: 11.5px; color: var(--fg); }
+/*
+ * The book's colour (Settings ▸ This book ▸ Colour, or VS Code's Peacock):
+ * the title bar and status bar in it, the activity bar 10% lighter, text and
+ * icons light or dark to read on it, badges a third of the way round the
+ * colour wheel. Shades from app/book-color.ts.
+ */
+[data-book-color] .titlebar { background: var(--book); color: var(--book-fg); border-bottom-color: transparent; }
+[data-book-color] .titlebar .chrome-icon { color: var(--book-fg); opacity: 0.8; }
+[data-book-color] .titlebar .chrome-icon:hover:not(:disabled) { background: color-mix(in srgb, var(--book-fg) 16%, transparent); color: var(--book-fg); opacity: 1; }
+[data-book-color] .titlebar-badge { box-shadow: 0 0 0 1.5px var(--book); }
+[data-book-color] .command-center { color: var(--book-fg); border-color: var(--book-fg-dim); background: color-mix(in srgb, var(--book-fg) 10%, transparent); }
+[data-book-color] .command-center:hover:not(:disabled) { color: var(--book-fg); border-color: var(--book-fg); background: color-mix(in srgb, var(--book-fg) 18%, transparent); }
+[data-book-color] .activity-bar { background: var(--book-bar); border-right-color: transparent; }
+[data-book-color] .activity-bar .chrome-icon { color: var(--book-bar-fg); opacity: 0.6; }
+[data-book-color] .activity-bar .chrome-icon:hover:not(:disabled), [data-book-color] .activity-bar .chrome-icon.on { color: var(--book-bar-fg); opacity: 1; }
+[data-book-color] .activity-bar .chrome-icon.on::before { background: var(--book-bar-fg); }
+[data-book-color] .activity-badge { background: var(--book-badge); color: var(--book-badge-fg); box-shadow: 0 0 0 2px var(--book-bar); }
+[data-book-color] .statusbar { background: var(--book); color: var(--book-fg); border-top-color: transparent; }
+[data-book-color] .statusbar :is(.status-file, .indicator, .indicator-icon, .link, .perf) { color: inherit; }
+[data-book-color] .statusbar :is(button.indicator, .link):hover { background: var(--book-hover); }
+[data-book-color] .statusbar .sdot { box-shadow: 0 0 0 1px var(--book-fg-dim); }
+
 /* A count, small and in the icon's light corner, cut out of it by a ring of the bar's colour. */
 .activity-badge { position: absolute; left: 25px; top: 23px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--accent); color: var(--accent-fg); font-size: 9px; font-weight: 700; line-height: 13px; text-align: center; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg-2); }
 .tree { overflow: auto; flex: 1; padding: 4px 0; }
@@ -734,6 +756,8 @@ button.switch:active:not(:disabled) { transform: none; }
 .swatch.other[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
 .swatch:focus-visible, .swatch-none:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .color-picker-input { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+.book-color-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.swatch-inline { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; background: var(--swatch); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
 .swatch-none { height: 22px; margin-left: 4px; padding: 0 9px; border-radius: 11px; font-size: 11.5px; color: var(--muted); background: transparent; border: 1px dashed var(--border); }
 .swatch-none:hover:not(:disabled) { color: var(--fg); background: transparent; }
 .swatch-none[aria-checked="true"], .swatch-none[aria-checked="true"]:hover:not(:disabled) { color: var(--fg); background: var(--bg-3); border-style: solid; border-color: var(--muted); }

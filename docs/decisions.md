@@ -2938,6 +2938,42 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   assistant version. The `history` group needs a live assistant and
   wasn't run.
 
+### A colour for each book, as VS Code's Peacock
+
+- **Asked for:** "add support for color theming like the peacock vs code
+  plugin". The author uses Peacock with the title bar, activity bar and
+  status bar coloured, and their Typst books already have Peacock colours
+  in `.vscode/settings.json` (ff7-book `#00ad9f`, deep-learning-book
+  `#22c55e`).
+- **Now:** a book can have a colour of its own, and its window wears it:
+  - the title bar and status bar in the colour, the activity bar 10 %
+    lighter, the search box and icons in light or dark to read on it, and
+    count badges a third of the way round the colour wheel;
+  - the shades are Peacock's own, worked out the way its code does
+    (tinycolor's lighten, its triad badge at the lightness closest to the
+    bar's that still has 2:1 contrast, light text `#e7e7e7` or dark
+    `#15202b` by brightness), and they match what Peacock wrote for the
+    author's books, value for value (unit tests).
+- **Choosing it:** Settings ▸ This book ▸ Colour: ten swatches, any colour
+  (the Mac's picker), None, and Surprise me. The palette has Choose a
+  Colour for This Book…, Surprise Me with a Colour and Remove This Book's
+  Colour. The window changes at once; the file is written once, a moment
+  after the last change, so dragging in the picker doesn't write it at
+  every step.
+- **Where it's kept:** `"color"` in the book's `.typst-studio.json`, so it
+  travels with the book, as Peacock's does in the workspace settings.
+  - A book with no colour of its own wears Peacock's, read from its
+    `.vscode/settings.json` (comments and trailing commas allowed) when it
+    opens and when that file changes; the Colour page says so.
+    `"color": "none"` turns that off too.
+- Not copied from Peacock: its dimmer colours for a window that isn't in
+  front, and colouring the editor's tabs or borders.
+- Verified: unit tests (Peacock's shades for both of the author's colours,
+  reading `peacock.color`, which colour wins); in the app with ff7-book's
+  `.vscode/settings.json`: the bars in `#00ad9f`/`#00e0ce`, a swatch saved
+  once after two quick changes, clearing it back to Peacock's; self-tests
+  `settings` (the Colour page among the book's) and `palette` pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

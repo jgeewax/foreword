@@ -9,6 +9,7 @@ import { errorMessage, ipc } from '../lib/ipc';
 import { wordMatch } from '../lib/fuzzy';
 import { baseName, tildePath } from '../lib/paths';
 import { AGENT_MODES, modeConfig } from '../services/agent/modes';
+import { effectiveBookColor, randomBookColor } from './book-color';
 import { uncommitted } from './source-control';
 import type { Studio } from './studio';
 
@@ -179,6 +180,9 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('setup-code', 'Runnable Code Examples…'),
         menu('add-makefile', 'Add a Makefile…'),
         menu('book-settings', 'Book Settings…', { keywords: ['page size', 'fonts'] }),
+        { id: 'book-color', title: 'Choose a Colour for This Book…', keywords: ['peacock', 'window colour', 'color', 'theme', 'tint'], run: () => studio.openSettings('book-color') },
+        { id: 'book-color-surprise', title: 'Surprise Me with a Colour', keywords: ['peacock', 'random colour', 'color'], run: () => studio.setBookColor(randomBookColor()) },
+        { id: 'book-color-none', title: 'Remove This Book’s Colour', keywords: ['peacock', 'color'], when: () => !!effectiveBookColor(s().project.settings.color, s().peacockColor), run: () => studio.setBookColor(s().peacockColor ? 'none' : null) },
       ],
     ],
     [
