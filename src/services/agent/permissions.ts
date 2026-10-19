@@ -10,7 +10,7 @@
 // "cat"; `$(…)` and backticks are checked on their own too). Redirections
 // and flags stay in the command ("echo hi > f.txt"). Verified live, 2.0.20.
 
-import { STUDIO_TOOL_ACTION, STUDIO_TOOL_NAMES, STUDIO_TOOLS } from './studio-tool';
+import { STUDIO_LOOK_TOOLS, STUDIO_TOOL_ACTION, STUDIO_TOOL_NAMES, STUDIO_TOOLS } from './studio-tool';
 
 export type Level = 'allow' | 'ask' | 'deny';
 
@@ -27,6 +27,8 @@ export type AgentPermissions = {
   shell: Level;
   /** Web search and fetching pages. */
   web: Level;
+  /** Change Typst Studio's settings with its tools (studio-tools.ts): preferences, model, effort, mode, which assistant. */
+  settings: Level;
 };
 
 export type PermissionRule = { action: string; resource: string; effect: Level };
@@ -38,6 +40,11 @@ export const PERMISSION_ITEMS: { key: keyof AgentPermissions; label: string; det
   { key: 'outside', label: 'Files outside this book', detail: 'Reading or changing other folders on this Mac.' },
   { key: 'shell', label: 'Run other commands', detail: 'Anything else in a terminal. Commands that only look (ls, cat, grep, git status…) always run; building the book is always blocked.' },
   { key: 'web', label: 'Search and read the web', detail: 'Web search and fetching pages.' },
+  {
+    key: 'settings',
+    label: 'Change Typst Studio’s settings',
+    detail: 'Preferences like the text size, and its own model, effort, mode or assistant, when you ask. Looking at them is always fine; these permissions are only yours to change.',
+  },
 ];
 
 export type PresetId = 'ask' | 'edit' | 'readonly';
@@ -46,17 +53,17 @@ export const PRESETS: Record<PresetId, { label: string; description: string; per
   ask: {
     label: 'Ask first',
     description: 'Asks before every change. You see each edit first.',
-    permissions: { edit: 'ask', move: 'ask', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask' },
+    permissions: { edit: 'ask', move: 'ask', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask', settings: 'ask' },
   },
   edit: {
     label: 'Edit freely',
-    description: 'Edits, creates and renames files in the book without asking; asks for the rest.',
-    permissions: { edit: 'allow', move: 'allow', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask' },
+    description: 'Edits, creates and renames files in the book, and changes Typst Studio’s settings, without asking; asks for the rest.',
+    permissions: { edit: 'allow', move: 'allow', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask', settings: 'allow' },
   },
   readonly: {
     label: 'Read-only',
     description: 'Reads and answers, never changes anything.',
-    permissions: { edit: 'deny', move: 'deny', delete: 'deny', outside: 'deny', shell: 'deny', web: 'ask' },
+    permissions: { edit: 'deny', move: 'deny', delete: 'deny', outside: 'deny', shell: 'deny', web: 'ask', settings: 'deny' },
   },
 };
 
@@ -77,6 +84,8 @@ export function sanitizePermissions(raw: unknown): AgentPermissions | null {
     const v = (raw as Record<string, unknown>)[k];
     if (LEVELS.includes(v as Level)) out[k] = v as Level;
   }
+  // From before there was a settings permission: as for editing files.
+  if (!LEVELS.includes((raw as Record<string, unknown>).settings as Level)) out.settings = out.edit;
   return out;
 }
 
@@ -135,6 +144,7 @@ const commandPatterns = (cmds: string[]) => cmds.flatMap((c) => [`${c} *`, `* ${
  * config file, e.g. "python3"), on top of LOOK_COMMANDS.
  */
 export function sessionRules(p: AgentPermissions, readOnly = false, allowCommands: readonly string[] = []): PermissionRule[] {
+  const studioEffect: Level = p.settings === 'ask' ? 'ask' : 'allow';
   return [
     // Anything not named below asks.
     { action: '*', resource: '*', effect: 'ask' },
@@ -164,9 +174,12 @@ export function sessionRules(p: AgentPermissions, readOnly = false, allowCommand
     { action: 'subagent', resource: '*', effect: 'deny' },
     { action: 'task', resource: '*', effect: 'deny' },
     { action: 'question', resource: '*', effect: 'allow' },
-    // Typst Studio's own tools change only the app's settings the author asked for (never these rules).
-    { action: STUDIO_TOOL_ACTION, resource: '*', effect: 'allow' },
-    ...STUDIO_TOOL_NAMES.map((t): PermissionRule => ({ action: `${STUDIO_TOOLS}_${t}`, resource: '*', effect: 'allow' })),
+    // Typst Studio's own tools: changing its settings is the author's call (never these rules: the tools can't);
+    // looking at them, and opening Settings for the author, never needs asking. Never is the tools' own to
+    // say: they refuse, with the reason, so the assistant can tell the author (a refusal here says nothing).
+    { action: STUDIO_TOOL_ACTION, resource: '*', effect: studioEffect },
+    ...STUDIO_LOOK_TOOLS.map((t): PermissionRule => ({ action: STUDIO_TOOL_ACTION, resource: t, effect: 'allow' })),
+    ...STUDIO_TOOL_NAMES.map((t): PermissionRule => ({ action: `${STUDIO_TOOLS}_${t}`, resource: '*', effect: STUDIO_LOOK_TOOLS.includes(t) ? 'allow' : studioEffect })),
     // Read-only: commands that only look still run; writing forms never do.
     ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny')] : []),
     ...NO_COMPILE_RULES,
@@ -225,7 +238,8 @@ export function onlyLooks(action: string, resources: readonly string[], rules: r
 export function describePermissions(p: AgentPermissions): string {
   const preset = presetOf(p);
   if (preset !== 'custom') return `Permissions: ${PRESETS[preset].label}. ${PRESETS[preset].description}`;
-  const by = (level: Level) => PERMISSION_ITEMS.filter((i) => p[i.key] === level).map((i) => i.label.toLowerCase());
+  // Lower case to go mid-sentence, but not the names in it ("Typst Studio").
+  const by = (level: Level) => PERMISSION_ITEMS.filter((i) => p[i.key] === level).map((i) => i.label.charAt(0).toLowerCase() + i.label.slice(1));
   const parts = [
     by('allow').length ? `allowed: ${by('allow').join(', ')}` : '',
     by('ask').length ? `asks first: ${by('ask').join(', ')}` : '',

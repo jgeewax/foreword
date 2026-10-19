@@ -13,6 +13,8 @@ import { effortFor } from '../services/agent/models';
 import { matchesQuery } from '../services/agent/model-search';
 import type { EffortOption, ModelInfo, ModelRef } from '../services/agent/types';
 import { ZOOM_STEPS } from '../lib/zoom';
+import type { Level } from '../services/agent/permissions';
+import { describeTool, NO_NAMES } from './tool-labels';
 import { ASSISTANT_NAMES, ASSISTANTS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, sanitize, type AppSettings, type AssistantId } from './settings';
 
 export { STUDIO_TOOLS } from '../services/agent/studio-tool';
@@ -36,7 +38,16 @@ export type StudioHost = {
     efforts: EffortOption[];
     effort: string | null;
     mode: AgentMode;
+    /** Whether it may change settings (Settings ▸ Permissions): without asking, after asking the author, or not at all. */
+    permission: Level;
   };
+  /**
+   * With the settings permission at Ask: the author's yes for this change.
+   * Taken from their answer to the assistant's own ask when there was one (Claude
+   * Code, OpenCode); otherwise asked in the chat (Codex asks no one about these
+   * tools). "unanswered": no answer before the assistant would give up waiting.
+   */
+  approve(tool: string, what: string): Promise<'yes' | 'no' | 'unanswered'>;
   /** App preferences (the settings file), and the UI zoom: at once. */
   changePreferences(patch: Partial<AppSettings>, zoom?: number): void;
   /** Once the assistant's reply ends (the turn that asked). */
@@ -94,6 +105,26 @@ type Tool = {
 /** A refusal or a mistake: the assistant reads it as the tool's error. */
 class ToolError extends Error {}
 
+/** The author's permission for changes, said to the assistant. */
+const PERMISSION_WORDS: Record<Level, string> = {
+  allow: 'You may change them without asking (the author allows it in Settings ▸ Permissions).',
+  ask: 'The author is asked before each change (Settings ▸ Permissions).',
+  deny: 'You may not change them: the author has turned that off in Settings ▸ Permissions. You can open that page for them (open_settings).',
+};
+
+/** A tool that changes something, when the author has said never (the tools say it: an assistant's own refusal says nothing). */
+function mayChange(host: StudioHost) {
+  if (host.state().permission === 'deny') throw new ToolError(`${PERMISSION_WORDS.deny} Nothing was changed.`);
+}
+
+/** At Ask: the author's yes for this change (`what`, in words for their card), or a refusal the assistant can pass on. */
+async function approved(host: StudioHost, tool: string, what: string) {
+  if (host.state().permission !== 'ask') return;
+  const answer = await host.approve(tool, what);
+  if (answer === 'no') throw new ToolError('The author didn’t allow it. Nothing was changed.');
+  if (answer === 'unanswered') throw new ToolError('The author hasn’t answered whether you may make this change, so nothing was changed. Ask them in your reply, and do it once they say yes.');
+}
+
 const json = (v: unknown) => JSON.stringify(v, null, 2);
 const words = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
@@ -145,6 +176,7 @@ export const TOOLS: Tool[] = [
         preferences: Object.fromEntries(
           Object.entries(PREFERENCES).map(([key, p]) => [key, { value: key === 'zoom' ? s.zoom : s.settings[key as keyof AppSettings], about: p.about, values: p.values }]),
         ),
+        changing: PERMISSION_WORDS[s.permission],
         authorOnly: AUTHOR_ONLY_NOTE,
         book: BOOK_NOTE,
       });
@@ -156,7 +188,8 @@ export const TOOLS: Tool[] = [
     description:
       'Change app preferences, at once: give only the ones to change, with the values get_settings lists (e.g. {"editorFontSize": 14, "rulers": [80]}). Not for the assistant, model, effort or mode (switch_assistant, set_model, set_mode), and not for permissions or programs, which only the author changes.',
     inputSchema: { type: 'object', properties: Object.fromEntries(Object.entries(PREFERENCES).map(([k, p]) => [k, { ...p.schema, description: p.about }])) },
-    run: (given, host) => {
+    run: async (given, host) => {
+      mayChange(host);
       const input = unwrapped(given);
       const keys = Object.keys(input);
       if (!keys.length) throw new ToolError('Nothing to change: give the preferences to change and their new values (see get_settings).');
@@ -174,6 +207,7 @@ export const TOOLS: Tool[] = [
       if (Array.isArray(rest.rulers) && patch.rulers && patch.rulers.length !== new Set(rest.rulers).size && !bad.includes('rulers')) bad.push('rulers');
       if (zoom !== undefined && !(typeof zoom === 'number' && zoom >= ZOOM_STEPS[0] && zoom <= ZOOM_STEPS[ZOOM_STEPS.length - 1])) bad.push('zoom');
       if (bad.length) throw new ToolError(`Not a value it takes: ${bad.map((k) => `${k} (${PREFERENCES[k].values})`).join('; ')}. Nothing was changed.`);
+      await approved(host, 'change_settings', describeTool(`${STUDIO_TOOLS}_change_settings`, input, NO_NAMES).note ?? keys.join(', '));
       const before = host.state();
       host.changePreferences(patch, zoom as number | undefined);
       // In the order asked.
@@ -215,7 +249,8 @@ export const TOOLS: Tool[] = [
       properties: { model: { type: 'string', description: 'A model id or part of its name, or "default"' }, effort: { type: 'string', description: 'An effort level, e.g. "high"' } },
       additionalProperties: false,
     },
-    run: (input, host) => {
+    run: async (input, host) => {
+      mayChange(host);
       const model = words(input.model);
       const effort = words(input.effort);
       if (!model && !effort) throw new ToolError('Give a model, an effort, or both.');
@@ -226,6 +261,7 @@ export const TOOLS: Tool[] = [
       // The same model: its levels are known now.
       if (effort && !model && s.efforts.length && !effortFor(effort, s.efforts)) throw new ToolError(`This model’s effort levels are ${s.efforts.map((e) => e.value).join(', ')}: “${effort}” isn’t one.`);
       if (effort && !model && !s.efforts.length) throw new ToolError('This model has no effort setting.');
+      await approved(host, 'set_model', [model && `model “${model}”`, effort && `effort “${effort}”`].filter(Boolean).join(', '));
       host.whenIdle(() => host.chooseModel({ model: model || undefined, effort: effort || undefined }));
       return `When your reply ends, Typst Studio ${[model && `switches the model to “${model}”`, effort && `sets the effort to “${effort}”`].filter(Boolean).join(' and ')}, for the author’s next message. The chat says if it can’t.`;
     },
@@ -244,18 +280,21 @@ export const TOOLS: Tool[] = [
       required: ['assistant'],
       additionalProperties: false,
     },
-    run: (input, host) => {
+    run: async (input, host) => {
+      mayChange(host);
       const id = words(input.assistant).toLowerCase();
       if (!ASSISTANT_IDS.includes(id)) throw new ToolError(`No assistant is called “${id}”: ${ASSISTANTS.join(', ')}.`);
       const choice = { model: words(input.model) || undefined, effort: words(input.effort) || undefined };
       const s = host.state();
+      const then = [choice.model && `model “${choice.model}”`, choice.effort && `effort “${choice.effort}”`].filter(Boolean).join(', ');
       if (id === s.assistant) {
         if (!choice.model && !choice.effort) return `${ASSISTANT_NAMES[id as AssistantId]} is the assistant already.`;
+        await approved(host, 'set_model', then);
         host.whenIdle(() => host.chooseModel(choice));
         return `${ASSISTANT_NAMES[id as AssistantId]} is the assistant already; its ${[choice.model && 'model', choice.effort && 'effort'].filter(Boolean).join(' and ')} change${choice.model && choice.effort ? '' : 's'} when your reply ends.`;
       }
+      await approved(host, 'switch_assistant', `${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}`);
       host.whenIdle(() => host.switchAssistant(id as AssistantId, choice));
-      const then = [choice.model && `model “${choice.model}”`, choice.effort && `effort “${choice.effort}”`].filter(Boolean).join(', ');
       return `When your reply ends, Typst Studio switches to ${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}. This conversation stays with ${ASSISTANT_NAMES[s.assistant]}; the author's next message starts a new conversation with ${ASSISTANT_NAMES[id as AssistantId]}. Tell the author so.`;
     },
   },
@@ -264,10 +303,12 @@ export const TOOLS: Tool[] = [
     title: 'Change the chat’s mode',
     description: `The chat's mode, from the author's next message on (it changes when your reply ends): ${AGENT_MODES.map((m) => `${m} (${modeConfig(m).description})`).join('; ')}`,
     inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...AGENT_MODES] } }, required: ['mode'], additionalProperties: false },
-    run: (input, host) => {
+    run: async (input, host) => {
+      mayChange(host);
       const mode = words(input.mode).toLowerCase() as AgentMode;
       if (!AGENT_MODES.includes(mode)) throw new ToolError(`No mode is called “${mode}”: ${AGENT_MODES.join(', ')}.`);
       if (mode === host.state().mode) return `The chat is in ${modeConfig(mode).label} mode already.`;
+      await approved(host, 'set_mode', `${modeConfig(mode).label} mode`);
       host.whenIdle(() => host.setMode(mode));
       return `When your reply ends, the chat switches to ${modeConfig(mode).label} mode.`;
     },

@@ -13,6 +13,9 @@ export const STUDIO_TOOL_ACTION = STUDIO_TOOLS;
 /** The tools (studio-tools.ts has them). OpenCode asks about each by its own action, "typst-studio_set_model". */
 export const STUDIO_TOOL_NAMES = ['get_settings', 'change_settings', 'list_models', 'set_model', 'switch_assistant', 'set_mode', 'open_settings'] as const;
 
+/** Those that change nothing (opening Settings is for the author to act): never asked about. The others follow the settings permission. */
+export const STUDIO_LOOK_TOOLS: readonly string[] = ['get_settings', 'list_models', 'open_settings'];
+
 /** The tool's own name ("set_model") from the name an assistant gives it, or null if it isn't one of ours. */
 export function studioToolName(name: unknown): string | null {
   if (typeof name !== 'string') return null;

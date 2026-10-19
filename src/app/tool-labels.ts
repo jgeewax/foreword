@@ -137,6 +137,9 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
       const answers = [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*?"="((?:[^"\\]|\\.)*?)"/g)].map((m) => m[1]);
       return { done: 'Asked you a question', running: 'Asking you a question', note: answers.length ? `you said ${answers.map((a) => `“${a}”`).join(', ')}` : undefined };
     }
+    // Claude Code looking up tools it hasn't loaded yet (Typst Studio's own, say).
+    case 'toolsearch':
+      return { done: 'Found the tools it needs', running: 'Finding the tools it needs' };
     case 'skill':
       return { done: `Used the ${String(o.name ?? '')} skill`, running: `Using the ${String(o.name ?? '')} skill` };
     default:
@@ -159,6 +162,14 @@ const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
   historyPlacement: (v) => (v === 'below' ? 'History below the files' : 'History in its own tab'),
   checkForUpdates: (v) => `checking for updates ${v ? 'on' : 'off'}`,
   zoom: (v) => `zoom ${Math.round(Number(v) * 100)}%`,
+};
+
+/** Typst Studio's own tools that change something, completing "The assistant wants to …" (what, exactly, is in the row above). */
+const STUDIO_TOOL_ASKS: Record<string, string> = {
+  change_settings: 'change Typst Studio’s settings',
+  set_model: 'change its model or effort',
+  switch_assistant: 'switch to another assistant',
+  set_mode: 'change the chat’s mode',
 };
 
 /** Typst Studio's own tools (studio-tools.ts), in words. */
@@ -195,6 +206,13 @@ function describeStudioTool(tool: string, o: Record<string, unknown>): ToolLabel
  * "read “The Storm” (chapter 1), lines 205–242". `code` is the command, if any.
  */
 export function describePermission(action: string, resources: readonly string[], names: BookNames): { what: string; code?: string } {
+  // Typst Studio's own tools: ACP's asks name the tool as the resource, OpenCode's in the action.
+  const tool = action === STUDIO_TOOL_ACTION ? resources[0] : studioToolName(action);
+  if (tool) {
+    // Typst Studio's own asks (studio-tools.ts) say what the change is, after the tool.
+    const detail = action === STUDIO_TOOL_ACTION ? resources[1] : undefined;
+    return { what: `${STUDIO_TOOL_ASKS[tool] ?? 'use Typst Studio’s settings'}${detail ? `: ${detail}` : ''}` };
+  }
   const files = () => {
     const named = resources.map((r) => fileName(bookPath(names.root, r) ?? r, names));
     return named.length <= 3 ? named.join(', ').replace(/, ([^,]*)$/, ' and $1') : `${named.slice(0, 2).join(', ')} and ${named.length - 2} more files`;
@@ -215,8 +233,6 @@ export function describePermission(action: string, resources: readonly string[],
       return { what: `read a web page (${resources.join(', ')})` };
     case 'websearch':
       return { what: `search the web${resources.length ? ` for ${resources.map((r) => `“${r}”`).join(', ')}` : ''}` };
-    case STUDIO_TOOL_ACTION:
-      return { what: `use Typst Studio’s settings (${resources.join(', ')})` };
     default:
       return { what: `use ${action}${resources.length ? ` (${resources.join(', ')})` : ''}` };
   }

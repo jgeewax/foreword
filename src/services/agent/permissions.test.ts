@@ -136,13 +136,21 @@ describe('presets and descriptions', () => {
     expect(presetOf({ ...PRESETS.ask.permissions, web: 'allow' })).toBe('custom');
     expect(describePermissions(PRESETS.readonly.permissions)).toMatch(/^Permissions: Read-only/);
     expect(describePermissions({ ...PRESETS.ask.permissions, web: 'allow', delete: 'deny' })).toBe(
-      'Permissions changed (allowed: search and read the web; asks first: edit and create files, rename or move files, files outside this book, run other commands; never: delete files).',
+      'Permissions changed (allowed: search and read the web; asks first: edit and create files, rename or move files, files outside this book, run other commands, change Typst Studio’s settings; never: delete files).',
     );
   });
 
   it('sanitizes stored values', () => {
-    expect(sanitizePermissions({ edit: 'allow', web: 'yes', junk: 1 })).toEqual({ ...PRESETS.ask.permissions, edit: 'allow' });
+    expect(sanitizePermissions({ edit: 'allow', web: 'yes', junk: 1, settings: 'deny' })).toEqual({ ...PRESETS.ask.permissions, edit: 'allow', settings: 'deny' });
     expect(sanitizePermissions('nope')).toBeNull();
+  });
+
+  it('gives settings files from before the settings permission the level they had for editing files', () => {
+    const before = { edit: 'allow', move: 'allow', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask' };
+    expect(sanitizePermissions(before)).toEqual(PRESETS.edit.permissions);
+    expect(presetOf(sanitizePermissions(before)!)).toBe('edit');
+    expect(sanitizePermissions({ ...before, edit: 'ask' })!.settings).toBe('ask');
+    expect(sanitizePermissions({ ...before, edit: 'deny' })!.settings).toBe('deny');
   });
 });
 

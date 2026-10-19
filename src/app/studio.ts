@@ -27,6 +27,7 @@ import {
 } from './project-settings';
 import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type ToolName } from './settings';
 import { handleMcp, STUDIO_TOOLS, type ModelChoice, type StudioHost } from './studio-tools';
+import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
@@ -157,6 +158,8 @@ export type ChatItem =
       resources: string[];
       patches: FilePatch[];
       state: 'pending' | 'sending' | 'once' | 'always' | 'reject';
+      /** Asked by Typst Studio itself (its settings tools, for an assistant that asks no one): answered here, not by the assistant. */
+      local?: boolean;
     }
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
 
@@ -3504,11 +3507,16 @@ export class Studio {
   }
 
   async replyPermission(requestId: string, decision: PermissionDecision) {
+    const item = this.state.agent.items.find((it) => it.id === requestId);
+    if (item?.kind === 'permission' && item.local) return this.answerLocalAsk(requestId, decision !== 'reject');
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
     this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'sending' } : it));
     try {
       await this.agent.replyPermission(sessionId, requestId, decision);
+      // A yes for one of the settings tools: the tool won't ask again.
+      const tool = item?.kind === 'permission' ? (item.action === STUDIO_TOOL_ACTION ? item.resources[0] : studioToolName(item.action)) : null;
+      if (tool && decision !== 'reject') this.studioApprovals.set(tool, Date.now());
     } catch (e) {
       this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'pending' } : it));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Permission reply failed: ${errorMessage(e)}` });
@@ -4348,11 +4356,63 @@ export class Studio {
     return this.toolsUrl;
   }
 
+  /** The author's yes to an assistant's own ask about a settings tool, by tool (when): used once, by the tool. */
+  private studioApprovals = new Map<string, number>();
+  /** Typst Studio's own asks, waiting: their answers. */
+  private localAsks = new Map<string, (yes: boolean) => void>();
+
+  /**
+   * The author's yes for a settings change at Ask. When the assistant asked
+   * (Claude Code, OpenCode), the author's answer to that is it; otherwise (Codex
+   * asks no one about these tools) a card in the chat, the same as an
+   * assistant's. Not answered in 50 s: the assistant would stop waiting for the
+   * tool, so it hears so, and the card goes.
+   */
+  private async approveStudioChange(tool: string, what: string): Promise<'yes' | 'no' | 'unanswered'> {
+    const given = this.studioApprovals.get(tool);
+    this.studioApprovals.delete(tool);
+    if (given && Date.now() - given < 120_000) return 'yes';
+    const id = uid('ask');
+    const answer = new Promise<boolean | null>((resolve) => {
+      this.localAsks.set(id, resolve);
+      setTimeout(() => resolve(null), 50_000);
+    });
+    this.pushItem({ kind: 'permission', id, action: STUDIO_TOOL_ACTION, resources: [tool, what], patches: [], state: 'pending', local: true });
+    this.activityBeforeAsking = this.state.agent.activity;
+    this.setActivity({ phase: 'asking' });
+    this.events.emit('show-agent-pane');
+    const yes = await answer;
+    this.localAsks.delete(id);
+    if (yes === null) this.setAgent((a) => ({ items: a.items.filter((it) => it.id !== id) }));
+    if (this.state.agent.activity?.phase === 'asking' && this.activityBeforeAsking) {
+      const { since: _since, ...before } = this.activityBeforeAsking;
+      this.setActivity(yes ? before : { phase: 'waiting' });
+    }
+    this.activityBeforeAsking = null;
+    return yes === null ? 'unanswered' : yes ? 'yes' : 'no';
+  }
+
+  private answerLocalAsk(id: string, yes: boolean) {
+    this.updateItem(id, (it) => (it.kind === 'permission' ? { ...it, state: yes ? 'once' : 'reject' } : it));
+    this.localAsks.get(id)?.(yes);
+  }
+
   readonly toolsHost: StudioHost = {
     state: () => {
       const a = this.state.agent;
-      return { settings: this.state.settings, zoom: this.state.zoom, assistant: this.state.settings.assistant, models: a.models, model: a.model, efforts: a.efforts, effort: a.effort, mode: a.mode };
+      return {
+        settings: this.state.settings,
+        zoom: this.state.zoom,
+        assistant: this.state.settings.assistant,
+        models: a.models,
+        model: a.model,
+        efforts: a.efforts,
+        effort: a.effort,
+        mode: a.mode,
+        permission: this.state.settings.permissions.settings,
+      };
     },
+    approve: (tool, what) => this.approveStudioChange(tool, what),
     changePreferences: (patch, zoom) => {
       if (Object.keys(patch).length) this.updateSettings(patch);
       if (zoom !== undefined) void this.setZoom(zoom);

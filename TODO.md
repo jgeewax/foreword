@@ -242,4 +242,6 @@
 
 - [x] make the loading spinners and text more interesting to feel less slow. e.g., waiting on the model "Claude is thinking..." or "Codex is thinking...", and better animations, something more entertaining so that we dont feel liek this is taking SO LONG because it really can be slow. (“Claude is thinking…”, words that change while it waits, a tip once a turn runs long, and an animation for each phase.)
 
+- [x] we need a permission checkbox that allows settings changes just like editing files (Settings ▸ Permissions ▸ Change Typst Studio’s settings: Allow, Ask or Never, set by the presets, and for settings files from before it, as for editing files. At Ask every assistant shows one card first, Codex’s from Typst Studio itself; at Never the tools refuse and say why.)
+
 - [x] clicking on the preview jumps to the text, but the scrolling isnt quite right. i think we should position at like 10-20% scrolled , not 50% (A click in the preview puts the text about 15% down the editor, so what follows is in view; text already in view stays put.)

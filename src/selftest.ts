@@ -455,6 +455,65 @@ async function settingsToolsChecks(kind: 'claude' | 'codex' | 'opencode') {
 }
 
 /**
+ * The settings permission, with a real assistant: at Ask, a change waits for
+ * the author's card (allowed here) and then happens; at Never, nothing changes
+ * and the assistant says why. Looking at the settings never asks.
+ */
+async function settingsAskChecks(kind: 'claude' | 'codex' | 'opencode') {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions, editorFontSize: 12 };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const pending = () => studio.state.agent.items.find((i) => i.kind === 'permission' && i.state === 'pending') as Extract<ChatItem, { kind: 'permission' }> | undefined;
+  const settle = async (text: string, allow: boolean) => {
+    const cards: string[] = [];
+    const from = studio.state.agent.items.length;
+    await studio.send(text);
+    await sleep(1000);
+    for (let i = 0; i < 6; i++) {
+      await waitFor(() => !studio.state.agent.running || pending(), 240000, text).catch(() => {});
+      const p = pending();
+      if (!p) {
+        await sleep(2000);
+        if (!studio.state.agent.running) break;
+        continue;
+      }
+      await sleep(300);
+      cards.push(`${p.action} [${p.resources.join(', ')}]: ${document.querySelector('.permission.pending .permission-title')?.textContent}`);
+      if (cards.length === 1) out[`snapshotCard${allow ? 'Allow' : 'Never'}`] = await snap(`settingsask-${kind}-card`);
+      await studio.replyPermission(p.id, allow ? 'once' : 'reject');
+      await sleep(1000);
+    }
+    const items = studio.state.agent.items.slice(from);
+    return {
+      cards,
+      tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as { name: string }).name} → ${(i as { status: string }).status}`),
+      reply: (items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.slice(0, 400),
+      editorFontSize: studio.state.settings.editorFontSize,
+    };
+  };
+  try {
+    studio.updateSettings({ assistant: kind, permissions: PRESETS.ask.permissions, editorFontSize: 12 }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const models = studio.state.agent.models;
+    const small = kind === 'opencode' ? models.find((m) => m.providerID === 'opencode' && /free/i.test(m.id) && m.supportsTools) : models.find((m) => /haiku|luna/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.model = studio.state.agent.model?.id;
+    studio.newSession();
+    await sleep(300);
+    out.ask = await settle('Make the editor text 15 px.', true);
+    studio.updateSettings({ permissions: { ...PRESETS.ask.permissions, settings: 'deny' } }, { write: false });
+    await sleep(500);
+    out.never = await settle('Now make the editor text 16 px.', false);
+  } finally {
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions, editorFontSize: saved.editorFontSize }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * The effort menu beside the model, with a real assistant (Claude Code on
  * Haiku, Codex on Luna, OpenCode on a free model with variants): its levels,
  * choosing one, /effort, and the level in force on a conversation after one
@@ -6626,11 +6685,27 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
+    if (only?.includes('permissionspage')) {
+      // Settings ▸ Permissions has a row for the settings tools; presets set it.
+      const still = document.createElement('style');
+      still.textContent = '*{animation:none!important;transition:none!important}';
+      document.head.append(still);
+      studio.openSettings('permissions');
+      await sleep(400);
+      result.permissionsPage = {
+        rows: [...document.querySelectorAll('.perm-row')].map((r) => `${r.querySelector('.perm-label')?.textContent}: ${r.querySelector('.perm-level.active')?.textContent}`),
+        preset: document.querySelector('.perm-preset.active')?.textContent,
+        snapshot: await snap('permissions-page'),
+      };
+      studio.closeSettings();
+      still.remove();
+    }
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`effort-${kind}`)) result[`effort-${kind}`] = await effortChecks(kind);
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingstools-${kind}`)) result[`settingstools-${kind}`] = await settingsToolsChecks(kind);
+    for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingsask-${kind}`)) result[`settingsask-${kind}`] = await settingsAskChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
