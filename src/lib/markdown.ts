@@ -19,9 +19,36 @@ export type Block =
   | { t: 'list'; ordered: boolean; start: number; items: Inline[][] }
   | { t: 'quote'; c: Inline[] }
   | { t: 'code'; lang: string; v: string }
+  | { t: 'table'; align: ('left' | 'center' | 'right' | null)[]; head: Inline[][]; rows: Inline[][][] }
   | { t: 'hr' };
 
 const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s+(.*)$/;
+/** A table's second line: | --- | :--: | ---: | */
+const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+/** A row's cells: split at the pipes outside `code`, without the pipes at either end. */
+function cells(line: string): string[] {
+  const out: string[] = [];
+  let cell = '';
+  let code = false;
+  const s = line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '');
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '`') code = !code;
+    if (ch === '\\' && s[i + 1] === '|') {
+      cell += '|';
+      i++;
+    } else if (ch === '|' && !code) {
+      out.push(cell.trim());
+      cell = '';
+    } else cell += ch;
+  }
+  out.push(cell.trim());
+  return out;
+}
+
+/** A table starts here: a row of cells, then its rule (as many columns). */
+const tableAt = (lines: string[], i: number) => i + 1 < lines.length && lines[i].includes('|') && TABLE_RULE.test(lines[i + 1]) && lines[i + 1].includes('-') && cells(lines[i]).length === cells(lines[i + 1]).length;
 
 export function parseMarkdown(src: string): Block[] {
   const lines = src.replace(/\r\n?/g, '\n').split('\n');
@@ -59,6 +86,18 @@ export function parseMarkdown(src: string): Block[] {
       blocks.push({ t: 'quote', c: joinLines(body) });
       continue;
     }
+    if (tableAt(lines, i)) {
+      const head = cells(lines[i]);
+      const align = cells(lines[i + 1]).map((c) => (/^:-+:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:-/.test(c) ? 'left' : null));
+      const rows: Inline[][][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
+        const row = cells(lines[i++]);
+        rows.push(head.map((_, k) => parseInline(row[k] ?? '')));
+      }
+      blocks.push({ t: 'table', align, head: head.map(parseInline), rows });
+      continue;
+    }
     const item = LIST_ITEM.exec(line);
     if (item) {
       const ordered = /\d/.test(item[1]);
@@ -77,7 +116,7 @@ export function parseMarkdown(src: string): Block[] {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*(```|~~~)|\s*>)/.test(lines[i]) && !LIST_ITEM.exec(lines[i])) para.push(lines[i++]);
+    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*(```|~~~)|\s*>)/.test(lines[i]) && !LIST_ITEM.exec(lines[i]) && !(para.length && tableAt(lines, i))) para.push(lines[i++]);
     blocks.push({ t: 'para', c: joinLines(para) });
   }
   return blocks;

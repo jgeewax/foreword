@@ -927,6 +927,9 @@ async function styleRedraftChecks() {
 
     const asked: string[] = [];
     studio.confirmAction = async (message, title, ok) => (asked.push(`${title} | ${message} | ${ok}`), true);
+    // Redraft… is in the style guide's menu, on the strip under the header.
+    document.querySelector<HTMLButtonElement>('.style-menu-trigger')?.click();
+    await sleep(200);
     document.querySelector<HTMLButtonElement>('.style-redraft')?.click();
     await sleep(3000);
     out.asked = asked;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { studio, type EpubResult } from '../app/studio';
 import { errorMessage } from '../lib/ipc';
 import { tildePath } from '../lib/paths';
-import { ActivityGlyph } from './AgentPane';
+import { ActivityGlyph } from './Trace';
 
 type Choice = 'auto' | 'reflow' | 'fixed';
 

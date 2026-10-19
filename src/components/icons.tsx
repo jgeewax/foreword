@@ -187,6 +187,22 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   edit: <path d="M4.5 19.5l1-4.2L15.8 5a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L8.7 18.5zM13.8 7l3.2 3.2" />,
+  // The chat's trace: a thought, show it in the editor, undo, copy, try again.
+  bulb: <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" />,
+  eye: (
+    <>
+      <path d="M3.5 12s3-6 8.5-6 8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </>
+  ),
+  undo: <path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+    </>
+  ),
+  retry: <path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" />,
   // Settings ▸ Assistant: sign in, in Terminal.
   terminal: (
     <>

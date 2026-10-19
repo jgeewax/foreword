@@ -16,6 +16,20 @@ describe('parseMarkdown blocks', () => {
     expect(parseMarkdown('```\nhalf done')).toEqual([{ t: 'code', lang: '', v: 'half done' }]);
   });
 
+  it('tables: a header, its rule (with alignment) and rows, after a paragraph too', () => {
+    const blocks = parseMarkdown('Where it is:\n| Chapter | Line | Use |\n|---|--:|:-:|\n| 1 | 5 | `a|b` and **bold** |\n| 10 | 6\n\nAfter.');
+    expect(blocks.map((b) => b.t)).toEqual(['para', 'table', 'para']);
+    const table = blocks[1] as Extract<ReturnType<typeof parseMarkdown>[number], { t: 'table' }>;
+    expect(table.align).toEqual([null, 'right', 'center']);
+    expect(table.head.map((c) => c.map((x) => (x as { v: string }).v).join(''))).toEqual(['Chapter', 'Line', 'Use']);
+    expect(table.rows).toHaveLength(2);
+    expect(table.rows[0][2].map((x) => x.t)).toEqual(['code', 'text', 'strong']);
+    // A short row is filled out to the header's columns.
+    expect(table.rows[1][2]).toEqual([]);
+    // Pipes in a sentence aren't a table.
+    expect(parseMarkdown('a | b\nc | d').map((b) => b.t)).toEqual(['para']);
+  });
+
   it('keeps numbering of ordered lists that start later', () => {
     expect(parseMarkdown('3. third\n4. fourth')[0]).toMatchObject({ ordered: true, start: 3 });
   });

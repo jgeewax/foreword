@@ -109,7 +109,19 @@ export type Activity = {
 };
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; attachments: string[] }
+  | {
+      kind: 'user';
+      id: string;
+      text: string;
+      attachments: string[];
+      /** When it was sent, and when the turn it started ended (ms). */
+      at?: number;
+      ended?: number;
+      /** Who answered: the assistant, its model's name and the effort, as they were. */
+      by?: TurnBy;
+      /** The History version of what the turn changed (null: it changed nothing). */
+      version?: string | null;
+    }
   | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
   /**
    * The assistant asks (choices, several choices, yes or no, or its own words)
@@ -152,6 +164,9 @@ export type ChatItem =
       /** The tool's input (for describing it in words) and a note on its result ("3 matches"). */
       input?: unknown;
       note?: string;
+      /** When it started and finished (ms). */
+      started?: number;
+      ended?: number;
     }
   | {
       kind: 'permission';
@@ -166,6 +181,9 @@ export type ChatItem =
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
 
 export type QuestionItem = Extract<ChatItem, { kind: 'question' }>;
+
+/** Who answered a turn, for its reply's byline. */
+export type TurnBy = { assistant: AssistantId; model: string | null; effort: string | null };
 
 /**
  * The question waiting for the author in the shown conversation (the question
@@ -1837,6 +1855,57 @@ export class Studio {
     this.store.set((s) => ({ aiMarks: s.aiMarks + 1 }));
   }
 
+  /** Who's answering now: the assistant, its model's name and the effort. */
+  private turnBy(): TurnBy {
+    const a = this.state.agent;
+    const model = a.model ? (a.models.find((m) => m.providerID === a.model!.providerID && m.id === a.model!.id)?.name ?? a.model.id) : null;
+    const effort = a.effort && a.effort !== 'default' ? (a.efforts.find((o) => o.value === a.effort)?.name ?? a.effort) : null;
+    return { assistant: this.state.settings.assistant, model, effort };
+  }
+
+  /** A book file's text as it is now: the editor's, if it's open, else the file's (null if it can't be read). */
+  async textOf(path: string): Promise<string | null> {
+    const doc = this.docs?.get(path);
+    if (doc) return doc.model.getValue();
+    try {
+      return (await ipc.fsRead(path)).text;
+    } catch {
+      return null;
+    }
+  }
+
+  /** From the chat: the text an edit wrote, selected in the editor. */
+  async showEdit(path: string, after: string) {
+    await this.openFile(path);
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!editor || !model || this.state.active !== path) return;
+    const found = after ? model.findMatches(after, false, false, true, null, false, 2) : [];
+    if (found.length !== 1) return this.toast(after ? 'That text has changed since the assistant wrote it.' : 'The assistant only took text out there.');
+    editor.setSelection(found[0].range);
+    editor.revealRangeInCenterIfOutsideViewport(found[0].range);
+    editor.focus();
+  }
+
+  /** From the chat: put back what one edit replaced (in the editor, so ⌘Z brings the edit back). */
+  async undoEdit(path: string, before: string, after: string) {
+    await this.openFile(path);
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!editor || !model || this.state.active !== path) return;
+    const found = after ? model.findMatches(after, false, false, true, null, false, 2) : [];
+    if (found.length !== 1) return this.toast(found.length ? 'That text is in the file more than once: undo it there, or in History.' : 'That text has changed since the assistant wrote it: undo it in History.', 'error');
+    const range = found[0].range;
+    editor.pushUndoStop();
+    editor.executeEdits('undo-assistant-edit', [{ range, text: before, forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+    const start = range.getStartPosition();
+    const end = model.getPositionAt(model.getOffsetAt(start) + before.length);
+    editor.setSelection(monaco.Range.fromPositions(start, end));
+    editor.revealRangeInCenterIfOutsideViewport(monaco.Range.fromPositions(start, end));
+    this.toast('Edit undone (⌘Z to bring it back).');
+  }
+
   /** From the chat: open the file with the lines the assistant read selected. */
   async showRead(read: { path: string; from: number; to: number }) {
     await this.openAt(read.path, read.from);
@@ -2655,8 +2724,16 @@ export class Studio {
     // What the agent changed in this turn becomes one history version.
     if (wasRunning && !this.state.agent.running) {
       // The turn is over: no progress line, and no thinking left open.
+      const now = Date.now();
+      const turnId = [...this.state.agent.items].reverse().find((it) => it.kind === 'user')?.id;
       this.store.set((s) => ({
-        agent: { ...s.agent, activity: null, items: s.agent.items.map((it) => (it.kind === 'thinking' && !it.done ? { ...it, done: true, ended: it.ended ?? Date.now() } : it)) },
+        agent: {
+          ...s.agent,
+          activity: null,
+          items: s.agent.items.map((it) =>
+            it.kind === 'thinking' && !it.done ? { ...it, done: true, ended: it.ended ?? now } : it.kind === 'tool' && it.status === 'running' ? { ...it, ended: it.ended ?? now } : it.id === turnId && it.kind === 'user' ? { ...it, ended: it.ended ?? now } : it,
+          ),
+        },
       }));
       void this.afterReviewTurn();
       void this.loadTasks();
@@ -2664,6 +2741,7 @@ export class Studio {
       const sessionId = this.state.agent.sessionId;
       void this.history.afterAgent(this.turnMessage).then((turn) => {
         this.recordTurn(sessionId, turn);
+        if (turnId && this.state.agent.sessionId === sessionId) this.updateItem(turnId, (it) => (it.kind === 'user' ? { ...it, version: turn.created } : it));
         return this.refreshAiEdits();
       });
       void this.afterStyleDraft(sessionId);
@@ -3309,7 +3387,7 @@ export class Studio {
       stopped: false,
       attachments: [],
       activity: { phase: 'sending', since: Date.now() },
-      items: [...a.items, { kind: 'user', id: userId, text, attachments: attachments.map((x) => x.label) }],
+      items: [...a.items, { kind: 'user', id: userId, text, attachments: attachments.map((x) => x.label), at: Date.now(), by: this.turnBy() }],
     }));
     const unsend = (why: string) => {
       this.setAgent((a) => ({ running: false, attachments, items: a.items.filter((it) => it.id !== userId) }));
@@ -3477,7 +3555,7 @@ export class Studio {
     this.turnMessage = q.text;
     this.setAgent((a) => ({
       queued: a.queued.filter((m) => m.id !== inboxId),
-      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments }],
+      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, at: Date.now(), by: this.turnBy() }],
     }));
   }
 
@@ -3893,7 +3971,7 @@ export class Studio {
         // Should the form event not arrive, look for the question ourselves.
         if (e.name === 'question') window.setTimeout(() => void this.syncQuestions(), 1500);
         this.toolCalls.set(e.callId, { name: e.name });
-        this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '' });
+        this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '', started: Date.now() });
         break;
       case 'tool-called':
         this.toolCalls.set(e.callId, { name: this.toolCalls.get(e.callId)?.name ?? '', input: e.input });
@@ -3914,6 +3992,7 @@ export class Studio {
                 status: 'done',
                 detail: e.output.slice(0, 4000),
                 note,
+                ended: Date.now(),
                 ...(read ? { summary: readLabel(read), read: { path: read.path, from: read.start, to: read.start + read.lines.length - 1 } } : {}),
               }
             : it,
@@ -3922,7 +4001,7 @@ export class Studio {
       }
       case 'tool-failed':
         this.setActivity({ phase: 'waiting' });
-        this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, status: 'failed', detail: e.error } : it));
+        this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, status: 'failed', detail: e.error, ended: Date.now() } : it));
         break;
       case 'permission-asked':
         this.pushItem({

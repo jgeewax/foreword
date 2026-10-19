@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { studio } from '../app/studio';
+import { pendingQuestion, studio } from '../app/studio';
 import { useStore } from '../lib/store';
 
 const ago = (ms: number) => {
@@ -23,12 +23,12 @@ export function ContextMeter() {
   return (
     <span className={`context-meter ${tone}`} title={`This conversation uses about ${k(tokens)} tokens${window_ ? ` of the model's ${k(window_)}` : ''}. Long conversations get slower and less focused: start a new task or compact it.`}>
       {share != null && (
-        <span className="context-bar">
-          <span style={{ width: `${Math.round(share * 100)}%` }} />
-        </span>
+        <svg className="context-ring" width="16" height="16" viewBox="0 0 20 20" aria-hidden>
+          <circle cx="10" cy="10" r="7.5" />
+          <circle className="context-ring-used" cx="10" cy="10" r="7.5" strokeDasharray={`${Math.max(0.5, share * 47.1)} 47.2`} transform="rotate(-90 10 10)" />
+        </svg>
       )}
       {k(tokens)}
-      {window_ ? ` / ${k(window_)}` : ''}
     </span>
   );
 }
@@ -71,12 +71,26 @@ export function TaskRow({ task, status, current, onPick, onContextMenu }: { task
   );
 }
 
+/** The shown task's state, as a dot by its title: at work, needs you, didn't finish, or done for now. */
+function useTaskDot(): string {
+  return useStore(studio.store, (s) => {
+    const a = s.agent;
+    if (!a.sessionId && !a.items.length) return '';
+    if (pendingQuestion(a) || a.activity?.phase === 'asking' || a.items.some((it) => it.kind === 'permission' && (it.state === 'pending' || it.state === 'sending'))) return 'ask';
+    if (a.running) return 'busy';
+    const since = a.items.map((it) => it.kind).lastIndexOf('user');
+    if (a.items.slice(since + 1).some((it) => it.kind === 'notice' && it.tone === 'error')) return 'fail';
+    return 'idle';
+  });
+}
+
 /** The current task, and a list of the book's other tasks (conversations). */
 export function TaskMenu() {
   const { agent, status, inProgress, open: openTasks, done: doneTasks } = useTaskGroups();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = agent.tasks.find((t) => t.sessionId === agent.sessionId);
+  const dot = useTaskDot();
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +126,7 @@ export function TaskMenu() {
     <div className="task-menu" ref={rootRef}>
       <button className="task-trigger" aria-haspopup="menu" aria-expanded={open} title="Tasks: one conversation per goal" onClick={() => setOpen((o) => !o)}>
         {/* A blank conversation's label is a placeholder, greyed out, not a third "New task" button. */}
+        {dot && <span className={`task-dot ${dot}`} title={dot === 'ask' ? 'Needs you' : dot === 'busy' ? 'At work' : dot === 'fail' ? 'The last turn didn’t finish' : 'Ready'} />}
         <span className={`task-trigger-title${agent.sessionId ? '' : ' muted'}`}>{agent.sessionId ? (agent.title ?? current?.title ?? 'Task') : 'New task'}</span>
         {current?.status === 'done' && <span className="task-done-badge">done</span>}
         {working > 0 && (

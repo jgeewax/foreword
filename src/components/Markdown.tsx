@@ -51,6 +51,34 @@ function block(b: Block, k: number): ReactNode {
         );
       }
       return <pre key={k} className="md-code" data-lang={b.lang || undefined}>{b.v}</pre>;
+    case 'table':
+      // Wide tables scroll sideways in their own box.
+      return (
+        <div key={k} className="md-table-wrap">
+          <table className="md-table">
+            <thead>
+              <tr>
+                {b.head.map((c, j) => (
+                  <th key={j} style={b.align[j] ? { textAlign: b.align[j]! } : undefined}>
+                    {inlines(c)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {b.rows.map((row, r) => (
+                <tr key={r}>
+                  {row.map((c, j) => (
+                    <td key={j} style={b.align[j] ? { textAlign: b.align[j]! } : undefined}>
+                      {inlines(c)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     case 'hr':
       return <hr key={k} />;
   }

@@ -1,13 +1,10 @@
-import { activityWords, clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix, waitingTip, workerName } from '../app/activity';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
-import { pendingQuestion, studio, type Activity, type ChatItem, type QuestionItem } from '../app/studio';
-import { onContextMenu } from '../lib/context-menu';
+import { pendingQuestion, studio, type QuestionItem } from '../app/studio';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
-import { parseOptions } from '../services/agent/options-mode';
-import { answerText, isAnswered, isRecommended, questionKind, questionText, splitQuestions, withoutRecommended, type QuestionKind } from '../services/agent/questions';
+import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
 import { Icon } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
@@ -15,144 +12,14 @@ import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu } from './TaskMenu';
-import { withoutMarker } from '../app/tasks';
-import { withoutAddressed } from '../app/review';
-import { describePermission, describeTool } from '../app/tool-labels';
+import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
 import { parseSlash, slashMatches } from '../app/slash';
 import type { SourceSelection } from '../editor/selection';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
-function Patch({ text }: { text: string }) {
-  const lines = text.split('\n').filter((l) => !l.startsWith('Index:') && !/^={5,}/.test(l));
-  return (
-    <pre className="patch">
-      {lines.map((l, i) => (
-        <div key={i} className={l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : ''}>
-          {l || ' '}
-        </div>
-      ))}
-    </pre>
-  );
-}
-
-type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
-
-function copyText(text: string) {
-  navigator.clipboard.writeText(text).then(
-    () => studio.toast('Copied'),
-    (e) => studio.toast(`Couldn't copy: ${e}`, 'error'),
-  );
-}
-
-/** Options-mode reply: one card per option; picking one replaces the passage in the editor. */
-function OptionsReply({ item }: { item: AssistantItem }) {
-  const parsed = useMemo(() => parseOptions(item.text), [item.text]);
-  const { target, applied } = item.options!;
-  if (!parsed.options.some((o) => o.text != null)) {
-    return (
-      <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
-        <Markdown text={item.text} />
-      </div>
-    );
-  }
-  const where = target && `${target.path.split('/').pop()}:${target.start.line}`;
-  return (
-    <div className="msg assistant options-reply">
-      {parsed.intro && (
-        <div className="md">
-          <Markdown text={parsed.intro} />
-        </div>
-      )}
-      <div className="options-target">{target ? `Pick one to ${target.text ? 'replace' : 'insert at'} ${where}` : 'Nothing was selected: copy the one you want.'}</div>
-      {parsed.options.map((o, i) => (
-        <div key={i} className={`option-card${applied === i ? ' applied' : ''}`}>
-          <div className="option-head">
-            <span className="option-n">Option {o.n}</span>
-            {o.label && <span className="option-label">{o.label}</span>}
-          </div>
-          {o.text != null && <pre className={`option-text${o.complete ? '' : ' streaming'}`}>{o.text}</pre>}
-          {o.note && (
-            <div className="option-note md">
-              <Markdown text={o.note} />
-            </div>
-          )}
-          <div className="option-actions">
-            {target && (
-              <button
-                className={applied === i ? '' : 'primary'}
-                disabled={!item.done || !o.complete || o.text == null}
-                title={applied === i ? 'This option is in the editor (⌘Z to undo)' : `Put this in place of ${where} (⌘Z to undo)`}
-                onClick={() => void studio.applyOption(item.id, i)}
-              >
-                {applied === i ? 'In use ✓' : applied != null ? 'Use this instead' : target.text ? 'Use this' : 'Insert'}
-              </button>
-            )}
-            <button disabled={!o.complete || o.text == null} onClick={() => copyText(o.text ?? '')}>
-              Copy
-            </button>
-          </div>
-        </div>
-      ))}
-      {/* Once one is in use: was that it? */}
-      {applied != null && item.taskCheck === 'ask' && <TaskCheck id={item.id} question={`Option ${parsed.options[applied]?.n ?? applied + 1} is in. Is this task done?`} />}
-    </div>
-  );
-}
-
-const selectedText = () => String(window.getSelection() ?? '').trim();
-
-/** Right-click on a chat item: copy the selection, the message, or a tool's details. */
-const itemMenu = (text: string, what: string) =>
-  onContextMenu(() => [
-    !!selectedText() && { label: 'Copy', action: () => studio.copy(selectedText()) },
-    { label: `Copy ${what}`, action: () => studio.copy(text) },
-  ]);
-
 type Field = QuestionItem['fields'][number];
 type Value = string | number | boolean | string[];
-
-/** A question's short name, for tabs and the record: its header, or the start of the question. */
-function questionName(f: Field) {
-  if (f.title) return f.title;
-  const t = questionText(f).replace(/\s+/g, ' ');
-  return t.length > 40 ? `${t.slice(0, 39)}…` : t;
-}
-
-/**
- * The question in the chat, once it's answered: what was asked and what you
- * said (asked in a reply, your message below says it). While it waits, a line
- * pointing to the panel.
- */
-function QuestionRecord({ item }: { item: QuestionItem }) {
-  const questions = item.fields.filter((f) => f.type !== 'external');
-  const several = questions.length > 1;
-  if (item.state === 'pending' || item.state === 'sending') {
-    return (
-      <div className="question-waiting">
-        <Icon name="help" size={13} />
-        The assistant asks you {several ? `${questions.length} questions` : 'a question'}, below
-      </div>
-    );
-  }
-  const head =
-    item.state === 'answered' ? (item.via === 'message' ? 'The assistant asked' : several ? 'You answered' : 'You answered') : item.state === 'dismissed' ? `You skipped ${several ? 'the questions' : 'the question'}` : 'Not answered';
-  const withAnswers = item.state === 'answered' && item.via !== 'message';
-  return (
-    <div className={`question-record ${item.state}`}>
-      <div className="question-record-head">
-        {item.state === 'answered' && <Icon name="check" size={12} />}
-        {head}
-      </div>
-      {questions.map((f) => (
-        <div key={f.key} className="question-record-row" title={questionText(f)}>
-          <span className="question-record-q">{withAnswers ? questionName(f) : questionText(f)}</span>
-          {withAnswers && <span className="question-record-a">{answerText(f, item.answer?.[f.key]) ? <MarkdownLine text={answerText(f, item.answer?.[f.key])} /> : <span className="muted">Not answered</span>}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 const KEY_HINT: Record<QuestionKind, string> = {
   choice: '1–9 to choose',
@@ -485,281 +352,6 @@ function QuestionPanel({ item }: { item: QuestionItem }) {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/** A question about something the assistant may not do without asking, in words; the exact command folds out. */
-function PermissionCard({ item }: { item: Extract<ChatItem, { kind: 'permission' }> }) {
-  const names = useStore(studio.store, (s) => s.names);
-  const pending = item.state === 'pending' || item.state === 'sending';
-  const { what, code } = describePermission(item.action, item.resources, names);
-  return (
-    <div className={`permission ${pending ? 'pending' : item.state}`}>
-      <div className="permission-title">
-        {pending ? 'The assistant wants to' : item.state === 'reject' ? 'You didn’t let the assistant' : 'You let the assistant'} {what}.
-      </div>
-      {code && (
-        <details className="permission-command">
-          <summary>Show the command</summary>
-          <pre className="tool-command">{code}</pre>
-        </details>
-      )}
-      {item.patches.map((p) => (
-        <Patch key={p.file} text={p.patch} />
-      ))}
-      {pending && (
-        <div className="permission-actions">
-          <button className="primary" disabled={item.state === 'sending'} title="Just this once; it asks again next time" onClick={() => void studio.replyPermission(item.id, 'once')}>
-            Allow
-          </button>
-          <button disabled={item.state === 'sending'} onClick={() => void studio.replyPermission(item.id, 'reject')}>
-            Don’t allow
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** A tool call in words ("Read “The Storm” (chapter 2) · lines 1–40"); its raw output folds out. */
-function ToolRow({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
-  const names = useStore(studio.store, (s) => s.names);
-  // A question asked here is shown by its card.
-  const hasCard = useStore(studio.store, (s) => item.name === 'question' && s.agent.items.some((i) => i.kind === 'question' && i.callId === item.id));
-  if (hasCard) return null;
-  const label = describeTool(item.name, item.input, names, undefined, item.read);
-  const text = item.status === 'running' ? `${label.running}…` : label.done;
-  const note = item.note ?? label.note;
-  const open = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (item.read) void studio.showRead(item.read);
-    else if (label.path) void studio.openFile(label.path);
-  };
-  return (
-    <details className={`tool ${item.status}`}>
-      <summary title={`${item.name}: ${item.summary}`}>
-        <span className="tool-status" aria-hidden>
-          {item.status === 'running' ? <span className="tool-spinner" /> : item.status === 'done' ? '✓' : '✕'}
-        </span>
-        {label.path && (item.read || item.name !== 'read') ? (
-          <button className="tool-label link" title={item.read ? 'Open the file with these lines selected' : 'Open the file'} onClick={open}>
-            {text}
-          </button>
-        ) : (
-          <span className="tool-label">{text}</span>
-        )}
-        {note && <span className="tool-note">· {note}</span>}
-      </summary>
-      {/* The command itself, for the curious: in words above, exact here. */}
-      {label.code && <pre className="tool-command">{label.code}</pre>}
-      {item.detail && <pre className="tool-detail">{item.detail}</pre>}
-    </details>
-  );
-}
-
-/** A clock that ticks while `on`, for a live time. */
-function useNow(on: boolean, every = 250) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!on) return;
-    const t = window.setInterval(() => setNow(Date.now()), every);
-    return () => window.clearInterval(t);
-  }, [on, every]);
-  return now;
-}
-
-/** Who's at work, for the chat: "Claude", "Codex", or OpenCode's model. */
-function useWorkerName() {
-  const assistant = useStore(studio.store, (s) => s.settings.assistant);
-  const model = useStore(studio.store, (s) => (s.agent.model ? s.agent.models.find((m) => m.providerID === s.agent.model!.providerID && m.id === s.agent.model!.id)?.name : null));
-  return workerName(assistant, model);
-}
-
-/**
- * A small moving picture for what the assistant is doing: a sparkle that
- * twinkles while it thinks, a line being written while it writes, a comet
- * going round while a tool runs, an hourglass while it waits to try again.
- */
-export function ActivityGlyph({ phase }: { phase: Activity['phase'] | 'starting' }) {
-  if (phase === 'writing') {
-    return (
-      <svg className="glyph glyph-write" viewBox="0 0 24 24" aria-hidden>
-        <path className="glyph-ink" d="M2 15c2.5-5 4.5-5 5.5-1s2.5 4 4.5-1 3.5-5.5 5-1 2.5 3.5 5 1" />
-        <circle className="glyph-nib" cx="22" cy="13" r="1.6" />
-      </svg>
-    );
-  }
-  if (phase === 'tool') return <span className="glyph glyph-comet" aria-hidden />;
-  if (phase === 'retrying') {
-    return (
-      <svg className="glyph glyph-hourglass" viewBox="0 0 24 24" aria-hidden>
-        <path className="glass" d="M7 3.5h10M7 20.5h10M8 3.5c0 5 8 5 8 8.5s-8 3.5-8 8.5M16 3.5c0 5-8 5-8 8.5s8 3.5 8 8.5" />
-        <path className="sand-top" d="M9.6 6.5h4.8L12 10.5z" />
-        <path className="sand-bottom" d="M12 15.5l3.6 4H8.4z" />
-      </svg>
-    );
-  }
-  if (phase === 'asking') return <span className="glyph glyph-pulse" aria-hidden />;
-  return (
-    <svg className="glyph glyph-sparkle" viewBox="0 0 24 24" aria-hidden>
-      <path className="sparkle-big" d="M10 3.5l1.9 6.6 6.6 1.9-6.6 1.9L10 20.5l-1.9-6.6L1.5 12l6.6-1.9z" />
-      <path className="sparkle-small a" d="M19.5 2.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
-      <path className="sparkle-small b" d="M19 16l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
-    </svg>
-  );
-}
-
-/**
- * The model's reasoning: its last lines while it streams, then folded to
- * "Waited 12 s · Thought for 4 s". Waiting (the model saying nothing yet:
- * queued, loading, or reasoning it doesn't show) and thinking (its reasoning
- * streaming in) are timed apart, so a slow start doesn't count as thought.
- */
-function Thinking({ item }: { item: Extract<ChatItem, { kind: 'thinking' }> }) {
-  const [open, setOpen] = useState(false);
-  const now = useNow(!item.done, 1000);
-  const name = useWorkerName();
-  if (!item.done) {
-    return (
-      <div className="thinking live">
-        <div className="thinking-head">
-          <ActivityGlyph phase="thinking" />
-          {waitedPrefix(item)}
-          <span className="shimmer">{name} is thinking…</span> <span className="thinking-time">{clockTime(thinkingSoFar(item, now))}</span>
-        </div>
-        <div className="thinking-tail">
-          <div>{item.text}</div>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="thinking">
-      <button className="thinking-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {thoughtHeading(item)} <span aria-hidden>{open ? '▾' : '▸'}</span>
-      </button>
-      {open && <div className="thinking-text">{item.text}</div>}
-    </div>
-  );
-}
-
-/** While a turn runs: what it's doing now, animated, with the time so far. */
-function ActivityLine() {
-  const running = useStore(studio.store, (s) => s.agent.running);
-  const activity = useStore(studio.store, (s) => s.agent.activity);
-  // A live thinking block already says "… is thinking".
-  const thinkingShown = useStore(studio.store, (s) => {
-    const last = s.agent.items[s.agent.items.length - 1];
-    return last?.kind === 'thinking' && !last.done;
-  });
-  const name = useWorkerName();
-  const now = useNow(running);
-  if (!running || !activity || (thinkingShown && activity.phase === 'thinking')) return null;
-  // This step's own time (how long it's been waiting, or thinking, or on this
-  // tool), and the turn's when it has had other steps before.
-  const { step, total } = stepTimes(activity, now);
-  const wait = activity.retryAt ? Math.max(0, Math.ceil((activity.retryAt - now) / 1000)) : 0;
-  const words = activityWords(activity, name, step, wait);
-  const label = activity.phase === 'asking' || activity.phase === 'retrying' ? words : `${words}…`;
-  // A long turn: something worth knowing, under the line (not while it's waiting on you).
-  const tip = activity.phase === 'asking' ? null : waitingTip(total, activity.since);
-  return (
-    <div className={`activity phase-${activity.phase}`}>
-      <div className="activity-line" role="status" aria-live="polite" title={activity.reason}>
-        <ActivityGlyph phase={activity.phase} />
-        {/* Keyed by its words, so each new phrase comes in rather than just swapping. */}
-        <span key={words} className="activity-label shimmer">
-          {label}
-        </span>
-        <span className="activity-time">{clockTime(step)}</span>
-        {total > step && (
-          <span className="activity-total" title="Since you sent it">
-            {clockTime(total)} in all
-          </span>
-        )}
-      </div>
-      {tip && (
-        <div key={tip} className="activity-tip">
-          {tip}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Item({ item }: { item: ChatItem }) {
-  return (
-    <div className="item-wrap" onContextMenu={item.kind === 'user' || item.kind === 'assistant' ? itemMenu(item.text, 'Message') : item.kind === 'tool' ? itemMenu(`${item.name} ${item.summary}\n${item.detail}`, 'Details') : undefined}>
-      <ItemBody item={item} />
-    </div>
-  );
-}
-
-function ItemBody({ item }: { item: ChatItem }) {
-  switch (item.kind) {
-    case 'user':
-      return (
-        <div className="msg user">
-          {item.attachments.length > 0 && (
-            <div className="chips">
-              {item.attachments.map((a) => (
-                <span key={a} className="chip">
-                  {a}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="msg-text">{item.text}</div>
-        </div>
-      );
-    case 'thinking':
-      return <Thinking item={item} />;
-    case 'question':
-      return <QuestionRecord item={item} />;
-    case 'assistant': {
-      if (item.options) return <OptionsReply item={item} />;
-      // Questions at the end of a reply are asked in the panel, not shown as their block.
-      const text = withoutAddressed(withoutMarker(splitQuestions(item.text).text));
-      if (!text.trim() && item.taskCheck !== 'ask') return null;
-      return (
-        <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
-          <Markdown text={text} />
-          {item.taskCheck === 'ask' && <TaskCheck id={item.id} />}
-        </div>
-      );
-    }
-    case 'tool':
-      return <ToolRow item={item} />;
-    case 'permission':
-      return <PermissionCard item={item} />;
-    case 'notice':
-      return (
-        <div className={`notice ${item.tone}`}>
-          {item.text}
-          {item.action && (
-            <div className="notice-action">
-              <button onClick={() => void (item.action!.resume ? studio.resume() : studio.send(item.action!.prompt ?? ''))}>{item.action.label}</button>
-            </div>
-          )}
-        </div>
-      );
-  }
-}
-
-/** "Is the task done?" under the reply that asks it (or the option picked). */
-function TaskCheck({ id, question = 'Is this task done?' }: { id: string; question?: string }) {
-  const running = useStore(studio.store, (s) => s.agent.running);
-  return (
-    <div className="task-check">
-      <span>{question}</span>
-      <button className="primary" disabled={running} title="Saves your files, keeps a named version in History, and starts a new task" onClick={() => void studio.finishTask()}>
-        Yes, it's done: new task
-      </button>
-      <button disabled={running} title="Keep going in this task" onClick={() => studio.dismissTaskCheck(id)}>
-        Not yet
-      </button>
     </div>
   );
 }
@@ -1160,28 +752,8 @@ function StyleGuideBar() {
       </div>
     );
   }
-  if (guide.exists) {
-    return (
-      <div className="style-bar">
-        <span className="muted">Style guide</span>
-        <button className="link" title="Every message follows this guide. Click to edit it." onClick={() => void studio.openFile('WRITING_STYLE.md')}>
-          WRITING_STYLE.md
-        </button>
-        <span className="spacer" />
-        <button className="link style-interview" disabled={!ready} title="The assistant asks you how the book should read, and writes the guide again from your answers" onClick={() => void studio.interviewStyleGuide()}>
-          Interview me…
-        </button>
-        <button
-          className="link style-redraft"
-          disabled={!ready}
-          title="Not quite right? The assistant drafts it again from your chapters, keeping the rules you wrote or changed yourself. History keeps this one."
-          onClick={() => void studio.redraftStyleGuide()}
-        >
-          Redraft…
-        </button>
-      </div>
-    );
-  }
+  // The guide, once there is one, is in the strip under the header (TaskStrip).
+  if (guide.exists) return null;
   if (guide.dismissed) return null;
   return (
     <div className="style-bar setup">
@@ -1349,6 +921,7 @@ export function AgentPane() {
           </div>
         )}
         <StyleGuideBar />
+        <TaskStrip />
         <div
           className="transcript"
           ref={listRef}
@@ -1358,10 +931,7 @@ export function AgentPane() {
           }}
         >
           {agent.items.length === 0 && <Starter />}
-          {agent.items.map((item) => (
-            <Item key={item.id} item={item} />
-          ))}
-          <ActivityLine />
+          <Transcript key={agent.sessionId ?? 'new'} />
         </div>
         {/* The assistant's questions take the message box's place until they're answered or skipped. */}
         {asking ? (
