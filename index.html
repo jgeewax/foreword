@@ -121,8 +121,12 @@
   .feature li { position: relative; padding: 9px 0 9px 28px; border-top: 1px solid var(--line); font-size: 15.5px; }
   .feature li::before { content: ""; position: absolute; left: 2px; top: 17px; width: 12px; height: 7px; border-left: 2px solid var(--blue); border-bottom: 2px solid var(--blue); transform: rotate(-45deg); }
   .feature figure { margin: 0; }
-  .feature img { border-radius: 12px; box-shadow: var(--shot-shadow); }
+  .feature img { width: 100%; border-radius: 12px; box-shadow: var(--shot-shadow); }
   .feature figcaption { margin-top: 14px; color: var(--muted); font-size: 14px; }
+  /* A picture that needs the width (two panes side by side): the words above it, the list beside them. */
+  .feature.wide { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); align-items: end; row-gap: 44px; }
+  .feature.wide > ul { margin: 0; }
+  .feature.wide figure { grid-column: 1 / -1; }
 
   /* Everything else, in brief. */
   .more { padding: 130px 0 0; text-align: center; }
@@ -154,7 +158,9 @@
 
   @media (max-width: 900px) {
     nav.links a:not(.button) { display: none; }
-    .feature, .feature.flip { grid-template-columns: minmax(0, 1fr); gap: 34px; padding-top: 90px; }
+    .feature, .feature.flip, .feature.wide { grid-template-columns: minmax(0, 1fr); gap: 34px; padding-top: 90px; }
+    .feature.wide { row-gap: 22px; }
+    .feature.wide figure { margin-top: 12px; }
     .feature.flip .copy { order: 0; }
     .grid { grid-template-columns: minmax(0, 1fr); }
     .hero { padding-top: 64px; }
@@ -202,7 +208,10 @@
       <p class="fine"><span data-version>Version 0.2.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
     </div>
     <figure class="shot">
-      <img src="images/calculus.webp" width="2400" height="1500" alt="Typst Studio with Calculus Made Easy open: the book's files on the left, a chapter's Typst source with a passage selected, the typeset pages with their equations, and the assistant explaining why a term can be dropped.">
+      <picture>
+        <source media="(max-width: 700px)" srcset="images/calculus-phone.webp" width="1624" height="1497">
+        <img src="images/calculus.webp" width="2560" height="1600" alt="Typst Studio with Calculus Made Easy open: a chapter's Typst source with a passage selected, the typeset page with its equations, and Claude Code explaining why (dx)² can be dropped.">
+      </picture>
       <figcaption>Calculus Made Easy, one of the sample books: a passage selected, its pages beside it, and the assistant explaining the step, equations and all.</figcaption>
     </figure>
   </section>
@@ -223,39 +232,45 @@
   </section>
 
   <div class="wrap" id="features">
-    <section class="feature">
+    <section class="feature wide">
       <div class="copy">
         <span class="eyebrow">Live pages</span>
         <h2>The pages as they'll print, while you type</h2>
         <p>Typst Studio typesets the book from what you've typed, saved or not, and redraws only the pages in view. In a 491-page book, a change shows up in about a tenth of a second.</p>
-        <ul>
-          <li>Click a passage in the pages to go to its source.</li>
-          <li>Errors are underlined where they are, explained in plain words.</li>
-          <li>Export the PDF when you want it. Nothing to compile by hand.</li>
-        </ul>
       </div>
+      <ul>
+        <li>Click a passage in the pages to go to its source.</li>
+        <li>Errors are underlined where they are, explained in plain words.</li>
+        <li>Export the PDF when you want it. Nothing to compile by hand.</li>
+      </ul>
       <figure>
-        <img src="images/paper.webp" width="2400" height="1500" loading="lazy" alt="The paper Attention Is All You Need set in the NeurIPS template, with its source in the editor and the first two pages in the preview.">
-        <figcaption>Attention Is All You Need, set with the NeurIPS template.</figcaption>
+        <picture>
+          <source media="(max-width: 700px)" srcset="images/paper-phone.webp" width="1303" height="1091">
+          <img src="images/paper.webp" width="2560" height="1200" loading="lazy" alt="The paper Attention Is All You Need in the NeurIPS template: its title, authors and abstract in the Typst source on the left, and the first page as it prints on the right.">
+        </picture>
+        <figcaption>Attention Is All You Need, set with the NeurIPS template: the title and abstract in the source, and on the page.</figcaption>
       </figure>
     </section>
 
-    <section class="feature flip">
+    <section class="feature wide">
       <div class="copy">
         <span class="eyebrow">A writing assistant</span>
         <h2>An assistant that edits, and shows its work</h2>
         <p>Select a passage and ask about it, or ask for a change. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves, in plain sentences, never shell commands.</p>
-        <ul>
-          <li>Lines it changed are marked until you rewrite them.</li>
-          <li>Plan talks a change through before writing it.</li>
-          <li>Options gives three versions of a passage to pick from.</li>
-          <li>When it needs you to decide, it asks in a panel, with answers to pick.</li>
-          <li>Ask it to change a setting, like “make the text bigger”, and it does.</li>
-        </ul>
       </div>
+      <ul>
+        <li>Lines it changed are marked until you rewrite them.</li>
+        <li>Plan talks a change through before writing it.</li>
+        <li>Options gives three versions of a passage to pick from.</li>
+        <li>When it needs you to decide, it asks in a panel, with answers to pick.</li>
+        <li>Ask it to change a setting, like “make the text bigger”, and it does.</li>
+      </ul>
       <figure>
-        <img src="images/jekyll-edit.webp" width="2400" height="1500" loading="lazy" alt="Jekyll and Hyde open at chapter one, with the chapter's opening page in the preview, and the assistant reporting the edit it made to the first paragraph.">
-        <figcaption>The assistant tightening the first paragraph of Jekyll and Hyde, and saying what it cut.</figcaption>
+        <picture>
+          <source media="(max-width: 700px)" srcset="images/jekyll-edit-phone.webp" width="1085" height="544">
+          <img src="images/jekyll-edit.webp" width="2560" height="1028" loading="lazy" alt="Jekyll and Hyde's first chapter in the editor, with the three lines the assistant changed marked by a purple bar, beside Claude Code's account of the task: the chapter it read, the two edits it made, what it cut, and Is this task done?">
+        </picture>
+        <figcaption>Claude Code tightening the opening of Jekyll and Hyde: the lines it changed are marked, and it says what it cut.</figcaption>
       </figure>
     </section>
 
@@ -272,8 +287,8 @@
         </ul>
       </div>
       <figure>
-        <img src="images/interview.webp" width="2728" height="1936" loading="lazy" alt="Jekyll and Hyde open at chapter one, its first page in the preview, and the assistant interviewing for the book's style guide: a panel asks who reads this edition, with three answers to pick from and one of your own.">
-        <figcaption>Claude Code writing a style guide for Jekyll and Hyde with you: first, who reads this edition?</figcaption>
+        <img src="images/interview.webp" width="1158" height="676" loading="lazy" alt="The assistant's questions for Jekyll and Hyde's style guide, in a panel: four of them (Linking, Echoing, Avoid, Oddities), the first asking how new sentences should join up, with three answers to pick from, the first recommended, and one of your own.">
+        <figcaption>Claude Code writing a style guide for Jekyll and Hyde with you: how should new sentences join up?</figcaption>
       </figure>
     </section>
 
@@ -288,25 +303,28 @@
         </ul>
       </div>
       <figure>
-        <img src="images/jekyll-changes.webp" width="2400" height="1500" loading="lazy" alt="What changed: the assistant's version of chapter one beside the previous one, with the removed words in red and the new line in green, and buttons to undo the changes or restore the file.">
-        <figcaption>What changed in the assistant's version, with Undo these changes.</figcaption>
+        <img src="images/jekyll-changes.webp" width="1428" height="985" loading="lazy" alt="What changed in the assistant's version of chapter one, word by word: the words it cut struck through in red, the words it put in their place in green, and buttons to undo the changes or restore the file.">
+        <figcaption>What the assistant changed in chapter one, word by word, with Undo these changes.</figcaption>
       </figure>
     </section>
 
-    <section class="feature">
+    <section class="feature wide">
       <div class="copy">
         <span class="eyebrow">Templates and samples</span>
         <h2>Novels, textbooks, picture books and papers</h2>
         <p>Start from a template at the page sizes printers use in the US, the UK and Europe, and Asia. Papers start from IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS or APA.</p>
-        <ul>
-          <li>Or open a finished sample: Jekyll and Hyde, Calculus Made Easy, Luca's Wonderful Brain…</li>
-          <li>Picture books set their words on full-page pictures.</li>
-          <li>A programming book whose code examples run.</li>
-        </ul>
       </div>
+      <ul>
+        <li>Or open a finished sample: Jekyll and Hyde, Calculus Made Easy, Luca's Wonderful Brain…</li>
+        <li>Picture books set their words on full-page pictures.</li>
+        <li>A programming book whose code examples run.</li>
+      </ul>
       <figure>
-        <img src="images/luca.webp" width="2092" height="1307" loading="lazy" alt="Luca's Wonderful Brain as a picture book: a page's picture, words and three sound words in the source, and the watercolour page with the words and the sound words set on it in the preview.">
-        <figcaption>Luca's Wonderful Brain, a picture book: words and sound words set on full-page watercolours.</figcaption>
+        <picture>
+          <source media="(max-width: 700px)" srcset="images/luca-phone.webp" width="1303" height="1300">
+          <img src="images/luca.webp" width="2560" height="1600" loading="lazy" alt="Luca's Wonderful Brain as a picture book: a page's picture, words and three sound words (rub, rub, rub!) in the Typst source, and the watercolour page with the words and the sound words set on it.">
+        </picture>
+        <figcaption>Luca's Wonderful Brain, a picture book: each page's picture, words and sound words in the source, set on the watercolour beside it.</figcaption>
       </figure>
     </section>
   </div>
