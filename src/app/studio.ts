@@ -59,7 +59,7 @@ import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructi
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
-import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, type GuideChange } from '../services/agent/style-guide';
+import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
@@ -4561,7 +4561,9 @@ export class Studio {
     if (a.sessionId || a.items.length) this.newSession();
     if (this.state.agent.mode !== 'write') await this.setMode('write');
     this.styleDraftBefore = this.styleGuideText;
-    const brief = redraft ? styleDraftBrief({ redraft: { authorChanges: await this.guideAuthorChanges() } }) : styleDraftBrief();
+    // How the author has rewritten the assistant's text: the guide should ask for that.
+    const revisions = await this.authorRevisions();
+    const brief = styleDraftBrief({ revisions, ...(redraft ? { redraft: { authorChanges: await this.guideAuthorChanges() } } : {}) });
     this.pendingBrief = { key: STYLE_DRAFT_KEY, text: brief };
     this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '', redraft } }));
     const sent = await this.send(redraft ? STYLE_REDRAFT_MESSAGE : STYLE_DRAFT_MESSAGE);
@@ -4594,6 +4596,41 @@ export class Studio {
       'Redraft',
     );
     if (ok) await this.draftStyleGuide({ redraft: true });
+  }
+
+  /**
+   * How the author rewrote the assistant's text, from History, newest first:
+   * for each of the assistant's recent versions, the passages it wrote in the
+   * book's Typst files that the author then changed by hand, as they left them
+   * before an assistant next changed that file (or as they are now), so later
+   * assistant changes never count as the author's. Changes of spacing only, and
+   * the style guide itself, are left out.
+   */
+  async authorRevisions(): Promise<AuthorRevision[]> {
+    if (this.state.history.status !== 'ready') return [];
+    const out: AuthorRevision[] = [];
+    try {
+      const agents = (await ipc.historyList(400)).filter((v) => v.kind === 'agent' && v.parent).slice(0, 40);
+      /** Per file, the assistant's next version that changed it (newer than the one being looked at). */
+      const next = new Map<string, Version>();
+      const flat = (t: string) => t.replace(/\s+/g, ' ').trim();
+      for (const v of agents) {
+        const paths = (await ipc.historyChanges(v.parent, v.id)).filter((c) => c.status !== 'D' && c.path.endsWith('.typ')).map((c) => c.path);
+        for (const path of paths) {
+          if (out.length >= 12) break;
+          const edit = await this.aiEditOf(v, path);
+          const lines = edit?.blocks.filter((b) => b.to > b.from).map((b) => ({ from: b.from + 1, to: b.to })) ?? [];
+          const later = next.get(path);
+          const left = later ? await ipc.historyFile(later.parent!, path).catch(() => null) : await this.currentText(path).catch(() => null);
+          if (!edit || !lines.length || left == null) continue;
+          for (const e of authorEdits(path, edit.after.join('\n'), left, lines)) if (flat(e.wrote) !== flat(e.now)) out.push({ path, wrote: e.wrote, now: e.now });
+        }
+        for (const path of paths) next.set(path, v);
+      }
+    } catch (e) {
+      console.warn('style guide: the author’s revisions', e);
+    }
+    return out.slice(0, 12);
   }
 
   /**

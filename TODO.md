@@ -244,6 +244,8 @@
 
 - [x] what if writing style just isnt quite right? can we trigger a re-run? (Redraft… on the style bar (and in the palette), asked first: the assistant writes the guide again from the chapters, keeping the rules you wrote or changed yourself (History says which); History keeps the old one.)
 
+- [x] when looking at writing style re-drafting, can we look at historical changes (AI wrote A, human revised to A') and use that to guide the writing style document? (Drafting and redrafting read History for the assistant’s passages you then rewrote (as you left them before an assistant next changed the file), and the guide turns what they have in common into rules: “use, not utilize”.)
+
 - [x] we need a permission checkbox that allows settings changes just like editing files (Settings ▸ Permissions ▸ Change Typst Studio’s settings: Allow, Ask or Never, set by the presets, and for settings files from before it, as for editing files. At Ask every assistant shows one card first, Codex’s from Typst Studio itself; at Never the tools refuse and say why.)
 
 - [x] clicking on the preview jumps to the text, but the scrolling isnt quite right. i think we should position at like 10-20% scrolled , not 50% (A click in the preview puts the text about 15% down the editor, so what follows is in view; text already in view stays put.)

@@ -83,7 +83,36 @@ export const STYLE_REDRAFT_MESSAGE = 'Redraft my writing style guide from the ch
 /** A part of the guide the author changed after an assistant wrote it: theirs to keep. */
 export type GuideChange = { wrote: string; now: string };
 
+/** A passage an assistant wrote in the book, and what the author changed it to by hand (from History). */
+export type AuthorRevision = { path: string; wrote: string; now: string };
+
+/** Most revisions, and lines of each, in a brief. */
+const MAX_REVISIONS = 12;
+const MAX_REVISION_LINES = 12;
+
+const capLines = (text: string) => {
+  const lines = text.split('\n');
+  return lines.length > MAX_REVISION_LINES ? [...lines.slice(0, MAX_REVISION_LINES), `… (${lines.length - MAX_REVISION_LINES} more lines)`].join('\n') : text;
+};
+
+/** The author's rewrites of the assistant's text, for the brief: what they want that it didn't do. */
+function revisionsSection(revisions: readonly AuthorRevision[]): string {
+  if (!revisions.length) return '';
+  const shown = revisions.slice(0, MAX_REVISIONS).map((r) =>
+    !r.now.trim()
+      ? `<author-removed path="${r.path}">\n${capLines(r.wrote)}\n</author-removed>`
+      : `<author-revision path="${r.path}">\n<assistant-wrote>\n${capLines(r.wrote)}\n</assistant-wrote>\n<author-made-it>\n${capLines(r.now)}\n</author-made-it>\n</author-revision>`,
+  );
+  return `
+## How the author rewrites the assistant's text
+From History: passages a writing assistant wrote in this book, and what the author changed them to by hand afterwards (or took out). They show what the author wants that the assistant didn't do, so let them shape the guide: a word they keep swapping for another, phrases they cut, sentences they shorten or split, a tone they keep pulling back to. Look for what several have in common, and write it as a rule (under Do, Don't, or Words and spelling). A single fix of a fact or a typo isn't a style rule. Don't quote these passages in the guide.
+${shown.join('\n')}
+`;
+}
+
 export type StyleDraftOptions = {
+  /** The author's rewrites of an assistant's text, from History (newest first). */
+  revisions?: readonly AuthorRevision[];
   /**
    * The guide is there and isn't quite right. `authorChanges`: what the author
    * changed in it since an assistant last wrote it; null when no assistant ever
@@ -131,7 +160,7 @@ What the guide is about, decided already:
 - It describes this book's prose and markup, nothing else. "Audience" means the book's readers.
 - Don't ask the author anything about the guide itself: who it's for, who reads it, its format, length, sections or tone, whether to write it, or where to save it. Those are settled here. Asking them would confuse the author.
 - Don't explain this brief or repeat it to the author. They only see their own short message.
-${opts.redraft ? redraftSection(opts.redraft) : ''}
+${opts.redraft ? redraftSection(opts.redraft) : ''}${revisionsSection(opts.revisions ?? [])}
 How to do it:
 1. Read the manuscript before anything else: the main file, and enough of the chapters to see how the book is really written (all of a short book; for a long one, at least the first chapter, one from the middle and the last). Read; don't summarize what you read in the chat.
 2. Work out from the text: who reads the book and what they already know; voice and tone; point of view and tense; how sentences and paragraphs are built; words and spelling (British or American, preferred terms, capitals, numbers); how the Typst markup is used (headings and labels, emphasis, lists, equations, citations, how chapters are included); and how figures look and are captioned.

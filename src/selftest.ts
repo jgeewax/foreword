@@ -668,6 +668,94 @@ async function styleDraftChecks(kind: 'claude' | 'codex' | 'opencode') {
 }
 
 /**
+ * The style guide learns from how the author rewrites the assistant's text.
+ * History is made as it would be: the assistant writes passages (agent
+ * versions), the author rewrites some (cutting "utilize", "in order to",
+ * "basically"), the assistant writes more that the author leaves alone, and
+ * the author edits their own text. Only the author's rewrites of the
+ * assistant's text are found; then a real draft (Claude Code on Haiku) gets
+ * them in its brief, and its guide says what they have in common. Writes
+ * files: scratch book only.
+ */
+async function styleRevisionsChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  await waitFor(() => studio.state.history.status === 'ready', 30000, 'history');
+  const write = async (path: string, change: (t: string) => string) => {
+    const cur = await ipc.fsRead(path);
+    await ipc.fsWrite(path, change(cur.text), cur.hash);
+    await studio.reloadFromDisk(path).catch(() => {});
+  };
+  const version = async (kind: 'agent' | 'save', label: string) => {
+    await ipc.historySnapshot(kind, label);
+    await sleep(300);
+  };
+  const ch1 = 'chapters/ch1-vectors.typ';
+  const ch2 = 'chapters/ch2-eigenvalues.typ';
+  // The assistant writes; the author rewrites.
+  await write(ch1, (t) => `${t}\nWe utilize the dot product in order to measure the angle between two vectors.\nIn order to compare lengths, we utilize the norm.\n`);
+  await version('agent', 'Agent: add a passage on angles');
+  await write(ch1, (t) => t.replace('We utilize the dot product in order to measure the angle between two vectors.', 'The dot product measures the angle between two vectors.').replace('In order to compare lengths, we utilize the norm.', 'To compare lengths, we use the norm.'));
+  await version('save', 'Edited ch1');
+  await write(ch2, (t) => `${t}\nBasically, it is very important to note that every eigenvector can be scaled.\n`);
+  await version('agent', 'Agent: a note on scaling');
+  await write(ch2, (t) => t.replace('Basically, it is very important to note that every eigenvector can be scaled.', 'Every eigenvector can be scaled.'));
+  await version('save', 'Edited ch2');
+  // The assistant writes more, left as it is; the author edits their own text.
+  await write(ch1, (t) => `${t}\nThe zero vector has no direction.\n`);
+  await version('agent', 'Agent: the zero vector');
+  await write(ch1, (t) => t.replace(/^= (.*)$/m, '= $1 (revised)'));
+  await version('save', 'Edited ch1 heading');
+
+  const revisions = await studio.authorRevisions();
+  out.revisions = revisions.map((r) => `${r.path}: “${r.wrote.trim()}” → “${r.now.trim()}”`);
+  out.found = {
+    rewrites: revisions.length,
+    utilize: revisions.some((r) => /utilize/.test(r.wrote) && !/utilize/.test(r.now)),
+    basically: revisions.some((r) => /Basically/.test(r.wrote)),
+    notTheLaterPassage: !revisions.some((r) => /zero vector/.test(r.wrote)),
+    notTheAuthorsOwn: !revisions.some((r) => /revised/.test(r.now) && !/utilize|Basically/.test(r.wrote)),
+  };
+
+  try {
+    studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+    if (haiku) await studio.selectModel(haiku);
+    await studio.draftStyleGuide();
+    await sleep(3000);
+    const sessionId = studio.state.agent.sessionId;
+    const brief = sessionId ? ((await studio.agent!.getInstructions(sessionId)).find((e) => e.key === 'style-draft')?.value as string | undefined) : undefined;
+    out.brief = { hasRevisions: /How the author rewrites/.test(brief ?? ''), count: (brief ?? '').match(/<author-revision /g)?.length ?? 0 };
+    for (const t0 = Date.now(); Date.now() - t0 < 300000; ) {
+      const q = studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
+      if (q?.kind === 'question') {
+        const answer: Record<string, string> = {};
+        for (const f of q.fields) if (f.options?.length) answer[f.key] = f.options[0].value;
+        await studio.answerQuestion(q.id, answer);
+      }
+      if (studio.state.styleGuide.drafting === null && !studio.state.agent.running) break;
+      await sleep(1000);
+    }
+    await sleep(1500);
+    const guide = (await ipc.fsRead('WRITING_STYLE.md').catch(() => null))?.text ?? '';
+    out.guide = {
+      written: !!guide,
+      mentions: ['utilize', 'in order to', 'basically', 'it is important to note', 'very important'].filter((w) => guide.toLowerCase().includes(w)),
+      lines: guide.split('\n').filter((l) => /utiliz|in order to|basically|important to note|very important|filler/i.test(l)),
+      reply: (studio.state.agent.items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.slice(0, 500),
+    };
+  } finally {
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * Redraft…, with a real assistant (Claude Code on Haiku): a guide is drafted,
  * the author changes a rule of it by hand, and Redraft… (asked first) writes
  * it again from the chapters, keeping the author's rule. The brief says which
@@ -6760,6 +6848,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
+    if (only?.includes('stylerevisions')) result.stylerevisions = await styleRevisionsChecks();
     if (only?.includes('permissionspage')) {
       // Settings ▸ Permissions has a row for the settings tools; presets set it.
       const still = document.createElement('style');

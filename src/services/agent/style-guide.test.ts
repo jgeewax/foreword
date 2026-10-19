@@ -75,3 +75,31 @@ describe('redrafting the guide', () => {
     expect(more).toContain('<author-added>\n- Never begin with “So”.\n</author-added>\n<author-removed>\n- Use the Oxford comma.\n</author-removed>');
   });
 });
+
+describe('the author’s rewrites of the assistant’s text', () => {
+  const revisions = [
+    { path: 'chapters/ch1.typ', wrote: 'We utilize the dot product in order to measure angles.', now: 'We use the dot product to measure angles.' },
+    { path: 'chapters/ch2.typ', wrote: 'Basically, this is very important.', now: '' },
+  ];
+
+  it('go in the brief, as what the author wants that the assistant didn’t do, to make rules of', () => {
+    const p = styleDraftBrief({ revisions });
+    expect(p).toMatch(/## How the author rewrites the assistant's text\nFrom History/);
+    expect(p).toMatch(/Look for what several have in common, and write it as a rule/);
+    expect(p).toMatch(/A single fix of a fact or a typo isn't a style rule/);
+    expect(p).toContain('<author-revision path="chapters/ch1.typ">\n<assistant-wrote>\nWe utilize the dot product in order to measure angles.\n</assistant-wrote>\n<author-made-it>\nWe use the dot product to measure angles.\n</author-made-it>\n</author-revision>');
+    expect(p).toContain('<author-removed path="chapters/ch2.typ">\nBasically, this is very important.\n</author-removed>');
+  });
+
+  it('for a redraft too, and none when there aren’t any', () => {
+    expect(styleDraftBrief({ revisions, redraft: { authorChanges: [] } })).toMatch(/## Redrafting[\s\S]*## How the author rewrites/);
+    expect(styleDraftBrief({ revisions: [] })).not.toMatch(/How the author rewrites/);
+  });
+
+  it('a few, each cut short', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ path: 'a.typ', wrote: `line ${i}\n`.repeat(20), now: `x ${i}` }));
+    const p = styleDraftBrief({ revisions: many });
+    expect(p.match(/<author-revision /g)).toHaveLength(12);
+    expect(p).toMatch(/… \(9 more lines\)/);
+  });
+});
