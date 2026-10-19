@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Typst Studio — write books in Typst, with the pages beside you</title>
-<meta name="description" content="A Mac app for writing books, papers and picture books in Typst: the typeset pages update beside your words as you type, and a writing assistant reads, explains and edits with you.">
+<meta name="description" content="A Mac app for writing books, papers and picture books in Typst: the typeset pages update beside your words as you type, a writing assistant reads, explains and edits with you, and the book exports as a PDF for print or an EPUB for e-readers.">
 <meta property="og:title" content="Typst Studio">
 <meta property="og:description" content="Write in plain text. Watch it become a book. A Mac app for writing books in Typst, with a writing assistant that shows its work.">
 <meta property="og:image" content="https://jgeewax.github.io/typststudio/images/calculus.webp">
@@ -79,7 +79,8 @@
   .hero { position: relative; padding: 92px 0 0; overflow-x: clip; text-align: center; }
   .hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 900px; z-index: -1; background: radial-gradient(42% 46% at 50% 38%, color-mix(in srgb, var(--blue-soft) 22%, transparent), transparent 70%), radial-gradient(26% 30% at 74% 22%, color-mix(in srgb, var(--coral) 12%, transparent), transparent 70%); }
   .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--card) 70%, transparent); color: var(--muted); font-size: 14px; text-decoration: none; }
-  .pill b { padding: 2px 9px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 600; }
+  .pill b { flex: none; white-space: nowrap; padding: 2px 9px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 600; }
+  .pill span { text-align: left; }
   h1 { margin: 26px auto 0; max-width: 980px; color: var(--ink); font: 500 clamp(42px, 7vw, 88px)/1.03 var(--serif); letter-spacing: -0.025em; text-wrap: balance; }
   h2 { text-wrap: balance; }
   h1 em { display: block; font-style: italic; color: var(--blue-deep); }
@@ -185,7 +186,7 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <a class="pill" href="https://github.com/jgeewax/typststudio/releases/latest"><b>New</b><span data-version-pill>Version 0.1.0 for Mac</span></a>
+      <a class="pill" href="https://github.com/jgeewax/typststudio/blob/main/CHANGELOG.md"><b>New in 0.2</b><span>EPUB export, a style guide written with you, and more</span></a>
       <h1>Write in plain text. <em>Watch it become a book.</em></h1>
       <p class="lede">Typst Studio is a Mac app for writing books, papers and picture books in Typst. The typeset pages update beside your words as you type, and a writing assistant reads, explains and edits with you, showing every change it makes.</p>
       <div class="cta">
@@ -198,7 +199,7 @@
           View on GitHub
         </a>
       </div>
-      <p class="fine"><span data-version>Version 0.1.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
+      <p class="fine"><span data-version>Version 0.2.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
     </div>
     <figure class="shot">
       <img src="images/calculus.webp" width="2400" height="1500" alt="Typst Studio with Calculus Made Easy open: the book's files on the left, a chapter's Typst source with a passage selected, the typeset pages with their equations, and the assistant explaining why a term can be dropped.">
@@ -210,7 +211,7 @@
     <div class="wrap">
       <span class="eyebrow">Your assistant</span>
       <h2>Bring the assistant you already use</h2>
-      <p class="sub">It's a program on your Mac, signed in with your own account. Pick one in Settings, or from the chat. Each conversation is its own task, and several can run at once.</p>
+      <p class="sub">It's a program on your Mac, signed in with your own account. Pick one in Settings, or from the chat, with its model and how hard it thinks. Or just ask: “switch me to Claude Code”. Each conversation is its own task, and several can run at once.</p>
       <div class="marks">
         <div class="mark"><i class="m-opencode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4.5C6.8 4.5 6 5.3 6 7v2.6c0 1.3-.7 2.4-2 2.4 1.3 0 2 1.1 2 2.4V17c0 1.7.8 2.5 2.5 2.5M15.5 4.5c1.7 0 2.5.8 2.5 2.5v2.6c0 1.3.7 2.4 2 2.4-1.3 0-2 1.1-2 2.4V17c0 1.7-.8 2.5-2.5 2.5"/></svg></i><span><b>OpenCode</b><small>Any model you've set up</small></span></div>
         <div class="mark"><i class="m-claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 3.5v17M3.5 12h17M6.3 6.3l11.4 11.4M17.7 6.3L6.3 17.7"/></svg></i><span><b>Claude Code</b><small>Your Claude plan</small></span></div>
@@ -248,6 +249,8 @@
           <li>Lines it changed are marked until you rewrite them.</li>
           <li>Plan talks a change through before writing it.</li>
           <li>Options gives three versions of a passage to pick from.</li>
+          <li>When it needs you to decide, it asks in a panel, with answers to pick.</li>
+          <li>Ask it to change a setting, like “make the text bigger”, and it does.</li>
         </ul>
       </div>
       <figure>
@@ -257,6 +260,24 @@
     </section>
 
     <section class="feature">
+      <div class="copy">
+        <span class="eyebrow">Your style guide</span>
+        <h2>A style guide, written with you</h2>
+        <p>Every book gets a short guide to how it's written (voice, tone, the words it uses) that every request to the assistant follows. Answer a few rounds of questions about your book, and the assistant writes it from your answers.</p>
+        <ul>
+          <li>Or start from a template made for your kind of book.</li>
+          <li>Or have it drafted from the chapters you've written.</li>
+          <li>It learns from how you rewrite the assistant's text.</li>
+          <li>Redraft it any time: the rules you wrote stay.</li>
+        </ul>
+      </div>
+      <figure>
+        <img src="images/interview.webp" width="2728" height="1936" loading="lazy" alt="Jekyll and Hyde open at chapter one, its first page in the preview, and the assistant interviewing for the book's style guide: a panel asks who reads this edition, with three answers to pick from and one of your own.">
+        <figcaption>Claude Code writing a style guide for Jekyll and Hyde with you: first, who reads this edition?</figcaption>
+      </figure>
+    </section>
+
+    <section class="feature flip">
       <div class="copy">
         <span class="eyebrow">History</span>
         <h2>Every version, and what changed in it</h2>
@@ -272,19 +293,20 @@
       </figure>
     </section>
 
-    <section class="feature flip">
+    <section class="feature">
       <div class="copy">
         <span class="eyebrow">Templates and samples</span>
         <h2>Novels, textbooks, picture books and papers</h2>
         <p>Start from a template at the page sizes printers use in the US, the UK and Europe, and Asia. Papers start from IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS or APA.</p>
         <ul>
-          <li>Or open a finished sample: Jekyll and Hyde, The Elements of Style, Peter Rabbit…</li>
+          <li>Or open a finished sample: Jekyll and Hyde, Calculus Made Easy, Luca's Wonderful Brain…</li>
+          <li>Picture books set their words on full-page pictures.</li>
           <li>A programming book whose code examples run.</li>
         </ul>
       </div>
       <figure>
-        <img src="images/peter.webp" width="2400" height="1500" loading="lazy" alt="The Tale of Peter Rabbit as a picture book: each page's text and picture in the source, and the title page with Beatrix Potter's illustration in the preview.">
-        <figcaption>The Tale of Peter Rabbit, as a picture book: one page per picture.</figcaption>
+        <img src="images/luca.webp" width="2092" height="1307" loading="lazy" alt="Luca's Wonderful Brain as a picture book: a page's picture, words and three sound words in the source, and the watercolour page with the words and the sound words set on it in the preview.">
+        <figcaption>Luca's Wonderful Brain, a picture book: words and sound words set on full-page watercolours.</figcaption>
       </figure>
     </section>
   </div>
@@ -310,9 +332,9 @@
           <p>Design a print cover with the spine worked out from the page count, check the files, and order through Mixam.</p>
         </div>
         <div class="card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1-4.2L15.8 5a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L8.7 18.5zM13.8 7l3.2 3.2"/></svg>
-          <h3>Your style, kept</h3>
-          <p>A style guide for each book (voice, tone, terminology) that every request follows. The assistant can draft it from your chapters.</p>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 7.5h6M9 10.5h6M9 13.5h4M11 18h2"/></svg>
+          <h3>E-books</h3>
+          <p>Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, every page as typeset for picture books and papers.</p>
         </div>
         <div class="card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5.5A2 2 0 0 1 7 3.5h12v14H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h12v-4"/></svg>
@@ -322,7 +344,7 @@
         <div class="card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg>
           <h3>Familiar keys</h3>
-          <p>A command palette, Go to File, tabs and shortcuts as in VS Code, formatting on save, and a window for each book.</p>
+          <p>A command palette, Go to File, tabs and shortcuts as in VS Code, formatting on save, wrapping at a column with rulers, and a window for each book.</p>
         </div>
       </div>
     </div>
@@ -337,7 +359,7 @@
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg>
         Download for Mac
       </a>
-      <p class="fine"><span data-version>Version 0.1.0</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
+      <p class="fine"><span data-version>Version 0.2.0</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
       <details class="source">
         <summary>Or build it from source</summary>
         <pre>brew install rust node tinymist
@@ -370,7 +392,6 @@ cd typststudio &amp;&amp; npm install &amp;&amp; npm run app</pre>
       const version = release.tag_name.replace(/^v/, '');
       const dmg = (release.assets || []).find((a) => a.name.endsWith('.dmg'));
       document.querySelectorAll('[data-version]').forEach((e) => (e.textContent = `Version ${version}`));
-      document.querySelectorAll('[data-version-pill]').forEach((e) => (e.textContent = `Version ${version} for Mac`));
       if (dmg) {
         document.querySelectorAll('[data-download]').forEach((a) => (a.href = dmg.browser_download_url));
         document.querySelectorAll('[data-size]').forEach((e) => (e.textContent = `Free · ${Math.round(dmg.size / 1e6)} MB`));
