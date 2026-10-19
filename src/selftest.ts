@@ -668,6 +668,71 @@ async function styleDraftChecks(kind: 'claude' | 'codex' | 'opencode') {
 }
 
 /**
+ * "Interview me", with a real assistant (Claude Code on Haiku), on a book
+ * with little written yet (where it's the style bar's first choice): it asks
+ * in rounds, in the question panel, about the book and never the guide
+ * (answered here with each question's first choice), then writes the guide
+ * from the answers. Writes the guide: scratch book only.
+ */
+async function styleInterviewChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  try {
+    studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+    if (haiku) await studio.selectModel(haiku);
+    studio.newSession();
+    await sleep(500);
+    out.bar = { words: studio.state.compile.words, primary: document.querySelector('.style-bar.setup .primary')?.textContent };
+    document.querySelector<HTMLButtonElement>('.style-bar.setup .style-interview')?.click();
+    await sleep(2000);
+    out.barWhileInterviewing = document.querySelector('.style-bar')?.textContent;
+    const rounds: { questions: string[]; picked: string[] }[] = [];
+    for (const t0 = Date.now(); Date.now() - t0 < 420000; ) {
+      const q = studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
+      if (q?.kind === 'question') {
+        if (!rounds.length) out.snapshotQuestion = await snap('style-interview-question');
+        const answer: Record<string, string | string[]> = {};
+        const picked: string[] = [];
+        for (const f of q.fields) {
+          if (!f.options?.length) continue;
+          answer[f.key] = f.type === 'multiselect' ? [f.options[0].value] : f.options[0].value;
+          picked.push(f.options[0].label);
+        }
+        rounds.push({ questions: q.fields.map((f) => `${f.title ?? ''}: ${f.description ?? ''}`), picked });
+        await studio.answerQuestion(q.id, answer);
+        await sleep(1500);
+        continue;
+      }
+      if (studio.state.styleGuide.drafting === null && !studio.state.agent.running) break;
+      await sleep(1000);
+    }
+    await sleep(1500);
+    const guide = (await ipc.fsRead('WRITING_STYLE.md').catch(() => null))?.text ?? '';
+    const items = studio.state.agent.items;
+    out.rounds = rounds;
+    out.aboutTheGuide = rounds.flatMap((r) => r.questions).filter((q) => /\bguide\b|style guide|WRITING_STYLE/i.test(q));
+    out.result = {
+      written: !!guide,
+      headings: guide.split('\n').filter((l) => l.startsWith('## ')),
+      userMessages: items.filter((i) => i.kind === 'user').map((i) => (i as { text: string }).text.slice(0, 160)),
+      reply: (items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.slice(0, 400),
+      active: studio.state.active,
+      start: guide.slice(0, 900),
+    };
+    out.snapshot = await snap('style-interview');
+  } finally {
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * The style guide learns from how the author rewrites the assistant's text.
  * History is made as it would be: the assistant writes passages (agent
  * versions), the author rewrites some (cutting "utilize", "in order to",
@@ -6849,6 +6914,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('stylerevisions')) result.stylerevisions = await styleRevisionsChecks();
+    if (only?.includes('styleinterview')) result.styleinterview = await styleInterviewChecks();
     if (only?.includes('permissionspage')) {
       // Settings ▸ Permissions has a row for the settings tools; presets set it.
       const still = document.createElement('style');

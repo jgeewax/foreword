@@ -251,3 +251,5 @@
 - [x] we need a permission checkbox that allows settings changes just like editing files (Settings ▸ Permissions ▸ Change Typst Studio’s settings: Allow, Ask or Never, set by the presets, and for settings files from before it, as for editing files. At Ask every assistant shows one card first, Codex’s from Typst Studio itself; at Never the tools refuse and say why.)
 
 - [x] clicking on the preview jumps to the text, but the scrolling isnt quite right. i think we should position at like 10-20% scrolled , not 50% (A click in the preview puts the text about 15% down the editor, so what follows is in view; text already in view stays put.)
+
+- [x] interview style writing guide (ask me questions and we'll build a writing style guide) (Interview me, on the style bar (first choice while the book is short) and in the palette: a few rounds of questions about the book in the question panel, then the guide from your answers.)

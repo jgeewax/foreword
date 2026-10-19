@@ -1131,17 +1131,31 @@ function QueuedMessages() {
   );
 }
 
+/** Fewer words than this in the book: the interview, not the draft, is the style bar's first choice. */
+const STYLE_INTERVIEW_BELOW_WORDS = 1500;
+
 function StyleGuideBar() {
   const guide = useStore(studio.store, (s) => s.styleGuide);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
   // This conversation is drafting the guide: say so, rather than offering to start it.
   const drafting = useStore(studio.store, (s) => s.styleGuide.drafting !== null && (s.styleGuide.drafting === '' || s.styleGuide.drafting === s.agent.sessionId));
+  // Little written yet: a draft from the chapters has little to go on, so the interview comes first.
+  const fewWords = useStore(studio.store, (s) => (s.compile.words ?? 0) < STYLE_INTERVIEW_BELOW_WORDS);
   if (drafting) {
     return (
       <div className="style-bar drafting">
         <ActivityGlyph phase="thinking" />
         <span>
-          <strong>{guide.redraft ? 'Redrafting' : 'Drafting'} your style guide</strong> from the chapters. It opens in the editor when it’s written.
+          {guide.draftKind === 'interview' ? (
+            <>
+              <strong>Writing your style guide with you:</strong> answer the questions below.
+            </>
+          ) : (
+            <>
+              <strong>{guide.draftKind === 'redraft' ? 'Redrafting' : 'Drafting'} your style guide</strong> from the chapters.
+            </>
+          )}{' '}
+          It opens in the editor when it’s written.
         </span>
       </div>
     );
@@ -1154,6 +1168,9 @@ function StyleGuideBar() {
           WRITING_STYLE.md
         </button>
         <span className="spacer" />
+        <button className="link style-interview" disabled={!ready} title="The assistant asks you how the book should read, and writes the guide again from your answers" onClick={() => void studio.interviewStyleGuide()}>
+          Interview me…
+        </button>
         <button
           className="link style-redraft"
           disabled={!ready}
@@ -1172,8 +1189,21 @@ function StyleGuideBar() {
         <strong>No writing style guide yet.</strong> A short guide (voice, tone, terminology, formatting) keeps every edit sounding like your book.
       </div>
       <div className="style-actions">
-        <button className="primary" disabled={!ready} title="The agent reads your chapters, asks a few questions, then writes WRITING_STYLE.md" onClick={() => void studio.draftStyleGuide()}>
+        <button
+          className={fewWords ? '' : 'primary'}
+          disabled={!ready}
+          title="The assistant reads your chapters and writes WRITING_STYLE.md from how the book is written"
+          onClick={() => void studio.draftStyleGuide()}
+        >
           Draft from my chapters
+        </button>
+        <button
+          className={`style-interview${fewWords ? ' primary' : ''}`}
+          disabled={!ready}
+          title="The assistant asks you a few rounds of questions about the book (answers to pick from), then writes WRITING_STYLE.md from your answers"
+          onClick={() => void studio.interviewStyleGuide()}
+        >
+          Interview me
         </button>
         <button onClick={() => void studio.createStyleGuideFromTemplate()}>Start from a template</button>
         <button className="link" onClick={() => studio.dismissStyleGuidePrompt()}>

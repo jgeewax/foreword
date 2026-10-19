@@ -59,7 +59,7 @@ import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructi
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
-import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
+import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
@@ -184,6 +184,9 @@ const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.col
 export type SettingsPage = 'general' | 'editor' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant';
 export type NewBookTab = 'book' | 'paper' | 'sample';
 
+/** How the style guide is being written: from the chapters, again from them, or from the author's answers. */
+export type StyleDraftKind = 'draft' | 'redraft' | 'interview';
+
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };
 
 /** Where a picked option goes: the passage as it stands in the buffer (1-based positions). */
@@ -283,7 +286,7 @@ export type StudioState = {
    * setup prompt. `drafting`: the conversation drafting it from the chapters
    * ('' while it starts), until the guide is written.
    */
-  styleGuide: { exists: boolean; chars: number; dismissed: boolean; drafting: string | null; redraft: boolean };
+  styleGuide: { exists: boolean; chars: number; dismissed: boolean; drafting: string | null; draftKind: StyleDraftKind };
   history: HistoryState;
   /** The author's own Git repository, if the book is in one. */
   git: GitState;
@@ -378,7 +381,7 @@ const initialState: StudioState = {
   recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
-  styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null, redraft: false },
+  styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null, draftKind: 'draft' },
   history: initialHistory,
   git: initialGit,
   code: initialCode,
@@ -4555,7 +4558,7 @@ export class Studio {
    * The chat shows the author a short message; the brief goes with it as that
    * conversation's instructions, out of sight.
    */
-  async draftStyleGuide({ redraft = false } = {}) {
+  async draftStyleGuide({ kind = 'draft' as StyleDraftKind } = {}) {
     const a = this.state.agent;
     if (!this.agent || a.status !== 'ready' || a.running) return false;
     if (a.sessionId || a.items.length) this.newSession();
@@ -4563,10 +4566,13 @@ export class Studio {
     this.styleDraftBefore = this.styleGuideText;
     // How the author has rewritten the assistant's text: the guide should ask for that.
     const revisions = await this.authorRevisions();
-    const brief = styleDraftBrief({ revisions, ...(redraft ? { redraft: { authorChanges: await this.guideAuthorChanges() } } : {}) });
+    const brief =
+      kind === 'interview'
+        ? styleInterviewBrief({ revisions, existing: this.state.styleGuide.exists })
+        : styleDraftBrief({ revisions, ...(kind === 'redraft' ? { redraft: { authorChanges: await this.guideAuthorChanges() } } : {}) });
     this.pendingBrief = { key: STYLE_DRAFT_KEY, text: brief };
-    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '', redraft } }));
-    const sent = await this.send(redraft ? STYLE_REDRAFT_MESSAGE : STYLE_DRAFT_MESSAGE);
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '', draftKind: kind } }));
+    const sent = await this.send(kind === 'interview' ? STYLE_INTERVIEW_MESSAGE : kind === 'redraft' ? STYLE_REDRAFT_MESSAGE : STYLE_DRAFT_MESSAGE);
     this.pendingBrief = null;
     this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: sent ? this.state.agent.sessionId : null } }));
     return sent;
@@ -4582,7 +4588,7 @@ export class Studio {
     await this.refreshFiles();
     await this.openFile(STYLE_GUIDE_FILE);
     if (this.state.agent.sessionId === sessionId) {
-      const what = this.state.styleGuide.redraft ? `Your redrafted style guide is open in the editor (${STYLE_GUIDE_FILE}); History keeps the one before.` : `Your style guide is open in the editor (${STYLE_GUIDE_FILE}).`;
+      const what = this.styleDraftBefore !== null ? `Your new style guide is open in the editor (${STYLE_GUIDE_FILE}); History keeps the one before.` : `Your style guide is open in the editor (${STYLE_GUIDE_FILE}).`;
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${what} Every message follows it from now on; change anything that isn't right.` });
     }
   }
@@ -4595,7 +4601,20 @@ export class Studio {
       'Redraft the style guide?',
       'Redraft',
     );
-    if (ok) await this.draftStyleGuide({ redraft: true });
+    if (ok) await this.draftStyleGuide({ kind: 'redraft' });
+  }
+
+  /** "Interview me": the guide from the author's answers. Over a guide that's there, asked first (History keeps it). */
+  async interviewStyleGuide() {
+    if (this.state.styleGuide.exists) {
+      const ok = await this.confirmAction(
+        `The assistant asks you how the book should read, then writes ${STYLE_GUIDE_FILE} again from your answers, keeping the rules you wrote yourself. History keeps this version, so you can go back to it.`,
+        'Write the style guide by interview?',
+        'Interview me',
+      );
+      if (!ok) return;
+    }
+    await this.draftStyleGuide({ kind: 'interview' });
   }
 
   /**

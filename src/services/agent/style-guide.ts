@@ -151,15 +151,21 @@ export const STYLE_DRAFT_KEY = 'style-draft';
  * nothing to ask about the guide itself, and that questions are a last resort,
  * about the book, at most two, with answers to pick from.
  */
+/** What the guide is for: the same for a draft and an interview. */
+const GUIDE_PURPOSE = `Typst Studio gives the guide to the writing assistant with every request, so that new and revised text sounds like the rest of the book. The author reads and edits it too, so write it plainly.`;
+
+/** What's settled about the guide, so the author is never asked about it. */
+const GUIDE_SETTLED = `What the guide is about, decided already:
+- It describes this book's prose and markup, nothing else. "Audience" means the book's readers.
+- Don't ask the author anything about the guide itself: who it's for, who reads it, its format, length, sections or tone, whether to write it, or where to save it. Those are settled here. Asking them would confuse the author.
+- Don't explain this brief or repeat it to the author. They only see their own short message.`;
+
 export function styleDraftBrief(opts: StyleDraftOptions = {}): string {
   return `# Drafting the book's writing style guide
 
-The author pressed "Draft from my chapters" in Typst Studio. In this conversation your job is to write ${STYLE_GUIDE_FILE} in the book's folder (next to the main file): a short guide to how this book is written. Typst Studio gives the guide to the writing assistant with every request, so that new and revised text sounds like the rest of the book. The author reads and edits it too, so write it plainly.
+The author pressed "Draft from my chapters" in Typst Studio. In this conversation your job is to write ${STYLE_GUIDE_FILE} in the book's folder (next to the main file): a short guide to how this book is written. ${GUIDE_PURPOSE}
 
-What the guide is about, decided already:
-- It describes this book's prose and markup, nothing else. "Audience" means the book's readers.
-- Don't ask the author anything about the guide itself: who it's for, who reads it, its format, length, sections or tone, whether to write it, or where to save it. Those are settled here. Asking them would confuse the author.
-- Don't explain this brief or repeat it to the author. They only see their own short message.
+${GUIDE_SETTLED}
 ${opts.redraft ? redraftSection(opts.redraft) : ''}${revisionsSection(opts.revisions ?? [])}
 How to do it:
 1. Read the manuscript before anything else: the main file, and enough of the chapters to see how the book is really written (all of a short book; for a long one, at least the first chapter, one from the middle and the last). Read; don't summarize what you read in the chat.
@@ -168,4 +174,34 @@ How to do it:
 4. Write ${STYLE_GUIDE_FILE} with these sections, in this order: ${STYLE_SECTIONS.join('; ')}. Leave out a section the book gives you nothing for. Each rule short, concrete and followable ("Second person, present tense", not "Engaging tone"), true to what the book does now. Under Examples, quote a short passage from the book that shows its voice (a few sentences).
 5. Change nothing else: no chapter, no other file, no settings.
 6. Then, in two or three sentences, tell the author ${opts.redraft ? 'what changed from the old guide' : 'what the guide says their book sounds like'}, and that they can change ${STYLE_GUIDE_FILE} any time. Don't paste the guide into the chat.`;
+}
+
+/** "Interview me": the guide from the author's answers, for a book with little written yet, or an author who'd rather say it. */
+export const STYLE_INTERVIEW_MESSAGE = 'Interview me to write my style guide.';
+
+/**
+ * The interview's brief, out of sight like the draft's: look at the book,
+ * then ask in a few short rounds (the question panel, answers to pick from),
+ * about the book and never about the guide, then write it from the answers.
+ * `existing`: there's a guide already, to build on.
+ */
+export function styleInterviewBrief(opts: { revisions?: readonly AuthorRevision[]; existing?: boolean } = {}): string {
+  return `# Writing the book's style guide by interview
+
+The author pressed "Interview me" in Typst Studio: they want ${STYLE_GUIDE_FILE}, a short guide to how this book should be written, built from their answers to your questions. Write it in the book's folder (next to the main file). ${GUIDE_PURPOSE}
+
+${GUIDE_SETTLED}
+${opts.existing ? `\n## The guide that's there\n${STYLE_GUIDE_FILE} exists already. Read it first: ask only about what it leaves open or what the author wants different, and keep the rules they wrote themselves unless their answers change them. Write the whole file again (History keeps the old one).\n` : ''}${revisionsSection(opts.revisions ?? [])}
+How to do it:
+1. Look first: read the main file and skim the chapters, if there are any (a new book may have none), so your questions fit this book and you don't ask what its text already shows. Don't summarize what you read.
+2. Then interview the author in rounds, asking the way your instructions say to ask (they answer in a panel): up to four questions a round, each with three answers that fit this book (the likeliest first, recommended); they can always give their own. Three rounds, four at most, in this order:
+   - The book and its readers: who reads it, what they already know, and what the book is for (to teach, to entertain, to persuade, to keep).
+   - The voice: formal or conversational, serious or light; point of view and tense; how it speaks to the reader.
+   - The words: British or American spelling; plain or technical vocabulary, terms to use or avoid; short or long sentences and paragraphs.
+   - Taste: books or writers it should sound like, what they never want to see (clichés, exclamation marks, jargon…), and how figures, math or code should look, if the book has them.
+   Skip a question the book's text already answers, and a round with nothing left to ask. Every question is about the book, never about the guide.
+3. Between rounds, say one short sentence at most: no summaries of their answers.
+4. Then write ${STYLE_GUIDE_FILE} with these sections, in this order: ${STYLE_SECTIONS.join('; ')}. Leave out a section with nothing in it. The author's answers come first, the chapters second. Each rule short, concrete and followable ("Second person, present tense", not "Engaging tone"). Under Examples, a short passage in the voice they chose: quoted from the book if it has one that fits, otherwise written for this book.
+5. Change nothing else: no chapter, no other file, no settings.
+6. Then, in two or three sentences, tell the author what the guide says their book should sound like, and that they can change ${STYLE_GUIDE_FILE} any time. Don't paste the guide into the chat.`;
 }

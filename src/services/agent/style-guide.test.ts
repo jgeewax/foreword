@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STYLE_DRAFT_MESSAGE, STYLE_GUIDE_MAX_CHARS, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions } from './style-guide';
+import { STYLE_DRAFT_MESSAGE, STYLE_GUIDE_MAX_CHARS, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, styleInterviewBrief } from './style-guide';
 
 describe('styleInstructions', () => {
   it('wraps the guide and tells the agent to follow it', () => {
@@ -101,5 +101,31 @@ describe('the author’s rewrites of the assistant’s text', () => {
     const p = styleDraftBrief({ revisions: many });
     expect(p.match(/<author-revision /g)).toHaveLength(12);
     expect(p).toMatch(/… \(9 more lines\)/);
+  });
+});
+
+describe('the style guide by interview', () => {
+  it('shows the author one short message, and settles the guide as the draft does', () => {
+    expect(STYLE_INTERVIEW_MESSAGE).toBe('Interview me to write my style guide.');
+    const p = styleInterviewBrief();
+    expect(p).toMatch(/"Audience" means the book's readers/);
+    expect(p).toMatch(/Don't ask the author anything about the guide itself/);
+    expect(p).toMatch(/Every question is about the book, never about the guide/);
+  });
+
+  it('looks at the book first, then asks in a few rounds with answers to pick, then writes from the answers', () => {
+    const p = styleInterviewBrief();
+    expect(p).toMatch(/1\. Look first: read the main file and skim the chapters, if there are any/);
+    expect(p).toMatch(/up to four questions a round, each with three answers that fit this book/);
+    expect(p).toMatch(/Three rounds, four at most/);
+    expect(p).toMatch(/Skip a question the book's text already answers/);
+    expect(p).toMatch(/The author's answers come first, the chapters second/);
+    expect(p).toMatch(/Change nothing else: no chapter/);
+  });
+
+  it('builds on a guide that’s there, and on how the author rewrites the assistant', () => {
+    expect(styleInterviewBrief()).not.toMatch(/The guide that's there/);
+    expect(styleInterviewBrief({ existing: true })).toMatch(/## The guide that's there\nWRITING_STYLE.md exists already\. Read it first/);
+    expect(styleInterviewBrief({ revisions: [{ path: 'a.typ', wrote: 'utilize', now: 'use' }] })).toMatch(/How the author rewrites the assistant's text/);
   });
 });
