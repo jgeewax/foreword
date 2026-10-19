@@ -8,15 +8,22 @@ import { resolveRef } from './references';
 import { ASSISTANT_NAMES, type AssistantId } from './settings';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 
-/** What the book calls its files: the main file, the chapters it includes (in order), and headings. */
-export type BookNames = { root: string; entry: string | null; chapters: string[]; titles: Record<string, string> };
+/**
+ * What the book calls its files: the main file, the chapters it includes (in
+ * order), headings, and the files whose heading isn't numbered (a preface).
+ */
+export type BookNames = { root: string; entry: string | null; chapters: string[]; titles: Record<string, string>; unnumbered?: string[] };
 
 export const NO_NAMES: BookNames = { root: '', entry: null, chapters: [], titles: {} };
 
-/** A file's first heading ("= The Storm <ch-storm>" → "The Storm"), without markup. */
+/**
+ * A file's first heading ("= The Storm <ch-storm>" → "The Storm", or
+ * "#heading(numbering: none)[Prologue]" → "Prologue"), without markup.
+ */
 export function firstHeading(text: string): string | null {
   for (const line of text.split('\n')) {
-    const m = /^\s*=\s+(.+?)\s*(<[\w:.-]+>)?\s*$/.exec(line);
+    const call = /^\s*#heading\(([^)]*)\)\[(.+)\]\s*(<[\w:.-]+>)?\s*$/.exec(line);
+    const m = call && !/level\s*:\s*[2-9]/.test(call[1]) ? [line, call[2]] : /^\s*=\s+(.+?)\s*(<[\w:.-]+>)?\s*$/.exec(line);
     // Markup out, and Typst's non-breaking space (~) as one.
     if (m) return m[1].replace(/[*_`]/g, '').replace(/(?<!\\)~/g, '\u00a0').replace(/\\(.)/g, '$1').trim() || null;
   }
@@ -36,13 +43,35 @@ export function includedFiles(main: string, mainPath: string, root = ''): string
   return out;
 }
 
+/** Whether a file turns heading numbers off before its first heading, as a preface or a prologue does. */
+export function unnumberedHeading(text: string): boolean {
+  const heading = text.search(/^\s*=\s/m);
+  const before = heading < 0 ? text : text.slice(0, heading);
+  return /heading\s*\([^)]*numbering\s*:\s*none/.test(before.replace(/^\s*\/\/.*$/gm, ''));
+}
+
+/**
+ * A chapter's number as the book counts them: the main file's includes, in
+ * order, that start with a numbered heading. Null for anything else.
+ */
+export function chapterNumber(path: string, names: BookNames): number | null {
+  const counts = (p: string) => !!names.titles[p] && !names.unnumbered?.includes(p);
+  if (!counts(path)) return null;
+  let n = 0;
+  for (const p of names.chapters) {
+    if (counts(p)) n++;
+    if (p === path) return n;
+  }
+  return null;
+}
+
 /** A file as the author knows it: “Heading” (chapter 2), the main file, the style guide, or its path. */
 export function fileName(path: string, names: BookNames): string {
   if (path === names.entry) return 'the main file';
   if (path === 'WRITING_STYLE.md') return 'the style guide';
   const title = names.titles[path];
-  const chapter = names.chapters.indexOf(path);
-  if (title && chapter >= 0) return `“${title}” (chapter ${chapter + 1})`;
+  const chapter = chapterNumber(path, names);
+  if (title && chapter) return `“${title}” (chapter ${chapter})`;
   if (title) return `“${title}”`;
   return path;
 }

@@ -31,7 +31,7 @@ import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-too
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
-import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, type BookNames } from './tool-labels';
+import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
@@ -4421,15 +4421,18 @@ export class Studio {
     if (!ws) return;
     const typ = ws.files.filter((f) => f.endsWith('.typ'));
     const titles = only ? { ...this.state.names.titles } : {};
+    const unnumbered = new Set(only ? this.state.names.unnumbered : []);
     for (const f of only ? only.filter((p) => p.endsWith('.typ')) : typ) {
       const text = await this.currentText(f).catch(() => null);
       const heading = text == null ? null : firstHeading(text);
       if (heading) titles[f] = heading;
       else delete titles[f];
+      if (text != null && unnumberedHeading(text)) unnumbered.add(f);
+      else unnumbered.delete(f);
     }
     const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
     const chapters = main && ws.entry ? includedFiles(main, ws.entry, this.typstRoot()) : [];
-    if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles } });
+    if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...unnumbered] } });
   }
 
   /** The last PDF exported in this session (Open Exported PDF). */

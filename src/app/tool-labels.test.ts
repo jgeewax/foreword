@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describePermission, describeTool, fileName, firstHeading, includedFiles, type BookNames } from './tool-labels';
+import { chapterNumber, describePermission, describeTool, fileName, firstHeading, includedFiles, unnumberedHeading, type BookNames } from './tool-labels';
 
 const names: BookNames = {
   root: '/b',
@@ -12,6 +12,8 @@ describe('the book’s names', () => {
   it('reads headings and the include order', () => {
     expect(firstHeading('// a comment\n#import "x": *\n\n= The *Lighthouse* Keeper <ch-1>\n\nText.')).toBe('The Lighthouse Keeper');
     expect(firstHeading('== Only a subsection')).toBeNull();
+    expect(firstHeading('#import "../style.typ": *\n\n#heading(numbering: none)[Prologue]\n')).toBe('Prologue');
+    expect(firstHeading('#heading(level: 2, numbering: none)[Exercises I] <answers-i>')).toBeNull();
     expect(firstHeading('= Remarkable Incident of Dr.~Lanyon, 5\\~6')).toBe('Remarkable Incident of Dr.\u00a0Lanyon, 5~6');
     expect(includedFiles('#include "chapters/a.typ"\n// #include "chapters/old.typ"\n#include "./chapters/b.typ"', 'main.typ')).toEqual(['chapters/a.typ', 'chapters/b.typ']);
   });
@@ -22,6 +24,30 @@ describe('the book’s names', () => {
     expect(fileName('main.typ', names)).toBe('the main file');
     expect(fileName('WRITING_STYLE.md', names)).toBe('the style guide');
     expect(fileName('refs.bib', names)).toBe('refs.bib');
+  });
+
+  it('numbers chapters as the book does: a prologue without a numbered heading isn’t chapter 1', () => {
+    expect(chapterNumber('chapters/02-harbour.typ', names)).toBe(2);
+    expect(chapterNumber('notes.typ', names)).toBeNull();
+    expect(chapterNumber('main.typ', names)).toBeNull();
+    const withPrologue: BookNames = {
+      ...names,
+      chapters: ['chapters/00-prologue.typ', 'chapters/00-preface.typ', 'chapters/01-storm.typ', 'chapters/02-harbour.typ'],
+      titles: { ...names.titles, 'chapters/00-preface.typ': 'Preface' },
+      unnumbered: ['chapters/00-prologue.typ', 'chapters/00-preface.typ'],
+    };
+    expect(chapterNumber('chapters/00-preface.typ', withPrologue)).toBeNull();
+    expect(chapterNumber('chapters/01-storm.typ', withPrologue)).toBe(1);
+    expect(fileName('chapters/02-harbour.typ', withPrologue)).toBe('“The Harbour” (chapter 2)');
+    expect(fileName('chapters/00-preface.typ', withPrologue)).toBe('“Preface”');
+  });
+
+  it('sees heading numbers turned off before the first heading', () => {
+    expect(unnumberedHeading('#import "../style.typ": *\n\n#heading(numbering: none)[Prologue]\n\nText.')).toBe(true);
+    expect(unnumberedHeading('#set heading(numbering: none)\n= Preface\n')).toBe(true);
+    expect(unnumberedHeading('#set math.equation(numbering: none)\n= Constants\n')).toBe(false);
+    expect(unnumberedHeading('// #set heading(numbering: none)\n= The Storm\n')).toBe(false);
+    expect(unnumberedHeading('= The Storm\n\n#heading(numbering: none, level: 2)[Aside]')).toBe(false);
   });
 });
 

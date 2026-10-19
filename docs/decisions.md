@@ -2729,6 +2729,27 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   icon and View ▸ History open it alone; Settings ▸ General has no History
   choice), and `activity`, `shot`, `chrome` and `defaults` still pass.
 
+### Chapter numbers in Go to File
+
+- **Asked for:** "when selecting chapters from the file palette modal, we
+  show titles but not chapter numbers. We should include numbers ("17. Title
+  of Chapter 17")".
+- **Now:** Go to File (⌘P) shows a chapter as "17. Its Heading", path beside
+  it, and the number is part of what you can type to find it ("17").
+  - A chapter's number is the book's: the main file's includes, in order,
+    that start with a numbered heading. A prologue or preface that turns
+    heading numbers off before its heading (`#heading(numbering: none)[…]`,
+    `#set heading(numbering: none)`) gets no number and doesn't push the
+    rest up one, as in Calculus Made Easy.
+  - The chat's names for files use the same count ("Read “The Harbour”
+    (chapter 2)"), so the two never disagree.
+  - Headings written as `#heading(…)[Prologue]` (level 1) are a file's
+    title now too, so the prologue shows as "Prologue", not 00-prologue.typ.
+- Verified: unit tests (numbering with an unnumbered prologue and preface;
+  `numbering: none` for equations doesn't count); self-test `quickopen`
+  ("2. Eigenvalues" found by "eigenval"); in the app on Calculus Made Easy:
+  Prologue, 1.–5., Answers.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

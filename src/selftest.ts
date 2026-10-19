@@ -3789,9 +3789,10 @@ async function quickOpenChecks() {
   out.eig = rows().slice(0, 2);
   out.highlighted = document.querySelector('.quick-open-row.active b')?.textContent;
   out.snapshot = await snap('quick-open');
-  // A chapter by its heading: "vectors" is in ch1's name, "eigen" in ch2's heading ("Eigenvalues").
+  // A chapter by its heading: "vectors" is in ch1's name, "eigen" in ch2's heading ("Eigenvalues"), after its number.
   await typeIn(input, 'eigenval');
   out.byHeading = document.querySelector('.quick-open-row.active .quick-open-main')?.textContent;
+  out.numbered = /^2\. /.test(String(out.byHeading));
   await typeIn(input, 'zzzq');
   out.none = document.querySelector('.quick-open-empty')?.textContent;
   await typeIn(input, 'refs');
