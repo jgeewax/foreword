@@ -1,9 +1,9 @@
 # Writing style: Counting Words
 
 <!--
-This file tells the writing assistant how this book should read. Replace the
-prompts under each heading with your own notes. Short, concrete rules work
-best, especially with an example. Delete sections you don't need.
+A worked example of the Programming book style guide template. To start one like it
+for your own book: Writing Style Guide Templates… in the command palette, or
+Start from a template on the chat's style bar.
 -->
 
 ## Audience

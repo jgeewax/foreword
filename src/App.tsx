@@ -7,6 +7,7 @@ import { EditorPane } from './components/EditorPane';
 import { ActivityBar, Explorer, type View } from './components/Explorer';
 import { PreviewPane } from './components/PreviewPane';
 import { CoverDialog } from './components/CoverDialog';
+import { StyleTemplatesDialog } from './components/StyleTemplatesDialog';
 import { NewBookDialog } from './components/NewBookDialog';
 import { PrintDialog } from './components/PrintDialog';
 import { QuickOpen } from './components/QuickOpen';
@@ -246,6 +247,7 @@ export function App() {
   const aboutOpen = useStore(studio.store, (s) => s.aboutOpen);
   const newBookOpen = useStore(studio.store, (s) => s.newBookOpen);
   const coverDialogOpen = useStore(studio.store, (s) => s.coverDialogOpen);
+  const styleTemplatesOpen = useStore(studio.store, (s) => s.styleTemplatesOpen);
   const printOpen = useStore(studio.store, (s) => s.print.open);
   const quickOpen = useStore(studio.store, (s) => s.quickOpen);
   // Typst source outside the editor (What changed's words) is set like the editor.
@@ -264,6 +266,7 @@ export function App() {
       {settingsOpen && <SettingsDialog />}
       {newBookOpen && <NewBookDialog />}
       {coverDialogOpen && <CoverDialog />}
+      {styleTemplatesOpen && <StyleTemplatesDialog />}
       {printOpen && <PrintDialog />}
       {quickOpen && <QuickOpen />}
       {updateDialog && <UpdateDialog />}

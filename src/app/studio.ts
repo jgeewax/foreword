@@ -59,7 +59,8 @@ import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructi
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
-import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
+import { STYLE_TEMPLATES } from '../style-guides';
+import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
@@ -304,6 +305,8 @@ export type StudioState = {
   /** The book's page count, last seen while previewing the book (for the cover's spine). */
   bookPages: number | null;
   coverDialogOpen: boolean;
+  /** Writing Style Guide Templates: pick one to start WRITING_STYLE.md from. */
+  styleTemplatesOpen: boolean;
   /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
   names: BookNames;
   /** ⌘P: go to a file by name; ⇧⌘P: run a command. What it was opened for (false: closed). */
@@ -390,6 +393,7 @@ const initialState: StudioState = {
   previewTarget: 'book',
   bookPages: null,
   coverDialogOpen: false,
+  styleTemplatesOpen: false,
   print: { open: false, status: 'idle', checks: [], files: {} },
   aiMarks: 0,
   names: NO_NAMES,
@@ -695,7 +699,7 @@ export class Studio {
   /** The writing style guide, created from the template if there isn't one. */
   async openStyleGuide() {
     if (this.state.styleGuide.exists) await this.openFile(STYLE_GUIDE_FILE);
-    else await this.createStyleGuideFromTemplate();
+    else this.openStyleTemplates();
   }
 
   /** Name the current version (as History's "Name this version…" does). */
@@ -2594,7 +2598,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.print.open || !!s.quickOpen;
+    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.styleTemplatesOpen || s.print.open || !!s.quickOpen;
   }
 
   private syncPreviewVisibility() {
@@ -4528,22 +4532,49 @@ export class Studio {
     }
   }
 
-  /** Create WRITING_STYLE.md from the template and open it. */
-  async createStyleGuideFromTemplate() {
+  openStyleTemplates() {
+    this.store.set({ styleTemplatesOpen: true });
+    this.syncPreviewVisibility();
+  }
+
+  closeStyleTemplates() {
+    this.store.set({ styleTemplatesOpen: false });
+    this.syncPreviewVisibility();
+  }
+
+  /**
+   * WRITING_STYLE.md from a template (style-guides/; Blank has a prompt under each
+   * heading), named for the book, and open it. Over a guide that's there, asked
+   * first: History keeps the one it replaces.
+   */
+  async createStyleGuideFromTemplate(templateId = 'blank') {
     const ws = this.state.workspace;
-    if (!ws) return;
-    try {
-      await ipc.fsWrite(STYLE_GUIDE_FILE, styleGuideTemplate(ws.name), null);
-    } catch (e) {
-      if (!(isCmdError(e) && e.kind === 'conflict')) {
-        this.toast(`Couldn't create ${STYLE_GUIDE_FILE}: ${errorMessage(e)}`, 'error');
-        return;
-      }
-      // It appeared meanwhile: just open it.
+    if (!ws) return false;
+    const template = STYLE_TEMPLATES.find((t) => t.id === templateId) ?? STYLE_TEMPLATES[STYLE_TEMPLATES.length - 1];
+    const title = (await this.bookMeasurements().catch(() => null))?.title ?? ws.name;
+    const there = await ipc.fsRead(STYLE_GUIDE_FILE).catch(() => null);
+    if (there) {
+      const ok = await this.confirmAction(
+        `This replaces your ${STYLE_GUIDE_FILE} with the ${template.name} template. History keeps the guide you have now, so you can go back to it.`,
+        'Replace the style guide?',
+        'Replace',
+      );
+      if (!ok) return false;
+      await this.docs?.saveAll();
+      await this.history.checkpoint().catch(() => null);
     }
+    try {
+      await ipc.fsWrite(STYLE_GUIDE_FILE, template.text(title), there?.hash ?? null);
+    } catch (e) {
+      this.toast(`Couldn't write ${STYLE_GUIDE_FILE}: ${errorMessage(e)}`, 'error');
+      return false;
+    }
+    this.closeStyleTemplates();
     await this.loadStyleGuide({ updateSession: true });
     await this.refreshFiles();
+    await this.reloadFromDisk(STYLE_GUIDE_FILE).catch(() => {});
     await this.openFile(STYLE_GUIDE_FILE);
+    return true;
   }
 
   /** Instructions for the next message's conversation, which the author doesn't see (set by draftStyleGuide). */

@@ -668,6 +668,67 @@ async function styleDraftChecks(kind: 'claude' | 'codex' | 'opencode') {
 }
 
 /**
+ * Style guide templates: Start from a template opens the picker, which
+ * suggests one for the book; each shows its text, or its sample's guide;
+ * Use this template writes WRITING_STYLE.md named for the book; over a guide
+ * that's there it asks first and History keeps the old one. No model needed.
+ * Writes the guide: scratch book only.
+ */
+async function styleTemplatesChecks() {
+  const out: Record<string, unknown> = {};
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  const confirm = studio.confirmAction;
+  const asked: string[] = [];
+  studio.confirmAction = async (message, title) => (asked.push(`${title} | ${message}`), true);
+  const dialog = () => document.querySelector('.modal.style-templates');
+  const pick = async (name: string) => {
+    [...document.querySelectorAll<HTMLButtonElement>('.style-template')].find((b) => b.querySelector('.template-name')?.textContent === name)?.click();
+    await sleep(200);
+  };
+  try {
+    await waitFor(() => studio.state.history.status === 'ready', 30000, 'history');
+    out.barButton = !!document.querySelector('.style-bar.setup');
+    [...document.querySelectorAll<HTMLButtonElement>('.style-bar.setup button')].find((b) => b.textContent === 'Start from a template')?.click();
+    await sleep(400);
+    out.open = !!dialog();
+    out.list = [...document.querySelectorAll('.style-template')].map((b) => `${b.querySelector('.template-name')?.textContent}${b.getAttribute('aria-checked') === 'true' ? ' ✓' : ''} | ${b.querySelector('.template-details')?.textContent ?? ''}`);
+    await pick('Friendly textbook');
+    out.templateView = { title: document.querySelector('.style-template-text h3')?.textContent, headings: [...document.querySelectorAll('.style-template-text h4')].map((h) => h.textContent) };
+    out.snapshotTemplate = await snap('style-templates');
+    [...document.querySelectorAll<HTMLButtonElement>('.style-template-preview [role=tab]')].find((b) => b.textContent === 'In the sample')?.click();
+    await sleep(300);
+    out.sampleView = document.querySelector('.style-template-text h3')?.textContent;
+    out.snapshotSample = await snap('style-templates-sample');
+    out.openSampleLink = document.querySelector('.modal.style-templates .modal-footer .link')?.textContent;
+    document.querySelector<HTMLButtonElement>('.modal.style-templates .modal-footer .primary')?.click();
+    await waitFor(() => !dialog() && studio.state.styleGuide.exists, 10000, 'the guide').catch(() => {});
+    await sleep(500);
+    const first = (await ipc.fsRead('WRITING_STYLE.md')).text;
+    out.written = { title: first.split('\n')[0], textbook: /Friendly textbook template/.test(first), active: studio.state.active, asked: [...asked] };
+
+    // Again, over the guide that's there: asked first, and History keeps it.
+    studio.openStyleTemplates();
+    await sleep(400);
+    await pick('Classic fiction');
+    out.replaceButton = document.querySelector('.modal.style-templates .modal-footer .primary')?.textContent;
+    document.querySelector<HTMLButtonElement>('.modal.style-templates .modal-footer .primary')?.click();
+    await waitFor(() => !dialog(), 10000, 'replaced').catch(() => {});
+    await sleep(800);
+    const second = (await ipc.fsRead('WRITING_STYLE.md')).text;
+    const versions = await ipc.historyList(20, 'WRITING_STYLE.md');
+    const kept = await Promise.all(versions.map((v) => ipc.historyFile(v.id, 'WRITING_STYLE.md')));
+    out.replaced = { classic: /Classic fiction template/.test(second), asked: asked.slice(-1)[0], historyHasTheTextbookGuide: kept.some((t) => /Friendly textbook template/.test(t ?? '')) };
+  } finally {
+    studio.confirmAction = confirm;
+    studio.closeStyleTemplates();
+    still.remove();
+  }
+  return out;
+}
+
+/**
  * "Interview me", with a real assistant (Claude Code on Haiku), on a book
  * with little written yet (where it's the style bar's first choice): it asks
  * in rounds, in the question panel, about the book and never the guide
@@ -6915,6 +6976,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('stylerevisions')) result.stylerevisions = await styleRevisionsChecks();
     if (only?.includes('styleinterview')) result.styleinterview = await styleInterviewChecks();
+    if (only?.includes('styletemplates')) result.styletemplates = await styleTemplatesChecks();
     if (only?.includes('permissionspage')) {
       // Settings ▸ Permissions has a row for the settings tools; presets set it.
       const still = document.createElement('style');

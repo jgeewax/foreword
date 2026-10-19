@@ -1,5 +1,11 @@
 # Writing style: Attention Is All You Need
 
+<!--
+A worked example of the Research paper style guide template. To start one like it
+for your own book: Writing Style Guide Templates… in the command palette, or
+Start from a template on the chat's style bar.
+-->
+
 ## Audience
 
 Machine-learning researchers and graduate students. They know neural networks, softmax, backpropagation, BLEU and the encoder–decoder idea, and many know recurrent translation models. Don't explain the basics, but define every symbol where it first appears.

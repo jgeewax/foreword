@@ -1,5 +1,11 @@
 # Writing style: Luca's Wonderful Brain
 
+<!--
+A worked example of the Picture book style guide template. To start one like it
+for your own book: Writing Style Guide Templates… in the command palette, or
+Start from a template on the chat's style bar.
+-->
+
 ## Audience
 
 Read aloud by a grown-up to Luca, his little sister Summer and other young children (about three to seven), one page at a time, with the pictures in front of them.

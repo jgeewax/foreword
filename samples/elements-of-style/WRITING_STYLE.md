@@ -1,5 +1,11 @@
 # Writing style: The Elements of Style
 
+<!--
+A worked example of the Rules and reference style guide template. To start one like it
+for your own book: Writing Style Guide Templates… in the command palette, or
+Start from a template on the chat's style bar.
+-->
+
 ## Audience
 
 Students in a first college course in composition, and their instructors: Strunk wrote the book for his classes at Cornell.

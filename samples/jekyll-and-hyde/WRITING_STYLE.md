@@ -1,5 +1,11 @@
 # Writing style: Strange Case of Dr Jekyll and Mr Hyde
 
+<!--
+A worked example of the Classic fiction style guide template. To start one like it
+for your own book: Writing Style Guide Templates… in the command palette, or
+Start from a template on the chat's style bar.
+-->
+
 ## Audience
 
 Readers of a new edition of Stevenson's 1886 novella: adults who read classic fiction and expect it to sound as it did when it was first published. Anything new (a restored passage, a bridging paragraph, a letter or document inside the story) must read as Stevenson's own; nothing may sound modern.

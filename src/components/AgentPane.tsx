@@ -1205,7 +1205,9 @@ function StyleGuideBar() {
         >
           Interview me
         </button>
-        <button onClick={() => void studio.createStyleGuideFromTemplate()}>Start from a template</button>
+        <button title="Pick one made for your kind of book (a novel, a textbook, a picture book…), then change it" onClick={() => studio.openStyleTemplates()}>
+          Start from a template
+        </button>
         <button className="link" onClick={() => studio.dismissStyleGuidePrompt()}>
           Not now
         </button>

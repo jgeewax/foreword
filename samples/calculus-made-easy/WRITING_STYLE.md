@@ -1,5 +1,11 @@
 # Writing style: Calculus Made Easy
 
+<!--
+A worked example of the Friendly textbook style guide template. To start one like it
+for your own book: Writing Style Guide Templates… in the command palette, or
+Start from a template on the chat's style bar.
+-->
+
 ## Audience
 
 Beginners who are frightened of the calculus: the "fifth-form boys" of Chapter I, and grown-ups who never got past the symbols.
