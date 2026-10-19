@@ -42,6 +42,7 @@ import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
 import { shouldStartTour, TOUR_SEEN_KEY, TOUR_STEPS } from './tour';
 import { replaceText, searchPattern, searchText, SEARCHABLE, type FileMatches, type SearchMatch, type SearchOptions } from './book-search';
+import { fileContents, type FileContents } from './contents';
 import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
@@ -391,7 +392,9 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'search' | 'history' | 'code' | 'todos' | 'review' | 'git';
+  sidebar: 'files' | 'contents' | 'search' | 'history' | 'code' | 'todos' | 'review' | 'git';
+  /** Each Typst file's headings and about how many words it has (the Contents view). */
+  contents: Record<string, FileContents>;
   /** The Search view: what's searched for, how, and what it found. */
   search: SearchState;
 };
@@ -443,6 +446,7 @@ const initialState: StudioState = {
   settingsOpen: false,
   tour: null,
   search: initialSearch,
+  contents: {},
   update: null,
   updateDialog: false,
   aboutOpen: false,
@@ -724,6 +728,7 @@ export class Studio {
     'toggle-preview': () => this.events.emit('toggle-pane', 'preview'),
     'toggle-assistant': () => this.events.emit('toggle-pane', 'agent'),
     'show-files': () => this.revealSidebar('files'),
+    'show-contents': () => this.revealSidebar('contents'),
     'show-review': () => this.showReview(),
     'show-history': () => this.revealSidebar('history'),
     'show-tasks': () => this.showTasks(),
@@ -882,6 +887,7 @@ export class Studio {
             if (!doc) return;
             this.code.updateFile(p, doc.model.getValue());
             this.updateTodos(p, doc.model.getValue());
+            this.store.set((s) => ({ contents: { ...s.contents, [p]: fileContents(doc.model.getValue()) } }));
           }, 400);
         }
       },
@@ -4642,6 +4648,7 @@ export class Studio {
     const typ = ws.files.filter((f) => f.endsWith('.typ'));
     const titles = only ? { ...this.state.names.titles } : {};
     const unnumbered = new Set(only ? this.state.names.unnumbered : []);
+    const contents = only ? { ...this.state.contents } : {};
     for (const f of only ? only.filter((p) => p.endsWith('.typ')) : typ) {
       const text = await this.currentText(f).catch(() => null);
       const heading = text == null ? null : firstHeading(text);
@@ -4649,10 +4656,12 @@ export class Studio {
       else delete titles[f];
       if (text != null && unnumberedHeading(text)) unnumbered.add(f);
       else unnumbered.delete(f);
+      if (text != null) contents[f] = fileContents(text);
+      else delete contents[f];
     }
     const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
     const chapters = main && ws.entry ? includedFiles(main, ws.entry, this.typstRoot()) : [];
-    if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...unnumbered] } });
+    if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...unnumbered] }, contents });
   }
 
   /** The last PDF exported in this session (Open Exported PDF). */

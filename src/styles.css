@@ -532,6 +532,26 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 /* todos */
 .todo-panel { overflow-y: auto; flex: 1; padding: 4px 0 12px; }
 .todo-panel.empty { padding: 12px; line-height: 1.45; }
+/* Contents: chapters in order with their number, title and words, sections under them; where the cursor is, lit. */
+.contents-panel { flex: 1; overflow-y: auto; padding: 2px 0 12px; }
+.contents-total { padding: 6px 12px 6px; font-size: 11.5px; }
+.contents-row { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 24px; padding: 0 10px 0 4px; border: none; border-radius: 0; background: transparent; text-align: left; cursor: default; }
+button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { background: var(--bg-3); }
+.contents-row.here { background: var(--sel); }
+.contents-row.depth-1 { padding-left: 42px; font-size: 12px; color: var(--muted); }
+.contents-row.depth-1.here { color: var(--fg); }
+.contents-fold { flex: none; display: grid; place-items: center; width: 18px; height: 20px; padding: 0; color: var(--muted); }
+.contents-fold svg { transition: transform 0.12s; }
+.contents-fold.open svg { transform: rotate(90deg); }
+.contents-go { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; padding: 3px 0; border: none; background: transparent; text-align: left; }
+.contents-go:hover:not(:disabled) { border: none; }
+.contents-number { flex: none; min-width: 14px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.contents-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter .contents-title { font-weight: 500; }
+.contents-words { flex: none; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.contents-row.depth-0:not(.chapter) { padding-left: 26px; font-weight: 500; }
+.contents-row:focus-visible, .contents-go:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
 /* Search: the box with its toggles (and Replace), a line saying what it found, matches under each chapter. */
 .search-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .search-form { display: flex; align-items: flex-start; gap: 2px; padding: 8px 8px 4px 2px; }

@@ -44,6 +44,11 @@ describe('headingPath', () => {
     expect(headingPath(headings(['#set page(width: 5in)', '= Title'], 'typst'), 1)).toEqual([]);
   });
 
+  it('isn’t fooled by a line of maths that starts with =', () => {
+    const lines = ['= Constants', 'Squaring, we get', '$', '  (a - b)^2 y^2 \\', '  = (x^2 + y^2)(a^2 - b^2),', '$', 'and $x = 1$ costs `$5`.', '== Next'];
+    expect(headings(lines, 'typst').map((h) => h.title)).toEqual(['Constants', 'Next']);
+  });
+
   it('copes with a deeper heading first', () => {
     expect(headingPath(headings(['== Two', '= One', 'x'], 'typst'), 3).map((h) => h.title)).toEqual(['One']);
   });

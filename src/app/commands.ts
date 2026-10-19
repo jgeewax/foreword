@@ -144,6 +144,7 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('toggle-assistant', 'Toggle Assistant', { keys: '⌥⌘B', keywords: ['chat'] }),
         menu('show-tasks', 'Show Assistant Tasks', { keywords: ['conversations', 'chats'] }),
         menu('show-files', 'Show Files', { keywords: ['explorer', 'sidebar'] }),
+        menu('show-contents', 'Show Contents', { keywords: ['outline', 'chapters', 'table of contents', 'toc', 'word count'] }),
         menu('show-review', 'Show Review', { keywords: ['comments'] }),
         menu('show-history', 'Show History', { keywords: ['versions'] }),
         menu('show-git', 'Show Source Control', { keywords: ['git'], when: () => !!repo() }),

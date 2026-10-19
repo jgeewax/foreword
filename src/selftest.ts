@@ -4656,6 +4656,25 @@ async function searchChecks(edits: boolean) {
   return out;
 }
 
+/** Contents: the chapters in order, numbered, with their sections and words; a click goes there, and the place the cursor is under is lit. */
+async function contentsChecks() {
+  const out: Record<string, unknown> = {};
+  const sidebar = studio.state.sidebar;
+  await waitFor(() => studio.state.names.chapters.every((c) => studio.state.contents[c]), 15000, 'the chapters').catch(() => {});
+  studio.revealSidebar('contents');
+  await sleep(300);
+  const rows = () => [...document.querySelectorAll('.contents-row')];
+  out.rows = rows().map((r) => `${r.classList.contains('here') ? '> ' : ''}${r.querySelector('.contents-number')?.textContent ?? ''}|${r.querySelector('.contents-title')?.textContent}|${r.querySelector('.contents-words')?.textContent ?? ''}`);
+  out.total = document.querySelector('.contents-total')?.textContent;
+  const section = rows().find((r) => r.classList.contains('depth-1')) as HTMLButtonElement | undefined;
+  section?.click();
+  await sleep(500);
+  out.clicked = { title: section?.textContent, active: studio.state.active, line: studio.state.cursor?.line, lit: document.querySelector('.contents-row.here')?.textContent };
+  out.snapshot = await snap('contents');
+  studio.showSidebar(sidebar);
+  return out;
+}
+
 /** The activity bar: the open view's icon hides the sidebar, any icon brings it back at that view. */
 async function activityChecks() {
   const out: Record<string, unknown> = {};
@@ -7450,6 +7469,7 @@ export async function runSelftest(launch: LaunchOptions) {
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingsask-${kind}`)) result[`settingsask-${kind}`] = await settingsAskChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
     if (want('tour')) result.tour = await tourChecks();
+    if (want('contents')) result.contents = await contentsChecks();
     if (want('search')) result.search = await searchChecks(launch.selftestEdits);
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();

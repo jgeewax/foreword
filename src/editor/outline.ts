@@ -24,6 +24,7 @@ export function headings(lines: readonly string[], language: string): Heading[] 
   const fences = language === 'typst' ? /^\s*(`{3,})(.*)$/ : /^\s*(`{3,}|~{3,})(.*)$/;
   let fence: string | null = null;
   let comment = false;
+  let math = false;
   lines.forEach((text, i) => {
     if (comment) {
       if (text.includes('*/')) comment = false;
@@ -43,6 +44,10 @@ export function headings(lines: readonly string[], language: string): Heading[] 
       comment = true;
       return;
     }
+    // Not inside maths that spans lines (`$` … `= x^2` … `$`): a line there starting with = isn't a heading.
+    const inMath = math;
+    if (language === 'typst') math = ((text.replace(/`[^`]*`/g, '').match(/(?<!\\)\$/g)?.length ?? 0) % 2 === 1) !== math;
+    if (inMath) return;
     const m = pattern.exec(text);
     const title = m && plain(m[2]);
     if (m && title) out.push({ line: i + 1, level: m[1].length, title });

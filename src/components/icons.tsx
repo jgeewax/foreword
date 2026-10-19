@@ -163,6 +163,15 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M13 3.5v5h5M9 14.5h6.5M13 12l2.5 2.5L13 17" />
     </>
   ),
+  // The book's contents: a list of chapters with sections under them.
+  contents: (
+    <>
+      <path d="M8.5 6h11.5M11.5 12h8.5M11.5 18h8.5" />
+      <circle cx="4.8" cy="6" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="7.8" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="7.8" cy="18" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   // A book's colour: a painter's palette.
   palette: (
     <>

@@ -3033,6 +3033,40 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Replace All asking once and leaving no matches, files put back); in the
   app with Calculus Made Easy (19 results in 4 files).
 
+### Contents: the views a book was missing
+
+- **Asked for:** "what other left-side tab icons are missing?", with Search
+  just added.
+- **Considered:** VS Code's are Explorer, Search, Source Control, Run and
+  Debug, Extensions, and Outline inside Explorer. A book needs neither Run
+  nor Extensions; Problems are a click away in the status bar (the error
+  count goes to each in turn); a file's own outline is the path bar's
+  heading menu. What a book lacked was a view of the whole book in
+  order, the table of contents a writer navigates by. A references view
+  (labels and citations, and where they're used) is the next candidate.
+- **Now: Contents,** after Files (View ▸ Contents, Show Contents in the
+  palette):
+  - the main file's own headings (a preface), then each chapter it
+    includes, in order, numbered as the book numbers them (as in Go to
+    File), with about how many words it has (1.3k);
+  - each chapter's sections (== headings) under it, folding up;
+  - the heading the cursor is under is lit, as VS Code's Outline follows
+    the cursor, and a click goes to any of them;
+  - at the top: how many chapters, and about how many words in all.
+  The words are counted from the text, leaving out comments, code lines,
+  maths, labels and references, so they're "about". They follow the text
+  as you type (with the TODOs, 400 ms after an edit).
+- **Fixed on the way:** a line of display maths spanning lines that starts
+  with `=` (`$ … \ = (x^2 + y^2)… $` in Calculus Made Easy) was read as a
+  heading, in the path bar's outline too; lines inside maths are skipped.
+- The bar is now Files, Contents, Search, Review, History, then Source
+  control, Code examples and To do when the book has them.
+- Verified: unit tests (the word count, the heading under the cursor, the
+  maths line); self-test `contents` (two numbered chapters with their
+  sections, a click on a section goes there and lights it), `breadcrumbs`,
+  `menubar` and `palette`; in the app on Calculus Made Easy (7 chapters,
+  about 5,850 words).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
