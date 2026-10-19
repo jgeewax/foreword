@@ -5067,6 +5067,7 @@ async function chromeChecks() {
       name: 'window',
       parts: {
         // Not the title bar itself: it's as tall as macOS's, whose buttons don't zoom (titlebarPt).
+        // What's in it never gets smaller than at 100%, as in VS Code (below).
         titlebarIcon: '.titlebar .chrome-icon',
         commandCenter: '.command-center',
         activityIcon: '.activity-bar .chrome-icon',
@@ -5125,7 +5126,9 @@ async function chromeChecks() {
       for (const zoom of [0.67, 1.5]) {
         const v = at[zoom][s.name][part] as number | null;
         const ratio = v ? v / base : 0;
-        if (Math.abs(ratio / zoom - 1) > 0.12) notFollowing.push(`${s.name}.${part} at ${Math.round(zoom * 100)}%: ${v} pt vs ${base} pt at 100%`);
+        // The title bar's icons and search box stay at their 100% size below it.
+        const expected = s.name === 'window' && ['titlebarIcon', 'commandCenter'].includes(part) ? Math.max(1, zoom) : zoom;
+        if (Math.abs(ratio / expected - 1) > 0.12) notFollowing.push(`${s.name}.${part} at ${Math.round(zoom * 100)}%: ${v} pt vs ${base} pt at 100%`);
       }
     }
   }

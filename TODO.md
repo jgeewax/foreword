@@ -262,6 +262,8 @@
 
 - [x] history tab shouldnt always be stuck at the bottom. it shoudl be its own tab (separate from the git tab) (History is a view of its own in the activity bar now, after Files, like every other view. The "below the files" setting is gone, and an old one in the settings file is ignored.)
 
+- [x] the text box in the header title bar thing is too small. we need to make it bigger. match VS.code size. (It's VS Code's size now: 22 pt tall, 38% of the window wide up to 600 pt, 12 pt text, with VS Code's hairline border. And like VS Code's, the title bar doesn't zoom out: below 100% its search box and pane toggles keep their 100% size (at 75% the box was 16 pt tall and 9 pt text), and above 100% they grow.)
+
 - [x] when selecting chapters from the file palette modal, we show titles but not chapter numbers. We should include numbers ("17. Title of Chapter 17") (Go to File (⌘P) shows a chapter as "17. Its Heading", and typing the number finds it. The numbers are the book's: a prologue or preface whose heading isn't numbered gets none and doesn't push the rest up one, and the chat names chapters the same way. Headings written as #heading(numbering: none)[Prologue] show as their titles now too.)
 
 - [x] when you hover on the left side panel icons, show help text so people know what they mean? (Hovering an icon in the activity bar shows a card beside it, as VS Code does: the view's name, a line on what it's for, and how things stand ("2 comments open", "3 files not committed"). It comes after a moment, then at once as you move down the icons, and on keyboard focus; it zooms with everything else, unlike the native tooltips it replaces.)

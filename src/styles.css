@@ -106,19 +106,25 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
   background: var(--bg-2); border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden;
 }
 .titlebar-left { padding-left: var(--titlebar-buttons, 0px); }
-.titlebar-right { display: flex; justify-content: flex-end; gap: 2px; }
-.titlebar .chrome-icon { width: 26px; height: 24px; }
-.titlebar .chrome-icon { position: relative; }
-.titlebar .chrome-icon .icon-svg { width: 16px; height: 16px; }
+.titlebar-right { display: flex; justify-content: flex-end; gap: calc(2px * var(--s)); }
+/*
+ * What's in the bar is VS Code's size, in points, at 100% and below (--s
+ * undoes a zoom below 100%), and grows with the zoom above it.
+ */
+.titlebar { --s: var(--titlebar-scale, 1); }
+.titlebar .chrome-icon { position: relative; width: calc(26px * var(--s)); height: calc(24px * var(--s)); border-radius: calc(6px * var(--s)); }
+.titlebar .chrome-icon .icon-svg { width: calc(16px * var(--s)); height: calc(16px * var(--s)); }
 /* On the assistant's toggle while its pane is hidden: a task needs you. */
-.titlebar-badge { position: absolute; top: 3px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 1.5px var(--bg-2); }
+.titlebar-badge { position: absolute; top: calc(3px * var(--s)); right: calc(4px * var(--s)); width: calc(7px * var(--s)); height: calc(7px * var(--s)); border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 1.5px var(--bg-2); }
+/* As VS Code's command centre: 22 pt tall, 38% of the window wide up to 600 pt, 12 pt text, a hairline border. */
 .command-center {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: min(38vw, 520px); min-width: 180px; height: 22px; padding: 0 10px;
-  border-radius: 6px; background: var(--bg); color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; gap: calc(6px * var(--s));
+  width: min(38vw, calc(600px * var(--s))); min-width: calc(180px * var(--s)); height: calc(22px * var(--s)); padding: 0 calc(10px * var(--s));
+  border: 1px solid color-mix(in srgb, var(--fg) 13%, transparent); border-radius: calc(6px * var(--s));
+  background: color-mix(in srgb, var(--fg) 4%, var(--bg-2)); color: var(--muted); font-size: calc(12px * var(--s));
 }
-.command-center:hover:not(:disabled) { color: var(--fg); }
-.command-center .icon-svg { flex: none; width: 13px; height: 13px; }
+.command-center:hover:not(:disabled) { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, var(--bg-2)); border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
+.command-center .icon-svg { flex: none; width: calc(14px * var(--s)); height: calc(14px * var(--s)); }
 .command-center-name { overflow: hidden; text-overflow: ellipsis; }
 /*
  * The UI zoom (⌘+/⌘−) is the webview's own page zoom, so it scales everything:

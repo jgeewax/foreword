@@ -2879,6 +2879,30 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   on a click; Settings with ⌘,; no native titles left); in the app at
   125 %, natively captured, over the sidebar and the editor.
 
+### The title bar's search box, VS Code's size
+
+- **Asked for:** "the text box in the header title bar thing is too small.
+  we need to make it bigger. match VS Code size." It was 22 px tall and at
+  most 520 px wide, and zoomed with the page: at 75 % (the zoom the author
+  uses) that's a 16.5 pt box with 9 pt text in a 32 pt bar.
+- **VS Code's,** read from its own stylesheet and title bar code: the
+  command centre is 22 px tall, 38vw wide up to 600 px, 12 px text, with a
+  1 px `commandCenter.border`. And the title bar doesn't zoom out: when the
+  zoom is below 100 % (`preventZoom`), it's counter-zoomed back to 100 %;
+  above 100 % it grows with everything else.
+- **Now the same:** the search box is 22 pt × min(38 % of the window,
+  600 pt) with 12 pt text at 100 % and below, a hairline border, and a
+  background a shade off the bar's; the pane toggles keep their 100 % size
+  too. Above 100 % both grow (33 pt at 150 %).
+  - This narrows "Zoom applies to everything": the title bar already kept
+    its height in points; now what's in it doesn't shrink below 100 %.
+    It's done without CSS `zoom` (still none anywhere): `applyTitleBar`
+    sets `--titlebar-scale` (1 ÷ zoom below 100 %, else 1) and the bar's
+    sizes are `calc(… * var(--s))`.
+- Verified: self-test `chrome` (search box 22 pt and toggles 24 pt at 67 %
+  and 100 %, 33 and 36 pt at 150 %; every other part follows the zoom; no
+  CSS zoom); in the app at 75 %, 100 % and 150 % (600 × 22 pt, 12 pt text).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
