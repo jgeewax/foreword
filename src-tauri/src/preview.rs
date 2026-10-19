@@ -47,6 +47,13 @@ const WEBKIT_FIX_SCRIPT: &str = r#"
     settle = setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
   }, true);
 
+  // Back from another app or desktop, the pages on screen were sometimes blank
+  // (the gaps between them drawn) until something made the renderer redraw,
+  // like a click in the editor (its jump). Redraw them on return.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') window.dispatchEvent(new Event('resize'));
+  });
+
   const add = () => {
     const style = document.createElement('style');
     style.textContent =

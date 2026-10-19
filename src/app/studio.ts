@@ -767,6 +767,8 @@ export class Studio {
       void this.loadConfig();
       // Commits made in a terminal or another app while this window was in the background.
       if (this.state.workspace) this.scheduleGitRefresh(0);
+      // Pages can come back blank; redraw them (also on the preview's own return, see preview.rs).
+      if (this.previewOpened) void ipc.previewEval("window.dispatchEvent(new Event('resize'))").catch(() => {});
     });
     await this.refreshViewportInset();
     // The inset changes with the title bar (e.g. full screen hides it).
