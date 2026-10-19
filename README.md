@@ -20,9 +20,9 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 <br>
 
-<img src="docs/images/calculus.webp" alt="Typst Studio with Calculus Made Easy open: the book's files on the left, a chapter's Typst source with a passage selected, the typeset pages with their equations, and the assistant explaining why a term can be dropped." width="100%">
+<img src="docs/images/calculus.webp" alt="Typst Studio with Calculus Made Easy open: a chapter's Typst source with a passage selected, the typeset page with its equations, and Claude Code explaining why (dx)² can be dropped." width="100%">
 
-<sub><i>Calculus Made Easy, one of the sample books: a passage selected in the source, its pages in the preview, and the assistant explaining the step.</i></sub>
+<sub><i>Calculus Made Easy, one of the sample books: a passage selected in the source, its page in the preview, and Claude Code explaining the step.</i></sub>
 
 </div>
 
@@ -57,7 +57,7 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 </td>
 <td width="50%" valign="top">
 
-<img src="docs/images/paper.webp" alt="The paper Attention Is All You Need set in the NeurIPS template, with its source in the editor and the first two pages in the preview.">
+<img src="docs/images/paper.webp" alt="The first page of Attention Is All You Need in the NeurIPS template, as the preview shows it: the title, the authors, the abstract and the start of the introduction.">
 <sub><i>Attention Is All You Need, set with the NeurIPS template.</i></sub>
 
 </td>
@@ -65,8 +65,8 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 <tr>
 <td width="50%" valign="top">
 
-<img src="docs/images/jekyll-edit.webp" alt="Jekyll and Hyde open at chapter one, with the chapter's opening page in the preview, and the assistant reporting the edit it made to the first paragraph.">
-<sub><i>The assistant tightening the first paragraph of Jekyll and Hyde, and saying what it cut.</i></sub>
+<img src="docs/images/jekyll-edit.webp" alt="Claude Code's account of an edit to Jekyll and Hyde: the request, the chapter it read, the two edits it made, what it cut, and Is this task done?">
+<sub><i>Claude Code tightening the first paragraph of Jekyll and Hyde, and saying what it cut.</i></sub>
 
 </td>
 <td width="50%" valign="top">
@@ -96,7 +96,7 @@ And when you're stuck, it gets you moving: an outline for the next chapter, a ro
 </td>
 <td width="50%" valign="top">
 
-<img src="docs/images/luca.webp" alt="Luca's Wonderful Brain as a picture book: a page's picture, words and three sound words in the source, and the watercolour page with the words and the sound words set on it in the preview.">
+<img src="docs/images/luca.webp" alt="A page of Luca's Wonderful Brain in the preview: a watercolour of Luca rubbing his chin on someone's shoulder, the words above it, and the sound words rub, rub, rub! drawn on the picture.">
 <sub><i>Luca's Wonderful Brain, a picture book: words and sound words set on full-page watercolours.</i></sub>
 
 </td>
@@ -123,8 +123,8 @@ Comments sit beside the text, never in it.
 <tr>
 <td width="50%" valign="top">
 
-<img src="docs/images/jekyll-changes.webp" alt="What changed: the assistant's version of chapter one beside the previous one, with the removed words in red and the new line in green.">
-<sub><i>What the assistant changed in chapter one, with Undo these changes.</i></sub>
+<img src="docs/images/jekyll-changes.webp" alt="What changed in the assistant's version of chapter one, word by word: the words it cut struck through in red, the words it put in their place in green, and buttons to undo the changes or restore the file.">
+<sub><i>What the assistant changed in chapter one, word by word, with Undo these changes.</i></sub>
 
 </td>
 <td width="50%" valign="top">
@@ -149,8 +149,8 @@ Or start from a template made for your kind of book, or have it drafted from the
 </td>
 <td width="50%" valign="top">
 
-<img src="docs/images/interview.webp" alt="Jekyll and Hyde open at chapter one, its first page in the preview, and the assistant interviewing for the book's style guide: a panel asks who reads this edition, with three answers to pick from and one of your own.">
-<sub><i>Claude Code writing a style guide for Jekyll and Hyde with you: first, who reads this edition?</i></sub>
+<img src="docs/images/interview.webp" alt="The assistant's questions for Jekyll and Hyde's style guide, in a panel: four of them, the first asking how new sentences should join up, with three answers to pick from, the first recommended, and one of your own.">
+<sub><i>Claude Code writing a style guide for Jekyll and Hyde with you: how should new sentences join up?</i></sub>
 
 </td>
 </tr>
