@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-epub-write"
+description = "Enables the epub_write command without any pre-configured scope."
+commands.allow = ["epub_write"]
+
+[[permission]]
+identifier = "deny-epub-write"
+description = "Denies the epub_write command without any pre-configured scope."
+commands.deny = ["epub_write"]

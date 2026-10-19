@@ -167,6 +167,7 @@ export function paletteCommands(studio: Studio): Command[] {
       'Book',
       [
         menu('export-pdf', 'Export PDF…', { keys: '⇧⌘E' }),
+        menu('export-epub', 'Export EPUB…', { keywords: ['ebook', 'kindle', 'apple books', 'kobo', 'mobi'] }),
         menu('open-pdf', 'Open Exported PDF', { keys: '⌥⌘E' }),
         menu('print-mixam', 'Print with Mixam…', { keywords: ['printer'] }),
         menu('design-cover', 'Design Cover…'),

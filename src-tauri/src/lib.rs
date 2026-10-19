@@ -5,6 +5,7 @@ mod clipboard;
 mod code;
 mod config;
 mod discover;
+mod epub;
 mod error;
 mod export;
 mod files;
@@ -612,6 +613,11 @@ pub fn run() {
             acp::assistant_sign_in,
             acp::assistant_download,
             mcp::mcp_serve,
+            epub::epub_html,
+            epub::epub_pages,
+            epub::epub_write,
+            epub::epub_done,
+            epub::epub_reveal,
             mcp::mcp_reply,
             updater::update_state,
             updater::update_check,

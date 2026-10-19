@@ -53,6 +53,7 @@ pub const COMMANDS: &[&str] = &[
     "zoom-reset",
     // Book
     "export-pdf",
+    "export-epub",
     "open-pdf",
     "print-mixam",
     "design-cover",
@@ -195,6 +196,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &item("export-pdf", "Export PDF…", Some("CmdOrCtrl+Shift+E"))?,
+            &item("export-epub", "Export EPUB…", None)?,
             &item("open-pdf", "Open Exported PDF", Some("CmdOrCtrl+Alt+E"))?,
             &item("print-mixam", "Print with Mixam…", None)?,
             &sep()?,

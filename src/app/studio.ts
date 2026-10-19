@@ -47,7 +47,7 @@ import { OUTPUTS_FILE } from '../code/cells';
 import { message } from '@tauri-apps/plugin-dialog';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
-import { referencesTo, removeIncludes, updateReferences } from './references';
+import { referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
@@ -60,6 +60,7 @@ import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/a
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { STYLE_TEMPLATES } from '../style-guides';
+import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
@@ -188,6 +189,9 @@ export type NewBookTab = 'book' | 'paper' | 'sample';
 /** How the style guide is being written: from the chapters, again from them, or from the author's answers. */
 export type StyleDraftKind = 'draft' | 'redraft' | 'interview';
 
+/** What Export EPUB made: where, which kind and why, and what the reflowing kind left behind. */
+export type EpubResult = { path: string; kind: EpubKind; why: string; lost: string[]; chapters: number };
+
 export type PromptRequest = { title: string; label: string; value: string; placeholder?: string; okLabel: string; help?: string; multiline?: boolean };
 
 /** Where a picked option goes: the passage as it stands in the buffer (1-based positions). */
@@ -307,6 +311,8 @@ export type StudioState = {
   coverDialogOpen: boolean;
   /** Writing Style Guide Templates: pick one to start WRITING_STYLE.md from. */
   styleTemplatesOpen: boolean;
+  /** Export EPUB: which kind, then the result. */
+  epubOpen: boolean;
   /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
   names: BookNames;
   /** ⌘P: go to a file by name; ⇧⌘P: run a command. What it was opened for (false: closed). */
@@ -394,6 +400,7 @@ const initialState: StudioState = {
   bookPages: null,
   coverDialogOpen: false,
   styleTemplatesOpen: false,
+  epubOpen: false,
   print: { open: false, status: 'idle', checks: [], files: {} },
   aiMarks: 0,
   names: NO_NAMES,
@@ -649,6 +656,7 @@ export class Studio {
     'zoom-reset': () => this.zoom('reset', 'menu'),
     // Book
     'export-pdf': () => this.exportPdf(),
+    'export-epub': () => this.openEpubDialog(),
     'open-pdf': () => this.openExportedPdf(),
     'print-mixam': () => this.openPrint(),
     'design-cover': () => this.openCoverDialog(),
@@ -2598,7 +2606,7 @@ export class Studio {
   /** A dialog is open: the preview (a native view above the page) must hide, or it's drawn over it. */
   private dialogOpen() {
     const s = this.state;
-    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.styleTemplatesOpen || s.print.open || !!s.quickOpen;
+    return s.settingsOpen || s.updateDialog || s.aboutOpen || s.newBookOpen || !!s.prompt || s.coverDialogOpen || s.styleTemplatesOpen || s.epubOpen || s.print.open || !!s.quickOpen;
   }
 
   private syncPreviewVisibility() {
@@ -4267,6 +4275,130 @@ export class Studio {
 
   /** The last PDF exported in this session (Open Exported PDF). */
   lastExport: string | null = null;
+
+  openEpubDialog() {
+    if (!this.state.workspace?.entry) return;
+    this.store.set({ epubOpen: true });
+    this.syncPreviewVisibility();
+  }
+
+  closeEpubDialog() {
+    this.store.set({ epubOpen: false });
+    this.syncPreviewVisibility();
+  }
+
+  /** An exported EPUB in Finder, or opened (Books adds it to its library). */
+  async revealEpub(path: string, open = false) {
+    await ipc.epubReveal(path, open).catch((e) => this.toast(errorMessage(e), 'error'));
+  }
+
+  /** The Save dialog for Export EPUB (replaced in self-tests). */
+  pickEpubPath: (defaultPath: string) => Promise<string | null> = async (defaultPath) => {
+    const picked = await saveDialog({ title: 'Export EPUB', defaultPath, filters: [{ name: 'EPUB', extensions: ['epub'] }] });
+    if (!picked) return null;
+    return /\.epub$/i.test(picked) ? picked : `${picked}.epub`;
+  };
+
+  /** Where the EPUB goes by default: beside this book's last PDF, else in Documents, named for the book. */
+  async defaultEpubPath(): Promise<string> {
+    const pdf = await this.defaultExportPath();
+    return pdf.replace(/\.pdf$/i, '.epub');
+  }
+
+  /**
+   * Export EPUB (epub/): reflowing text, or fixed layout (every page as
+   * typeset). "auto" picks per book: fixed for a picture book or a paper, for
+   * a book with math on most pages, or when the reflowing export fails;
+   * reflowing text otherwise. Says which it made, why, and what didn't carry over.
+   */
+  async exportEpub(choice: 'auto' | EpubKind, target: string): Promise<EpubResult> {
+    const ws = this.state.workspace;
+    if (!ws?.entry) throw new Error('This book has no main file.');
+    const failures = (await this.docs?.saveAll()) ?? [];
+    if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
+    const entry = ws.entry;
+    const main = (await this.currentText(entry)) ?? '';
+    const names = namesFromMain(main);
+    const title = names.title || ws.name;
+    const root = this.typstRoot() || '.';
+    const fonts = absoluteFontPaths(this.state.project.settings, ws.root);
+    const id = await bookId(ws.root);
+
+    let kind: EpubKind = choice === 'fixed' ? 'fixed' : 'reflow';
+    let why = choice === 'fixed' ? 'you chose fixed layout' : choice === 'reflow' ? 'you chose reflowing text' : 'it’s mostly text, so it reflows to fit any screen';
+    const fixedWhy = choice === 'auto' ? fixedFor({ files: ws.files, main }) : null;
+    if (fixedWhy) [kind, why] = ['fixed', fixedWhy];
+    let html: { html: string | null; warnings: string[]; errors: string[] } | null = null;
+    if (kind === 'reflow') {
+      html = await ipc.epubHtml(entry, epubSource(main).source, root, fonts);
+      if (!html.html) [kind, why] = ['fixed', `the reflowing export didn’t work for this book (${html.errors[0] ?? 'Typst stopped'}), so every page stays as typeset`];
+      else if (choice === 'auto' && mathHeavy(html.html)) [kind, why] = ['fixed', 'it has math on most pages, which e-readers can’t reflow well'];
+    }
+
+    const files: EpubFile[] = [{ name: 'META-INF/container.xml', text: CONTAINER_XML }];
+    const items: ManifestItem[] = [{ id: 'nav', href: 'nav.xhtml', mediaType: 'application/xhtml+xml', properties: 'nav' }];
+    const toc: { title: string; href: string }[] = [];
+    let lang = /#set text\([^)]*lang:\s*"([a-z-]+)"/i.exec(main)?.[1] ?? 'en';
+    let lost: string[] = [];
+    let temp: string | null = null;
+    try {
+      if (kind === 'reflow' && html?.html) {
+        const book = splitBook(html.html);
+        lang = book?.lang ?? lang;
+        const parts = book ? [...(book.front.trim() ? [{ file: null as string | null, body: book.front }] : []), ...book.chapters] : [{ file: null as string | null, body: html.html }];
+        items.push({ id: 'css', href: 'style.css', mediaType: 'text/css' });
+        files.push({ name: 'OEBPS/style.css', text: EPUB_CSS });
+        // Each part's pictures made its own (their ids, and files instead of data: URLs), then links between parts.
+        let pictures = 0;
+        const bodies = parts.map((part, i) => {
+          const { html: body, images } = extractImages(uniqueSvgIds(part.body, `s${i + 1}-`), pictures);
+          for (const img of images) {
+            items.push({ id: `image-${++pictures}`, href: img.name, mediaType: img.mediaType });
+            files.push({ name: `OEBPS/${img.name}`, base64: img.base64 });
+          }
+          return body;
+        });
+        const linked = linkParts(
+          bodies,
+          parts.map((_, i) => chapterFile(i + 1)),
+        );
+        parts.forEach((part, i) => {
+          const n = i + 1;
+          const body = linked[i];
+          // A chapter's title is its first heading (as the chat names it), else "Chapter 3".
+          const number = book && part.file ? book.chapters.findIndex((c) => c.file === part.file) + 1 : n;
+          const chapterTitle = part.file ? (this.state.names.titles[resolveRef(entry, part.file, this.typstRoot()) ?? ''] ?? `Chapter ${number}`) : title;
+          const href = chapterFile(n);
+          files.push({ name: `OEBPS/${href}`, text: xhtmlPage({ title: chapterTitle, lang, body: toXhtml(part.file ? chapterHead(body, chapterTitle) : body), type: part.file ? 'bodymatter' : 'frontmatter' }) });
+          items.push({ id: `part-${n}`, href, mediaType: 'application/xhtml+xml', spine: true, ...(/<svg[\s>]/.test(body) ? { properties: 'svg' } : {}) });
+          toc.push({ title: chapterTitle, href });
+        });
+        lost = didntCarryOver(html.warnings);
+      } else {
+        const pages = await ipc.epubPages(entry, root, fonts);
+        temp = pages.dir;
+        if (!pages.pages.length) throw new Error(pages.errors[0] ?? 'Typst made no pages');
+        const pad = (n: number) => String(n).padStart(3, '0');
+        pages.pages.forEach((p, i) => {
+          const n = i + 1;
+          const image = `images/page-${pad(n)}.svg`;
+          files.push({ name: `OEBPS/${image}`, temp: p.file });
+          items.push({ id: `image-${n}`, href: image, mediaType: 'image/svg+xml', ...(n === 1 ? { properties: 'cover-image' } : {}) });
+          const href = `page-${pad(n)}.xhtml`;
+          files.push({ name: `OEBPS/${href}`, text: fixedPage({ n, lang, image, width: p.width, height: p.height }) });
+          items.push({ id: `page-${n}`, href, mediaType: 'application/xhtml+xml', spine: true });
+        });
+        const chapters = pages.toc.filter((t) => t.level === 1 && t.page >= 1 && t.page <= pages.pages.length);
+        for (const t of chapters.length ? chapters : [{ title, page: 1 }]) toc.push({ title: t.title, href: `page-${pad(t.page)}.xhtml` });
+      }
+      files.push({ name: 'OEBPS/nav.xhtml', text: navPage({ lang, entries: toc }) });
+      files.push({ name: 'OEBPS/content.opf', text: packageOpf({ id, title, author: names.author, lang, modified: new Date(), fixed: kind === 'fixed', items }) });
+      const path = await ipc.epubWrite(target, files);
+      return { path, kind, why, lost, chapters: toc.length };
+    } finally {
+      if (temp) void ipc.epubDone(temp).catch(() => {});
+    }
+  }
 
   /** The Save dialog for Export PDF (replaced in self-tests, which can't click native dialogs). */
   pickExportPath: (defaultPath: string) => Promise<string | null> = async (defaultPath) => {

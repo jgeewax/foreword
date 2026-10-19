@@ -12,6 +12,7 @@ describe('the book’s names', () => {
   it('reads headings and the include order', () => {
     expect(firstHeading('// a comment\n#import "x": *\n\n= The *Lighthouse* Keeper <ch-1>\n\nText.')).toBe('The Lighthouse Keeper');
     expect(firstHeading('== Only a subsection')).toBeNull();
+    expect(firstHeading('= Remarkable Incident of Dr.~Lanyon, 5\\~6')).toBe('Remarkable Incident of Dr.\u00a0Lanyon, 5~6');
     expect(includedFiles('#include "chapters/a.typ"\n// #include "chapters/old.typ"\n#include "./chapters/b.typ"', 'main.typ')).toEqual(['chapters/a.typ', 'chapters/b.typ']);
   });
 

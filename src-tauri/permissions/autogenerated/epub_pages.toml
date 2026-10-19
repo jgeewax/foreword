@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-epub-pages"
+description = "Enables the epub_pages command without any pre-configured scope."
+commands.allow = ["epub_pages"]
+
+[[permission]]
+identifier = "deny-epub-pages"
+description = "Denies the epub_pages command without any pre-configured scope."
+commands.deny = ["epub_pages"]

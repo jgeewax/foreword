@@ -202,6 +202,14 @@ export const ipc = {
   /** Typst Studio's own tools for the assistant (mcp.rs): this window's address; each request comes to `page`, answered with mcpReply. */
   mcpServe: (page: Channel<{ id: number; body: string }>) => invoke<string>('mcp_serve', { page }),
   mcpReply: (id: number, body: string | null) => invoke<void>('mcp_reply', { id, body }),
+  /** EPUB export (epub.rs): the main file (`source` in its place) as HTML; every page as SVG with the outline; the zip. */
+  epubHtml: (entry: string, source: string, root: string, fontPaths: string[]) =>
+    invoke<{ html: string | null; warnings: string[]; errors: string[] }>('epub_html', { entry, source, root, fontPaths }),
+  epubPages: (entry: string, root: string, fontPaths: string[]) =>
+    invoke<{ dir: string; pages: { file: string; width: number; height: number }[]; toc: { level: number; title: string; page: number }[]; errors: string[] }>('epub_pages', { entry, root, fontPaths }),
+  epubWrite: (path: string, files: { name: string; text?: string; base64?: string; temp?: string }[]) => invoke<string>('epub_write', { path, files }),
+  epubDone: (dir: string) => invoke<void>('epub_done', { dir }),
+  epubReveal: (path: string, open = false) => invoke<void>('epub_reveal', { path, open }),
   acpStop: () => invoke<void>('acp_stop'),
   /** Each assistant's program, sign-in and account on this Mac. */
   assistantsStatus: () => invoke<AssistantsSetup>('assistants_status'),

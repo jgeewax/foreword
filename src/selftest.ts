@@ -4640,6 +4640,45 @@ async function historyAboutChecks() {
 }
 
 /**
+ * Export EPUB, on the book this instance has open (run it on each sample):
+ * Best for this book, reflowing text and fixed layout, each written next to
+ * the results (epub-auto.epub…) for epubcheck; then through the dialog, as
+ * the author would, photographed choosing and done.
+ */
+async function epubChecks(outDir: string) {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.names.chapters.length > 0 || studio.state.workspace?.entry, 30000, 'the book');
+  await sleep(1500);
+  for (const choice of ['auto', 'reflow', 'fixed'] as const) {
+    const t0 = Date.now();
+    try {
+      const r = await studio.exportEpub(choice, `${outDir}/epub-${choice}.epub`);
+      out[choice] = { ...r, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+    } catch (e) {
+      out[choice] = { error: errorMessage(e) };
+    }
+  }
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  try {
+    studio.openEpubDialog();
+    await sleep(400);
+    out.choices = [...document.querySelectorAll('.epub-choice')].map((c) => `${c.querySelector('.template-name')?.textContent}${c.getAttribute('aria-checked') === 'true' ? ' ✓' : ''}`);
+    out.snapshotChoose = await snap('epub-choose');
+    document.querySelector<HTMLButtonElement>('.epub-dialog .modal-footer .primary')?.click();
+    await waitFor(() => document.querySelector('.epub-done, .epub-dialog .bad'), 300000, 'the export').catch(() => {});
+    await sleep(300);
+    out.done = document.querySelector('.epub-done, .epub-dialog .bad')?.textContent;
+    out.snapshotDone = await snap('epub-done');
+  } finally {
+    studio.closeEpubDialog();
+    still.remove();
+  }
+  return out;
+}
+
+/**
  * Preview → source puts the clicked text about 15% down the editor, not in
  * the middle; text already in view stays where it is. Through the jump
  * handler (to lines off screen and on screen), then with a real click in the
@@ -6800,6 +6839,7 @@ export async function runSelftest(launch: LaunchOptions) {
   // The Save dialog can't be clicked from here: exports are saved next to the results file.
   const outDir = (launch.selftestOut ?? '/tmp/x').slice(0, (launch.selftestOut ?? '/tmp/x').lastIndexOf('/'));
   studio.pickExportPath = async (defaultPath) => `${outDir}/selftest-export-${defaultPath.slice(defaultPath.lastIndexOf('/') + 1)}`;
+  studio.pickEpubPath = async (defaultPath) => `${outDir}/selftest-export-${defaultPath.slice(defaultPath.lastIndexOf('/') + 1)}`;
   // Nor should it open Preview windows: PDFs that would be opened are logged instead.
   const openedPdfs: string[] = [];
   studio.pdfViewer = async (path) => {
@@ -6973,6 +7013,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
+    if (only?.includes('epub')) result.epub = await epubChecks(outDir);
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('stylerevisions')) result.stylerevisions = await styleRevisionsChecks();
     if (only?.includes('styleinterview')) result.styleinterview = await styleInterviewChecks();

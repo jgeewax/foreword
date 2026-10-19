@@ -17,7 +17,8 @@ export const NO_NAMES: BookNames = { root: '', entry: null, chapters: [], titles
 export function firstHeading(text: string): string | null {
   for (const line of text.split('\n')) {
     const m = /^\s*=\s+(.+?)\s*(<[\w:.-]+>)?\s*$/.exec(line);
-    if (m) return m[1].replace(/[*_`]/g, '').replace(/\\(.)/g, '$1').trim() || null;
+    // Markup out, and Typst's non-breaking space (~) as one.
+    if (m) return m[1].replace(/[*_`]/g, '').replace(/(?<!\\)~/g, '\u00a0').replace(/\\(.)/g, '$1').trim() || null;
   }
   return null;
 }

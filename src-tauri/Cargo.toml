@@ -36,6 +36,9 @@ lopdf = { version = "0.38", default-features = false }
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
+# EPUB export (epub.rs): its zip, and pictures sent from the page; versions reqwest and Tauri already bring in.
+zip = { version = "4", default-features = false, features = ["deflate"] }
+base64 = "0.22"
 tauri-plugin-updater = "2"
 
 
