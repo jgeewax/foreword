@@ -242,6 +242,8 @@
 
 - [x] make the loading spinners and text more interesting to feel less slow. e.g., waiting on the model "Claude is thinking..." or "Codex is thinking...", and better animations, something more entertaining so that we dont feel liek this is taking SO LONG because it really can be slow. (“Claude is thinking…”, words that change while it waits, a tip once a turn runs long, and an animation for each phase.)
 
+- [x] add support for book covers (cover.typ) (The cover designer already does this: Book ▸ Design Cover… makes cover/ (design.typ, spec.typ, cover.typ), with Book/Cover in the preview, Export Cover and Print with Mixam.)
+
 - [x] what if writing style just isnt quite right? can we trigger a re-run? (Redraft… on the style bar (and in the palette), asked first: the assistant writes the guide again from the chapters, keeping the rules you wrote or changed yourself (History says which); History keeps the old one.)
 
 - [x] when looking at writing style re-drafting, can we look at historical changes (AI wrote A, human revised to A') and use that to guide the writing style document? (Drafting and redrafting read History for the assistant’s passages you then rewrote (as you left them before an assistant next changed the file), and the guide turns what they have in common into rules: “use, not utilize”.)
