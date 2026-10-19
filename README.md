@@ -137,6 +137,23 @@ Open any version to see what changed, line by line or word by word, then undo ju
 
 </td>
 </tr>
+<tr>
+<td width="50%" valign="top">
+
+### A style guide, written with you
+
+Every book gets a short guide to how it's written (voice, tone, the words it uses), and every request to the assistant follows it. Press **Interview me** and answer a few rounds of questions about your book, picking from answers that fit it, and the assistant writes the guide from your answers.
+
+Or start from a template made for your kind of book, or have it drafted from the chapters you've written. It learns from how you rewrite the assistant's text, and **Redraft** keeps the rules you wrote yourself.
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/images/interview.webp" alt="Jekyll and Hyde open at chapter one, its first page in the preview, and the assistant interviewing for the book's style guide: a panel asks who reads this edition, with three answers to pick from and one of your own.">
+<sub><i>Claude Code writing a style guide for Jekyll and Hyde with you: first, who reads this edition?</i></sub>
+
+</td>
+</tr>
 </table>
 
 ## Bring the AI you already use
