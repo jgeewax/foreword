@@ -2,6 +2,33 @@
 
 What's new in each version of Typst Studio. The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.3.0 · 19 October 2026
+
+### Finding your way
+
+- **Search the whole book** (⇧⌘F, or the new Search view): words or a pattern, matching case or whole words, in every chapter at once, open ones as they are in the editor. Results sit under each chapter's name in reading order and follow your edits; a click opens the chapter with the match selected. **Replace All** asks first, and History keeps the book as it was.
+- **Contents:** the book's chapters in order, numbered as the book numbers them, each with its sections and about how many words. The heading you're in is lit, and a click goes anywhere.
+- **Go to File numbers chapters** ("17. The Harbour"), and typing the number finds it. A prologue without a numbered heading doesn't push the rest up one.
+- **A tour for someone new:** a minute's look around the window, one part at a time. It offers itself the first time you open a book; Help ▸ Take the Tour runs it again.
+- **The icons down the side say what they're for** in a card when you hover them, and each has a shape of its own now, with small count badges that don't cover it.
+
+### The window
+
+- **A colour for each book**, as VS Code's Peacock gives a folder: the title bar, the icons down the side and the status bar wear it, so a glance tells one book's window from another. Choose it in Settings ▸ This book ▸ Colour (or Surprise me). A book with a Peacock colour in its VS Code settings wears that one already.
+- **The title bar's search box is VS Code's size**, and like VS Code's title bar it doesn't shrink when you zoom out.
+- **The assistant's conversations stay in the assistant pane.** The Conversations view is gone; its list is the task menu at the top of the pane (View ▸ Assistant Tasks), and while the pane is hidden a dot on its button says when a task needs you.
+
+### History
+
+- **History is a timeline:** each version a dot on a line from now back to the start, coloured by who made it (you, the assistant's purple ✦, a version you named), with how much it changed. A click shows what it changed, and its files and what you can do with it (compare with now, undo the assistant's changes, restore) fold out beneath. No more "What changed" button.
+- **What changed** shows a file's actions (Open, Side by side, Restore) as one quiet line, never as tall buttons in a narrow pane.
+
+### Fixes
+
+- The To do view's rows keep their height under the pointer; the circle marks a TODO done.
+- A line of maths starting with "=" is no longer taken for a heading.
+- Icons that appeared down the side while you worked could stay invisible.
+
 ## 0.2.0 · 19 October 2026
 
 ### The assistant

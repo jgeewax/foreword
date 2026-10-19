@@ -16,7 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** · [Website](https://jgeewax.github.io/typststudio/) · [Releases](https://github.com/jgeewax/typststudio/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.2:** export EPUB for any e-reader · a style guide by interview, or from a template · questions in a panel · effort beside the model · ask the assistant to change a setting
+**New in 0.3:** search the whole book · Contents, every chapter with its sections and words · History as a timeline · a colour for each book, as Peacock gives a folder · a tour for someone new
 
 <br>
 
@@ -133,7 +133,7 @@ Comments sit beside the text, never in it.
 
 Engineers keep every version in Git. Most writers keep *chapter-3-final-v2-REAL.docx*. Typst Studio keeps the versions for you, as you work and around every change the assistant makes, in a repository of its own outside the book's folder.
 
-Open any version to see what changed, line by line or word by word, then undo just that change or put the whole book back. Name a version, like “Draft sent to my editor”. Already keep your book in Git? Source Control stages, commits, pulls and pushes it.
+History is a timeline of them, coloured by who made each one. Click a version to see what changed, line by line or word by word, then undo just that change or put the whole book back. Name a version, like “Draft sent to my editor”. Already keep your book in Git? Source Control stages, commits, pulls and pushes it.
 
 </td>
 </tr>
@@ -178,7 +178,9 @@ Each conversation is its own task, and several can run at once. Choose the model
 - **Covers and printing.** Design a print cover with the spine worked out from the page count, check the files against the printer's rules, and order through Mixam.
 - **E-books.** Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, or every page exactly as typeset for picture books, papers and books full of math. Typst Studio picks for you and says what didn't carry over.
 - **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. Start it from a template for your kind of book, let the assistant draft it from your chapters, or answer its questions and have it write the guide from your answers. Redraft it whenever it isn't quite right: it keeps the rules you wrote, and learns from how you've rewritten its text.
-- **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest.
+- **Find anything.** Search every chapter at once and replace across the book (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd>), see the whole book in Contents (each chapter with its sections and how many words), and go to a chapter by its number or name (<kbd>⌘</kbd><kbd>P</kbd>).
+- **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons and status bar wear it. A book that already has a Peacock colour keeps it.
+- **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Typst Studio? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).
 - **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code, formatting on save, wrapping at a column with rulers, and a window for each book.
 
 ## Download
