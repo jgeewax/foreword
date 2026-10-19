@@ -33,11 +33,16 @@ export function parseConfig(text: string): ParsedConfig {
   return { settings: { ...DEFAULT_SETTINGS, ...sanitize(r) }, zoom, raw: r, error: null };
 }
 
+/** Settings Typst Studio had once and no longer has: dropped when the file is written, not kept as unknown. */
+const RETIRED = [
+  // History below the files: History is a view of its own now, like the others.
+  'historyPlacement',
+];
+
 /** The file's text: the settings (and zoom) over what was there, in a stable order, 2-space JSON. */
 export function serializeConfig(raw: Record<string, unknown>, settings: AppSettings, zoom: number): string {
   const ours = {
     sendKey: settings.sendKey,
-    historyPlacement: settings.historyPlacement,
     markAiEdits: settings.markAiEdits,
     markAiReads: settings.markAiReads,
     aiEditColor: settings.aiEditColor,
@@ -56,6 +61,6 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     permissions: settings.permissions,
     allowCommands: settings.allowCommands,
   };
-  const rest = Object.fromEntries(Object.entries(raw).filter(([k]) => !(k in ours)));
+  const rest = Object.fromEntries(Object.entries(raw).filter(([k]) => !(k in ours) && !RETIRED.includes(k)));
   return `${JSON.stringify({ ...ours, ...rest }, null, 2)}\n`;
 }

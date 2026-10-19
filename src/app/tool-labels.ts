@@ -160,7 +160,6 @@ const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
   markAiReads: (v) => `marks for what it read ${v ? 'on' : 'off'}`,
   aiEditColor: (v) => `its changes marked in ${v}`,
   aiReadColor: (v) => `what it read marked in ${v}`,
-  historyPlacement: (v) => (v === 'below' ? 'History below the files too' : 'History only in its own tab'),
   checkForUpdates: (v) => `checking for updates ${v ? 'on' : 'off'}`,
   zoom: (v) => `zoom ${Math.round(Number(v) * 100)}%`,
 };

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { uncommitted } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
@@ -137,24 +136,6 @@ function SourceControlActions() {
   );
 }
 
-/** History's own tab ⇄ below the files too; either way it lands where History is now shown. */
-function PlacementButton({ to }: { to: 'tab' | 'below' }) {
-  const label = to === 'below' ? 'Show History below the files too' : 'Show History only in its own tab';
-  return (
-    <button
-      className="icon"
-      title={label}
-      aria-label={label}
-      onClick={() => {
-        studio.updateSettings({ historyPlacement: to });
-        studio.showSidebar(to === 'below' ? 'files' : 'history');
-      }}
-    >
-      {to === 'below' ? '⬓' : '⧉'}
-    </button>
-  );
-}
-
 export type View = 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks' | 'git';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
@@ -180,11 +161,10 @@ function useViews() {
  * any icon opens it at that view.
  */
 export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
-  const { view: current } = useSidebarView();
+  const current = useSidebarView();
   const { hasCode, todoCount, hasReview, reviewOpen, tasksWaiting, hasGit, gitChanged } = useViews();
   const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
     { id: 'files', icon: 'files', label: 'Files' },
-    // History has its own tab even when it's below the files too.
     { id: 'history', icon: 'history', label: 'History: saved versions of the book' },
     ...(hasGit
       ? [{ id: 'git' as const, icon: 'branch' as const, label: `Source control: ${gitChanged ? `${gitChanged} file${gitChanged === 1 ? '' : 's'} not committed` : 'everything committed'}`, badge: gitChanged || undefined }]
@@ -240,7 +220,6 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
 /** A view's header: its full title and its actions. */
 function ViewHeader({ view }: { view: View }) {
   const ws = useStore(studio.store, (s) => s.workspace);
-  const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
   const { todoCount, reviewOpen } = useViews();
   const title =
     view === 'files'
@@ -268,7 +247,6 @@ function ViewHeader({ view }: { view: View }) {
           <RefreshButton />
         </>
       )}
-      {view === 'history' && placement === 'tab' && <PlacementButton to="below" />}
       {view === 'git' && <SourceControlActions />}
       {view === 'tasks' && (
         <button className="icon" title="New task (a new conversation)" aria-label="New task" onClick={() => studio.newSession()}>
@@ -297,58 +275,22 @@ function ViewBody({ view }: { view: View }) {
   );
 }
 
-/** The files on top and History below, with a draggable divider. */
-function Stacked() {
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-sidebar', storage: localStorage });
-  return (
-    <Group className="sidebar-stack" orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
-      <Panel id="files" minSize="60px">
-        <div className="sidebar-section">
-          <ViewHeader view="files" />
-          <FileTree />
-        </div>
-      </Panel>
-      <Separator className="separator separator-h" />
-      <Panel id="history" defaultSize="40%" minSize="60px">
-        <div className="sidebar-section">
-          <header className="pane-header">
-            <span className="pane-title">History</span>
-            <span className="spacer" />
-            <PlacementButton to="tab" />
-          </header>
-          <HistoryPanel />
-        </div>
-      </Panel>
-    </Group>
-  );
-}
-
-/** The sidebar's view, and whether History is below it (the files, with History below the files). */
-function useSidebarView(): { view: View; stacked: boolean } {
+/** The sidebar's view: a view with nothing in it falls back to the files. */
+function useSidebarView(): View {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
-  const placement = useStore(studio.store, (s) => s.settings.historyPlacement);
   const { hasCode, todoCount, hasReview, hasGit } = useViews();
-  // A view with nothing in it falls back to the files.
   const available =
-    sidebar === 'files' || sidebar === 'tasks' || sidebar === 'history' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
-  const view = available ? sidebar : 'files';
-  // Only the files have History below them: every other view has the whole sidebar.
-  return { view, stacked: placement === 'below' && view === 'files' };
+    sidebar === 'files' || sidebar === 'history' || sidebar === 'tasks' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+  return available ? sidebar : 'files';
 }
 
 export function Explorer() {
-  const { view, stacked } = useSidebarView();
+  const view = useSidebarView();
   return (
     <section className="pane explorer">
       <div className="explorer-main">
-        {stacked ? (
-          <Stacked />
-        ) : (
-          <>
-            <ViewHeader view={view} />
-            <ViewBody view={view} />
-          </>
-        )}
+        <ViewHeader view={view} />
+        <ViewBody view={view} />
       </div>
     </section>
   );

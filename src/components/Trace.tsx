@@ -806,7 +806,7 @@ function TaskChanges({ items }: { items: ChatItem[] }) {
     <section className="task-changes" aria-label="Changed in this task">
       <div className="task-changes-head">
         <span>Changed in this task</span>
-        <button className="link" title="Every version, in History" onClick={() => studio.showHistory()}>
+        <button className="link" title="Every version, in History" onClick={() => studio.revealSidebar('history')}>
           <Icon name="history" size={13} />
           Review in History
         </button>

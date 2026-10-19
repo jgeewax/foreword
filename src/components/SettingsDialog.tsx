@@ -148,18 +148,6 @@ function GeneralPage() {
       </Section>
       <Section title="Layout">
         <div className="settings-field">
-          <div className="settings-label">History</div>
-          <Choice
-            label="History"
-            value={settings.historyPlacement}
-            onChange={(v) => studio.updateSettings({ historyPlacement: v })}
-            options={[
-              { value: 'tab', label: 'In its own tab', detail: 'A view of its own in the sidebar, next to Files.' },
-              { value: 'below', label: 'Below the files too', detail: 'Under the files as well, both visible at once; drag the divider to resize. Other views have the whole sidebar.' },
-            ]}
-          />
-        </div>
-        <div className="settings-field">
           <div className="settings-label">Size of everything</div>
           <div className="settings-row">
             <button onClick={() => void studio.zoom('out', 'key')} aria-label="Smaller">

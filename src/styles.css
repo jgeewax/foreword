@@ -170,9 +170,6 @@ button.indicator:hover { background: var(--bg-3); }
 .separator[data-separator='hover'], .separator[data-separator='active'] { background: var(--accent); }
 .separator.separator-h { width: auto; height: 1px; }
 .separator.separator-h::after { inset: -3px 0; }
-.sidebar-stack { flex: 1; min-height: 0; }
-.sidebar-section { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.sidebar-section .tree { flex: 1; overflow: auto; }
 
 .pane { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg); }
 .pane-header { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--border); background: var(--bg-2); flex: none; position: relative; }
@@ -854,7 +851,7 @@ button.thinking-head:hover { color: var(--fg); }
 button { transition: background-color 0.08s, border-color 0.08s, color 0.08s, transform 0.06s; }
 button:active:not(:disabled) { transform: scale(0.97); }
 .tab { animation: appear 0.12s ease-out; }
-.explorer-main > .pane-header + *, .sidebar-section > .pane-header + * { animation: appear 0.12s ease-out; }
+.explorer-main > .pane-header + * { animation: appear 0.12s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
   .busy-bar::before { left: 0; width: 100%; transform: none; opacity: 0.6; }

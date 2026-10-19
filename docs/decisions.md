@@ -2704,26 +2704,30 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   story.typ, 28 pages, 0 errors, 0 warnings, 22 pictures, a change kept on
   reopening) and `print` (a new picture book passes, with no edge warning).
 
-### History below the files, and its own tab still
+### History is a view of its own, like the others
 
 - **Asked for:** "history tab shouldnt always be stuck at the bottom. it
   shoudl be its own tab (separate from the git tab)". With History below the
   files (Settings ▸ Layout), it sat under every view, Source Control too
   (two lists of versions, one over the other), and had no icon of its own.
-- **Now:** History is always in the activity bar, after Files. *Below the
-  files too* puts it under the files only; every other view (Source Control,
-  Conversations, Review…) has the whole sidebar.
-  - Show History (View menu, palette), Name this version, History of This
-    File and the trace's Review in History stay on the files when History is
-    below them and they're showing; anywhere else they open History's tab,
-    and the sidebar if it was hidden.
-  - The header buttons say what they do: *Show History only in its own tab*
-    (below the files), *Show History below the files too* (its own tab,
-    which then shows the files).
-- Verified: self-test `layout` in a book with its own Git repository (below
-  the files with the History icon there; Conversations and Source control
-  without History; Show History from each; the icon; both header buttons),
-  and `activity`, `shot` and `chrome` still pass.
+  A first pass kept the option for the files only; then: "i dont want the
+  setting at all. now that we have a left tab bar thing, it should be its own
+  thing just like anything else." Rearranging views may come later.
+- **Now:** History is always in the activity bar, after Files, and nothing
+  can put it below anything. The setting is gone from Settings ▸ Layout, the
+  assistant's settings tools and the History header (its ⬓/⧉ buttons).
+  - A settings file that still says `historyPlacement` is read as if it
+    didn't, and the key is dropped the next time the file is written (other
+    keys the app doesn't know are still kept).
+  - Show History, Name this version, History of This File and the trace's
+    Review in History open History's view, and the sidebar if it was hidden
+    (History of This File and Review in History left a hidden sidebar hidden
+    before).
+- Verified: unit tests (the retired key read and dropped); self-test `layout`
+  in a book with its own Git repository, with `"historyPlacement": "below"`
+  in its settings file (no History under Files or Source control; the History
+  icon and View ▸ History open it alone; Settings ▸ General has no History
+  choice), and `activity`, `shot`, `chrome` and `defaults` still pass.
 
 ### Open questions
 

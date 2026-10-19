@@ -4,9 +4,6 @@ import { DEFAULT_PERMISSIONS, PRESETS, sanitizePermissions, type AgentPermission
 
 export type SendKey = 'enter' | 'mod-enter';
 
-/** Where History lives in the left pane: its own tab, or that and a section below the files (only the files). */
-export type HistoryPlacement = 'tab' | 'below';
-
 /** Which program runs the writing assistant: OpenCode, or an agent spoken to over ACP. */
 export type AssistantId = 'opencode' | 'claude' | 'gemini' | 'codex' | 'antigravity';
 export const ASSISTANTS: AssistantId[] = ['opencode', 'claude', 'gemini', 'codex', 'antigravity'];
@@ -34,7 +31,6 @@ export type AppSettings = {
   sendKey: SendKey;
   /** What the assistant may do (see permissions.ts). */
   permissions: AgentPermissions;
-  historyPlacement: HistoryPlacement;
   /** Mark the lines the assistant changed (from History), in the editor's gutter; off, they look like the author's. */
   markAiEdits: boolean;
   /** Mark the lines the assistant read in the current conversation. */
@@ -69,7 +65,6 @@ export type AppSettings = {
 export const DEFAULT_SETTINGS: AppSettings = {
   sendKey: 'enter',
   permissions: DEFAULT_PERMISSIONS,
-  historyPlacement: 'tab',
   markAiEdits: true,
   markAiReads: true,
   aiEditColor: '#a371f7',
@@ -159,7 +154,6 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (permissions) out.permissions = permissions;
   // Before fine-grained permissions there was one switch: edit without asking, or ask.
   else if (raw.agentEdits === 'allow') out.permissions = PRESETS.edit.permissions;
-  if (raw.historyPlacement === 'tab' || raw.historyPlacement === 'below') out.historyPlacement = raw.historyPlacement;
   if (typeof raw.markAiEdits === 'boolean') out.markAiEdits = raw.markAiEdits;
   if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
   if (isColor(raw.aiEditColor)) out.aiEditColor = raw.aiEditColor.toLowerCase();

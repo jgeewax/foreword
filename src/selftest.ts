@@ -5420,9 +5420,7 @@ async function shotChecks() {
     const r = b.getBoundingClientRect();
     return `${b.getAttribute('aria-label')}: ${Math.round(r.width)}×${Math.round(r.height)}`;
   });
-  // Every view, with its full title: History in its own tab, a TODO typed (not saved).
-  const placement = studio.state.settings.historyPlacement;
-  studio.updateSettings({ historyPlacement: 'tab' });
+  // Every view, with its full title, a TODO typed (not saved).
   const editor = studio.editor!;
   const model = editor.getModel()!;
   editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// TODO: a note for the sidebar check\n' }]);
@@ -5442,7 +5440,6 @@ async function shotChecks() {
   while (model.canUndo()) await model.undo();
   await sleep(300);
   out.restored = { dirty: !!studio.state.dirty[studio.state.active ?? ''] };
-  studio.updateSettings({ historyPlacement: placement });
   studio.showSidebar(saved);
   return out;
 }
@@ -5978,16 +5975,13 @@ async function explicitDefaultsChecks() {
   out.textSizeDefault = [...document.querySelectorAll('.settings-content button')].find((b) => b.textContent?.startsWith('Default'))?.textContent;
   studio.closeSettings();
   await sleep(200);
-  // History's "How does this work?", in its own tab.
+  // History's "How does this work?".
   const sidebar = studio.state.sidebar;
-  const placement = studio.state.settings.historyPlacement;
-  studio.updateSettings({ historyPlacement: 'tab' }, { write: false });
   studio.showSidebar('history');
   await sleep(400);
   [...document.querySelectorAll<HTMLButtonElement>('.history-help button')].find((b) => b.textContent === 'How does this work?')?.click();
   await sleep(200);
   out.historyWhere = [...document.querySelectorAll('.history-about p')].find((p) => p.textContent?.startsWith('Where'))?.textContent;
-  studio.updateSettings({ historyPlacement: placement }, { write: false });
   studio.showSidebar(sidebar);
   // New File says which folder its name is in; Cancel leaves it.
   const asked = studio.newFile('');
@@ -6013,78 +6007,55 @@ async function explicitDefaultsChecks() {
 }
 
 /**
- * History below the files (layout option): below the files only, and its own
- * tab still; every other view has the whole sidebar. Restores the author's setting.
+ * History is a view of its own, like the others: never below the files or any
+ * other view, and Settings has no choice about it.
  */
 async function layoutChecks() {
-  const saved = studio.state.settings.historyPlacement;
   const sidebar = studio.state.sidebar;
   const state = () => ({
     sidebar: studio.state.sidebar,
-    stacked: !!document.querySelector('.explorer .sidebar-stack'),
     title: document.querySelector('.explorer-main .pane-title')?.textContent,
     history: document.querySelectorAll('.explorer .history-row').length,
     tree: !!document.querySelector('.explorer .tree .tree-row'),
-    placement: [...document.querySelectorAll('.explorer .pane-header button')].map((b) => b.getAttribute('aria-label')).filter((l) => l?.startsWith('Show History')),
   });
-  const icon = () => document.querySelector<HTMLButtonElement>('.activity-bar button[aria-label^="History"]');
-  studio.updateSettings({ historyPlacement: 'below' });
+  const out: Record<string, unknown> = {};
   studio.showSidebar('files');
-  await sleep(500);
-  const out: Record<string, unknown> = { below: { ...state(), icon: !!icon() }, snapshot: await snap('history-below') };
-  // The other views have the whole sidebar: Conversations always, Source control when the book is in Git.
-  studio.showSidebar('tasks');
-  await sleep(300);
-  out.tasks = state();
+  await sleep(400);
+  out.files = state();
+  // Source control, when the book is in Git.
   if (studio.state.git.repo) {
     studio.showSidebar('git');
-    // Its sections' divider lays out a moment later.
-    await sleep(1200);
-    out.git = { ...state(), snapshot: await snap('history-below-git') };
+    await sleep(400);
+    out.git = state();
   }
-  // Show History from there opens its tab; from the files, it's already below them.
-  studio.showHistory();
-  await sleep(300);
-  out.showFromTasks = state();
-  studio.showSidebar('files');
-  await sleep(200);
-  studio.showHistory();
-  await sleep(300);
-  out.showFromFiles = state();
-  // The History icon opens it on its own.
-  icon()?.click();
+  // The History icon opens it, on its own.
+  document.querySelector<HTMLButtonElement>('.activity-bar button[aria-label^="History"]')?.click();
   await sleep(400);
-  out.tab = state();
-  // Its header below the files: only in its own tab; then its own header: below the files too.
-  studio.showSidebar('files');
+  out.tab = { ...state(), snapshot: await snap('history-tab') };
+  // View ▸ History from another view.
+  studio.showSidebar('tasks');
+  await sleep(200);
+  await studio.menuCommand('show-history');
   await sleep(300);
-  document.querySelector<HTMLButtonElement>('.sidebar-stack button[aria-label="Show History only in its own tab"]')?.click();
+  out.menu = state();
+  const page = localStorage.getItem('studio.settingsPage');
+  studio.openSettings('general');
   await sleep(300);
-  out.toTab = { setting: studio.state.settings.historyPlacement, ...state() };
-  studio.showSidebar('files');
-  await sleep(300);
-  out.tabFiles = state();
-  studio.showSidebar('history');
-  await sleep(300);
-  document.querySelector<HTMLButtonElement>('.explorer button[aria-label="Show History below the files too"]')?.click();
-  await sleep(300);
-  out.toBelow = { setting: studio.state.settings.historyPlacement, ...state() };
-  studio.updateSettings({ historyPlacement: saved });
+  out.settingsLabels = [...document.querySelectorAll('.settings-content .settings-label')].map((l) => l.textContent);
+  studio.closeSettings();
+  await sleep(200);
+  if (page === null) localStorage.removeItem('studio.settingsPage');
+  else localStorage.setItem('studio.settingsPage', page);
   studio.showSidebar(sidebar);
   type S = ReturnType<typeof state>;
-  const [below, tasks, fromTasks, fromFiles, tab, toTab, tabFiles, toBelow] = [out.below, out.tasks, out.showFromTasks, out.showFromFiles, out.tab, out.toTab, out.tabFiles, out.toBelow] as (S & { icon?: boolean; setting?: string })[];
+  const [files, tab, menu] = [out.files, out.tab, out.menu] as S[];
   const git = out.git as S | undefined;
-  const alone = (s: S, title: string) => !s.stacked && s.title === title;
   out.ok =
-    below.stacked && below.tree && below.history > 0 && !!below.icon && below.placement.join() === 'Show History only in its own tab' &&
-    alone(tasks, 'Conversations') && tasks.history === 0 &&
-    (!git || (alone(git, 'Source control') && git.history === 0)) &&
-    fromTasks.sidebar === 'history' && alone(fromTasks, 'History') &&
-    fromFiles.sidebar === 'files' && fromFiles.stacked &&
-    tab.sidebar === 'history' && alone(tab, 'History') && tab.history > 0 && !tab.tree && tab.placement.length === 0 &&
-    toTab.setting === 'tab' && toTab.sidebar === 'history' && !toTab.stacked &&
-    !tabFiles.stacked && tabFiles.history === 0 &&
-    toBelow.setting === 'below' && toBelow.sidebar === 'files' && toBelow.stacked;
+    files.tree && files.history === 0 &&
+    (!git || (git.title === 'Source control' && git.history === 0)) &&
+    tab.sidebar === 'history' && tab.title === 'History' && tab.history > 0 && !tab.tree &&
+    menu.sidebar === 'history' && menu.title === 'History' &&
+    (out.settingsLabels as string[]).includes('Size of everything') && !(out.settingsLabels as string[]).includes('History');
   return out;
 }
 

@@ -16,6 +16,14 @@ describe('the settings file', () => {
     expect(text.endsWith('}\n')).toBe(true);
   });
 
+  it('drops settings it no longer has, as History below the files', () => {
+    const c = parseConfig('{ "historyPlacement": "below", "myNote": "hi" }');
+    expect(c.settings).toEqual(DEFAULT_SETTINGS);
+    const written = JSON.parse(serializeConfig(c.raw, c.settings, 1));
+    expect(written).not.toHaveProperty('historyPlacement');
+    expect(written.myNote).toBe('hi');
+  });
+
   it('keeps where lines wrap and the rulers', () => {
     const c = parseConfig('{ "wordWrap": "column", "wordWrapColumn": 120, "rulers": [80, 120] }');
     expect(c.settings).toMatchObject({ wordWrap: 'column', wordWrapColumn: 120, rulers: [80, 120] });

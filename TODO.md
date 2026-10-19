@@ -260,4 +260,4 @@
 
 - [x] writing style guide templates to pick from , also include these in the same docs that we let people try out (Start from a template (and Writing Style Guide Templates… in the palette): Classic fiction, Friendly textbook, Picture book, Research paper, Rules and reference, Programming book and Blank, one suggested for the book; each shows its sample’s guide beside it, and each sample’s guide names its template.)
 
-- [x] history tab shouldnt always be stuck at the bottom. it shoudl be its own tab (separate from the git tab) (History always has its own icon in the activity bar now, after Files. Below the files (Settings ▸ Layout, now "Below the files too") puts it under the files only: Source control and every other view have the whole sidebar.)
+- [x] history tab shouldnt always be stuck at the bottom. it shoudl be its own tab (separate from the git tab) (History is a view of its own in the activity bar now, after Files, like every other view. The "below the files" setting is gone, and an old one in the settings file is ignored.)
