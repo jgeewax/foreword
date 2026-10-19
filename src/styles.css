@@ -643,44 +643,65 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 
 /* sidebar tabs + history */
 .history { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.history-actions { padding: 8px 8px 4px; }
-.history-name { display: flex; gap: 4px; }
+/*
+ * History as a timeline, newest first: a rail down the left through each
+ * version's node (coloured by who made it: you, the assistant in the
+ * editor's purple, a name you gave it in amber), the version's words in a
+ * card to its right. The rail starts at Now and ends at the first version.
+ */
+.history-list { --rail: 18px; overflow-y: auto; flex: 1; padding: 6px 0 12px; }
+.history-now, .history-day, .history-item { position: relative; }
+.history-now::before, .history-day::before, .history-item::before { content: ""; position: absolute; z-index: 1; left: calc(var(--rail) - 1px); top: 0; bottom: 0; width: 2px; background: color-mix(in srgb, var(--muted) 32%, transparent); }
+.history-list > .first::before { top: 15px; }
+.history-item.last::before { bottom: auto; height: 15px; }
+.history-node { position: absolute; z-index: 2; left: var(--rail); top: 15px; translate: -50% -50%; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: var(--bg-2); color: var(--muted); }
+.history-node::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.history-node:has(svg)::after { display: none; }
+.kind-opened .history-node::after { width: 8px; height: 8px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.kind-milestone .history-node::after { width: 8px; height: 8px; border-radius: 1.5px; rotate: 45deg; background: var(--milestone); }
+.kind-agent .history-node { color: var(--ai-edit); }
+.kind-restore .history-node { color: var(--accent); }
+.history-item.selected .history-node { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* Now: a ring in the accent, and where a name marks this point. */
+.history-now .history-node::after { width: 9px; height: 9px; background: transparent; box-shadow: inset 0 0 0 2px var(--accent); }
+.history-now-body { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 30px; padding: 2px 8px 2px calc(var(--rail) + 14px); }
+.history-now-label { font-weight: 600; }
+.history-now .change-action { margin-left: auto; }
+.history-name { display: flex; gap: 4px; flex: 1 1 100%; }
 .history-name input { flex: 1; min-width: 0; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--accent); border-radius: 5px; padding: 2px 6px; outline: none; }
-.history-help { padding: 0 8px 6px; font-size: 11px; }
-.history-empty { padding: 12px; }
-.history-list { overflow-y: auto; flex: 1; padding-bottom: 12px; }
-.history-day { position: sticky; top: 0; background: var(--bg-2); padding: 6px 8px 3px; font-size: 11px; font-weight: 600; color: var(--muted); }
-/* A version folds out, as a folder in the file tree: a chevron that turns, and its files under a guide line. */
-.history-row { display: flex; gap: 4px; align-items: flex-start; padding: 4px 8px 4px 4px; cursor: default; }
-.history-row:hover { background: var(--bg-3); }
-.history-row:hover .twisty { color: var(--fg); }
-.history-row:focus-visible, .history-file:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
-.history-row .twisty { margin-top: 1px; }
-.history-item.open > .history-row { background: var(--sel); }
-.history-icon { width: 14px; flex: none; text-align: center; color: var(--muted); }
-.kind-agent .history-icon { color: var(--accent); }
-.kind-milestone .history-icon { color: var(--milestone); }
-.history-main { display: flex; flex-direction: column; min-width: 0; }
+.history-day { position: sticky; top: 0; z-index: 3; background: var(--bg-2); padding: 8px 8px 3px calc(var(--rail) + 14px); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+/* A version: a card right of the rail, its words, time and size; hover and the shown one light it up. */
+.history-row { display: block; padding: 1px 8px 1px calc(var(--rail) + 8px); cursor: default; outline: none; }
+.history-body { display: flex; flex-direction: column; min-width: 0; padding: 4px 8px 5px; border-radius: 7px; }
+.history-row:hover .history-body { background: var(--bg-3); }
+.history-item.selected > .history-row .history-body { background: var(--sel); }
+.history-row:focus-visible .history-body { outline: 1px solid var(--accent); outline-offset: -1px; }
 .history-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kind-milestone .history-label { font-weight: 600; }
-.history-meta { font-size: 11px; color: var(--muted); }
+/* One line: what doesn't fit wraps onto a second line that isn't shown, so the size bar is left out whole, not cut off. */
+.history-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; height: 16px; overflow: hidden; line-height: 16px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .add-n { color: var(--good); }
 .del-n { color: var(--bad); }
-.history-detail { margin: 0 8px 4px 11px; padding: 3px 0 6px 10px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; animation: appear 0.12s ease-out; }
-.history-item.open > .history-detail { border-left-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.history-loading { padding: 2px 4px; font-size: 12px; }
-.history-file { display: flex; gap: 6px; align-items: center; padding: 2px 4px; border-radius: 4px; font-size: 12px; cursor: default; }
+/* How much it changed, as GitHub shows it: five blocks. */
+.change-bar { display: inline-flex; gap: 1.5px; margin-left: 4px; }
+.change-bar i { width: 6px; height: 6px; border-radius: 1.5px; background: color-mix(in srgb, var(--muted) 30%, transparent); }
+.change-bar i.a { background: var(--good); }
+.change-bar i.d { background: var(--bad); }
+/* The shown version's files, and what you can do with it, on the rail. */
+.history-detail { margin: 2px 8px 0 calc(var(--rail) + 8px); padding: 2px 0 8px; display: flex; flex-direction: column; gap: 1px; animation: appear 0.12s ease-out; }
+.history-loading { padding: 2px 8px; font-size: 12px; }
+.history-file { display: flex; gap: 6px; align-items: center; padding: 2px 8px; border-radius: 5px; font-size: 12px; cursor: default; }
 .history-file:hover { background: var(--bg-3); }
+.history-file:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .history-file .file-icon { flex: none; }
 .history-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; }
 .history-folder { color: var(--muted); font-size: 10.5px; }
 .history-status { font-size: 10px; text-transform: uppercase; color: var(--muted); }
-/* Shown on hover: a click opens the file's changes in a tab. */
-.history-open { flex: none; display: grid; place-items: center; color: var(--muted); opacity: 0; transition: opacity 0.1s; }
-.history-file:hover .history-open, .history-file:focus-visible .history-open { opacity: 1; }
-.history-file:hover .history-open { color: var(--fg); }
 .history-counts { font-size: 11px; white-space: nowrap; }
-.history-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.history-version-actions { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 4px 0 0 1px; }
+.history-empty { padding: 12px; }
+/* After the timeline: what History is, more on request. */
+.history-help { margin: 14px 10px 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; line-height: 1.45; }
 .settings-section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 16px 0 8px; }
 .settings-field { margin-bottom: 12px; }
 .settings-label { font-weight: 600; margin-bottom: 4px; }

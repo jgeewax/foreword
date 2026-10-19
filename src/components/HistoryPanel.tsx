@@ -1,24 +1,25 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { studio } from '../app/studio';
 import type { Version } from '../lib/ipc';
 import { onContextMenu } from '../lib/context-menu';
 import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
-import { FileIcon, Icon } from './icons';
+import { FileIcon, Icon, type IconName } from './icons';
 
 /** ⏎ or space on a row that acts as a button. */
 const onActivate = (run: () => void) => (e: KeyboardEvent) => {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
+  if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
   e.preventDefault();
   run();
 };
 
-const KIND: Record<string, { icon: string; title: string }> = {
-  opened: { icon: '○', title: 'Opened in Typst Studio' },
-  save: { icon: '✎', title: 'Your edits' },
-  agent: { icon: '✦', title: 'Changes by the agent' },
-  milestone: { icon: '◆', title: 'Named version' },
-  restore: { icon: '↺', title: 'Restore' },
+/** Each kind of version, as its node on the timeline says it: in the editor's colours for the assistant. */
+const KIND: Record<string, { title: string; glyph?: IconName }> = {
+  opened: { title: 'When Typst Studio started keeping this book’s history' },
+  save: { title: 'Your edits' },
+  agent: { title: 'Changes by the assistant', glyph: 'sparkle' },
+  milestone: { title: 'A version you named' },
+  restore: { title: 'Put back from an earlier version', glyph: 'undo' },
 };
 
 function dayLabel(t: number) {
@@ -32,32 +33,62 @@ function dayLabel(t: number) {
 
 const timeLabel = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-function Stats({ v }: { v: Version }) {
-  if (!v.files) return <span>no changes</span>;
+/** How much a version changed, as five blocks: green for lines added, red for removed, grey for a small change. */
+function ChangeBar({ added, deleted }: { added: number; deleted: number }) {
+  const total = added + deleted;
+  if (!total) return null;
+  const coloured = Math.min(5, total);
+  let green = Math.round((added / total) * coloured);
+  if (added && !green) green = 1;
+  if (deleted && green === coloured) green = coloured - 1;
   return (
-    <span title="Files changed, and lines added and removed (a paragraph is one line)">
-      {v.files} file{v.files > 1 ? 's' : ''} <span className="add-n">+{v.added}</span> <span className="del-n">−{v.deleted}</span>
+    <span className="change-bar" aria-hidden>
+      {Array.from({ length: 5 }, (_, i) => (
+        <i key={i} className={i < green ? 'a' : i < coloured ? 'd' : ''} />
+      ))}
     </span>
   );
 }
 
-function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
-  const open = useStore(studio.store, (s) => (s.history.open?.id === v.id ? s.history.open : null));
-  const busy = useStore(studio.store, (s) => s.history.busy);
-  const kind = KIND[v.kind] ?? { icon: '•', title: v.kind };
-  const toggle = () => void studio.history.toggle(v.id);
+/** A quiet action under the selected version: an icon and words, on one line. */
+function VersionAction({ icon, label, title, disabled, onClick }: { icon: IconName; label: string; title: string; disabled?: boolean; onClick: () => void }) {
   return (
-    <div className={`history-item kind-${v.kind}${open ? ' open' : ''}`}>
-      {/* A chevron, as the file tree's folders: the row folds out to the files it changed. */}
+    <button className="change-action" title={title} disabled={disabled} onClick={onClick}>
+      <Icon name={icon} size={14} />
+      {label}
+    </button>
+  );
+}
+
+/**
+ * One version on the timeline: its node, what it was, when, how much it
+ * changed. A click shows what it changed in a tab (◀ Older and Newer ▶
+ * there step through), and folds out its files and what you can do with it
+ * here; a click on it again folds them up.
+ */
+function VersionRow({ v, latest, edge }: { v: Version; latest: boolean; edge: string }) {
+  const open = useStore(studio.store, (s) => (s.history.open?.id === v.id ? s.history.open : null));
+  const shown = useStore(studio.store, (s) => s.history.changes?.mode === 'version' && s.history.changes.version.id === v.id);
+  const busy = useStore(studio.store, (s) => s.history.busy);
+  const kind = KIND[v.kind] ?? { title: v.kind };
+  // The node says it was the assistant: its words are enough.
+  const label = v.kind === 'agent' ? v.label.replace(/^Agent:\s*/, '') : v.label;
+  const select = () => {
+    if (open) return void studio.history.toggle(v.id);
+    void studio.history.toggle(v.id);
+    void studio.history.showChanges(v);
+  };
+  return (
+    <div className={`history-item kind-${v.kind}${open ? ' open' : ''}${shown ? ' selected' : ''}${edge}`}>
       <div
         className="history-row"
         role="button"
         tabIndex={0}
         aria-expanded={!!open}
-        aria-label={`${kind.title}: ${v.label}`}
-        title={open ? 'Fold it up again' : v.files ? 'Show the files it changed, and what you can do with this version' : 'Show what you can do with this version'}
-        onClick={toggle}
-        onKeyDown={onActivate(toggle)}
+        aria-label={`${kind.title}: ${label}, ${timeLabel(v.time)}`}
+        title={open ? 'Fold up its files' : 'What it changed, in a tab, and its files here'}
+        onClick={select}
+        onKeyDown={onActivate(select)}
         onContextMenu={onContextMenu(() => [
           { label: 'What Changed', action: () => void studio.history.showChanges(v) },
           !latest && { label: 'Compare with Now', action: () => void studio.history.compareWithNow(v) },
@@ -66,16 +97,22 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
           !latest && { label: 'Restore This Version…', enabled: !busy, action: () => void studio.history.restoreVersion(v) },
         ])}
       >
-        <span className={`twisty${open ? ' open' : ''}`}>
-          <Icon name="chevronRight" size={16} />
+        <span className="history-node" title={kind.title}>
+          {kind.glyph && <Icon name={kind.glyph} size={11} />}
         </span>
-        <span className="history-icon" title={kind.title}>
-          {kind.icon}
-        </span>
-        <span className="history-main">
-          <span className="history-label">{v.label}</span>
+        <span className="history-body">
+          <span className="history-label">{label}</span>
           <span className="history-meta">
-            {timeLabel(v.time)} · <Stats v={v} />
+            <span className="history-time">{timeLabel(v.time)}</span>
+            <span aria-hidden>·</span>
+            {v.files ? (
+              <>
+                {v.files} file{v.files > 1 ? 's' : ''} <span className="add-n">+{v.added}</span> <span className="del-n">−{v.deleted}</span>
+                <ChangeBar added={v.added} deleted={v.deleted} />
+              </>
+            ) : (
+              'no changes'
+            )}
           </span>
         </span>
       </div>
@@ -86,7 +123,7 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
             const show = () => void studio.history.showDiff(v, c.path);
             const slash = c.path.lastIndexOf('/');
             return (
-              <div key={c.path} className="history-file" role="button" tabIndex={0} title={`What changed in ${c.path}, in its own tab`} onClick={show} onKeyDown={onActivate(show)}>
+              <div key={c.path} className="history-file" role="button" tabIndex={0} title={`What changed in ${c.path}, side by side`} onClick={show} onKeyDown={onActivate(show)}>
                 <FileIcon path={c.path} />
                 {/* The name first, then its folder (as Source Control): a narrow pane cuts the folder, not the name. */}
                 <span className="history-path">
@@ -99,33 +136,18 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
                     <span className="add-n">+{c.added}</span> <span className="del-n">−{c.deleted}</span>
                   </span>
                 )}
-                {/* What a click does: the changes open in a tab. */}
-                <span className="history-open" aria-hidden>
-                  <Icon name="openChanges" size={14} />
-                </span>
               </div>
             );
           })}
-          <div className="history-buttons">
-            <button className="primary" onClick={() => void studio.history.showChanges(v)}>
-              What changed
-            </button>
-            {!latest && (
-              <button title="Everything that changed from this version until now" onClick={() => void studio.history.compareWithNow(v)}>
-                Compare with now
-              </button>
-            )}
-            {v.kind === 'agent' && v.parent && (
-              <button disabled={busy} title="Put back what these files looked like before the agent changed them" onClick={() => void studio.history.undoVersion(v)}>
-                Undo these changes
-              </button>
-            )}
-            {!latest && (
-              <button disabled={busy} title="Put the whole book back as it was at this point" onClick={() => void studio.history.restoreVersion(v)}>
-                Restore this version
-              </button>
-            )}
-          </div>
+          {(!latest || (v.kind === 'agent' && v.parent)) && (
+            <div className="history-version-actions">
+              {!latest && <VersionAction icon="sideBySide" label="Compare with now" title="Everything that changed from this version until now, in a tab" onClick={() => void studio.history.compareWithNow(v)} />}
+              {v.kind === 'agent' && v.parent && (
+                <VersionAction icon="undo" label="Undo these changes" disabled={busy} title="Put back what these files looked like before the assistant changed them" onClick={() => void studio.history.undoVersion(v)} />
+              )}
+              {!latest && <VersionAction icon="retry" label="Restore this version" disabled={busy} title="Put the whole book back as it was at this point (a new version: you can go forward again)" onClick={() => void studio.history.restoreVersion(v)} />}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -135,14 +157,14 @@ function VersionRow({ v, latest }: { v: Version; latest: boolean }) {
 /** Single-quoted for a shell, for the Git command the author can copy. */
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-/** What History is, where it's kept, and how to go back: one line, more on request. */
+/** What History is, where it's kept, and how to go back: one line at the end of the timeline, more on request. */
 function HistoryAbout() {
   const repo = useStore(studio.store, (s) => s.history.repo);
   const root = useStore(studio.store, (s) => s.workspace?.root);
   const [open, setOpen] = useState(false);
   return (
     <div className="history-help muted">
-      Versions are saved automatically as you work and around every assistant change.{' '}
+      Versions are saved as you work and around every change the assistant makes.{' '}
       <button className="link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {open ? 'Less' : 'How does this work?'}
       </button>
@@ -159,9 +181,9 @@ function HistoryAbout() {
             . History never touches your own Git repository, if the book has one: that's Source Control, where you commit, pull and push yourself.
           </p>
           <p>
-            <b>Going back:</b> click a version (<b>›</b>) to fold out the files it changed, then a file, or <b>What changed</b>, to see the changes line by line in a tab.{' '}
-            <b>◀ Older</b> and <b>Newer ▶</b> there step through the versions one at a time; <b>Compare with now</b> shows everything since. You can undo just what the assistant changed, or put the whole book back as it was. Restoring adds a new version, so you can always go
-            forward again.
+            <b>Going back:</b> click a version to see what it changed, line by line or word by word, in a tab, with its files listed under it here; a file shows its own changes side by side.{' '}
+            <b>◀ Older</b> and <b>Newer ▶</b> in the tab step through the versions one at a time; <b>Compare with now</b> shows everything since. You can undo just what the assistant changed, or put the whole book back as it was.
+            Restoring adds a new version, so you can always go forward again.
           </p>
           <p>
             <b>Marking points:</b> <i>Name this version…</i> keeps a point like “Draft sent to editor” easy to find.
@@ -183,50 +205,64 @@ function HistoryAbout() {
   );
 }
 
-function NameVersion() {
+/** The top of the timeline: now, where a name marks this point. */
+function NowRow() {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
-  if (!naming) {
-    return (
-      <button title="Mark this point, e.g. “Draft sent to editor”" onClick={() => setNaming(true)}>
-        Name this version…
-      </button>
-    );
-  }
   const save = async () => {
     await studio.history.saveNamed(name);
     setName('');
     setNaming(false);
   };
   return (
-    <form
-      className="history-name"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save();
-      }}
-    >
-      <input autoFocus value={name} placeholder="e.g. Draft 2 sent to editor" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setNaming(false)} />
-      <button className="primary" type="submit" disabled={!name.trim()}>
-        Save
-      </button>
-    </form>
+    <div className="history-now first">
+      <span className="history-node" aria-hidden />
+      <div className="history-now-body">
+        <span className="history-now-label">Now</span>
+        {naming ? (
+          <form
+            className="history-name"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <input autoFocus value={name} placeholder="e.g. Draft 2 sent to editor" aria-label="Name for this version" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setNaming(false)} />
+            <button className="primary" type="submit" disabled={!name.trim()}>
+              Save
+            </button>
+          </form>
+        ) : (
+          <VersionAction icon="tag" label="Name this version…" title="Mark this point, e.g. “Draft sent to editor”, so it's easy to find" onClick={() => setNaming(true)} />
+        )}
+      </div>
+    </div>
   );
 }
 
+/**
+ * History: the book's versions as a timeline, newest first, from now down to
+ * when Typst Studio started keeping them. Each version's node says who made
+ * it (you, the assistant, a name you gave it, a restore); a click shows what
+ * it changed.
+ */
 export function HistoryPanel() {
   const history = useStore(studio.store, (s) => s.history);
   if (history.status === 'unavailable') {
     return <div className="history-empty bad">History is off: {history.error}</div>;
   }
   if (history.status !== 'ready') return <div className="history-empty muted">Starting history…</div>;
+  const rows: ReactNode[] = [];
   let lastDay = '';
+  history.versions.forEach((v, i) => {
+    const day = dayLabel(v.time);
+    if (day !== lastDay) rows.push(<div key={`day-${day}`} className={`history-day${!rows.length && history.filter ? ' first' : ''}`}>{day}</div>);
+    lastDay = day;
+    rows.push(<VersionRow key={v.id} v={v} latest={i === 0} edge={i === history.versions.length - 1 ? ' last' : ''} />);
+  });
   return (
     <div className="history">
-      <div className="history-actions">
-        <NameVersion />
-      </div>
-      {history.filter ? (
+      {history.filter && (
         <div className="history-filter">
           <span>
             Only <code>{history.filter}</code>
@@ -235,22 +271,12 @@ export function HistoryPanel() {
             ✕
           </button>
         </div>
-      ) : (
-        <HistoryAbout />
       )}
-      {history.filter && !history.versions.length && <div className="history-empty muted">No versions changed this file yet.</div>}
       <div className="history-list">
-        {history.versions.map((v, i) => {
-          const day = dayLabel(v.time);
-          const header = day !== lastDay;
-          lastDay = day;
-          return (
-            <div key={v.id}>
-              {header && <div className="history-day">{day}</div>}
-              <VersionRow v={v} latest={i === 0} />
-            </div>
-          );
-        })}
+        {!history.filter && <NowRow />}
+        {history.filter && !history.versions.length && <div className="history-empty muted">No versions changed this file yet.</div>}
+        {rows}
+        <HistoryAbout />
       </div>
     </div>
   );

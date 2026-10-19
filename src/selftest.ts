@@ -4992,9 +4992,10 @@ async function previewJumpChecks() {
 }
 
 /**
- * History's versions fold out as the file tree's folders do: a chevron that
- * turns, aria-expanded, a guide line under the open one, and files that show
- * they open in a tab. ⏎ folds a row too. Saves a file once (scratch book only).
+ * History is a timeline: each version a node on a rail, coloured by who made
+ * it. A click on a version shows what it changed in a tab (there's no "What
+ * changed" button) and folds out its files and what you can do with it; a
+ * click on it again, or ⏎, folds them up. Saves a file once (scratch book only).
  */
 async function historyRowsChecks() {
   const out: Record<string, unknown> = {};
@@ -5011,15 +5012,25 @@ async function historyRowsChecks() {
     studio.showSidebar('history');
     await sleep(400);
   }
-  const label = studio.state.history.versions.find((v) => v.kind === 'save')!.label;
+  const version = studio.state.history.versions.find((v) => v.kind === 'save')!;
+  const label = version.label;
   const row = () => [...document.querySelectorAll<HTMLElement>('.history-item .history-row')].find((r) => r.textContent?.includes(label));
+  const item = () => row()?.closest('.history-item');
   const state = () => ({
     expanded: row()?.getAttribute('aria-expanded'),
-    twisty: !!row()?.querySelector('.twisty svg'),
-    turned: !!row()?.querySelector('.twisty.open'),
-    files: [...document.querySelectorAll('.history-detail .history-file')].map((f) => ({ icon: !!f.querySelector('.file-icon'), opens: !!f.querySelector('.history-open svg'), title: f.getAttribute('title') })),
-    guide: getComputedStyle(document.querySelector('.history-detail') ?? document.body).borderLeftStyle,
+    node: !!item()?.querySelector('.history-node'),
+    rail: getComputedStyle(item() ?? document.body, '::before').width,
+    selected: !!item()?.classList.contains('selected'),
+    tab: studio.state.history.changes?.version.label ?? null,
+    files: [...document.querySelectorAll('.history-detail .history-file')].map((f) => ({ icon: !!f.querySelector('.file-icon'), title: f.getAttribute('title') })),
+    actions: [...document.querySelectorAll('.history-version-actions button')].map((b) => b.textContent),
   });
+  out.timeline = {
+    now: !!document.querySelector('.history-now .history-node'),
+    nameButton: document.querySelector('.history-now .change-action')?.textContent,
+    kinds: [...document.querySelectorAll('.history-item')].map((e) => [...e.classList].find((c) => c.startsWith('kind-'))),
+    noWhatChangedButton: ![...document.querySelectorAll('.history button')].some((b) => /^what changed$/i.test(b.textContent?.trim() ?? '')),
+  };
   out.closed = state();
   // A window behind others doesn't run transitions: the chevron would be photographed mid-turn.
   const still = document.createElement('style');
@@ -5027,6 +5038,8 @@ async function historyRowsChecks() {
   document.head.append(still);
   row()?.click();
   await waitFor(() => document.querySelector('.history-detail .history-file'), 5000, 'files').catch(() => {});
+  await waitFor(() => studio.state.history.changes?.version.id === version.id, 5000, 'its changes in a tab').catch(() => {});
+  await sleep(100);
   out.open = state();
   out.snapshot = await snap('history-rows');
   still.remove();

@@ -2903,6 +2903,41 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   and 100 %, 33 and 36 pt at 150 %; every other part follows the zoom; no
   CSS zoom); in the app at 75 %, 100 % and 150 % (600 × 22 pt, 12 pt text).
 
+### History as a timeline
+
+- **Asked for:** "in history, "What changed" is a button, which is a weird
+  button to have. can you rethink the history panel and try to design
+  something beautiful?". A version folded out to its files and a row of
+  buttons, the first a filled primary "What changed", under a "Name this
+  version…" button and a paragraph of help.
+- **Now:** a timeline, newest first.
+  - A rail runs down the left from **Now** (a ring in the accent, where
+    *Name this version…* is, as a quiet action) to "Started keeping
+    history". Day names sit on it.
+  - Each version is a node on the rail, coloured by who made it, in the
+    colours the editor and the chat already use: your edits a grey dot,
+    the assistant's a purple ✦ (`--ai-edit`), a version you named an amber
+    diamond (bold words), a restore a blue ↺, an opening a hollow ring.
+  - Beside it, in a card: its words (the assistant's without "Agent:", its
+    node says so), then the time, files, +/− and a five-block bar of what
+    it added and removed, as GitHub shows it. Where the bar wouldn't fit,
+    it's left out whole, not cut off.
+- **A click on a version shows what it changed,** in the tab (◀ Older and
+  Newer ▶ step on from there), and lights its card. Its files fold out
+  under it on the rail (a file opens its own changes side by side), then
+  quiet actions with icons: Compare with now, Undo these changes (the
+  assistant's), Restore this version. A click on it again, or ⏎, folds
+  them up. Right-click still has What Changed and the rest.
+- **The help** ("Versions are saved as you work… How does this work?") is
+  at the end of the timeline, and says how it works now.
+- Verified: self-tests `historyrows` (rewritten: node and rail, a click
+  shows its changes in the tab and folds out its file, ⏎ folds and space
+  unfolds, no What changed button, Now with Name this version), `historyabout`,
+  `menus` (right-click), `layout` and `changeszoom`; in the app at 75 %,
+  100 % and 125 % with saves, named versions, an outside change and an
+  assistant version. The `history` group needs a live assistant and
+  wasn't run.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
