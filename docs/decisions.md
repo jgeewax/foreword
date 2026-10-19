@@ -2704,6 +2704,27 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   story.typ, 28 pages, 0 errors, 0 warnings, 22 pictures, a change kept on
   reopening) and `print` (a new picture book passes, with no edge warning).
 
+### History below the files, and its own tab still
+
+- **Asked for:** "history tab shouldnt always be stuck at the bottom. it
+  shoudl be its own tab (separate from the git tab)". With History below the
+  files (Settings ▸ Layout), it sat under every view, Source Control too
+  (two lists of versions, one over the other), and had no icon of its own.
+- **Now:** History is always in the activity bar, after Files. *Below the
+  files too* puts it under the files only; every other view (Source Control,
+  Conversations, Review…) has the whole sidebar.
+  - Show History (View menu, palette), Name this version, History of This
+    File and the trace's Review in History stay on the files when History is
+    below them and they're showing; anywhere else they open History's tab,
+    and the sidebar if it was hidden.
+  - The header buttons say what they do: *Show History only in its own tab*
+    (below the files), *Show History below the files too* (its own tab,
+    which then shows the files).
+- Verified: self-test `layout` in a book with its own Git repository (below
+  the files with the History icon there; Conversations and Source control
+  without History; Show History from each; the icon; both header buttons),
+  and `activity`, `shot` and `chrome` still pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

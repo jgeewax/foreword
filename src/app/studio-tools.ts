@@ -81,7 +81,7 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   markAiReads: { about: 'Mark the lines the assistant read in this conversation.', values: 'true, false', schema: { type: 'boolean' } },
   aiEditColor: { about: 'The colour of the marks for lines the assistant changed.', values: '#rrggbb', schema: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
   aiReadColor: { about: 'The colour of the marks for lines the assistant read.', values: '#rrggbb', schema: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
-  historyPlacement: { about: 'Where History is: a tab of its own in the left pane, or below the files.', values: 'tab, below', schema: { type: 'string', enum: ['tab', 'below'] } },
+  historyPlacement: { about: 'Where History is: a tab of its own in the left pane, or that and below the files too.', values: 'tab, below', schema: { type: 'string', enum: ['tab', 'below'] } },
   checkForUpdates: { about: 'Look for a new version of Typst Studio when it starts.', values: 'true, false', schema: { type: 'boolean' } },
   zoom: { about: 'The size of the whole window’s text and controls (1 is 100%).', values: ZOOM_STEPS.join(', '), schema: { type: 'number', minimum: ZOOM_STEPS[0], maximum: ZOOM_STEPS[ZOOM_STEPS.length - 1] } },
 };

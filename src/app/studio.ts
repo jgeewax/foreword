@@ -676,7 +676,7 @@ export class Studio {
     'toggle-assistant': () => this.events.emit('toggle-pane', 'agent'),
     'show-files': () => this.revealSidebar('files'),
     'show-review': () => this.showReview(),
-    'show-history': () => this.revealSidebar(this.state.settings.historyPlacement === 'below' ? 'files' : 'history'),
+    'show-history': () => this.showHistory(),
     'show-tasks': () => this.revealSidebar('tasks'),
     'show-git': () => this.revealSidebar('git'),
     'show-in-preview': () => this.syncPreviewToCursor(),
@@ -725,6 +725,12 @@ export class Studio {
     this.showSidebar(view);
   }
 
+  /** History: below the files if it's shown there and they're open, else its own tab. */
+  showHistory() {
+    const below = this.state.settings.historyPlacement === 'below' && this.state.sidebar === 'files';
+    this.revealSidebar(below ? 'files' : 'history');
+  }
+
   /** Run one of the editor's own actions (Find, Replace) from the menu bar or the command palette. */
   editorAction(id: string) {
     const editor = this.editor;
@@ -745,7 +751,7 @@ export class Studio {
     const name = await this.prompt({ title: 'Name this version', label: 'Name', placeholder: 'e.g. Draft 2 sent to editor', okLabel: 'Save' });
     if (!name?.trim()) return;
     await this.history.saveNamed(name.trim());
-    this.revealSidebar(this.state.settings.historyPlacement === 'below' ? 'files' : 'history');
+    this.showHistory();
   }
 
   /** Runnable code examples: set them up if needed, and show the Code view. */
@@ -2026,7 +2032,7 @@ export class Studio {
 
   /** History, showing only the versions that changed `path`. */
   async showFileHistory(path: string) {
-    this.showSidebar('history');
+    this.showHistory();
     await this.history.setFilter(path);
   }
 

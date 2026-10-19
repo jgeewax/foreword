@@ -4,7 +4,7 @@ import { DEFAULT_PERMISSIONS, PRESETS, sanitizePermissions, type AgentPermission
 
 export type SendKey = 'enter' | 'mod-enter';
 
-/** Where History lives in the left pane: its own tab, or a section below the files. */
+/** Where History lives in the left pane: its own tab, or that and a section below the files (only the files). */
 export type HistoryPlacement = 'tab' | 'below';
 
 /** Which program runs the writing assistant: OpenCode, or an agent spoken to over ACP. */

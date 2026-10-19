@@ -155,7 +155,7 @@ function GeneralPage() {
             onChange={(v) => studio.updateSettings({ historyPlacement: v })}
             options={[
               { value: 'tab', label: 'In its own tab', detail: 'A view of its own in the sidebar, next to Files.' },
-              { value: 'below', label: 'Below the files', detail: 'Both visible at once; drag the divider between them to resize.' },
+              { value: 'below', label: 'Below the files too', detail: 'Under the files as well, both visible at once; drag the divider to resize. Other views have the whole sidebar.' },
             ]}
           />
         </div>
