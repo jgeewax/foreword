@@ -59,7 +59,7 @@ import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructi
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
-import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleDraftBrief, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
+import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
@@ -283,7 +283,7 @@ export type StudioState = {
    * setup prompt. `drafting`: the conversation drafting it from the chapters
    * ('' while it starts), until the guide is written.
    */
-  styleGuide: { exists: boolean; chars: number; dismissed: boolean; drafting: string | null };
+  styleGuide: { exists: boolean; chars: number; dismissed: boolean; drafting: string | null; redraft: boolean };
   history: HistoryState;
   /** The author's own Git repository, if the book is in one. */
   git: GitState;
@@ -378,7 +378,7 @@ const initialState: StudioState = {
   recent: readJson<string[]>('studio.recentWorkspaces') ?? [],
   project: { settings: {}, raw: {}, hash: null, error: null },
   exporting: false,
-  styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null },
+  styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null, redraft: false },
   history: initialHistory,
   git: initialGit,
   code: initialCode,
@@ -4555,15 +4555,16 @@ export class Studio {
    * The chat shows the author a short message; the brief goes with it as that
    * conversation's instructions, out of sight.
    */
-  async draftStyleGuide() {
+  async draftStyleGuide({ redraft = false } = {}) {
     const a = this.state.agent;
     if (!this.agent || a.status !== 'ready' || a.running) return false;
     if (a.sessionId || a.items.length) this.newSession();
     if (this.state.agent.mode !== 'write') await this.setMode('write');
     this.styleDraftBefore = this.styleGuideText;
-    this.pendingBrief = { key: STYLE_DRAFT_KEY, text: styleDraftBrief() };
-    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '' } }));
-    const sent = await this.send(STYLE_DRAFT_MESSAGE);
+    const brief = redraft ? styleDraftBrief({ redraft: { authorChanges: await this.guideAuthorChanges() } }) : styleDraftBrief();
+    this.pendingBrief = { key: STYLE_DRAFT_KEY, text: brief };
+    this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '', redraft } }));
+    const sent = await this.send(redraft ? STYLE_REDRAFT_MESSAGE : STYLE_DRAFT_MESSAGE);
     this.pendingBrief = null;
     this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: sent ? this.state.agent.sessionId : null } }));
     return sent;
@@ -4579,7 +4580,39 @@ export class Studio {
     await this.refreshFiles();
     await this.openFile(STYLE_GUIDE_FILE);
     if (this.state.agent.sessionId === sessionId) {
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `Your style guide is open in the editor (${STYLE_GUIDE_FILE}). Every message follows it from now on; change anything that isn't right.` });
+      const what = this.state.styleGuide.redraft ? `Your redrafted style guide is open in the editor (${STYLE_GUIDE_FILE}); History keeps the one before.` : `Your style guide is open in the editor (${STYLE_GUIDE_FILE}).`;
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${what} Every message follows it from now on; change anything that isn't right.` });
+    }
+  }
+
+  /** "Redraft…": the guide isn't quite right. Asked first: it's written again (History keeps this one). */
+  async redraftStyleGuide() {
+    if (!this.state.styleGuide.exists) return this.draftStyleGuide();
+    const ok = await this.confirmAction(
+      `The assistant reads your chapters again and rewrites ${STYLE_GUIDE_FILE}, keeping the rules you wrote or changed yourself. History keeps this version, so you can go back to it.`,
+      'Redraft the style guide?',
+      'Redraft',
+    );
+    if (ok) await this.draftStyleGuide({ redraft: true });
+  }
+
+  /**
+   * What the author changed in the guide since an assistant last wrote it (theirs,
+   * to keep): null when no assistant ever wrote it, undefined when History can't say.
+   */
+  private async guideAuthorChanges(): Promise<GuideChange[] | null | undefined> {
+    if (this.state.history.status !== 'ready') return undefined;
+    try {
+      const written = (await ipc.historyList(200, STYLE_GUIDE_FILE)).find((v) => v.kind === 'agent');
+      if (!written) return null;
+      const edit = await this.aiEditOf(written, STYLE_GUIDE_FILE);
+      const current = (await ipc.fsRead(STYLE_GUIDE_FILE)).text;
+      if (!edit) return undefined;
+      const lines = edit.blocks.filter((b) => b.to > b.from).map((b) => ({ from: b.from + 1, to: b.to }));
+      return authorEdits(STYLE_GUIDE_FILE, edit.after.join('\n'), current, lines).map((e) => ({ wrote: e.wrote, now: e.now }));
+    } catch (e) {
+      console.warn('style guide: History', e);
+      return undefined;
     }
   }
 

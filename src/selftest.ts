@@ -668,6 +668,80 @@ async function styleDraftChecks(kind: 'claude' | 'codex' | 'opencode') {
 }
 
 /**
+ * Redraft…, with a real assistant (Claude Code on Haiku): a guide is drafted,
+ * the author changes a rule of it by hand, and Redraft… (asked first) writes
+ * it again from the chapters, keeping the author's rule. The brief says which
+ * part is the author's. Writes the guide: scratch book only.
+ */
+async function styleRedraftChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const confirm = studio.confirmAction;
+  const run = async () => {
+    for (const t0 = Date.now(); Date.now() - t0 < 300000; ) {
+      const q = studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
+      if (q?.kind === 'question') {
+        const answer: Record<string, string> = {};
+        for (const f of q.fields) if (f.options?.length) answer[f.key] = f.options[0].value;
+        await studio.answerQuestion(q.id, answer);
+      }
+      if (studio.state.styleGuide.drafting === null && !studio.state.agent.running) break;
+      await sleep(1000);
+    }
+    await sleep(1500);
+  };
+  try {
+    studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+    if (haiku) await studio.selectModel(haiku);
+    await waitFor(() => studio.state.history.status === 'ready', 30000, 'history');
+    await studio.draftStyleGuide();
+    await run();
+    const first = (await ipc.fsRead('WRITING_STYLE.md')).text;
+    out.drafted = { headings: first.split('\n').filter((l) => l.startsWith('#')).length, bar: document.querySelector('.style-bar')?.textContent };
+
+    // The author's own rule, under Don't.
+    const rule = '- Never call a matrix a "table of numbers"; and never begin a sentence with "So".';
+    const mine = first.replace(/(## Don't\n+)/, `$1${rule}\n`);
+    await ipc.fsWrite('WRITING_STYLE.md', mine.includes(rule) ? mine : `${first}\n## Don't\n${rule}\n`, await ipc.fsHash('WRITING_STYLE.md'));
+    await studio.history.checkpoint();
+    await sleep(1500);
+
+    const asked: string[] = [];
+    studio.confirmAction = async (message, title, ok) => (asked.push(`${title} | ${message} | ${ok}`), true);
+    document.querySelector<HTMLButtonElement>('.style-redraft')?.click();
+    await sleep(3000);
+    out.asked = asked;
+    out.barWhileRedrafting = document.querySelector('.style-bar')?.textContent;
+    const sessionId = studio.state.agent.sessionId;
+    const brief = sessionId ? ((await studio.agent!.getInstructions(sessionId)).find((e) => e.key === 'style-draft')?.value as string | undefined) : undefined;
+    out.brief = { redraft: /## Redrafting/.test(brief ?? ''), hasAuthorRule: (brief ?? '').includes('table of numbers'), excerpt: (brief ?? '').match(/## Redrafting[\s\S]{0,700}/)?.[0] };
+    await run();
+    const second = (await ipc.fsRead('WRITING_STYLE.md')).text;
+    const items = studio.state.agent.items;
+    out.redrafted = {
+      changed: second !== mine,
+      keepsRule: /table of numbers/.test(second) && /begin a sentence with .?So/i.test(second),
+      userMessages: items.filter((i) => i.kind === 'user').map((i) => (i as { text: string }).text),
+      reply: (items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.slice(0, 500),
+      notices: items.filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text),
+      active: studio.state.active,
+      dontSection: second.match(/## Don't[\s\S]*?(?=\n## |$)/)?.[0]?.slice(0, 600),
+    };
+    out.snapshot = await snap('style-redraft');
+  } finally {
+    studio.confirmAction = confirm;
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * What the chat shows while the assistant works, for each phase, posed without
  * a model: who's at work ("Claude is thinking…"), words that change with the
  * wait, a tip once the turn runs long, and each phase's moving picture. A
@@ -6685,6 +6759,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
+    if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('permissionspage')) {
       // Settings ▸ Permissions has a row for the settings tools; presets set it.
       const still = document.createElement('style');

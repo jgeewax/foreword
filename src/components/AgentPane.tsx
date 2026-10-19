@@ -1141,7 +1141,7 @@ function StyleGuideBar() {
       <div className="style-bar drafting">
         <ActivityGlyph phase="thinking" />
         <span>
-          <strong>Drafting your style guide</strong> from the chapters. It opens in the editor when it’s written.
+          <strong>{guide.redraft ? 'Redrafting' : 'Drafting'} your style guide</strong> from the chapters. It opens in the editor when it’s written.
         </span>
       </div>
     );
@@ -1152,6 +1152,15 @@ function StyleGuideBar() {
         <span className="muted">Style guide</span>
         <button className="link" title="Every message follows this guide. Click to edit it." onClick={() => void studio.openFile('WRITING_STYLE.md')}>
           WRITING_STYLE.md
+        </button>
+        <span className="spacer" />
+        <button
+          className="link style-redraft"
+          disabled={!ready}
+          title="Not quite right? The assistant drafts it again from your chapters, keeping the rules you wrote or changed yourself. History keeps this one."
+          onClick={() => void studio.redraftStyleGuide()}
+        >
+          Redraft…
         </button>
       </div>
     );

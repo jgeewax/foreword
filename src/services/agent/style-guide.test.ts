@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STYLE_DRAFT_MESSAGE, STYLE_GUIDE_MAX_CHARS, styleDraftBrief, styleGuideTemplate, styleInstructions } from './style-guide';
+import { STYLE_DRAFT_MESSAGE, STYLE_GUIDE_MAX_CHARS, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions } from './style-guide';
 
 describe('styleInstructions', () => {
   it('wraps the guide and tells the agent to follow it', () => {
@@ -46,5 +46,32 @@ describe('drafting the guide', () => {
     expect(p).toMatch(/At most two questions, asked together/);
     expect(p).toMatch(/three answers drawn from the book/);
     expect(p).toMatch(/Never ask about something the chapters already show/);
+  });
+});
+
+describe('redrafting the guide', () => {
+  it('a first draft says nothing about a guide that’s there', () => {
+    expect(styleDraftBrief()).not.toMatch(/Redrafting/);
+    expect(styleDraftBrief()).toMatch(/what the guide says their book sounds like/);
+  });
+
+  it('reads the guide first, writes it all again, and says what changed', () => {
+    expect(STYLE_REDRAFT_MESSAGE).toBe('Redraft my writing style guide from the chapters.');
+    const p = styleDraftBrief({ redraft: { authorChanges: [] } });
+    expect(p).toMatch(/## Redrafting\nWRITING_STYLE.md is there already.*Read it before the chapters/);
+    expect(p).toMatch(/hasn’t changed it: redraft it from the chapters/);
+    expect(p).toMatch(/Write the whole file again \(History keeps the old one\)/);
+    expect(p).toMatch(/tell the author what changed from the old guide/);
+  });
+
+  it('keeps what the author wrote: all of it, or the parts they changed', () => {
+    expect(styleDraftBrief({ redraft: { authorChanges: null } })).toMatch(/The author wrote the guide themselves: keep its rules/);
+    const p = styleDraftBrief({ redraft: { authorChanges: [{ wrote: '- Avoid jargon.', now: '- Avoid jargon. Never say “leverage”.' }] } });
+    expect(p).toMatch(/the author has changed these parts since\. They're the author's own words: keep them/);
+    expect(p).toContain('<author-change>\n<it-was>\n- Avoid jargon.\n</it-was>\n<the-author-made-it>\n- Avoid jargon. Never say “leverage”.\n</the-author-made-it>\n</author-change>');
+    expect(styleDraftBrief({ redraft: {} })).toMatch(/Keep the rules the author wrote or changed themselves/);
+    // What they added or took out, said as that.
+    const more = styleDraftBrief({ redraft: { authorChanges: [{ wrote: '', now: '- Never begin with “So”.' }, { wrote: '- Use the Oxford comma.', now: '' }] } });
+    expect(more).toContain('<author-added>\n- Never begin with “So”.\n</author-added>\n<author-removed>\n- Use the Oxford comma.\n</author-removed>');
   });
 });

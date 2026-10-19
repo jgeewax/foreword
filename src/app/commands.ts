@@ -171,6 +171,7 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('print-mixam', 'Print with Mixam…', { keywords: ['printer'] }),
         menu('design-cover', 'Design Cover…'),
         menu('style-guide', 'Writing Style Guide'),
+        { id: 'redraft-style-guide', title: 'Redraft Writing Style Guide…', keywords: ['style guide', 're-run', 'again'], when: () => s().styleGuide.exists && idle(), run: () => studio.redraftStyleGuide() },
         menu('name-version', 'Name This Version…', { keywords: ['history', 'milestone'], when: () => s().history.status === 'ready' }),
         menu('setup-code', 'Runnable Code Examples…'),
         menu('add-makefile', 'Add a Makefile…'),
