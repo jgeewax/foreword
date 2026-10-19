@@ -39,7 +39,11 @@ export class OpenCodeAdapter implements AgentAdapter {
   /** Each model's variants (its levels of effort), from the last list of models. */
   private variants = new Map<string, string[]>();
 
-  constructor(private readonly root: string) {}
+  constructor(
+    private readonly root: string,
+    /** Typst Studio's own tools (its settings), an MCP server over HTTP. */
+    private readonly tools: { name: string; url: string } | null = null,
+  ) {}
 
   async start() {
     await ipc.agentStart();
@@ -50,6 +54,22 @@ export class OpenCodeAdapter implements AgentAdapter {
       if (event) for (const l of this.listeners) l(event);
     };
     await ipc.agentSubscribe(channel);
+    // For as long as this server runs (OpenCode doesn't keep it in its config).
+    if (this.tools) {
+      this.toolsAdded = await call('PUT', `/api/experimental/mcp/${encodeURIComponent(this.tools.name)}?location[directory]=${encodeURIComponent(this.root)}`, {
+        // Its tools as tools, not called from code ("code mode"): the chat shows each one, and the rules allow them by name.
+        config: { type: 'remote', url: this.tools.url, oauth: false, codemode: false },
+      }).then(
+        () => true,
+        (e) => (console.warn('opencode: Typst Studio’s tools not added', e), false),
+      );
+    }
+  }
+
+  private toolsAdded = false;
+
+  hasStudioTools() {
+    return this.toolsAdded;
   }
 
   async stop() {

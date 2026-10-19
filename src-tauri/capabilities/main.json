@@ -73,6 +73,8 @@
     "allow-assistants-status",
     "allow-assistant-sign-in",
     "allow-assistant-download",
+    "allow-mcp-serve",
+    "allow-mcp-reply",
     "allow-update-state",
     "allow-update-check",
     "allow-update-install",

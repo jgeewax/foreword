@@ -12,6 +12,7 @@ mod git;
 mod history;
 mod logs;
 mod lsp;
+mod mcp;
 mod menu;
 mod packages;
 mod preview;
@@ -511,9 +512,11 @@ pub fn run() {
                 if let Some(w) = state.windows.lock().unwrap().remove(window.label()) {
                     w.kill_children();
                 }
+                mcp::forget(window.app_handle(), window.label());
             }
         })
         .manage(AppState::default())
+        .manage(mcp::McpState::default())
         .setup(|app| {
             children::init(app.path().app_data_dir()?);
             acp::init(app.path().app_data_dir()?);
@@ -608,6 +611,8 @@ pub fn run() {
             acp::assistants_status,
             acp::assistant_sign_in,
             acp::assistant_download,
+            mcp::mcp_serve,
+            mcp::mcp_reply,
             updater::update_state,
             updater::update_check,
             updater::update_install,

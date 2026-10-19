@@ -5,6 +5,8 @@
 import { bookPath } from './ai-marks';
 import { describeCommand } from './command-words';
 import { resolveRef } from './references';
+import { ASSISTANT_NAMES, type AssistantId } from './settings';
+import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 
 /** What the book calls its files: the main file, the chapters it includes (in order), and headings. */
 export type BookNames = { root: string; entry: string | null; chapters: string[]; titles: Record<string, string> };
@@ -80,6 +82,8 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
     const rel = bookPath(names.root, p);
     return rel ? ` in ${fileName(rel, names) === rel ? `${rel}/` : fileName(rel, names)}` : '';
   };
+  const own = studioToolName(name);
+  if (own) return describeStudioTool(own, o);
   switch (name) {
     case 'read':
       return {
@@ -140,6 +144,52 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
   }
 }
 
+/** Typst Studio's preferences as the author knows them, for the chat. */
+const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
+  editorFontSize: (v) => `text size ${v} px`,
+  wordWrap: (v) => (v === 'off' ? 'no wrapping' : v === 'column' ? 'wrapping at a column' : 'wrapping at the edge'),
+  wordWrapColumn: (v) => `wrapping at column ${v}`,
+  rulers: (v) => (Array.isArray(v) && v.length ? `rulers at ${v.join(', ')}` : 'no rulers'),
+  formatOnSave: (v) => `format on save ${v ? 'on' : 'off'}`,
+  sendKey: (v) => (v === 'mod-enter' ? '⌘⏎ sends' : '⏎ sends'),
+  markAiEdits: (v) => `marks for its changes ${v ? 'on' : 'off'}`,
+  markAiReads: (v) => `marks for what it read ${v ? 'on' : 'off'}`,
+  aiEditColor: (v) => `its changes marked in ${v}`,
+  aiReadColor: (v) => `what it read marked in ${v}`,
+  historyPlacement: (v) => (v === 'below' ? 'History below the files' : 'History in its own tab'),
+  checkForUpdates: (v) => `checking for updates ${v ? 'on' : 'off'}`,
+  zoom: (v) => `zoom ${Math.round(Number(v) * 100)}%`,
+};
+
+/** Typst Studio's own tools (studio-tools.ts), in words. */
+function describeStudioTool(tool: string, o: Record<string, unknown>): ToolLabel {
+  const said = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  switch (tool) {
+    case 'get_settings':
+      return { done: 'Looked at Typst Studio’s settings', running: 'Looking at Typst Studio’s settings' };
+    case 'change_settings': {
+      const what = Object.entries(o).map(([k, v]) => PREFERENCE_WORDS[k]?.(v) ?? k);
+      return { done: 'Changed Typst Studio’s settings', running: 'Changing Typst Studio’s settings', note: what.join(', ') || undefined };
+    }
+    case 'list_models':
+      return { done: 'Looked at the models', running: 'Looking at the models', note: said(o.search) ? `“${said(o.search)}”` : undefined };
+    case 'set_model': {
+      const what = [said(o.model) && `model “${said(o.model)}”`, said(o.effort) && `effort “${said(o.effort)}”`].filter(Boolean).join(', ');
+      return { done: 'Changed the model', running: 'Changing the model', note: what ? `${what}, when it finishes` : undefined };
+    }
+    case 'switch_assistant': {
+      const name = ASSISTANT_NAMES[String(o.assistant) as AssistantId] ?? String(o.assistant ?? 'another assistant');
+      return { done: `Switched the assistant to ${name}`, running: `Switching the assistant to ${name}`, note: 'when it finishes' };
+    }
+    case 'set_mode':
+      return { done: `Switched to ${String(o.mode ?? '')} mode`, running: `Switching to ${String(o.mode ?? '')} mode`, note: 'when it finishes' };
+    case 'open_settings':
+      return { done: 'Opened Settings for you', running: 'Opening Settings for you', note: said(o.page) ?? undefined };
+    default:
+      return { done: `Used Typst Studio’s ${tool}`, running: `Using Typst Studio’s ${tool}` };
+  }
+}
+
 /**
  * A permission question in words, completing "The assistant wants to …":
  * "read “The Storm” (chapter 1), lines 205–242". `code` is the command, if any.
@@ -165,6 +215,8 @@ export function describePermission(action: string, resources: readonly string[],
       return { what: `read a web page (${resources.join(', ')})` };
     case 'websearch':
       return { what: `search the web${resources.length ? ` for ${resources.map((r) => `“${r}”`).join(', ')}` : ''}` };
+    case STUDIO_TOOL_ACTION:
+      return { what: `use Typst Studio’s settings (${resources.join(', ')})` };
     default:
       return { what: `use ${action}${resources.length ? ` (${resources.join(', ')})` : ''}` };
   }

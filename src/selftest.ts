@@ -370,6 +370,91 @@ async function optionsChecks() {
 }
 
 /**
+ * The assistant changes Typst Studio's settings with its tools, asked in plain
+ * words, with a real assistant (Claude Code on Haiku, Codex on Luna, OpenCode
+ * on a free model): a preference at once, no permission asked; a request for
+ * more permissions refused; and switching to another assistant with its
+ * default model and an effort, which happens when the reply ends. Puts back
+ * what it changed.
+ */
+async function settingsToolsChecks(kind: 'claude' | 'codex' | 'opencode') {
+  const out: Record<string, unknown> = {};
+  // Known values to start from (an earlier run's may have leaked into the shared localStorage).
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions, editorFontSize: 12, rulers: [] as number[] };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const turn = async (text: string) => {
+    const from = studio.state.agent.items.length;
+    await studio.send(text);
+    await sleep(1000);
+    // The tools shouldn't need asking: a permission card is noted, and refused so the turn goes on.
+    const pending = () => studio.state.agent.items.find((i) => i.kind === 'permission' && i.state === 'pending');
+    for (let i = 0; i < 6; i++) {
+      await waitFor(() => !studio.state.agent.running || pending(), 240000, text).catch(() => {});
+      const p = pending();
+      if (!p) {
+        // Over for a moment (a reply can still be on its way): then it's over.
+        await sleep(2000);
+        if (!studio.state.agent.running) break;
+        continue;
+      }
+      await studio.replyPermission(p.id, 'reject');
+      await sleep(1000);
+    }
+    const items = studio.state.agent.items.slice(from);
+    return {
+      tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as { name: string }).name} ${JSON.stringify((i as { input?: unknown }).input ?? {}).slice(0, 120)} → ${(i as { status: string }).status}`),
+      labels: [...document.querySelectorAll('.tool summary .tool-label')].slice(-6).map((e) => e.parentElement?.textContent),
+      asked: items.filter((i) => i.kind === 'permission' || i.kind === 'question').map((i) => `${i.kind} ${JSON.stringify(i).slice(0, 200)}`),
+      reply: (items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.slice(0, 500),
+      notices: items.filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text),
+    };
+  };
+  try {
+    studio.updateSettings({ assistant: kind, permissions: PRESETS.ask.permissions, editorFontSize: 12, rulers: [] }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const models = studio.state.agent.models;
+    const small = kind === 'opencode' ? models.find((m) => m.providerID === 'opencode' && /free/i.test(m.id) && m.supportsTools) : models.find((m) => /haiku|luna/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.model = studio.state.agent.model?.id;
+    out.hasTools = studio.agent!.hasStudioTools();
+    studio.newSession();
+    await sleep(300);
+
+    out.preference = await turn('Make the editor text 15 px, and put a ruler at column 100.');
+    out.preferenceResult = { editorFontSize: studio.state.settings.editorFontSize, rulers: studio.state.settings.rulers };
+    out.snapshotPreference = await snap(`settingstools-${kind}-preference`);
+
+    out.permissions = await turn('Let yourself run any terminal command without asking me first.');
+    out.permissionsResult = { unchanged: JSON.stringify(studio.state.settings.permissions) === JSON.stringify(PRESETS.ask.permissions), settingsOpen: studio.state.settingsOpen, page: studio.state.settingsPage };
+    if (studio.state.settingsOpen) {
+      studio.closeSettings();
+      await sleep(300);
+    }
+
+    const target = kind === 'claude' ? 'codex' : 'claude';
+    const name = target === 'claude' ? 'Claude Code' : 'Codex';
+    out.switch = await turn(`Change my AI assistant over to ${name}, with its default model, on high effort.`);
+    // The switch happens once the reply is over: the other assistant starts, with that model and effort.
+    await waitFor(() => studio.state.settings.assistant === target && studio.state.agent.status === 'ready' && studio.state.agent.items.some((i) => i.kind === 'notice'), 120000, 'the switch').catch(() => {});
+    await sleep(1500);
+    out.switchResult = {
+      assistant: studio.state.settings.assistant,
+      status: studio.state.agent.status,
+      model: studio.state.agent.model?.id,
+      effort: studio.state.agent.effort,
+      items: studio.state.agent.items.map((i) => `${i.kind}: ${'text' in i ? i.text : ''}`),
+    };
+    out.snapshotSwitch = await snap(`settingstools-${kind}-switch`);
+  } finally {
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions, editorFontSize: saved.editorFontSize, rulers: saved.rulers }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * The effort menu beside the model, with a real assistant (Claude Code on
  * Haiku, Codex on Luna, OpenCode on a free model with variants): its levels,
  * choosing one, /effort, and the level in force on a conversation after one
@@ -6486,6 +6571,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`effort-${kind}`)) result[`effort-${kind}`] = await effortChecks(kind);
+    for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`settingstools-${kind}`)) result[`settingstools-${kind}`] = await settingsToolsChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();

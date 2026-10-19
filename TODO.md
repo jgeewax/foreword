@@ -230,11 +230,13 @@
 
 - [x] we need a claude-code style question asking tool and UI in the chatbox. right now, when there are questions, the model seems to just dump them as text and i have to type to answer. i want multiple questions in order possible. for each one, suggest 3 options and give me a "other" option as well. this also includes multi-select checkbox (as well as other), y/n questions, etc. we have to be really thorough on this one.
 
-- [x] make the loading spinners and text more interesting to feel less slow. e.g., waiting on the model "Claude is thinking..." or "Codex is thinking...", and better animations, something more entertaining so that we dont feel liek this is taking SO LONG because it really can be slow.
+- [x] ai chat bot should also be able to mess w settings inside typst studio. if i ask it to change my ai agent over to claude code w default model, it should do it. or change a setting, etc. lets expose the right set of tools for those things.
 
 - [x] make sure we can control the effort level for things like claude code or codex or opencode. its not always just the model, it also includes effort. that selector needs to be there too.
 
 - [x] draft writing style button needs some hardening in the prompt and the prompt itself should be hidden from the user -- they dont give a shit about that. i shoudl never see a question like "Who reads it: is the guide for you and human editors or co-authors, for AI tools, or for both?" from clicking "draft writing style from chapters" button... think carefully about the user experience on how this works.
+
+- [x] make the loading spinners and text more interesting to feel less slow. e.g., waiting on the model "Claude is thinking..." or "Codex is thinking...", and better animations, something more entertaining so that we dont feel liek this is taking SO LONG because it really can be slow.
 
 - [x] in option mode, when i pick an option (use this), it shoudl prmpt me to see if the task is done
 

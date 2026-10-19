@@ -4,6 +4,7 @@
 // Code's ACP program (__fixtures__/acp-claude.jsonl).
 import { diff, splitLines } from '../../lib/diff';
 import { ruleEffect, withoutHarmlessRedirects, type Level, type PermissionRule } from './permissions';
+import { STUDIO_TOOL_ACTION, STUDIO_TOOLS, studioToolName } from './studio-tool';
 import type { FilePatch } from './types';
 
 export type AcpToolContent =
@@ -68,6 +69,9 @@ export function conversationTitle(title: string): string {
 export function appTool(call: AcpToolCall): { name: string; input: Record<string, unknown> } {
   const raw = (call.rawInput && typeof call.rawInput === 'object' ? call.rawInput : {}) as Record<string, unknown>;
   const tool = str(call._meta?.claudeCode?.toolName) ?? call.name ?? '';
+  // Typst Studio's own tools (its settings): named as OpenCode names them, with their arguments.
+  const own = studioToolName(tool) ?? studioToolName(call.title) ?? (raw.server === STUDIO_TOOLS ? studioToolName(`${STUDIO_TOOLS}_${String(raw.tool ?? '')}`) : null);
+  if (own) return { name: `${STUDIO_TOOLS}_${own}`, input: raw.server === STUDIO_TOOLS && raw.arguments && typeof raw.arguments === 'object' ? (raw.arguments as Record<string, unknown>) : raw };
   const where = call.locations?.[0]?.path;
   const file = str(raw.file_path) ?? str(raw.absolute_path) ?? str(raw.filePath) ?? str(raw.path) ?? where;
   const command = Array.isArray(raw.command) ? raw.command.map(String).join(' ') : unquote(str(raw.command));
@@ -181,6 +185,8 @@ export function permissionAsk(call: AcpToolCall, root: string): { action: string
       return { file, patch: unifiedPatch(file, c.oldText ?? '', c.newText) };
     });
   const file = inBook(root, str(input.filePath) ?? str(input.path));
+  const own = studioToolName(name);
+  if (own) return { action: STUDIO_TOOL_ACTION, resources: [own], patches };
   switch (name) {
     case 'edit':
     case 'write':

@@ -103,6 +103,8 @@ export type AgentEvent =
 
 export interface AgentAdapter {
   start(): Promise<void>;
+  /** Whether its conversations have Typst Studio's own tools (its settings): given them, and its program takes them. */
+  hasStudioTools(): boolean;
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;

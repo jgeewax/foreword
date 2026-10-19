@@ -10,6 +10,8 @@
 // "cat"; `$(…)` and backticks are checked on their own too). Redirections
 // and flags stay in the command ("echo hi > f.txt"). Verified live, 2.0.20.
 
+import { STUDIO_TOOL_ACTION, STUDIO_TOOL_NAMES, STUDIO_TOOLS } from './studio-tool';
+
 export type Level = 'allow' | 'ask' | 'deny';
 
 export type AgentPermissions = {
@@ -162,6 +164,9 @@ export function sessionRules(p: AgentPermissions, readOnly = false, allowCommand
     { action: 'subagent', resource: '*', effect: 'deny' },
     { action: 'task', resource: '*', effect: 'deny' },
     { action: 'question', resource: '*', effect: 'allow' },
+    // Typst Studio's own tools change only the app's settings the author asked for (never these rules).
+    { action: STUDIO_TOOL_ACTION, resource: '*', effect: 'allow' },
+    ...STUDIO_TOOL_NAMES.map((t): PermissionRule => ({ action: `${STUDIO_TOOLS}_${t}`, resource: '*', effect: 'allow' })),
     // Read-only: commands that only look still run; writing forms never do.
     ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny')] : []),
     ...NO_COMPILE_RULES,

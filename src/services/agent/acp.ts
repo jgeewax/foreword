@@ -116,7 +116,18 @@ export class AcpAdapter implements AgentAdapter {
     private readonly transport: AcpTransport = tauriTransport,
     /** Sign in first, with this of the agent's ways (its `authMethods`): it may wait for the author, in the browser. */
     private readonly signIn?: string,
+    /** Typst Studio's own tools (its settings), an MCP server over HTTP: given to every conversation. */
+    private readonly tools: { name: string; url: string } | null = null,
   ) {}
+
+  hasStudioTools() {
+    return this.mcpServers().length > 0;
+  }
+
+  /** The MCP servers a conversation gets: Typst Studio's own tools, when the agent takes HTTP servers. */
+  private mcpServers() {
+    return this.tools && this.caps.agentCapabilities?.mcpCapabilities?.http ? [{ type: 'http', name: this.tools.name, url: this.tools.url, headers: [] }] : [];
+  }
 
   // ---- the connection ------------------------------------------------------------------
 
@@ -216,7 +227,7 @@ export class AcpAdapter implements AgentAdapter {
   // ---- sessions and their settings -----------------------------------------------------
 
   private async newSession(): Promise<Session> {
-    const res = await this.request('session/new', { cwd: this.root, mcpServers: [] });
+    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers() });
     return this.track(res.sessionId, res);
   }
 
@@ -404,7 +415,7 @@ export class AcpAdapter implements AgentAdapter {
       s = this.track(sessionId, null);
       s.replaying = true;
       try {
-        const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: [] });
+        const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: this.mcpServers() });
         s.config = Array.isArray(res?.configOptions) ? res.configOptions : [];
         s.modes = (res?.modes?.availableModes ?? []).map((m: any) => String(m.id));
       } catch (e) {

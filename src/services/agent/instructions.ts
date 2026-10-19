@@ -16,6 +16,8 @@ export type InstructionContext = {
   root?: string;
   /** Which assistant (Settings ▸ Assistant): how it asks the author questions. */
   assistant?: string;
+  /** It has Typst Studio's own tools (typst-studio: its settings). */
+  studioTools?: boolean;
 };
 
 export const INSTRUCTIONS_KEY = 'typst-studio';
@@ -85,7 +87,7 @@ You are the writing assistant inside Typst Studio, an editor for books and long-
 - Many authors are new to Typst. When your answer involves markup they may not know, say in a few plain words what it does, and prefer the simplest markup that works.
 
 ${askingSection(ctx.assistant)}
-
+${ctx.studioTools ? STUDIO_TOOLS_SECTION : ''}
 ## Figures look alike
 - When you make or redraw a figure, match the book's other figures. If \`${FIGURE_STYLE_FILE}\` exists, import its wrappers (\`figure-canvas\` for CeTZ, \`figure-diagram\` for fletcher, \`figure-chart\` for Lilaq) and its \`palette\`, and don't set colours, fonts or line widths in the figure itself. Otherwise copy the look of the existing figures. Figures mode has the details.
 
@@ -99,6 +101,13 @@ ${askingSection(ctx.assistant)}
 - This project uses Typst 0.15 (for example \`chevron.l\`/\`chevron.r\`, not \`angle.l\`/\`angle.r\`).
 ${ctx.codeExamples ? CODE_SECTION : ''}`;
 }
+
+const STUDIO_TOOLS_SECTION = `
+## Typst Studio's own settings
+- You have tools for Typst Studio itself, from its typst-studio server: get_settings, change_settings, list_models, set_model, switch_assistant, set_mode and open_settings. When the author asks to change how Typst Studio works (another assistant, model, effort or chat mode; the editor's text size, wrapping or rulers; the marks; the zoom…), do it with them, never by editing files. Call get_settings first.
+- A change to you (the assistant, model, effort or mode) happens when your reply ends; say so in one sentence.
+- You can't change what you may do (permissions, commands you may run, the programs it runs): offer to open Settings at that page for the author (open_settings).
+`;
 
 const CODE_SECTION = `
 ## Runnable code examples

@@ -26,6 +26,7 @@ import {
   type ProjectSettings,
 } from './project-settings';
 import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type ToolName } from './settings';
+import { handleMcp, STUDIO_TOOLS, type ModelChoice, type StudioHost } from './studio-tools';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
@@ -2644,6 +2645,7 @@ export class Studio {
         return this.refreshAiEdits();
       });
       void this.afterStyleDraft(sessionId);
+      void this.runWhenIdle();
       void this.code.afterAgentTurn();
       if (this.restartAgentWhenIdle) {
         this.restartAgentWhenIdle = false;
@@ -2675,7 +2677,10 @@ export class Studio {
     if (!ws) return;
     // OpenCode, or Claude Code, Gemini CLI, Codex or Antigravity over ACP (Settings ▸ Assistant).
     const which = this.state.settings.assistant;
-    const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root) : new AcpAdapter(ws.root, which, undefined, signIn);
+    // Typst Studio's own tools (its settings), for every conversation.
+    const url = await this.studioToolsUrl();
+    const tools = url ? { name: STUDIO_TOOLS, url } : null;
+    const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root, tools) : new AcpAdapter(ws.root, which, undefined, signIn, tools);
     // Another program: its own models (the list fills in once it's started).
     const switched = this.agentKind !== which;
     this.agentKind = which;
@@ -2692,6 +2697,7 @@ export class Studio {
       this.setAgent({ status: 'ready', signingIn: false });
       await this.loadModels();
       void this.loadTasks();
+      await this.afterToolSwitch();
     } catch (e) {
       if (this.agent !== agent) return;
       this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e), signingIn: false });
@@ -3516,6 +3522,7 @@ export class Studio {
       codeExamples: ws.files.includes(OUTPUTS_FILE) || this.state.code.cells.length > 0,
       root: ws.root,
       assistant: this.agentKind ?? this.state.settings.assistant,
+      studioTools: this.agent.hasStudioTools(),
     });
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
@@ -4308,6 +4315,115 @@ export class Studio {
     } catch (e) {
       this.toast(`Couldn't open ${path}: ${errorMessage(e)}`, 'error');
     }
+  }
+
+  // ---- the assistant's own tools: Typst Studio's settings (studio-tools.ts) ----------
+
+  private toolsUrl: Promise<string | null> | null = null;
+  /** What the tools asked for, to do when the assistant's reply ends. */
+  private idleQueue: (() => unknown)[] = [];
+  /** An assistant the tools switched to, and its model and effort, for when it has started. */
+  private toolSwitch: { assistant: AssistantId; from: AssistantId; choice: ModelChoice } | null = null;
+
+  /** This window's address for the tools (served once; null if they can't be). */
+  studioToolsUrl(): Promise<string | null> {
+    this.toolsUrl ??= (async () => {
+      const page = new Channel<{ id: number; body: string }>();
+      page.onmessage = ({ id, body }) =>
+        void handleMcp(body, this.toolsHost).then(
+          (answer) => ipc.mcpReply(id, answer),
+          () => ipc.mcpReply(id, null),
+        );
+      try {
+        return await ipc.mcpServe(page);
+      } catch (e) {
+        console.warn('Typst Studio’s tools for the assistant are off:', e);
+        return null;
+      }
+    })();
+    return this.toolsUrl;
+  }
+
+  readonly toolsHost: StudioHost = {
+    state: () => {
+      const a = this.state.agent;
+      return { settings: this.state.settings, zoom: this.state.zoom, assistant: this.state.settings.assistant, models: a.models, model: a.model, efforts: a.efforts, effort: a.effort, mode: a.mode };
+    },
+    changePreferences: (patch, zoom) => {
+      if (Object.keys(patch).length) this.updateSettings(patch);
+      if (zoom !== undefined) void this.setZoom(zoom);
+    },
+    whenIdle: (run) => {
+      if (this.state.agent.running) this.idleQueue.push(run);
+      else void run();
+    },
+    switchAssistant: (assistant, choice) => {
+      this.toolSwitch = { assistant, from: this.state.settings.assistant, choice };
+      if (!this.switchAssistant(assistant)) this.toolSwitch = null;
+    },
+    chooseModel: async (choice) => {
+      const said = await this.chooseFromTools(choice);
+      if (said) this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `As the assistant was asked: ${said}.` });
+    },
+    setMode: (mode) => this.setMode(mode),
+    openSettings: (page) => this.openSettings(page),
+  };
+
+  /** The reply that asked is over: what the tools asked for, in order. */
+  private async runWhenIdle() {
+    for (let run = this.idleQueue.shift(); run; run = this.idleQueue.shift()) {
+      try {
+        await run();
+      } catch (e) {
+        this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn’t change that: ${errorMessage(e)}` });
+      }
+    }
+  }
+
+  /** The model and effort the tools asked for: what came of it, in words ("model Sonnet 5.5, effort High"). */
+  private async chooseFromTools({ model, effort }: ModelChoice): Promise<string> {
+    const said: string[] = [];
+    if (model) {
+      const { models, recentModels } = this.state.agent;
+      const usable = models.filter((m) => m.supportsTools);
+      let pick: ModelInfo | undefined;
+      if (model.toLowerCase() === 'default') {
+        const own = await this.agent?.defaultModel().catch(() => null);
+        pick = usable.find((m) => m.id === 'default') ?? (own ? usable.find((m) => m.providerID === own.providerID && m.id === own.id) : undefined);
+      } else {
+        const found = usable.filter((m) => matchesQuery(m, model));
+        pick = usable.find((m) => m.id === model) ?? found.find((m) => recentModels.some((r) => r.providerID === m.providerID && r.id === m.id)) ?? found[0];
+      }
+      if (pick) {
+        await this.selectModel({ providerID: pick.providerID, id: pick.id });
+        said.push(`model ${pick.name}`);
+      } else said.push(`no model like “${model}”, so the model is unchanged`);
+    }
+    if (effort) {
+      const { efforts } = this.state.agent;
+      const level = effortFor(effort, efforts);
+      if (!efforts.length) said.push('this model has no effort setting');
+      else if (!level) said.push(`the effort is unchanged (“${effort}” isn’t one of ${efforts.map((e) => e.name).join(', ')})`);
+      else if (await this.selectEffort(level.value)) said.push(`effort ${level.name}`);
+    }
+    return said.join(', ');
+  }
+
+  /** Started the assistant the tools switched to: its model and effort, and a word in the new conversation. */
+  private async afterToolSwitch() {
+    const pending = this.toolSwitch;
+    if (!pending || pending.assistant !== this.state.settings.assistant) return;
+    this.toolSwitch = null;
+    const said = await this.chooseFromTools(pending.choice);
+    const model = this.state.agent.models.find((m) => m.providerID === this.state.agent.model?.providerID && m.id === this.state.agent.model?.id);
+    const effort = this.state.agent.efforts.find((e) => e.value === this.state.agent.effort);
+    const now = said || [model && `model ${model.name}`, effort && `effort ${effort.name}`].filter(Boolean).join(', ');
+    this.pushItem({
+      kind: 'notice',
+      id: uid('n'),
+      tone: 'info',
+      text: `${ASSISTANT_NAMES[pending.assistant]} is the writing assistant now${now ? ` (${now})` : ''}, as you asked. This is a new conversation: your last one is kept with ${ASSISTANT_NAMES[pending.from]}, to carry on if you switch back.`,
+    });
   }
 
   // ---- writing style guide (WRITING_STYLE.md) --------------------------------------

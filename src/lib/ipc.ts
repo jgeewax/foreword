@@ -199,6 +199,9 @@ export const ipc = {
   /** An assistant over ACP (Claude Code, Gemini CLI, Codex, Antigravity): its JSON-RPC lines arrive on `onMessage`. */
   acpStart: (kind: string, onMessage: Channel<any>) => invoke<{ program: string; args: string[] }>('acp_start', { kind, onMessage }),
   acpSend: (line: string) => invoke<void>('acp_send', { line }),
+  /** Typst Studio's own tools for the assistant (mcp.rs): this window's address; each request comes to `page`, answered with mcpReply. */
+  mcpServe: (page: Channel<{ id: number; body: string }>) => invoke<string>('mcp_serve', { page }),
+  mcpReply: (id: number, body: string | null) => invoke<void>('mcp_reply', { id, body }),
   acpStop: () => invoke<void>('acp_stop'),
   /** Each assistant's program, sign-in and account on this Mac. */
   assistantsStatus: () => invoke<AssistantsSetup>('assistants_status'),

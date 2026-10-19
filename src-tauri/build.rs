@@ -65,6 +65,8 @@ fn main() {
             "assistants_status",
             "assistant_sign_in",
             "assistant_download",
+            "mcp_serve",
+            "mcp_reply",
             "update_state",
             "update_check",
             "update_install",
