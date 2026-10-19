@@ -232,6 +232,8 @@
 
 - [x] make the loading spinners and text more interesting to feel less slow. e.g., waiting on the model "Claude is thinking..." or "Codex is thinking...", and better animations, something more entertaining so that we dont feel liek this is taking SO LONG because it really can be slow.
 
+- [x] make sure we can control the effort level for things like claude code or codex or opencode. its not always just the model, it also includes effort. that selector needs to be there too.
+
 - [x] draft writing style button needs some hardening in the prompt and the prompt itself should be hidden from the user -- they dont give a shit about that. i shoudl never see a question like "Who reads it: is the guide for you and human editors or co-authors, for AI tools, or for both?" from clicking "draft writing style from chapters" button... think carefully about the user experience on how this works.
 
 - [x] in option mode, when i pick an option (use this), it shoudl prmpt me to see if the task is done

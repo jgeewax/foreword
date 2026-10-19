@@ -11,7 +11,8 @@ import { appTool, conversationTitle, decide, optionValues, permissionAsk, toolOu
 import { formatAuthorEdits } from './author-edits';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
 import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
-import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
+import { effortOption } from './models';
+import type { AgentAdapter, AgentEvent, Delivery, Efforts, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
 
 export type AcpKind = 'claude' | 'gemini' | 'codex' | 'antigravity';
 
@@ -269,12 +270,17 @@ export class AcpAdapter implements AgentAdapter {
     return { providerID: this.kind, id: String(option?.currentValue ?? 'default') };
   }
 
-  async createSession(model: ModelRef | null, { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[] } = {}) {
+  async createSession(
+    model: ModelRef | null,
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[], effort = null as string | null } = {},
+  ) {
     const warm = this.warm ? await this.warm : null;
     this.warm = null;
     const s = warm ?? (await this.newSession());
     Object.assign(s, { permissions, readOnly, allowCommands });
     if (model && model.providerID === this.kind) await this.switchModel(s.id, model).catch(() => {});
+    // After the model: a model sets its own effort (Claude Code's Haiku starts at high).
+    if (model && effort) await this.switchEffort(s.id, model, effort).catch(() => {});
     await this.applyMode(s).catch(() => {});
     if (agent === 'plan') await this.switchAgent(s.id, 'plan').catch(() => {});
     return s.id;
@@ -337,6 +343,40 @@ export class AcpAdapter implements AgentAdapter {
     const res = await this.request('session/set_config_option', { sessionId, configId: option.id, value: model.id });
     if (Array.isArray(res?.configOptions)) s.config = res.configOptions;
     else option.currentValue = model.id;
+  }
+
+  /** The effort option (category `thought_level`): Claude Code's effort, Codex's reasoning_effort. */
+  private effortOption(s: Session | null | undefined) {
+    return s?.config.find((o) => o.category === 'thought_level');
+  }
+
+  /**
+   * The model's levels of effort, which can differ between models (Codex's
+   * Ultra is only for its frontier model) and so does where each starts. With
+   * no conversation yet, the session made at start is set to the model first,
+   * so they're the model's own.
+   */
+  async efforts(sessionId: string | null, model: ModelRef): Promise<Efforts | null> {
+    let s = sessionId ? this.sessions.get(sessionId) : undefined;
+    if (!s) {
+      const warm = this.warm ? await this.warm : null;
+      if (warm && model.providerID === this.kind) await this.switchModel(warm.id, model).catch(() => {});
+      s = warm ?? [...this.sessions.values()][0];
+    }
+    const option = this.effortOption(s);
+    if (!option) return null;
+    // Another conversation's model may not be this one: its levels, but not where it is.
+    const same = !!sessionId || String(this.modelOption(s)?.currentValue ?? '') === model.id;
+    return { options: optionValues(option).map((o) => effortOption(o.value, o.name, o.description)), current: same && option.currentValue != null ? String(option.currentValue) : null };
+  }
+
+  async switchEffort(sessionId: string, _model: ModelRef, effort: string) {
+    const s = this.session(sessionId);
+    const option = this.effortOption(s);
+    if (!option || option.currentValue === effort || !optionValues(option).some((o) => o.value === effort)) return;
+    const res = await this.request('session/set_config_option', { sessionId, configId: option.id, value: effort });
+    if (Array.isArray(res?.configOptions)) s.config = res.configOptions;
+    else option.currentValue = effort;
   }
 
   // ---- conversations -------------------------------------------------------------------

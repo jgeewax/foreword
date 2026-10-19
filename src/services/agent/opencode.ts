@@ -6,7 +6,8 @@ import { formatAuthorEdits } from './author-edits';
 import { Channel, ipc } from '../../lib/ipc';
 import { mapOpenCodeEvent, toFormRequest } from './opencode-events';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
-import type { AgentAdapter, AgentEvent, Delivery, FormAnswer, FormRequest, ModelInfo, ModelRef, PermissionDecision } from './types';
+import { effortKey, effortOption } from './models';
+import { DEFAULT_EFFORT, type AgentAdapter, type AgentEvent, type Delivery, type Efforts, type FormAnswer, type FormRequest, type ModelInfo, type ModelRef, type PermissionDecision } from './types';
 
 // Permission rules: see permissions.ts (what the assistant may do).
 export { NO_COMPILE_RULES, READ_ONLY_RULES, sessionRules } from './permissions';
@@ -30,8 +31,13 @@ async function call<T = any>(method: string, path: string, body?: unknown): Prom
 /** Every raw OpenCode event, for self-tests that check what the server sends. */
 export const rawEventTap: { fn?: (raw: any) => void } = {};
 
+/** A model as OpenCode takes it: with a variant (its effort), or as it comes. */
+const modelBody = (model: ModelRef, effort?: string | null) => ({ providerID: model.providerID, id: model.id, ...(effort && effort !== DEFAULT_EFFORT ? { variant: effort } : {}) });
+
 export class OpenCodeAdapter implements AgentAdapter {
   private listeners = new Set<(e: AgentEvent) => void>();
+  /** Each model's variants (its levels of effort), from the last list of models. */
+  private variants = new Map<string, string[]>();
 
   constructor(private readonly root: string) {}
 
@@ -53,6 +59,9 @@ export class OpenCodeAdapter implements AgentAdapter {
   async listModels(): Promise<ModelInfo[]> {
     const [models, providers] = await Promise.all([call('GET', '/api/model'), call('GET', '/api/provider')]);
     const providerNames = new Map<string, string>((providers.data ?? []).map((p: any) => [p.id, p.name ?? p.id]));
+    this.variants = new Map(
+      (models.data ?? []).map((m: any) => [effortKey({ providerID: m.providerID, id: m.id }), Array.isArray(m.variants) ? m.variants.map((v: any) => String(v?.id ?? '')).filter(Boolean) : []]),
+    );
     return (models.data ?? [])
       .filter((m: any) => m.enabled !== false && (m.status ?? 'active') === 'active')
       .map((m: any) => ({
@@ -73,11 +82,11 @@ export class OpenCodeAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[] } = {},
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[], effort = null as string | null } = {},
   ): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
-      model: model ? { providerID: model.providerID, id: model.id } : null,
+      model: model ? modelBody(model, effort) : null,
       agent: agent === 'build' ? null : agent,
       permissions: sessionRules(permissions, readOnly, allowCommands),
     });
@@ -108,7 +117,24 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   async switchModel(sessionId: string, model: ModelRef) {
-    await call('POST', `/api/session/${sessionId}/model`, { model: { providerID: model.providerID, id: model.id } });
+    await call('POST', `/api/session/${sessionId}/model`, { model: modelBody(model) });
+  }
+
+  /** A model's variants (verified on OpenCode 2.0.20: each is a reasoningEffort, and a session's model carries one). "Default" is the model without one. */
+  async efforts(sessionId: string | null, model: ModelRef): Promise<Efforts | null> {
+    if (!this.variants.size) await this.listModels();
+    const variants = this.variants.get(effortKey(model)) ?? [];
+    if (!variants.length) return null;
+    let current: string | null = DEFAULT_EFFORT;
+    if (sessionId) {
+      const m = (await call('GET', `/api/session/${sessionId}`)).data?.model;
+      current = m?.providerID === model.providerID && m?.id === model.id ? (m.variant ?? DEFAULT_EFFORT) : null;
+    }
+    return { options: [DEFAULT_EFFORT, ...variants].map((v) => effortOption(v)), current };
+  }
+
+  async switchEffort(sessionId: string, model: ModelRef, effort: string) {
+    await call('POST', `/api/session/${sessionId}/model`, { model: modelBody(model, effort) });
   }
 
   async send(sessionId: string, message: string, context: Parameters<AgentAdapter['send']>[2], delivery?: Delivery) {

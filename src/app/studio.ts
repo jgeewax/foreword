@@ -59,10 +59,10 @@ import { parseOptions } from '../services/agent/options-mode';
 import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, styleDraftBrief, styleGuideTemplate, styleInstructions } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
-import { chooseModel, PREFERRED_PROVIDERS } from '../services/agent/models';
+import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
-import type { AgentAdapter, AgentEvent, Delivery, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
 import { TypstService } from '../services/typst';
@@ -221,6 +221,9 @@ export type StudioState = {
     models: ModelInfo[];
     model: ModelRef | null;
     recentModels: ModelRef[];
+    /** The model's levels of effort (none: it has no such setting), and the one in use (or for the next conversation). */
+    efforts: EffortOption[];
+    effort: string | null;
     sessionId: string | null;
     title: string | null;
     running: boolean;
@@ -337,6 +340,8 @@ const initialState: StudioState = {
     models: [],
     model: null,
     recentModels: readJson<ModelRef[]>('studio.recentModels') ?? [],
+    efforts: [],
+    effort: null,
     sessionId: null,
     title: null,
     running: false,
@@ -389,6 +394,8 @@ const initialState: StudioState = {
 
 const LAST_WORKSPACE = 'studio.lastWorkspace';
 const MODEL_KEY = 'studio.model';
+/** The effort chosen for each model (effortKey → level). */
+const EFFORTS_KEY = 'studio.efforts';
 const ZOOM_KEY = 'studio.zoom';
 const RECENT_KEY = 'studio.recentWorkspaces';
 export const NEW_BOOK_PARENT = 'studio.newBookParent';
@@ -2780,6 +2787,7 @@ export class Studio {
       const current = this.state.agent.sessionId ? this.state.agent.model : null;
       const chosen = chooseModel(models, { current, saved, serverDefault });
       this.setAgent({ models, model: chosen ? { providerID: chosen.providerID, id: chosen.id } : null });
+      void this.refreshEfforts();
       const missingSaved = !!saved && !models.some((m) => m.providerID === saved.providerID && m.id === saved.id);
       const missingPreferred = !models.some((m) => PREFERRED_PROVIDERS.includes(m.providerID));
       if ((missingSaved || missingPreferred) && attempt < 8) setTimeout(() => void this.loadModels(attempt + 1), 1500);
@@ -2808,6 +2816,46 @@ export class Studio {
       this.setAgent({ model: { providerID: model.providerID, id: model.id }, recentModels });
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Model not changed: ${errorMessage(e)}` });
+    }
+    await this.refreshEfforts();
+  }
+
+  /**
+   * The model's levels of effort, and the one in use. The author's choice for
+   * this model wins when it has that level: set on the conversation, or kept
+   * for the next one.
+   */
+  async refreshEfforts() {
+    const agent = this.agent;
+    const { model, sessionId } = this.state.agent;
+    if (!agent || !model) return this.setAgent({ efforts: [], effort: null });
+    const efforts = await agent.efforts(sessionId, model).catch(() => null);
+    // Another model, conversation or assistant meanwhile: that one's refresh says.
+    const now = this.state.agent;
+    if (this.agent !== agent || now.sessionId !== sessionId || !now.model || effortKey(now.model) !== effortKey(model)) return;
+    if (!efforts) return this.setAgent({ efforts: [], effort: null });
+    const chosen = readJson<Record<string, string>>(EFFORTS_KEY)?.[effortKey(model)];
+    let effort = efforts.current;
+    if (chosen && chosen !== effort && efforts.options.some((o) => o.value === chosen)) {
+      if (!sessionId) effort = chosen;
+      else if (!now.running) effort = await agent.switchEffort(sessionId, model, chosen).then(() => chosen, () => effort);
+    }
+    this.setAgent({ efforts: efforts.options, effort });
+  }
+
+  /** The chat's effort menu, or /effort: from the next message on, and remembered for this model. */
+  async selectEffort(value: string) {
+    const { model, sessionId, efforts } = this.state.agent;
+    const option = efforts.find((o) => o.value === value);
+    if (!model || !option) return false;
+    try {
+      if (sessionId && this.agent) await this.agent.switchEffort(sessionId, model, value);
+      writeJson(EFFORTS_KEY, { ...readJson<Record<string, string>>(EFFORTS_KEY), [effortKey(model)]: value });
+      this.setAgent({ effort: value });
+      return true;
+    } catch (e) {
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Effort not changed: ${errorMessage(e)}` });
+      return false;
     }
   }
 
@@ -2842,6 +2890,7 @@ export class Studio {
     this.stashCurrent();
     this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
     this.setAiReads([]);
+    void this.refreshEfforts();
   }
 
   // ---- several conversations at once ----------------------------------------------------
@@ -3045,6 +3094,7 @@ export class Studio {
       await agent.switchAgent(sessionId, config.agent).catch(() => {});
       await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands()).catch(() => {});
       await this.applyInstructions(sessionId);
+      void this.refreshEfforts();
     } catch (e) {
       this.toast(`Couldn't open that conversation: ${errorMessage(e)}`, 'error');
     }
@@ -3271,9 +3321,12 @@ export class Studio {
           readOnly: config.readOnly,
           agent: config.agent,
           allowCommands: this.allowedCommands(),
+          effort: this.state.agent.effort,
         });
         this.setAgent({ sessionId });
         await this.applyInstructions(sessionId);
+        // Where the conversation's effort really is (a model can start somewhere of its own).
+        void this.refreshEfforts();
       }
       // A brief that goes with this message, out of sight (the style guide's draft).
       if (this.pendingBrief) await agent.setInstructions(sessionId, this.pendingBrief.key, this.pendingBrief.text);
@@ -3588,6 +3641,22 @@ export class Studio {
           await this.selectModel({ providerID: pick.providerID, id: pick.id });
           say(`Model: ${pick.name} (${pick.providerName}).`);
         }
+        break;
+      }
+      case 'effort': {
+        const { efforts, effort } = this.state.agent;
+        if (!efforts.length) {
+          say('This model has no effort setting.', cmd.arg ? 'error' : 'info');
+          break;
+        }
+        const levels = efforts.map((o) => o.name).join(', ');
+        if (!cmd.arg) {
+          say(`Effort: ${efforts.find((o) => o.value === effort)?.name ?? 'not known'}. Change it with /effort and a level: ${levels}.`);
+          break;
+        }
+        const pick = effortFor(cmd.arg, efforts);
+        if (!pick) say(`This model's levels are ${levels}: “${cmd.arg}” isn't one of them.`, 'error');
+        else if (await this.selectEffort(pick.value)) say(`Effort: ${pick.name}.`);
         break;
       }
       case 'assistant': {

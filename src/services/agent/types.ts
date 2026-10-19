@@ -9,6 +9,7 @@ export type MessageContext = { selection: SourceSelection; stale: boolean } | { 
 
 export type ModelRef = { providerID: string; id: string };
 
+
 export type ModelInfo = ModelRef & {
   name: string;
   providerName: string;
@@ -16,6 +17,18 @@ export type ModelInfo = ModelRef & {
   /** Context window in tokens, when the provider reports it. */
   contextWindow?: number;
 };
+
+/**
+ * How hard a model thinks before it answers: Claude Code's effort, Codex's
+ * reasoning effort (ACP config options of category `thought_level`), or one
+ * of an OpenCode model's variants.
+ */
+export type EffortOption = { value: string; name: string; description?: string };
+/** A model's levels of effort, and the one in use (null: not known). */
+export type Efforts = { options: EffortOption[]; current: string | null };
+
+/** OpenCode's "no variant": the model as it comes. */
+export const DEFAULT_EFFORT = 'default';
 
 export type PermissionDecision = 'once' | 'always' | 'reject';
 
@@ -93,7 +106,19 @@ export interface AgentAdapter {
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;
-  createSession(model: ModelRef | null, opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan'; allowCommands?: string[] }): Promise<string>;
+  /** `effort`: one of the model's levels (efforts()), or null for its own. */
+  createSession(
+    model: ModelRef | null,
+    opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan'; allowCommands?: string[]; effort?: string | null },
+  ): Promise<string>;
+  /**
+   * The model's levels of effort, and the one in use: in the conversation, or
+   * (no conversation yet) what a new one would start with. Null when the model
+   * has none.
+   */
+  efforts(sessionId: string | null, model: ModelRef): Promise<Efforts | null>;
+  /** Think with this effort from the next message on. */
+  switchEffort(sessionId: string, model: ModelRef, effort: string): Promise<void>;
   /**
    * What the agent may do (`readOnly` forces no changes: Plan and Options; `allowCommands`
    * run without asking); applies to a running session.

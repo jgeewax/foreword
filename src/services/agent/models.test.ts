@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseModel } from './models';
+import { chooseModel, effortFor, effortOption } from './models';
 import type { ModelInfo } from './types';
 
 const m = (providerID: string, id: string, supportsTools = true): ModelInfo => ({
@@ -33,5 +33,26 @@ describe('chooseModel', () => {
   it('falls back to any tool-capable model, or null', () => {
     expect(chooseModel([m('openai', 'a', false), m('openai', 'b')], {})?.id).toBe('b');
     expect(chooseModel([m('openai', 'a', false)], {})).toBeNull();
+  });
+});
+
+describe('effort levels', () => {
+  it('have our names for the known ones, and the agent’s description when it gives one', () => {
+    expect(effortOption('xhigh', 'Xhigh')).toEqual({ value: 'xhigh', name: 'Extra high', description: 'Thinks longer still, for the hardest passages' });
+    expect(effortOption('low', 'Low', 'Fast responses with lighter reasoning')).toEqual({ value: 'low', name: 'Low', description: 'Fast responses with lighter reasoning' });
+    expect(effortOption('turbo', 'Turbo mode')).toEqual({ value: 'turbo', name: 'Turbo mode' });
+    expect(effortOption('turbo')).toEqual({ value: 'turbo', name: 'Turbo' });
+  });
+
+  it('are found by a word, for /effort', () => {
+    const levels = ['default', 'low', 'medium', 'high', 'xhigh', 'max'].map((v) => effortOption(v));
+    expect(effortFor('high', levels)?.value).toBe('high');
+    expect(effortFor('xhigh', levels)?.value).toBe('xhigh');
+    expect(effortFor('Extra high', levels)?.value).toBe('xhigh');
+    expect(effortFor('extra-high', levels)?.value).toBe('xhigh');
+    expect(effortFor('extra', levels)?.value).toBe('xhigh');
+    expect(effortFor('med', levels)?.value).toBe('medium');
+    expect(effortFor('m', levels)).toBeNull();
+    expect(effortFor('ultra', levels)).toBeNull();
   });
 });

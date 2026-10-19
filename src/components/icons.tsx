@@ -116,6 +116,14 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M12 13.2v7.3" />
     </>
   ),
+  // The chat's effort menu: a dial.
+  gauge: (
+    <>
+      <path d="M4.2 17a8.2 8.2 0 1 1 15.6 0" />
+      <path d="M12 15.5l3.6-4.6" />
+      <circle cx="12" cy="15.5" r="1.1" fill="currentColor" />
+    </>
+  ),
   chevronRight: <path d="M9.5 6l6 6-6 6" />,
   chevronDown: <path d="M6 9.5l6 6 6-6" />,
   shield: <path d="M12 3.2l7 2.8v5.2c0 4.3-2.9 7.7-7 9.6-4.1-1.9-7-5.3-7-9.6V6z" />,

@@ -209,6 +209,60 @@ describe('Codex', () => {
     expect(conversationTitle('Tighten chapter 2')).toBe('Tighten chapter 2');
   });
 
+  it('a model’s levels of effort: read for the model chosen, set after the model, only those it has', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    const start = codex.find((r) => r.result?.configOptions);
+    let config: any[] = structuredClone(start.result.configOptions);
+    const option = (id: string) => config.find((o) => o.id === id);
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage) => {
+        deliver = onMessage;
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        let reply: any = m.method === 'initialize' || m.method === 'session/new' ? codex.find((r) => r.id === m.id && r.result) : { jsonrpc: '2.0', id: m.id, result: {} };
+        if (m.method === 'session/new') reply = { ...reply, result: { ...reply.result, configOptions: config } };
+        if (m.method === 'session/set_config_option') {
+          // As Codex does: only its frontier model has Ultra.
+          const { configId, value } = m.params;
+          option(configId).currentValue = value;
+          if (configId === 'model') {
+            const effort = option('reasoning_effort');
+            effort.options = start.result.configOptions.find((o: any) => o.id === 'reasoning_effort').options.filter((o: any) => value === 'gpt-6-astra' || o.value !== 'ultra');
+          }
+          reply = { jsonrpc: '2.0', id: m.id, result: { configOptions: structuredClone(config) } };
+        }
+        if (m.id !== undefined && m.method) queueMicrotask(() => deliver({ ...reply, id: m.id }));
+      },
+      stop: async () => {},
+    };
+    const adapter = new AcpAdapter(ROOT, 'codex', transport);
+    await adapter.start();
+    const astra = { providerID: 'codex', id: 'gpt-6-astra' };
+    const luna = { providerID: 'codex', id: 'gpt-6-luna' };
+    const first = await adapter.efforts(null, astra);
+    expect(first?.current).toBe('xhigh');
+    expect(first?.options.map((o) => o.name)).toEqual(['Low', 'Medium', 'High', 'Extra high', 'Max', 'Ultra']);
+    expect(first?.options[0].description).toBe('Fast responses with lighter reasoning');
+    // Another model: the session made at start takes it, so its levels are that model's.
+    const second = await adapter.efforts(null, luna);
+    expect(sent.at(-1).params).toMatchObject({ configId: 'model', value: 'gpt-6-luna' });
+    expect(second?.options.map((o) => o.value)).not.toContain('ultra');
+
+    const sessionId = await adapter.createSession(luna, { effort: 'low' });
+    const sets = sent.filter((m) => m.method === 'session/set_config_option').map((m) => `${m.params.configId}=${m.params.value}`);
+    expect(sets.slice(-1)).toEqual(['reasoning_effort=low']);
+    expect((await adapter.efforts(sessionId, luna))?.current).toBe('low');
+    // A level the model hasn't: nothing is sent.
+    const before = sent.length;
+    await adapter.switchEffort(sessionId, luna, 'ultra');
+    expect(sent.length).toBe(before);
+    await adapter.switchEffort(sessionId, luna, 'max');
+    expect(sent.at(-1).params).toMatchObject({ configId: 'reasoning_effort', value: 'max' });
+  });
+
   it('asks in read-only unless edits are allowed; command output streams into the tool’s result', async () => {
     const sent: any[] = [];
     let deliver: (m: any) => void = () => {};

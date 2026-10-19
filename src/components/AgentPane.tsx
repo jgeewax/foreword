@@ -11,6 +11,7 @@ import { answerText, isAnswered, isRecommended, questionKind, questionText, spli
 import { AssistantMenu } from './AssistantMenu';
 import { Icon } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
+import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu } from './TaskMenu';
@@ -1055,6 +1056,7 @@ function Composer() {
           <ModeMenu />
           <AssistantMenu />
           <ModelPicker placement="up" />
+          <EffortPicker />
           <PermissionsMenu />
           <span className="spacer" />
           {!text && (

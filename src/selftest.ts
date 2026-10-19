@@ -370,6 +370,79 @@ async function optionsChecks() {
 }
 
 /**
+ * The effort menu beside the model, with a real assistant (Claude Code on
+ * Haiku, Codex on Luna, OpenCode on a free model with variants): its levels,
+ * choosing one, /effort, and the level in force on a conversation after one
+ * short message. Puts back the model and efforts it chose.
+ */
+async function effortChecks(kind: 'claude' | 'codex' | 'opencode') {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  try {
+    studio.updateSettings({ assistant: kind }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    await sleep(2000);
+    const models = studio.state.agent.models;
+    const small = kind === 'opencode' ? models.find((m) => m.providerID === 'opencode' && /free/i.test(m.id)) : models.find((m) => /haiku|luna/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    out.model = small?.id;
+    if (!small) return out;
+    // OpenCode: a free model with variants, if there's one.
+    if (kind === 'opencode') {
+      for (const m of models.filter((m) => m.providerID === 'opencode' && /free/i.test(m.id) && m.supportsTools)) {
+        if (await studio.agent!.efforts(null, m)) {
+          await studio.selectModel(m);
+          break;
+        }
+      }
+    } else await studio.selectModel(small);
+    studio.newSession();
+    await waitFor(() => studio.state.agent.efforts.length > 0, 15000, 'efforts').catch(() => {});
+    out.model = studio.state.agent.model?.id;
+    out.levels = studio.state.agent.efforts.map((o) => `${o.value}=${o.name}`);
+    out.before = studio.state.agent.effort;
+    out.trigger = document.querySelector('.effort-trigger')?.textContent;
+    document.head.append(still);
+    document.querySelector<HTMLButtonElement>('.effort-trigger')?.click();
+    await sleep(300);
+    out.menu = [...document.querySelectorAll('.effort-popover .mode-option')].map((b) => `${b.querySelector('.mode-name')?.textContent}${b.getAttribute('aria-checked') === 'true' ? ' ✓' : ''} | ${b.querySelector('.mode-description')?.textContent ?? ''} | ${b.querySelectorAll('.effort-meter .on').length}`);
+    out.focused = document.activeElement?.closest('.effort-popover') ? document.activeElement.textContent : null;
+    out.snapshotMenu = await snap(`effort-${kind}-menu`);
+    [...document.querySelectorAll<HTMLButtonElement>('.effort-popover .mode-option')].find((b) => b.querySelector('.mode-name')?.textContent === 'Low')?.click();
+    await sleep(500);
+    out.chosen = { effort: studio.state.agent.effort, trigger: document.querySelector('.effort-trigger')?.textContent, remembered: JSON.parse(localStorage.getItem('studio.efforts') ?? '{}') };
+    await studio.runSlash('/effort med');
+    await sleep(300);
+    out.slash = { effort: studio.state.agent.effort, said: (studio.state.agent.items.filter((i) => i.kind === 'notice').at(-1) as { text?: string } | undefined)?.text };
+    out.snapshotComposer = await snap(`effort-${kind}-composer`);
+    still.remove();
+
+    // One short message: the conversation starts at the chosen level.
+    await studio.send('Reply with just the word OK. Don’t use any tools.');
+    await sleep(1000);
+    await waitFor(() => !studio.state.agent.running, 120000, 'reply').catch(() => {});
+    await sleep(1000);
+    const sessionId = studio.state.agent.sessionId;
+    out.reply = (studio.state.agent.items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text;
+    out.inSession = sessionId ? (await studio.agent!.efforts(sessionId, studio.state.agent.model!))?.current : null;
+    out.after = studio.state.agent.effort;
+    // And changed mid-conversation.
+    await studio.selectEffort('high');
+    out.changedInSession = sessionId ? (await studio.agent!.efforts(sessionId, studio.state.agent.model!))?.current : null;
+    studio.newSession();
+  } finally {
+    still.remove();
+    studio.updateSettings({ assistant: saved.assistant }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * "Draft from my chapters", with a real assistant (Claude Code on a small
  * model, Codex, or OpenCode on a free one): the chat shows only the short
  * message, any question is about the book (answered with its first choice),
@@ -6412,6 +6485,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);
+    for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`effort-${kind}`)) result[`effort-${kind}`] = await effortChecks(kind);
     if (want('activity')) result.activity = await activityChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
