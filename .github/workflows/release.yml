@@ -60,10 +60,14 @@ jobs:
         id: notes
         if: github.ref_type == 'tag'
         run: |
+          # The version's section of CHANGELOG.md ("## 0.2.0 · …" up to the next "## "), else the commits since the last version.
+          section=$(awk -v v="${GITHUB_REF_NAME#v}" '/^## /{ if (found) exit; if ($2 == v) { found=1; next } } found' CHANGELOG.md 2>/dev/null | sed -e '/./,$!d')
           prev=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
           {
             echo 'body<<__NOTES__'
-            if [ -z "$prev" ]; then
+            if [ -n "$section" ]; then
+              printf '%s\n' "$section"
+            elif [ -z "$prev" ]; then
               echo 'The first release of Typst Studio.'
             else
               git log --no-merges --format='- %s' "$prev..$GITHUB_REF_NAME" | grep -v -E '^- (TODO|Version )' | head -40

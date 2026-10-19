@@ -11,9 +11,12 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20first-111?logo=apple&logoColor=white)
 ![Typst](https://img.shields.io/badge/Typst-0.15-239dad)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)
+![Release](https://img.shields.io/github/v/release/jgeewax/typststudio?label=release&color=2f63d8)
 ![Status](https://img.shields.io/badge/status-early%20development-e0a040)
 
-**[Download for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** · [Website](https://jgeewax.github.io/typststudio/) · [Releases](https://github.com/jgeewax/typststudio/releases)
+**[Download for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** · [Website](https://jgeewax.github.io/typststudio/) · [Releases](https://github.com/jgeewax/typststudio/releases) · [What's new](CHANGELOG.md)
+
+**New in 0.2:** export EPUB for any e-reader · a style guide by interview, or from a template · questions in a panel · effort beside the model · ask the assistant to change a setting
 
 <br>
 
@@ -72,7 +75,7 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 
 AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text, ask about it or ask for a change, and it edits the book itself, then tells you what it did in a sentence or two. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands.
 
-It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Plan** talks a chapter through before anything is written. **Options** gives you three versions of a passage to pick from. You decide what it may do without asking.
+It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Plan** talks a chapter through before anything is written. **Options** gives you three versions of a passage to pick from. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking.
 
 </td>
 </tr>
@@ -148,7 +151,7 @@ The assistant is a program on your Mac, signed in with your own account, so ther
 | **Antigravity** | Google | Your Google account, a Gemini API key or Gemini Enterprise | Agent Client Protocol, through Google's connector (Settings downloads it) |
 | **Gemini CLI** | Google | A paid Gemini API key or a Gemini Code Assist work account | Agent Client Protocol |
 
-Each conversation is its own task, and several can run at once. Settings ▸ Assistant says what each one needs on your Mac and signs you in.
+Each conversation is its own task, and several can run at once. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Typst Studio's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
 
 ## Everything else a book needs
 
@@ -156,9 +159,10 @@ Each conversation is its own task, and several can run at once. Settings ▸ Ass
 - **Sample books to try.** Open a finished one and try the assistant on it: *Jekyll and Hyde*, *Calculus Made Easy*, *The Elements of Style*, *Luca's Wonderful Brain*, *Attention Is All You Need*, and *Counting Words*, whose Python examples run.
 - **Code that runs.** Examples in Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell run from the book, with their real output set beneath and checked against what you expect.
 - **Covers and printing.** Design a print cover with the spine worked out from the page count, check the files against the printer's rules, and order through Mixam.
-- **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. The assistant can draft it from your chapters.
+- **E-books.** Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, or every page exactly as typeset for picture books, papers and books full of math. Typst Studio picks for you and says what didn't carry over.
+- **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. Start it from a template for your kind of book, let the assistant draft it from your chapters, or answer its questions and have it write the guide from your answers. Redraft it whenever it isn't quite right: it keeps the rules you wrote, and learns from how you've rewritten its text.
 - **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest.
-- **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code, formatting on save, and a window for each book.
+- **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code, formatting on save, wrapping at a column with rulers, and a window for each book.
 
 ## Download
 
@@ -195,6 +199,7 @@ Then choose **New Book**, or open one of the samples. For the assistant, install
 | [`fixtures/sample-book/`](fixtures/sample-book) | The book the self-tests open. |
 | [`docs/decisions.md`](docs/decisions.md) | Decisions and what they were measured against. |
 | [`SPEC.md`](SPEC.md), [`IDEAS.md`](IDEAS.md), [`TODO.md`](TODO.md) | What it's meant to be, what it might become, and what's next. |
+| [`CHANGELOG.md`](CHANGELOG.md) | What's new in each version. |
 
 ```sh
 npm run app             # run it, reloading as you edit (tauri dev)
@@ -205,7 +210,7 @@ npm run app:build       # the app and its DMG, with OpenCode and Tinymist inside
 (cd src-tauri && cargo test)
 ```
 
-To release a version, `npm run release -- 0.2.0`: it sets the version, tags it and pushes the tag, and the release build publishes the DMG and the update that every installed copy is offered. Updates are signed with the key in the `TAURI_SIGNING_PRIVATE_KEY` secret; keep its copy safe, since installed copies accept updates signed with that key only.
+To release a version, write its section in `CHANGELOG.md` (`## 0.3.0 · <date>`), then `npm run release -- 0.3.0`: it sets the version, tags it and pushes the tag, and the release build publishes the DMG and the update that every installed copy is offered, with that section as its notes (the app shows them under What's new). Updates are signed with the key in the `TAURI_SIGNING_PRIVATE_KEY` secret; keep its copy safe, since installed copies accept updates signed with that key only.
 
 The self-tests drive the real app, in a second window beside yours (once `npm run app` has built it). Point one at a scratch copy of a book, name the groups to run (see `src/selftest.ts`), and it writes its results and screenshots next to `out.json`:
 
