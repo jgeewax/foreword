@@ -2,10 +2,12 @@
 // src-tauri/src/history.rs), plus browsing, diffs and restores. The author's
 // own Git repo is never touched. Restores are ordinary conflict-checked file
 // writes: files with unsaved edits, or changed since, are skipped and named.
-// The current state is always saved first, so every restore can be undone
-// from History too.
+// Undoing a turn takes out only its changes (merge.ts), around the author's
+// later ones, unsaved edits included. The current state is always saved
+// first, so every restore can be undone from History too.
 import { ask } from '@tauri-apps/plugin-dialog';
 import type { Documents } from '../editor/documents';
+import { merge3 } from '../editor/merge';
 import { errorMessage, ipc, type FileChange, type Version } from '../lib/ipc';
 import { proseDiff, type ProseDiff } from './prose-diff';
 
@@ -329,13 +331,15 @@ export class History {
   }
 
   /**
-   * Undo what one version changed (an agent turn), file by file, but only
-   * where the file is still exactly as that version left it.
+   * Undo what one version changed (an agent turn), file by file. Changes made
+   * since stay: the version's own changes are taken out around them, and an
+   * open file's unsaved edits are kept. A file changed since in the same words
+   * is left alone.
    */
   async undoVersion(version: Version) {
     if (!version.parent) return;
     const ok = await this.confirm(
-      `Undo the changes from “${version.label}”?\n\nFiles you changed since then are left alone. Your current version is saved in History first.`,
+      `Undo the changes from “${version.label}”?\n\nWhat you changed since stays. A file where you changed the same words is left alone. Your current version is saved in History first.`,
       'Undo changes',
     );
     if (!ok) return;
@@ -344,13 +348,31 @@ export class History {
       await this.checkpoint();
       const report: RestoreReport = { restored: [], skipped: [], kept: [] };
       for (const change of await ipc.historyChanges(null, version.id)) {
-        const [then, now] = await Promise.all([ipc.historyFile(version.id, change.path).catch(() => undefined), this.currentText(change.path)]);
-        if (then === undefined || now !== then) {
-          report.skipped.push({ path: change.path, why: then === undefined ? 'not a text file' : 'changed since' });
+        const [then, now] = await Promise.all([ipc.historyFile(version.id, change.path).catch(() => undefined), this.diskText(change.path)]);
+        if (then === undefined) {
+          report.skipped.push({ path: change.path, why: 'not a text file' });
         } else if (change.status === 'A') {
-          report.kept.push(change.path);
+          if (now === then) report.kept.push(change.path);
+          else report.skipped.push({ path: change.path, why: 'changed since' });
+        } else if (then === null || now === null) {
+          // Deleted by the turn (or since): put back only if that's still so.
+          if (now === then) await this.restoreFrom(parent, change.path, report);
+          else report.skipped.push({ path: change.path, why: 'changed since' });
         } else {
-          await this.restoreFrom(parent, change.path, report);
+          let before: string | null;
+          try {
+            before = await ipc.historyFile(parent, change.path);
+          } catch (e) {
+            report.skipped.push({ path: change.path, why: errorMessage(e) });
+            continue;
+          }
+          if (before === null) {
+            report.kept.push(change.path);
+            continue;
+          }
+          const undone = merge3(then, now, before);
+          if (undone.conflicts.length) report.skipped.push({ path: change.path, why: 'changed since, in the same places' });
+          else await this.writeBack(change.path, undone.text, report, { mergeUnsaved: true });
         }
       }
       if (report.restored.length) await ipc.historySnapshot('restore', `Undid “${shorten(version.label, 40)}”`);
@@ -373,9 +395,7 @@ export class History {
     }
   }
 
-  private async currentText(path: string): Promise<string | null> {
-    const doc = this.host.docs()?.get(path);
-    if (doc && this.host.docs()!.isDirty(doc)) return doc.model.getValue();
+  private async diskText(path: string): Promise<string | null> {
     try {
       return (await ipc.fsRead(path)).text;
     } catch {
@@ -396,19 +416,23 @@ export class History {
     else await this.writeBack(path, text, report);
   }
 
-  /** Conflict-checked write; open buffers are reloaded (so ⌘Z in the editor also works). */
-  private async writeBack(path: string, text: string, report: RestoreReport) {
+  /**
+   * Write a file; an open one's buffer takes the change as one undoable edit
+   * (so ⌘Z in the editor also works). One with unsaved edits is skipped, or,
+   * with `mergeUnsaved`, has the change merged in around them.
+   */
+  private async writeBack(path: string, text: string, report: RestoreReport, { mergeUnsaved = false } = {}) {
     const docs = this.host.docs();
     const doc = docs?.get(path);
-    if (doc && docs!.isDirty(doc)) {
+    if (doc && docs!.isDirty(doc) && !mergeUnsaved) {
       report.skipped.push({ path, why: 'unsaved edits' });
       return;
     }
     try {
       const hash = await ipc.fsHash(path);
       if (hash !== null && (await ipc.fsRead(path)).text === text) return;
-      await ipc.fsWrite(path, text, hash);
-      if (doc) await docs!.reload(path);
+      if (doc) await docs!.writeThrough(path, text);
+      else await ipc.fsWrite(path, text, hash);
       report.restored.push(path);
     } catch (e) {
       report.skipped.push({ path, why: errorMessage(e) });

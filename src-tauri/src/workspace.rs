@@ -120,25 +120,7 @@ pub fn read_text(path: &Path) -> CmdResult<FileContent> {
 /// Atomically replace `path` with `text`, but only if the file on disk still
 /// has `expected_hash` (`None` = the file must not exist yet). Returns the new hash.
 pub fn write_text(path: &Path, text: &str, expected_hash: Option<&str>) -> CmdResult<String> {
-    let current = match fs::read(path) {
-        Ok(bytes) => Some(hash_bytes(&bytes)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(e.into()),
-    };
-    match (expected_hash, current.as_deref()) {
-        (Some(exp), Some(cur)) if exp != cur => {
-            return Err(CmdError::Conflict(
-                "the file changed on disk since it was opened".into(),
-            ));
-        }
-        (Some(_), None) => return Err(CmdError::Conflict("the file was deleted on disk".into())),
-        (None, Some(_)) => {
-            return Err(CmdError::Conflict(
-                "a file with this name already exists".into(),
-            ));
-        }
-        _ => {}
-    }
+    check_unchanged(path, expected_hash)?;
     let dir = path
         .parent()
         .ok_or_else(|| CmdError::Invalid("no parent directory".into()))?;
@@ -147,20 +129,43 @@ pub fn write_text(path: &Path, text: &str, expected_hash: Option<&str>) -> CmdRe
         ".{name}.{}.typst-studio.tmp",
         uuid::Uuid::new_v4().simple()
     ));
-    let result = (|| -> std::io::Result<()> {
+    let result = (|| -> CmdResult<()> {
         let mut f = fs::File::create(&tmp)?;
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
         if let Ok(meta) = fs::metadata(path) {
             fs::set_permissions(&tmp, meta.permissions())?;
         }
-        fs::rename(&tmp, path)
+        // Checked again just before the swap: another program's write while the
+        // copy was written (an assistant at work) isn't replaced unseen.
+        check_unchanged(path, expected_hash)?;
+        fs::rename(&tmp, path)?;
+        Ok(())
     })();
     if let Err(e) = result {
         let _ = fs::remove_file(&tmp);
-        return Err(e.into());
+        return Err(e);
     }
     Ok(hash_bytes(text.as_bytes()))
+}
+
+/// The file on disk still has `expected_hash` (`None`: it must not exist yet).
+fn check_unchanged(path: &Path, expected_hash: Option<&str>) -> CmdResult<()> {
+    let current = match fs::read(path) {
+        Ok(bytes) => Some(hash_bytes(&bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+    };
+    match (expected_hash, current.as_deref()) {
+        (Some(exp), Some(cur)) if exp != cur => Err(CmdError::Conflict(
+            "the file changed on disk since it was opened".into(),
+        )),
+        (Some(_), None) => Err(CmdError::Conflict("the file was deleted on disk".into())),
+        (None, Some(_)) => Err(CmdError::Conflict(
+            "a file with this name already exists".into(),
+        )),
+        _ => Ok(()),
+    }
 }
 
 // ---- commands -------------------------------------------------------------

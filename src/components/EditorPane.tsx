@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CommentCard, CommentComposer } from './CommentCard';
+import { MergeCard } from './MergeCard';
 import { studio } from '../app/studio';
 import { editorTextOptions, editorWrapOptions, monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
@@ -282,7 +283,8 @@ export function EditorPane() {
       }
     });
     // Review comments: their passages highlighted, and a card under each (open, or changed
-    // and waiting to be checked), in a view zone. The comment being written is one too.
+    // and waiting to be checked), in a view zone. The comment being written is one too, and
+    // so is each passage a merge with the file on disk asks about (documents.ts).
     const commentMarks = editor.createDecorationsCollection();
     // `line` is where we put it: Monaco's own tracking of zones isn't reliable when a file reloads from disk.
     type Zone = { zoneId: string; root: Root; fit: (h: number) => void; zone: monaco.editor.IViewZone; line: number };
@@ -321,6 +323,13 @@ export function EditorPane() {
           const range = monaco.Range.fromPositions(model.getPositionAt(draft.start), model.getPositionAt(draft.end));
           marks.push({ range, options: { inlineClassName: 'review-highlight draft' } });
           want.set('draft', { line: range.endLineNumber, node: <CommentComposer quote={model.getValueInRange(range)} /> });
+        }
+        for (const q of studio.state.questions[path] ?? []) {
+          const range = studio.docs?.questionRange(path, q.id);
+          if (!range) continue;
+          // A passage of whole lines ends at the start of the next: the card goes under its last line.
+          const line = range.endColumn === 1 && range.endLineNumber > range.startLineNumber ? range.endLineNumber - 1 : range.endLineNumber;
+          want.set(q.id, { line, node: <MergeCard path={path} question={q} /> });
         }
       }
       commentMarks.set(marks);
@@ -362,9 +371,11 @@ export function EditorPane() {
       });
     };
     let lastReview = studio.state.review;
+    let lastQuestions = studio.state.questions;
     const offReview = studio.store.subscribe(() => {
-      if (studio.state.review === lastReview) return;
+      if (studio.state.review === lastReview && studio.state.questions === lastQuestions) return;
       lastReview = studio.state.review;
+      lastQuestions = studio.state.questions;
       syncComments();
     });
     editor.onDidChangeModel(() => {
@@ -517,8 +528,7 @@ export function EditorPane() {
       {conflict && active && !viewTab && (
         <div className="banner warn">
           <span>{conflict}</span>
-          <button onClick={() => void studio.reloadFromDisk(active)}>Reload from disk</button>
-          <button onClick={() => void studio.save(active, { overwrite: true })}>Keep my version</button>
+          <button onClick={() => void studio.save(active, { overwrite: true })}>Save it again</button>
         </div>
       )}
       {/* Hidden, not unmounted, behind a tab that isn't a file: it keeps its place in the file. */}

@@ -1204,6 +1204,11 @@ button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px col
 .comment-change ins { background: var(--add); color: var(--good); text-decoration: none; border-radius: 2px; }
 .comment-change del { background: var(--del); color: var(--bad); border-radius: 2px; }
 .comment-actions { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+/* A passage changed two ways at once (documents.ts merge): marked, with a card under it. */
+.merge-question { background: rgba(163, 113, 247, 0.16); border-bottom: 1px dashed rgba(163, 113, 247, 0.85); }
+.comment-card.merge { border-left-color: #a371f7; }
+.comment-card.merge .comment-head { color: #a371f7; }
+.merge-note { margin-top: 2px; color: var(--muted); font-size: 12px; }
 .comment-hint { font-size: 11px; }
 .review-file-name { display: flex; align-items: baseline; gap: 2px; width: calc(100% - 16px); margin: 6px 8px 0; padding: 2px 4px; border: none; background: transparent; font-size: 11.5px; font-weight: 600; color: var(--fg); text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .review-file-name:hover { background: var(--bg-3); }

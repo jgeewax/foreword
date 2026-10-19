@@ -27,6 +27,9 @@ const MAX_TOKENS = 6000;
 
 export const countWords = (text: string) => (text.match(TOKEN) ?? []).filter((t) => WORD.test(t)).length;
 
+/** A text as words, runs of space and single marks: joined, they give it back exactly. */
+export const proseTokens = (text: string) => text.match(TOKEN) ?? [];
+
 /** Word-level pieces for one changed passage, with each run of changes shown as one deletion then one insertion. */
 export function wordPieces(oldText: string, newText: string): Piece[] {
   const a = oldText.match(TOKEN) ?? [];

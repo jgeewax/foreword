@@ -43,6 +43,7 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     aiEditColor: settings.aiEditColor,
     aiReadColor: settings.aiReadColor,
     formatOnSave: settings.formatOnSave,
+    autoSaveMinutes: settings.autoSaveMinutes,
     editorFontSize: settings.editorFontSize,
     wordWrap: settings.wordWrap,
     wordWrapColumn: settings.wordWrapColumn,

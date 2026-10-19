@@ -15,7 +15,7 @@ import { Choice, ColorChoice, SwitchRow, TypedSetting } from './SettingControls'
 import { ToolPicker } from './ToolPicker';
 import { DownloadProgress, InstallSteps, RELEASES } from './UpdateDialog';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
-import { DEFAULT_SETTINGS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, isCommandName, MARK_COLORS, parseRulers, rulersText, type ToolName } from '../app/settings';
+import { AUTO_SAVE_MINUTES, DEFAULT_SETTINGS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, isAutoSaveMinutes, isCommandName, MARK_COLORS, parseRulers, rulersText, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -310,6 +310,30 @@ function EditorPage() {
             With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
             line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
           </p>
+        </div>
+        <div className="settings-field">
+          <SwitchRow checked={settings.autoSaveMinutes > 0} onChange={(on) => studio.updateSettings({ autoSaveMinutes: on ? DEFAULT_SETTINGS.autoSaveMinutes : 0 })}>
+            <span className="settings-switch-label">Auto save</span>
+            <span className="settings-help">Every few minutes, files with unsaved changes are saved, so a crash or a flat battery costs you a few minutes at most. Not formatted, so nothing moves while you type.</span>
+          </SwitchRow>
+          {settings.autoSaveMinutes > 0 && (
+            <div className="settings-wrap-column">
+              <TypedSetting
+                label="Auto save every"
+                value={settings.autoSaveMinutes}
+                parse={(text) => {
+                  const n = Number(text.trim());
+                  return isAutoSaveMinutes(n) && n > 0 ? n : null;
+                }}
+                format={String}
+                onChange={(autoSaveMinutes) => studio.updateSettings({ autoSaveMinutes })}
+                mistake={`A whole number of minutes, from 1 to ${AUTO_SAVE_MINUTES.max}.`}
+                className="settings-column"
+                before="Every"
+                after="minutes"
+              />
+            </div>
+          )}
         </div>
       </Section>
       <Section title="Long lines">

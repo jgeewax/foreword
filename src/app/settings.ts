@@ -46,6 +46,8 @@ export type AppSettings = {
   allowCommands: string[];
   /** Format Typst files (typstyle, through Tinymist) when the author saves them. */
   formatOnSave: boolean;
+  /** Save files with unsaved changes every this many minutes (0: never), as Word's AutoRecover. */
+  autoSaveMinutes: number;
   /** The editor's text size in px (before the UI zoom), as VS Code's editor.fontSize. */
   editorFontSize: number;
   /** Where long lines wrap, as VS Code's editor.wordWrap ('window' is its "on", 'column' its "bounded"). */
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   aiReadColor: '#58a6ff',
   allowCommands: [],
   formatOnSave: true,
+  autoSaveMinutes: 5,
   editorFontSize: 12,
   wordWrap: 'window',
   wordWrapColumn: 80,
@@ -85,6 +88,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const EDITOR_FONT_SIZES = { min: 9, max: 24 };
+
+/** Auto save's interval, in whole minutes; 0 turns it off. */
+export const AUTO_SAVE_MINUTES = { max: 120 };
+export const isAutoSaveMinutes = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= AUTO_SAVE_MINUTES.max;
 
 /** The editor's line height for a text size: VS Code's on macOS (1.5 times, rounded). */
 export const editorLineHeight = (fontSize: number) => Math.round(fontSize * 1.5);
@@ -159,6 +166,7 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (isColor(raw.aiReadColor)) out.aiReadColor = raw.aiReadColor.toLowerCase();
   if (Array.isArray(raw.allowCommands)) out.allowCommands = sanitizeCommands(raw.allowCommands);
   if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
+  if (isAutoSaveMinutes(raw.autoSaveMinutes)) out.autoSaveMinutes = raw.autoSaveMinutes;
   const size = raw.editorFontSize;
   if (typeof size === 'number' && size >= EDITOR_FONT_SIZES.min && size <= EDITOR_FONT_SIZES.max) out.editorFontSize = Math.round(size * 2) / 2;
   if (raw.wordWrap === 'window' || raw.wordWrap === 'column' || raw.wordWrap === 'off') out.wordWrap = raw.wordWrap;

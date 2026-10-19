@@ -68,14 +68,14 @@ Keyboard bindings must be configurable eventually; avoid stepping on Monaco's or
 - Open an existing local folder without importing/converting anything.
 - Read file tree; respect `.gitignore` where reasonable; refresh after filesystem changes.
 - Open/edit multiple files through tabs; primary support for `.typ`, with plain text editing for `.bib`, `.md`, `.json`, etc.
-- Detect external file changes. Warn rather than overwrite if a dirty editor buffer conflicts with disk.
+- Detect external file changes and merge them into open buffers (three-way, word by word within a paragraph): unsaved edits are never overwritten, and where both sides changed the same words the buffer keeps the author's and shows the other version to take or leave. A save made while an agent works survives the agent writing from an older copy.
 - Remember recently opened workspace, open tabs, active file, and layout.
 
 **Editor**
 - Monaco editor with Typst syntax highlighting, line numbers, find/replace, undo/redo, standard editing shortcuts. Highlighting uses Tinymist's TextMate grammar plus LSP semantic tokens, as VS Code does — not a hand-written grammar.
 - Tinymist diagnostics and, after the LSP bridge is working, completion and hover.
 - Accurate UTF-8 file reading/writing. Preserve file contents and line endings; use atomic writes when possible.
-- An explicit save command and a predictable autosave mode (default on with a modest debounce); pending saves must flush before agent work or Git operations. Autosave exists for durability, the agent, and Git — the preview never waits for it.
+- An explicit save command and a predictable autosave mode (default on, every 5 minutes, unformatted); pending saves must flush before agent work or Git operations. Autosave exists for durability, the agent, and Git — the preview never waits for it.
 
 **Preview**
 - Embed Tinymist's live SVG/web preview in the preview pane, not an external browser tab.

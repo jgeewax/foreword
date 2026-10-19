@@ -1240,6 +1240,206 @@ async function historyChecks(withAgent: boolean) {
 }
 
 /**
+ * A file changed on disk while the author edits it (an assistant at work, git,
+ * another editor): merged into the buffer, unsaved edits and all, with a card
+ * where both changed the same words; a save made during a turn survives a
+ * write from an older copy; saving over a newer disk version merges it first;
+ * auto save. Simulated writes, and with the assistant one real edit made
+ * while the author types and a conflict resolved by it. Writes a chapter and
+ * puts it back: scratch book only.
+ */
+async function mergeChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const disk = async () => (await ipc.fsRead(file)).text;
+  // The author typing: one undoable edit.
+  const type = (find: string, text: string) => {
+    const at = model.getValue().indexOf(find);
+    if (at < 0) throw new Error(`not in the buffer: ${find}`);
+    editor.pushUndoStop();
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(model.getPositionAt(at), model.getPositionAt(at + find.length)), text }]);
+    editor.pushUndoStop();
+  };
+  // Another program writing the file.
+  const write = async (transform: (text: string) => string) => {
+    const { text, hash } = await ipc.fsRead(file);
+    await ipc.fsWrite(file, transform(text), hash);
+  };
+  const questions = () => studio.state.questions[file] ?? [];
+  const cards = () => [...document.querySelectorAll('.comment-card.merge')].map((c) => c.querySelector('.comment-id')?.textContent);
+  const reset = async () => {
+    for (const q of questions()) studio.keepMine(file, q.id);
+    await ipc.fsWrite(file, original, await ipc.fsHash(file));
+    await studio.reloadFromDisk(file);
+    studio.docs?.markSeen();
+  };
+  const A = 'A vector in $RR^n$ is an ordered list of $n$ real numbers.';
+  const B = 'Two vectors are orthogonal when their inner product is zero.';
+  try {
+    // 1. Apart: typing in one paragraph, a write to another. Both stay; nothing asked.
+    type('ordered list', 'ordered tuple');
+    await write((t) => t.replace(B, 'Two vectors are orthogonal if and only if their inner product is zero.'));
+    await waitFor(() => model.getValue().includes('if and only if'), 5000, 'merge').catch(() => {});
+    const merged = model.getValue();
+    out.apart = {
+      both: merged.includes('ordered tuple') && merged.includes('if and only if'),
+      dirty: !!studio.state.dirty[file],
+      questions: questions().length,
+      banner: !!document.querySelector('.banner.warn'),
+    };
+    // ⌘Z takes off the merged-in change only; ⌘⇧Z puts it back.
+    await model.undo();
+    out.undoMerge = { typingKept: model.getValue().includes('ordered tuple'), theirsGone: !model.getValue().includes('if and only if') };
+    await model.redo();
+    await studio.save(file);
+    out.savedBoth = { disk: (await disk()) === model.getValue(), dirty: !!studio.state.dirty[file] };
+
+    // 2. The same words: the buffer keeps the author's, and a card offers theirs.
+    await reset();
+    type('real numbers', 'real values');
+    await write((t) => t.replace('real numbers', 'real scalars'));
+    await waitFor(() => questions().length > 0, 5000, 'question').catch(() => {});
+    await sleep(500);
+    editor.render(true);
+    out.clash = {
+      buffer: model.getValue().includes('real values') && !model.getValue().includes('real scalars'),
+      questions: questions().map((q) => ({ kind: q.kind, mine: q.mine.trim(), theirs: q.theirs.trim() })),
+      cards: cards(),
+      buttons: [...document.querySelectorAll('.comment-card.merge button')].map((b) => b.textContent),
+      highlighted: document.querySelectorAll('.merge-question').length > 0,
+    };
+    out.clashSnap = await snap('merge-clash');
+    // Use theirs: in the buffer, undoable; the card goes.
+    studio.useTheirs(file, questions()[0]?.id ?? '');
+    await sleep(300);
+    out.useTheirs = { buffer: model.getValue().includes('real scalars'), questions: questions().length, cards: cards().length };
+    // Keep mine.
+    type('real scalars', 'real entries');
+    await write((t) => t.replace(B, B.replace('zero', 'exactly zero')).replace('real numbers', 'real reals'));
+    await waitFor(() => questions().length > 0, 5000, 'question 2').catch(() => {});
+    const id = questions()[0]?.id ?? '';
+    studio.keepMine(file, id);
+    await sleep(300);
+    out.keepMine = { buffer: model.getValue().includes('real entries'), apartMerged: model.getValue().includes('exactly zero'), questions: questions().length };
+
+    // 3. Saved during a turn, then a write from the copy read before it: the save stays, on disk too.
+    await reset();
+    const bg = { running: true, attention: null, unread: false, label: 'selftest', since: Date.now() };
+    studio.store.set((s) => ({ agent: { ...s.agent, background: { ...s.agent.background, 'selftest-merge': bg } } }));
+    const before = await disk();
+    type(A, 'A vector in $RR^n$ is an ordered list of $n$ real numbers, its entries.');
+    await studio.save(file);
+    // The other program wrote from `before`, which lacks that save.
+    await ipc.fsWrite(file, before.replace(B, 'Two vectors are perpendicular when their inner product is zero.'), await ipc.fsHash(file));
+    await waitFor(() => model.getValue().includes('perpendicular'), 5000, 'stale merge').catch(() => {});
+    await sleep(500);
+    const onDisk = await disk();
+    out.staleWrite = {
+      buffer: model.getValue().includes('its entries.') && model.getValue().includes('perpendicular'),
+      disk: onDisk.includes('its entries.') && onDisk.includes('perpendicular'),
+      dirty: !!studio.state.dirty[file],
+      questions: questions().map((q) => ({ kind: q.kind, by: q.by })),
+      cards: cards(),
+    };
+    out.staleSnap = await snap('merge-stale');
+    studio.store.set((s) => {
+      const background = { ...s.agent.background };
+      delete background['selftest-merge'];
+      return { agent: { ...s.agent, background } };
+    });
+
+    // 4. Saving over a newer version on disk (before the watcher says): merged, then saved.
+    await reset();
+    type('ordered list', 'ordered tuple');
+    await write((t) => t.replace(B, 'Two vectors are orthogonal if their inner product is zero.'));
+    await studio.save(file);
+    const saved = await disk();
+    out.saveOverNewer = { both: saved.includes('ordered tuple') && saved.includes('orthogonal if'), dirty: !!studio.state.dirty[file], toast: studio.state.toast?.text ?? null };
+
+    // 5. Deleted on disk: a banner; "Save it again" puts it back.
+    const scratch = 'chapters/selftest-merge.typ';
+    await ipc.fsWrite(scratch, '= Scratch\n\nText.\n', null);
+    await studio.openFile(scratch);
+    await ipc.fsTrash(scratch);
+    await waitFor(() => !!studio.state.conflicts[scratch], 5000, 'deleted banner').catch(() => {});
+    await sleep(200);
+    const banner = document.querySelector('.banner.warn');
+    out.deleted = { banner: banner?.querySelector('span')?.textContent, buttons: [...(banner?.querySelectorAll('button') ?? [])].map((b) => b.textContent) };
+    (banner?.querySelector('button') as HTMLButtonElement | null)?.click();
+    await sleep(800);
+    out.savedAgain = { exists: (await ipc.fsHash(scratch)) !== null, banner: !!studio.state.conflicts[scratch] };
+    await studio.closeTab(scratch);
+    await ipc.fsTrash(scratch).catch(() => {});
+    await studio.openFile(file);
+
+    // 6. Auto save: every minute here, unformatted.
+    await reset();
+    const minutes = studio.state.settings.autoSaveMinutes;
+    studio.updateSettings({ autoSaveMinutes: 1 }, { write: false });
+    type('ordered list', 'ordered  list');
+    const t0 = Date.now();
+    await waitFor(() => !studio.state.dirty[file], 75000, 'auto save').catch(() => {});
+    out.autoSave = { saved: !studio.state.dirty[file], afterS: Math.round((Date.now() - t0) / 1000), unformatted: (await disk()).includes('ordered  list') };
+    studio.updateSettings({ autoSaveMinutes: minutes }, { write: false });
+
+    if (withAgent) {
+      // 7. The real thing: the assistant edits one paragraph while the author types in another.
+      await reset();
+      const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+      const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+      studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+      await sleep(500);
+      await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.models.length > 0, 180000, 'agent');
+      const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+      if (haiku) await studio.selectModel(haiku);
+      await studio.setMode('write');
+      studio.newSession();
+      void studio.send(`In ${file}, change the sentence “${B}” to say “perpendicular” instead of “orthogonal”. Edit the file directly; change nothing else.`);
+      await sleep(1500);
+      type(A, `${A} Typed while the assistant worked.`);
+      await waitFor(() => !studio.state.agent.running, 180000, 'agent turn').catch(() => {});
+      await waitFor(() => model.getValue().includes('perpendicular'), 5000, 'agent merge').catch(() => {});
+      out.agentWhileTyping = {
+        typing: model.getValue().includes('Typed while the assistant worked.'),
+        agent: model.getValue().includes('Two vectors are perpendicular'),
+        dirty: !!studio.state.dirty[file],
+        questions: questions().length,
+        banner: !!document.querySelector('.banner.warn'),
+      };
+      // 8. A conflict resolved by the assistant: it writes one passage with both changes.
+      await studio.save(file);
+      type('real numbers', 'real numbers (its entries)');
+      await write((t) => t.replace('real numbers', 'numbers from $RR$'));
+      await waitFor(() => questions().length > 0, 5000, 'question for the assistant').catch(() => {});
+      const q = questions()[0];
+      if (q) {
+        await studio.resolveWithAssistant(file, q.id);
+        await sleep(1500);
+        await waitFor(() => !studio.state.agent.running, 180000, 'resolve turn').catch(() => {});
+        await sleep(1000);
+        const user = [...studio.state.agent.items].reverse().find((i) => i.kind === 'user') as { text: string } | undefined;
+        out.resolved = { sent: user?.text.slice(0, 120), questions: questions().length, line: model.getValue().split('\n').find((l) => l.startsWith('A vector in')) };
+      }
+      studio.newSession();
+      studio.updateSettings(saved, { write: false });
+      for (const [k, v] of savedKeys) {
+        if (v === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, v);
+      }
+    }
+  } catch (e) {
+    out.error = errorMessage(e);
+  } finally {
+    await reset().catch(() => {});
+  }
+  return out;
+}
+
+/**
  * Book templates (TODO #12): create a book from each template next to the
  * scratch workspace, open it, and check it compiles and previews. Then reopen
  * the original workspace.
@@ -7137,6 +7337,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && want('project')) {
       log('project settings');
       result.projectSettings = await projectSettingsChecks();
+    }
+    if (launch.selftestEdits && want('merge')) {
+      log('merge');
+      result.merge = await mergeChecks(launch.selftestAgent);
     }
     // Onboarding runs these too (with the assistant).
     if (launch.selftestEdits && want('guide') && !(launch.selftestAgent && want('onboarding'))) result.guide = await guideChecks();

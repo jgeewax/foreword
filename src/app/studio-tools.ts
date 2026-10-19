@@ -15,7 +15,7 @@ import type { EffortOption, ModelInfo, ModelRef } from '../services/agent/types'
 import { ZOOM_STEPS } from '../lib/zoom';
 import type { Level } from '../services/agent/permissions';
 import { describeTool, NO_NAMES } from './tool-labels';
-import { ASSISTANT_NAMES, ASSISTANTS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, sanitize, type AppSettings, type AssistantId } from './settings';
+import { ASSISTANT_NAMES, ASSISTANTS, AUTO_SAVE_MINUTES, EDITOR_COLUMNS, EDITOR_FONT_SIZES, sanitize, type AppSettings, type AssistantId } from './settings';
 
 export { STUDIO_TOOLS } from '../services/agent/studio-tool';
 import { STUDIO_TOOLS } from '../services/agent/studio-tool';
@@ -71,6 +71,11 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   wordWrapColumn: { about: 'The column long lines wrap at, with wordWrap "column".', values: `${EDITOR_COLUMNS.min} to ${EDITOR_COLUMNS.max}`, schema: { type: 'integer', minimum: EDITOR_COLUMNS.min, maximum: EDITOR_COLUMNS.max } },
   rulers: { about: 'Vertical lines in the editor at these columns (e.g. [80, 120]); [] for none.', values: `up to 8 columns, ${EDITOR_COLUMNS.min} to ${EDITOR_COLUMNS.max}`, schema: { type: 'array', items: { type: 'integer' } } },
   formatOnSave: { about: 'Format Typst files (typstyle) when the author saves them.', values: 'true, false', schema: { type: 'boolean' } },
+  autoSaveMinutes: {
+    about: 'Save files with unsaved changes every this many minutes; 0 turns auto save off.',
+    values: `0 to ${AUTO_SAVE_MINUTES.max}`,
+    schema: { type: 'integer', minimum: 0, maximum: AUTO_SAVE_MINUTES.max },
+  },
   sendKey: { about: 'Which key sends a chat message: Enter (Shift+Enter for a new line), or Cmd+Enter (Enter for a new line).', values: 'enter, mod-enter', schema: { type: 'string', enum: ['enter', 'mod-enter'] } },
   markAiEdits: { about: 'Mark the lines the assistant changed, in the editor’s gutter.', values: 'true, false', schema: { type: 'boolean' } },
   markAiReads: { about: 'Mark the lines the assistant read in this conversation.', values: 'true, false', schema: { type: 'boolean' } },
@@ -132,6 +137,7 @@ const words = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 function shown(key: string, v: unknown): string {
   if (key === 'zoom') return `${Math.round(Number(v) * 100)}%`;
   if (key === 'editorFontSize') return `${v} px`;
+  if (key === 'autoSaveMinutes') return v === 0 ? 'off' : `every ${v} minute${v === 1 ? '' : 's'}`;
   if (Array.isArray(v)) return v.length ? v.join(', ') : 'none';
   return String(v);
 }

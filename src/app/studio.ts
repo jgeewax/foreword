@@ -6,7 +6,7 @@ import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { tildePath } from '../lib/paths';
 import { commandId, type TabCommand } from '../lib/tab-keys';
-import { Documents } from '../editor/documents';
+import { Documents, type MergeQuestion } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
@@ -236,6 +236,8 @@ export type StudioState = {
   viewTab: string | null;
   dirty: Record<string, boolean>;
   conflicts: Record<string, string>;
+  /** Passages a merge with the file on disk asks about, per file (documents.ts). */
+  questions: Record<string, MergeQuestion[]>;
   cursor: { line: number; column: number } | null;
   problems: { errors: number; warnings: number };
   compile: { status: 'idle' | 'compiling' | 'ok' | 'error'; pages?: number; words?: number };
@@ -364,6 +366,7 @@ const initialState: StudioState = {
   viewTab: null,
   dirty: {},
   conflicts: {},
+  questions: {},
   cursor: null,
   problems: { errors: 0, warnings: 0 },
   compile: { status: 'idle' },
@@ -595,6 +598,14 @@ export class Studio {
         dialog = !dialog;
         this.syncPreviewVisibility();
       }
+    });
+    // Auto save follows its setting (Settings, the settings file, the assistant's tools).
+    let autoSave = -1;
+    this.store.subscribe(() => {
+      if (this.state.settings.autoSaveMinutes === autoSave) return;
+      autoSave = this.state.settings.autoSaveMinutes;
+      window.clearInterval(this.autoSaveTimer);
+      if (autoSave > 0) this.autoSaveTimer = window.setInterval(() => void this.autoSave(), autoSave * 60_000);
     });
     this.typst.on('diagnostics', (uri, list) => this.onDiagnostics(uri, list));
     this.typst.on('compile', (s) => {
@@ -832,6 +843,14 @@ export class Studio {
           else delete conflicts[p];
           return { conflicts };
         }),
+      onQuestions: (p, questions) =>
+        this.store.set((s) => {
+          const all = { ...s.questions };
+          if (questions.length) all[p] = questions;
+          else delete all[p];
+          return { questions: all };
+        }),
+      agentAtWork: () => (this.assistantBusy ? ASSISTANT_NAMES[this.state.settings.assistant] : null),
     });
     this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false });
 
@@ -2206,6 +2225,7 @@ export class Studio {
       guideOpen: false,
       dirty: {},
       conflicts: {},
+      questions: {},
       problems: { errors: 0, warnings: 0 },
       compile: { status: 'idle' },
       preview: { status: 'off' },
@@ -2578,6 +2598,60 @@ export class Studio {
     for (const path of Object.keys(this.state.dirty).filter((p) => this.state.dirty[p])) await this.save(path);
   }
 
+  private autoSaveTimer: number | undefined;
+
+  /** Auto save, every few minutes (Settings ▸ Editor): what's unsaved goes to disk, unformatted (as VS Code's), so nothing moves under the cursor. */
+  private async autoSave() {
+    for (const path of Object.keys(this.state.dirty).filter((p) => this.state.dirty[p])) await this.save(path, { format: false });
+  }
+
+  /**
+   * An assistant's turn starts: it reads the files as they are now (saved just
+   * before). Saves while it works stay protected from a write it makes from an
+   * older copy (documents.ts merge), until no assistant is at work.
+   */
+  private turnStarts() {
+    if (!Object.values(this.state.agent.background).some((t) => t.running)) this.docs?.markSeen();
+  }
+
+  private turnEnds() {
+    if (!this.assistantBusy) this.docs?.markSeen();
+  }
+
+  // ---- merge questions: a passage both the author and another program changed ----
+
+  /** "Use theirs": the other version of the passage, in the editor (unsaved, undoable). */
+  useTheirs(path: string, id: string) {
+    this.docs?.useTheirs(path, id);
+  }
+
+  /** "Keep mine": the editor already has it; the question goes. */
+  keepMine(path: string, id: string) {
+    this.docs?.dismissQuestion(path, id);
+  }
+
+  /** Ask the assistant to combine both versions of the passage, in the file. */
+  async resolveWithAssistant(path: string, id: string) {
+    const q = this.state.questions[path]?.find((x) => x.id === id);
+    const range = this.docs?.questionRange(path, id);
+    if (!q || !range || !this.editor) return;
+    if (this.state.active !== path || this.state.viewTab) await this.openFile(path);
+    const model = this.editor.getModel();
+    if (!model) return;
+    // The passage as it is now (the author's) goes as the selection; theirs is in the message.
+    const end = range.endColumn === 1 && range.endLineNumber > range.startLineNumber ? new monaco.Position(range.endLineNumber - 1, model.getLineMaxColumn(range.endLineNumber - 1)) : range.getEndPosition();
+    this.editor.setSelection(monaco.Range.fromPositions(range.getStartPosition(), end));
+    this.setAgent({ attachments: [] });
+    await this.attachSelection({ focus: false });
+    this.events.emit('show-agent-pane');
+    const theirs = q.theirs.trim() ? q.theirs.trim().split('\n').map((l) => `> ${l}`).join('\n') : '> (nothing: that version doesn’t have this passage)';
+    const yours = q.by === ASSISTANT_NAMES[this.state.settings.assistant] ? ' (yours)' : '';
+    const sent = await this.send(
+      `This passage of ${path} was changed two ways at once. Mine is the selection; the other version${yours} is:\n\n${theirs}\n\nCombine them into one passage in the file, in place of mine, keeping what each changed. Where they can't both stand, keep mine and tell me what you left out.`,
+    );
+    if (sent) this.docs?.dismissQuestion(path, id);
+  }
+
   async reloadFromDisk(path: string) {
     try {
       await this.docs?.reload(path);
@@ -2738,6 +2812,7 @@ export class Studio {
       void this.afterReviewTurn();
       void this.loadTasks();
       void this.refreshContextSize();
+      this.turnEnds();
       const sessionId = this.state.agent.sessionId;
       void this.history.afterAgent(this.turnMessage).then((turn) => {
         this.recordTurn(sessionId, turn);
@@ -3106,6 +3181,7 @@ export class Studio {
     const bg = this.state.agent.background[sessionId];
     if (!bg?.running) return;
     this.setBackground(sessionId, { ...bg, running: false, unread: true, label: failed ? `Stopped: ${failed}` : 'Finished', failed });
+    this.turnEnds();
     const title = this.taskTitle(sessionId);
     void this.history.afterAgent(this.turnMessages.get(sessionId) || title).then((turn) => {
       this.recordTurn(sessionId, turn);
@@ -3397,6 +3473,7 @@ export class Studio {
     // SPEC §4: flush pending editor writes so the agent sees what the user sees.
     const failures = (await docs?.saveAll()) ?? [];
     if (failures.length) return unsend(`Not sent: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`);
+    this.turnStarts();
     // Sending in a finished task reopens it.
     if (state.sessionId && state.tasks.find((t) => t.sessionId === state.sessionId)?.status === 'done') this.reopenTask(state.sessionId);
     // Everything up to now is its own version, so the agent's changes can be undone separately.
@@ -3814,6 +3891,7 @@ export class Studio {
     const sessionId = this.state.agent.sessionId;
     if (!this.agent || !sessionId || this.state.agent.running) return;
     this.setAgent({ running: true, stopped: false, activity: { phase: 'sending', since: Date.now() } });
+    this.turnStarts();
     await this.history.beforeAgent();
     try {
       await this.agent.resume(sessionId);
