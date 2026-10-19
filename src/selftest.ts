@@ -3893,12 +3893,12 @@ async function paletteChecks(edits: boolean) {
   out.none = document.querySelector('.quick-open-empty')?.textContent;
   await typeIn('>pdf');
   out.snapshot = await snap('command-palette');
-  // ⏎ runs it: the palette closes, the sidebar shows the conversations, and the editor has the keys again.
-  await typeIn('>show conv');
-  out.showConversations = { first: labels()[0] };
+  // ⏎ runs it: the palette closes, the sidebar shows History, and the editor has the keys again.
+  await typeIn('>show hist');
+  out.showHistory = { first: labels()[0] };
   key(input()!, { key: 'Enter' });
   await sleep(400);
-  Object.assign(out.showConversations as object, { closed: !studio.state.quickOpen && !input(), sidebar: studio.state.sidebar, editorFocused: editor.hasTextFocus() });
+  Object.assign(out.showHistory as object, { closed: !studio.state.quickOpen && !input(), sidebar: studio.state.sidebar, editorFocused: editor.hasTextFocus() });
   studio.showSidebar(saved.sidebar);
   // It's remembered: first, marked "recently used".
   shiftCmdP();
@@ -4506,24 +4506,42 @@ async function reloadWindowChecks() {
   return out;
 }
 
-/** The Conversations view: the book's tasks in groups, opened from the activity bar or the View menu. */
+/**
+ * The book's tasks (conversations) live in the assistant pane, not the
+ * sidebar: no Conversations icon; View ▸ Assistant Tasks (and the palette)
+ * shows the pane with its task list open, even from hidden; and while the
+ * pane is hidden, a task that needs you puts a badge on its title bar toggle.
+ */
 async function conversationsChecks() {
   const out: Record<string, unknown> = {};
-  const saved = studio.state.sidebar;
-  await studio.loadTasks();
-  [...document.querySelectorAll<HTMLButtonElement>('.activity-bar button')].find((b) => b.getAttribute('aria-label')?.startsWith('Conversations'))?.click();
-  await sleep(500);
-  out.view = studio.state.sidebar;
-  out.title = document.querySelector('.explorer .pane-title')?.textContent;
-  out.sections = [...document.querySelectorAll('.tasks-panel .task-section')].map((e) => e.textContent);
-  out.rows = document.querySelectorAll('.tasks-panel .task-row').length;
-  out.tasks = studio.state.agent.tasks.length;
-  out.snapshot = await snap('conversations');
-  studio.showSidebar('files');
+  const layout = localStorage.getItem('react-resizable-panels:studio-panes');
+  const agentShown = () => !!document.querySelector('.titlebar button[aria-label^="Assistant"][aria-pressed="true"]');
+  const icons = [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label') ?? '');
+  out.activityIcons = icons;
+  out.noConversationsIcon = !icons.some((l) => /conversation/i.test(l));
+  out.paletteLabel = available(paletteCommands(studio)).find((c) => c.id === 'show-tasks')?.title;
+  // From a hidden pane: the menu item brings it back with the list open.
+  if (agentShown()) studio.events.emit('toggle-pane', 'agent');
+  await sleep(300);
+  out.hiddenFirst = !agentShown();
   await studio.menuCommand('show-tasks');
+  await sleep(500);
+  out.fromMenu = { paneShown: agentShown(), listOpen: !!document.querySelector('.task-popover'), sidebar: studio.state.sidebar, snapshot: await snap('assistant-tasks') };
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await sleep(200);
-  out.fromMenu = studio.state.sidebar;
-  studio.showSidebar(saved);
+  out.listClosed = !document.querySelector('.task-popover');
+  // A task in the background asks a question while the pane is hidden: the toggle has a badge.
+  const background = studio.state.agent.background;
+  studio.store.set((s) => ({ agent: { ...s.agent, background: { ...s.agent.background, 'selftest-task': { running: false, attention: 'question', unread: false, label: '', since: Date.now() } } } }));
+  studio.events.emit('toggle-pane', 'agent');
+  await sleep(300);
+  const toggle = () => document.querySelector('.titlebar button[aria-label^="Assistant"]');
+  out.badgeHidden = { badge: !!toggle()?.querySelector('.titlebar-badge'), title: toggle()?.getAttribute('title') };
+  studio.events.emit('toggle-pane', 'agent');
+  await sleep(300);
+  out.badgeShown = !!toggle()?.querySelector('.titlebar-badge');
+  studio.store.set((s) => ({ agent: { ...s.agent, background } }));
+  if (layout) localStorage.setItem('react-resizable-panels:studio-panes', layout);
   return out;
 }
 
@@ -6043,7 +6061,7 @@ async function layoutChecks() {
   await sleep(400);
   out.tab = { ...state(), snapshot: await snap('history-tab') };
   // View ▸ History from another view.
-  studio.showSidebar('tasks');
+  studio.showSidebar('review');
   await sleep(200);
   await studio.menuCommand('show-history');
   await sleep(300);

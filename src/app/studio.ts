@@ -352,7 +352,7 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks' | 'git';
+  sidebar: 'files' | 'history' | 'code' | 'todos' | 'review' | 'git';
 };
 
 const initialState: StudioState = {
@@ -488,6 +488,8 @@ export class Studio {
     'fill-composer': [text: string];
     'find-in-settings': [];
     'show-agent-pane': [];
+    /** The assistant pane's list of the book's tasks, opened (View ▸ Assistant Tasks). */
+    'show-tasks': [];
     'show-explorer': [];
     'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
     /** ⌘P or ⇧⌘P, pressed again while the box is open: it starts over in that mode. */
@@ -677,7 +679,7 @@ export class Studio {
     'show-files': () => this.revealSidebar('files'),
     'show-review': () => this.showReview(),
     'show-history': () => this.revealSidebar('history'),
-    'show-tasks': () => this.revealSidebar('tasks'),
+    'show-tasks': () => this.showTasks(),
     'show-git': () => this.revealSidebar('git'),
     'show-in-preview': () => this.syncPreviewToCursor(),
     'zoom-in': () => this.zoom('in', 'menu'),
@@ -2189,6 +2191,13 @@ export class Studio {
     this.editor?.setPosition({ lineNumber: line, column: 1 });
     this.editor?.revealLineInCenter(line);
     this.editor?.focus();
+  }
+
+  /** The book's tasks (conversations): in the assistant pane, with its list of them open. */
+  showTasks() {
+    this.events.emit('show-agent-pane');
+    void this.loadTasks();
+    this.events.emit('show-tasks');
   }
 
   showSidebar(view: StudioState['sidebar']) {

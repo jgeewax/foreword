@@ -2792,6 +2792,33 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   comment. The test's fixture line lookup was fixed on the way (the
   sentence it looked for no longer starts a line).
 
+### The assistant's tasks stay in the assistant pane
+
+- **Asked for:** "im confused by the conversations tab. isnt that not quite
+  the right way to view this? shouldnt ai stuff stay on the right panel?
+  perhaps we should get rid of that?". The sidebar's Conversations view
+  (above, "Conversations in the sidebar") listed the same tasks as the
+  assistant pane's task menu, on the other side of the window from the
+  conversation they open.
+- **Now:** the Conversations view is gone, with its activity bar icon (a
+  speech bubble, too like Review's). The tasks are in the assistant pane's
+  task menu (the task's title ▾), grouped as before.
+  - The menu's rows have the view's right-click menu: Open, Mark Done,
+    Open Again (Not Done).
+  - View ▸ Assistant Tasks (after Toggle Assistant) and the palette's
+    Show Assistant Tasks ("conversations" finds it) show the pane, if it
+    was hidden, with the menu open.
+  - The view's badge counted tasks waiting for you. The pane's menu
+    button already shows that count; while the pane is hidden, the title
+    bar's assistant toggle gets an amber dot instead (and its tooltip says
+    how many tasks need you), counting the shown task when it has a
+    question or a permission card.
+- Verified: self-test `conversations`, rewritten: no Conversations icon;
+  View ▸ Assistant Tasks from a hidden pane shows it with the list open;
+  a background task with a question puts the dot on the hidden pane's
+  toggle and not the shown one's. `palette` (Show History through ⏎ now),
+  `layout`, `activity`, `menubar` and `menus` pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

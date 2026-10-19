@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { pendingQuestion, studio } from '../app/studio';
+import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 
 const ago = (ms: number) => {
@@ -72,7 +73,7 @@ export function TaskRow({ task, status, current, onPick, onContextMenu }: { task
 }
 
 /** The shown task's state, as a dot by its title: at work, needs you, didn't finish, or done for now. */
-function useTaskDot(): string {
+export function useTaskDot(): string {
   return useStore(studio.store, (s) => {
     const a = s.agent;
     if (!a.sessionId && !a.items.length) return '';
@@ -84,13 +85,19 @@ function useTaskDot(): string {
   });
 }
 
-/** The current task, and a list of the book's other tasks (conversations). */
+/**
+ * The current task, and a list of the book's other tasks (conversations):
+ * a click opens one, right-click marks it done or opens it again.
+ */
 export function TaskMenu() {
   const { agent, status, inProgress, open: openTasks, done: doneTasks } = useTaskGroups();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = agent.tasks.find((t) => t.sessionId === agent.sessionId);
   const dot = useTaskDot();
+
+  // View ▸ Assistant Tasks (the sidebar's Conversations view was this list).
+  useEffect(() => studio.events.on('show-tasks', () => setOpen(true)), []);
 
   useEffect(() => {
     if (!open) return;
@@ -115,6 +122,12 @@ export function TaskMenu() {
         setOpen(false);
         void studio.switchTask(t.sessionId);
       }}
+      onContextMenu={onContextMenu(() => [
+        { label: 'Open', action: () => void studio.switchTask(t.sessionId) },
+        t.status === 'done'
+          ? { label: 'Open Again (Not Done)', action: () => studio.reopenTask(t.sessionId) }
+          : { label: 'Mark Done', enabled: !(t.sessionId === agent.sessionId && agent.running), action: () => void studio.markTaskDone(t.sessionId) },
+      ])}
     />
   );
   // On the trigger: how many others are at work, and whether any needs the author.

@@ -7,7 +7,6 @@ import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
 import { TodoPanel } from './TodoPanel';
 import { ReviewPanel } from './ReviewPanel';
-import { TasksPanel } from './TasksPanel';
 import { SourceControlPanel } from './SourceControlPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { Icon, type IconName } from './icons';
@@ -136,7 +135,7 @@ function SourceControlActions() {
   );
 }
 
-export type View = 'files' | 'history' | 'code' | 'todos' | 'review' | 'tasks' | 'git';
+export type View = 'files' | 'history' | 'code' | 'todos' | 'review' | 'git';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
 function useViews() {
@@ -145,13 +144,11 @@ function useViews() {
   // Review is always there: it's where comments are written about and checked.
   const hasReview = true;
   const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
-  // Conversations that need the author: a question, a permission, a reply not yet seen.
-  const tasksWaiting = useStore(studio.store, (s) => Object.values(s.agent.background).filter((b) => b.attention || b.unread).length);
   // Source Control, when the book is in a Git repository: how many files changed since the last commit.
   const hasGit = useStore(studio.store, (s) => !!s.git.repo);
   const gitChanged = useStore(studio.store, (s) => uncommitted(s.git.repo));
   const branch = useStore(studio.store, (s) => s.git.repo?.branch ?? null);
-  return { hasCode, todoCount, hasReview, reviewOpen, tasksWaiting, hasGit, gitChanged, branch };
+  return { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged, branch };
 }
 
 /** The sidebar's views as a column of icons on its left edge, each with room for its own title. */
@@ -162,7 +159,7 @@ function useViews() {
  */
 export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
   const current = useSidebarView();
-  const { hasCode, todoCount, hasReview, reviewOpen, tasksWaiting, hasGit, gitChanged } = useViews();
+  const { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged } = useViews();
   const items: { id: View; icon: IconName; label: string; badge?: number }[] = [
     { id: 'files', icon: 'files', label: 'Files' },
     { id: 'history', icon: 'history', label: 'History: saved versions of the book' },
@@ -171,12 +168,6 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
       : []),
     ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples' }] : []),
     ...(todoCount > 0 ? [{ id: 'todos' as const, icon: 'todos' as const, label: `To do: ${todoCount} left in the book`, badge: todoCount }] : []),
-    {
-      id: 'tasks' as const,
-      icon: 'chats' as const,
-      label: `Conversations with the assistant${tasksWaiting ? `: ${tasksWaiting} waiting for you` : ''}`,
-      badge: tasksWaiting || undefined,
-    },
     ...(hasReview ? [{ id: 'review' as const, icon: 'comments' as const, label: `Review: ${reviewOpen} open comment${reviewOpen === 1 ? '' : 's'}`, badge: reviewOpen || undefined }] : []),
   ];
   const guideOpen = useStore(studio.store, (s) => s.guideOpen);
@@ -230,10 +221,8 @@ function ViewHeader({ view }: { view: View }) {
           ? 'Code examples'
           : view === 'todos'
             ? `To do · ${todoCount}`
-            : view === 'tasks'
-              ? 'Conversations'
-              : view === 'git'
-                ? 'Source control'
+            : view === 'git'
+              ? 'Source control'
               : `Review · ${reviewOpen} open`;
   return (
     <header className="pane-header">
@@ -248,11 +237,6 @@ function ViewHeader({ view }: { view: View }) {
         </>
       )}
       {view === 'git' && <SourceControlActions />}
-      {view === 'tasks' && (
-        <button className="icon" title="New task (a new conversation)" aria-label="New task" onClick={() => studio.newSession()}>
-          +
-        </button>
-      )}
     </header>
   );
 }
@@ -266,8 +250,6 @@ function ViewBody({ view }: { view: View }) {
     <CodePanel />
   ) : view === 'todos' ? (
     <TodoPanel />
-  ) : view === 'tasks' ? (
-    <TasksPanel />
   ) : view === 'git' ? (
     <SourceControlPanel />
   ) : (
@@ -280,7 +262,7 @@ function useSidebarView(): View {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
   const { hasCode, todoCount, hasReview, hasGit } = useViews();
   const available =
-    sidebar === 'files' || sidebar === 'history' || sidebar === 'tasks' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+    sidebar === 'files' || sidebar === 'history' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
   return available ? sidebar : 'files';
 }
 

@@ -4,6 +4,7 @@ import { Icon } from './icons';
 import type { ToolInfo } from '../lib/ipc';
 import { baseName, dirName, tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
+import { useTaskDot } from './TaskMenu';
 import { TypstGuide } from './TypstGuide';
 
 const ms = (v: number | null) => (v == null ? '–' : `${Math.round(v)}`);
@@ -20,6 +21,10 @@ type Pane = 'explorer' | 'preview' | 'agent';
  */
 export function TitleBar({ panes }: { panes?: { visible: Record<Pane, boolean>; onToggle: (pane: Pane) => void } }) {
   const ws = useStore(studio.store, (s) => s.workspace);
+  // Tasks that need the author (a question, a permission, a reply not yet seen): a badge on the
+  // assistant's toggle while its pane is hidden. Shown, the pane's task menu says so itself.
+  const others = useStore(studio.store, (s) => Object.values(s.agent.background).filter((b) => b.attention || b.unread).length);
+  const waiting = others + (useTaskDot() === 'ask' ? 1 : 0);
   return (
     <header className="titlebar" data-tauri-drag-region="deep">
       <div className="titlebar-left" />
@@ -39,18 +44,22 @@ export function TitleBar({ panes }: { panes?: { visible: Record<Pane, boolean>; 
               ['preview', 'paneMiddle', 'Preview', '⌥⌘P'],
               ['agent', 'paneRight', 'Assistant', '⌥⌘B'],
             ] as const
-          ).map(([pane, icon, label, keys]) => (
-            <button
-              key={pane}
-              className="chrome-icon"
-              title={`${panes.visible[pane] ? 'Hide' : 'Show'} the ${label.toLowerCase()} (${keys})`}
-              aria-label={label}
-              aria-pressed={panes.visible[pane]}
-              onClick={() => panes.onToggle(pane)}
-            >
-              <Icon name={panes.visible[pane] ? `${icon}On` : icon} />
-            </button>
-          ))}
+          ).map(([pane, icon, label, keys]) => {
+            const badge = pane === 'agent' && !panes.visible.agent && waiting > 0;
+            return (
+              <button
+                key={pane}
+                className="chrome-icon"
+                title={`${panes.visible[pane] ? 'Hide' : 'Show'} the ${label.toLowerCase()} (${keys})${badge ? `: ${waiting === 1 ? 'a task needs' : `${waiting} tasks need`} you` : ''}`}
+                aria-label={badge ? `${label}, ${waiting} waiting` : label}
+                aria-pressed={panes.visible[pane]}
+                onClick={() => panes.onToggle(pane)}
+              >
+                <Icon name={panes.visible[pane] ? `${icon}On` : icon} />
+                {badge && <span className="titlebar-badge" aria-hidden />}
+              </button>
+            );
+          })}
       </div>
     </header>
   );

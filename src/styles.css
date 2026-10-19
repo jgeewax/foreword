@@ -108,7 +108,10 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .titlebar-left { padding-left: var(--titlebar-buttons, 0px); }
 .titlebar-right { display: flex; justify-content: flex-end; gap: 2px; }
 .titlebar .chrome-icon { width: 26px; height: 24px; }
+.titlebar .chrome-icon { position: relative; }
 .titlebar .chrome-icon .icon-svg { width: 16px; height: 16px; }
+/* On the assistant's toggle while its pane is hidden: a task needs you. */
+.titlebar-badge { position: absolute; top: 3px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 1.5px var(--bg-2); }
 .command-center {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: min(38vw, 520px); min-width: 180px; height: 22px; padding: 0 10px;
@@ -1295,9 +1298,6 @@ button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px col
 .monaco-editor .ctag-text.ctag-question { color: light-dark(#6639ba, #dcc2fb) !important; }
 .monaco-editor .ctag-line.ctag-question { background: light-dark(rgba(130, 80, 223, 0.05), rgba(210, 168, 255, 0.05)); }
 
-/* The sidebar's Conversations view: the task rows of the header's menu, full width. */
-.tasks-panel { flex: 1; overflow: auto; padding: 4px 0 8px; }
-.tasks-panel .task-section { padding: 8px 12px 3px; }
 
 /* Typst drawn outside the book (chat, comments): formulas inline, blocks with what they make. */
 img.typst-inline { display: inline-block; vertical-align: middle; margin: 0 0.05em; max-width: 100%; }

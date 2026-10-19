@@ -93,13 +93,6 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7 7.5v9M17 9.5c0 4.5-10 3-10 7" />
     </>
   ),
-  // Conversations with the assistant: a speech bubble with lines of text.
-  chats: (
-    <>
-      <path d="M4 5.5h16v10.5h-8l-4.5 3.5V16H4z" />
-      <path d="M8 9h8M8 12.5h5" />
-    </>
-  ),
   comments: (
     <>
       <path d="M3.5 4.5h11v8H9l-3 2.5v-2.5H3.5z" />
