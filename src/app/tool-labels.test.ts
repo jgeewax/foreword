@@ -127,7 +127,40 @@ describe('tool calls in words', () => {
     expect(describeTool('webfetch', { url: 'https://typst.app/docs/' }, names).done).toBe('Read a web page (typst.app)');
     expect(describeTool('websearch', { query: 'typst footnotes' }, names).running).toBe('Searching the web for “typst footnotes”');
     expect(describeTool('mystery', {}, names).done).toBe('Used mystery');
+    expect(describeTool('update_topic', {}, names).done).toBe('Used update topic');
+    expect(describeTool('mcp__zotero__search_items', {}, names).done).toBe('Used “search items” (zotero)');
     expect(describeTool('question', {}, names, 'User has answered your questions: "Next chapter?"="Determinants". You can now continue.').note).toBe('you said “Determinants”');
+  });
+});
+
+describe('the assistant’s tools for its own work, in words', () => {
+  it('says what plan mode’s steps are, with the plan to read', () => {
+    const plan = '# Plan\n\n1. Rename the heading.';
+    expect(describeTool('plan_exit', { plan }, names)).toMatchObject({ done: 'Asked to start writing from its plan', text: plan, declined: 'you kept it planning' });
+    expect(describeTool('plan_exit', {}, names).text).toBeUndefined();
+    expect(describeTool('plan_enter', {}, names).running).toBe('Asking to plan before it writes');
+    expect(describeTool('plan_write', { filePath: '/Users/a/.claude/plans/x.md', content: plan }, names)).toMatchObject({ done: 'Wrote down its plan', text: plan });
+    expect(describeTool('plan_write', { filePath: '/Users/a/.claude/plans/x.md', oldString: 'a', newString: 'b' }, names).done).toBe('Revised its plan');
+  });
+
+  it('says what its helpers, skills, jobs and to-do list are', () => {
+    expect(describeTool('agent', { description: 'Research hardcover specs', prompt: '…' }, names).done).toBe('Handed a task to a helper: “Research hardcover specs”');
+    expect(describeTool('skill', { skill: 'dataviz' }, names).done).toBe('Used its “dataviz” skill');
+    expect(describeTool('skill', { name: 'typst' }, names).running).toBe('Using its “typst” skill');
+    expect(describeTool('taskstop', { task_id: 'b1' }, names).done).toBe('Stopped a background job');
+    expect(describeTool('taskcreate', { subject: 'x' }, names).done).toBe('Updated its to-do list');
+    expect(describeTool('toolsearch', { query: 'select:ExitPlanMode' }, names).done).toBe('Found the tools it needs');
+  });
+
+  it('asks about them in words, without a bare “*”', () => {
+    expect(describePermission('plan_exit', ['*'], names).what).toBe('stop planning and start writing');
+    expect(describePermission('plan_enter', ['*'], names).what).toBe('plan before it writes');
+    expect(describePermission('external_directory', ['/Users/a/.claude/plans/fizzy-scroll.md'], names).what).toBe('use its notes for the plan, which it keeps outside the book');
+    expect(describePermission('skill', ['dataviz'], names).what).toBe('use its “dataviz” skill (instructions it keeps for one kind of work)');
+    expect(describePermission('agent', ['Research hardcover specs'], names).what).toBe('hand part of the work to a helper (“Research hardcover specs”)');
+    expect(describePermission('taskstop', ['*'], names).what).toBe('stop a background job');
+    expect(describePermission('mcp__zotero__search_items', ['*'], names).what).toBe('use “search items” (zotero)');
+    expect(describePermission('mystery', ['*'], names).what).toBe('use mystery');
   });
 });
 

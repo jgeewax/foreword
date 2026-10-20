@@ -138,6 +138,9 @@ const TOOL_ICONS: Record<string, IconName> = {
   bash: 'terminal',
   shell: 'terminal',
   todowrite: 'todos',
+  plan_write: 'checklist',
+  plan_exit: 'checklist',
+  plan_enter: 'checklist',
 };
 
 /** A tool call in words ("Read “The Storm” (chapter 2) · lines 1–40"); its raw output folds out. An edit shows the words it changed. */
@@ -148,8 +151,10 @@ function ToolStep({ item, editOpen }: { item: ToolItem; editOpen: boolean }) {
   if (hasCard) return null;
   const label = describeTool(item.name, item.input, names, undefined, item.read);
   const [verb, rest] = verbAndRest(item.status === 'running' ? `${label.running}…` : label.done);
-  const note = item.note ?? label.note;
-  const tone = toolTone(item, label.done);
+  // A no from you (keep planning) isn't a failure: it says what you chose.
+  const declined = item.status === 'failed' && label.declined && /doesn.t want to proceed|refused permission|keep planning/i.test(item.detail) ? label.declined : null;
+  const note = declined ?? item.note ?? label.note;
+  const tone = declined ? 'other' : toolTone(item, label.done);
   // A command that only looked: a book or a magnifier, not a terminal.
   const look = tone === 'look' && (!TOOL_ICONS[item.name] || TOOL_ICONS[item.name] === 'terminal') ? lookOf(label.done) : null;
   const edit = tone === 'change' ? editOf(item, names.root) : null;
@@ -182,7 +187,14 @@ function ToolStep({ item, editOpen }: { item: ToolItem; editOpen: boolean }) {
         </summary>
         {/* The command itself, for the curious: in words above, exact here. */}
         {label.code && <pre className="tool-command">{label.code}</pre>}
-        {item.detail && <pre className="tool-detail">{item.detail}</pre>}
+        {/* Words of its own (a plan) say more than the tool's reply. */}
+        {label.text ? (
+          <div className="tool-text md">
+            <Markdown text={label.text} />
+          </div>
+        ) : (
+          item.detail && !declined && <pre className="tool-detail">{item.detail}</pre>
+        )}
       </details>
       {typeof command === 'string' && command.trim() && (
         <div className="tool-cmdline">

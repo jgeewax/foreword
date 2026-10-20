@@ -7,6 +7,7 @@ import { describeCommand } from './command-words';
 import { scanIncludes } from './includes';
 import { resolveRef } from './references';
 import { ASSISTANT_NAMES, type AssistantId } from './settings';
+import { isPlanFile, PLAN_ENTER, PLAN_EXIT, PLAN_WRITE } from '../services/agent/plan-mode';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 
 /**
@@ -102,6 +103,10 @@ export type ToolLabel = {
   note?: string;
   /** The command itself, shown when the row is opened. */
   code?: string;
+  /** Words shown when the row is opened, as Markdown: a plan. */
+  text?: string;
+  /** Said instead when you said no, which isn't a failure ("you kept it planning"). */
+  declined?: string;
   /** The file it's about (for a link). */
   path?: string;
 };
@@ -177,21 +182,64 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
     }
     case 'websearch':
       return { done: `Searched the web for ${quote(o.query)}`, running: `Searching the web for ${quote(o.query)}` };
-    case 'todowrite':
-      return { done: 'Updated its to-do list', running: 'Updating its to-do list' };
+    case PLAN_WRITE:
+      return typeof o.content === 'string' ? { done: 'Wrote down its plan', running: 'Writing down its plan', text: o.content } : { done: 'Revised its plan', running: 'Revising its plan' };
+    case PLAN_EXIT:
+      return { done: 'Asked to start writing from its plan', running: 'Asking to start writing from its plan', text: typeof o.plan === 'string' && o.plan.trim() ? o.plan : undefined, declined: 'you kept it planning' };
+    case PLAN_ENTER:
+      return { done: 'Asked to plan before it writes', running: 'Asking to plan before it writes', declined: 'you had it write without planning first' };
+    case 'agent':
+    case 'task': {
+      const what = typeof o.description === 'string' && o.description.trim() ? `: ${quote(o.description)}` : '';
+      return { done: `Handed a task to a helper${what}`, running: `Handing a task to a helper${what}` };
+    }
     case 'question': {
       // OpenCode's result: User has answered your questions: "Q"="A", "Q2"="B". …
       const answers = [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*?"="((?:[^"\\]|\\.)*?)"/g)].map((m) => m[1]);
       return { done: 'Asked you a question', running: 'Asking you a question', note: answers.length ? `you said ${answers.map((a) => `“${a}”`).join(', ')}` : undefined };
     }
-    // Claude Code looking up tools it hasn't loaded yet (Foreword's own, say).
-    case 'toolsearch':
-      return { done: 'Found the tools it needs', running: 'Finding the tools it needs' };
-    case 'skill':
-      return { done: `Used the ${String(o.name ?? '')} skill`, running: `Using the ${String(o.name ?? '')} skill` };
-    default:
-      return { done: `Used ${name}`, running: `Using ${name}` };
+    case 'skill': {
+      // OpenCode names it `name`, Claude Code `skill`.
+      const skill = String(o.name ?? o.skill ?? '').trim();
+      return skill ? { done: `Used its “${skill}” skill`, running: `Using its “${skill}” skill` } : { done: 'Used a skill', running: 'Using a skill' };
+    }
+    default: {
+      const own = OWN_WORK[name];
+      if (own) return { done: own.done, running: own.running };
+      return { done: `Used ${toolWords(name)}`, running: `Using ${toolWords(name)}` };
+    }
   }
+}
+
+/**
+ * The assistant's tools for its own work, not the book's: its to-do list,
+ * the tools it looks up, jobs it left running, helpers it sent off (Claude
+ * Code's names, as the chat has them). Done, under way, and asked about.
+ */
+const OWN_WORK: Record<string, { done: string; running: string; ask: string }> = {
+  todowrite: { done: 'Updated its to-do list', running: 'Updating its to-do list', ask: 'update its to-do list' },
+  todoread: { done: 'Checked its to-do list', running: 'Checking its to-do list', ask: 'check its to-do list' },
+  taskcreate: { done: 'Updated its to-do list', running: 'Updating its to-do list', ask: 'update its to-do list' },
+  taskupdate: { done: 'Updated its to-do list', running: 'Updating its to-do list', ask: 'update its to-do list' },
+  tasklist: { done: 'Checked its to-do list', running: 'Checking its to-do list', ask: 'check its to-do list' },
+  taskget: { done: 'Checked its to-do list', running: 'Checking its to-do list', ask: 'check its to-do list' },
+  // Looking up tools it hasn't loaded yet (Foreword's own, say).
+  toolsearch: { done: 'Found the tools it needs', running: 'Finding the tools it needs', ask: 'look up the tools it needs' },
+  taskstop: { done: 'Stopped a background job', running: 'Stopping a background job', ask: 'stop a background job' },
+  killshell: { done: 'Stopped a background job', running: 'Stopping a background job', ask: 'stop a background job' },
+  killbash: { done: 'Stopped a background job', running: 'Stopping a background job', ask: 'stop a background job' },
+  taskoutput: { done: 'Checked on a background job', running: 'Checking on a background job', ask: 'check on a background job' },
+  bashoutput: { done: 'Checked on a background job', running: 'Checking on a background job', ask: 'check on a background job' },
+  monitor: { done: 'Watched a background job', running: 'Watching a background job', ask: 'watch a background job' },
+  sendmessage: { done: 'Sent a message to a helper', running: 'Sending a message to a helper', ask: 'send a message to a helper' },
+  listagents: { done: 'Checked on its helpers', running: 'Checking on its helpers', ask: 'check on its helpers' },
+};
+
+/** Any other tool's name in words: "update topic"; an MCP server's tool as “tool” (server). */
+function toolWords(name: string): string {
+  const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
+  if (mcp) return `“${mcp[2].replace(/[_-]+/g, ' ')}” (${mcp[1]})`;
+  return name.replace(/[_-]+/g, ' ');
 }
 
 /** Foreword's preferences as the author knows them, for the chat. */
@@ -263,6 +311,8 @@ export function describePermission(action: string, resources: readonly string[],
     const named = resources.map((r) => fileName(bookPath(names.root, r) ?? r, names));
     return named.length <= 3 ? named.join(', ').replace(/, ([^,]*)$/, ' and $1') : `${named.slice(0, 2).join(', ')} and ${named.length - 2} more files`;
   };
+  // What it names, without the "anything" ("*") a request about no one thing has.
+  const named = resources.filter((r) => r.trim() && r !== '*');
   switch (action) {
     case 'shell':
     case 'bash': {
@@ -274,13 +324,24 @@ export function describePermission(action: string, resources: readonly string[],
     case 'read':
       return { what: `read ${files()}, which can hold passwords or keys` };
     case 'external_directory':
+      // Claude Code's plan, in its own folder (plan mode).
+      if (resources.length && resources.every(isPlanFile)) return { what: 'use its notes for the plan, which it keeps outside the book' };
       return { what: `use files outside the book (${resources.join(', ')})` };
     case 'webfetch':
       return { what: `read a web page (${resources.join(', ')})` };
     case 'websearch':
       return { what: `search the web${resources.length ? ` for ${resources.map((r) => `“${r}”`).join(', ')}` : ''}` };
+    case PLAN_EXIT:
+      return { what: 'stop planning and start writing' };
+    case PLAN_ENTER:
+      return { what: 'plan before it writes' };
+    case 'skill':
+      return { what: named.length ? `use its “${named[0]}” skill (instructions it keeps for one kind of work)` : 'use one of its skills (instructions it keeps for one kind of work)' };
+    case 'agent':
+    case 'task':
+      return { what: `hand part of the work to a helper${named.length ? ` (“${named[0]}”)` : ''}` };
     default:
-      return { what: `use ${action}${resources.length ? ` (${resources.join(', ')})` : ''}` };
+      return { what: `${OWN_WORK[action]?.ask ?? `use ${toolWords(action)}`}${named.length ? ` (${named.join(', ')})` : ''}` };
   }
 }
 

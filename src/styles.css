@@ -414,6 +414,8 @@ button.tool-label:hover { color: var(--accent); text-decoration-color: currentCo
 button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .tool.failed .tool-status { color: var(--bad); }
 .tool-detail, .patch { font: 11px/1.4 "SF Mono", Menlo, monospace; background: var(--bg-2); border: 1px solid var(--border); border-radius: 5px; padding: 6px; margin: 4px 0 0; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+/* Words of its own when a row opens (a plan): read as prose, not output. */
+.tool-text { font-size: 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px 10px; margin: 4px 0 0; max-height: 320px; overflow: auto; }
 .patch div.add { background: var(--add); }
 .patch div.del { background: var(--del); }
 .permission { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }

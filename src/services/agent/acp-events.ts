@@ -4,6 +4,7 @@
 // Code's ACP program (__fixtures__/acp-claude.jsonl).
 import { diff, splitLines } from '../../lib/diff';
 import { ruleEffect, withoutHarmlessRedirects, type Level, type PermissionRule } from './permissions';
+import { isPlanFile, PLAN_ENTER, PLAN_EXIT, PLAN_WRITE } from './plan-mode';
 import { splitCommands } from './shell-words';
 import { STUDIO_TOOL_ACTION, STUDIO_TOOLS, studioToolName } from './studio-tool';
 import type { FilePatch } from './types';
@@ -79,6 +80,8 @@ export function appTool(call: AcpToolCall): { name: string; input: Record<string
   const where = call.locations?.[0]?.path;
   const file = str(raw.file_path) ?? str(raw.absolute_path) ?? str(raw.filePath) ?? str(raw.path) ?? where;
   const command = Array.isArray(raw.command) ? raw.command.map(String).join(' ') : unquote(str(raw.command));
+  // Claude Code's plan, written down in its own folder: its notes, not a change to the book.
+  if ((tool === 'Write' || tool === 'Edit') && isPlanFile(file)) return { name: PLAN_WRITE, input: { filePath: file, content: raw.content, oldString: raw.old_string, newString: raw.new_string } };
   switch (tool) {
     case 'Read':
     case 'read_file':
@@ -118,6 +121,11 @@ export function appTool(call: AcpToolCall): { name: string; input: Record<string
     case 'request_user_input':
     case 'ask_user':
       return { name: 'question', input: { questions: raw.questions } };
+    // Plan mode: it has a plan and asks to carry it out (the plan comes once it's written down), or asks to plan first.
+    case 'ExitPlanMode':
+      return { name: PLAN_EXIT, input: { plan: raw.plan } };
+    case 'EnterPlanMode':
+      return { name: PLAN_ENTER, input: raw };
   }
   switch (call.kind) {
     case 'read':
@@ -192,6 +200,8 @@ export function permissionAsk(call: AcpToolCall, root: string): { action: string
   const own = studioToolName(name);
   if (own) return { action: STUDIO_TOOL_ACTION, resources: [own], patches };
   switch (name) {
+    // Its plan written down is a write like any other to the rules: outside the book, as the author's setting says.
+    case PLAN_WRITE:
     case 'edit':
     case 'write':
       return { action: file.outside ? 'external_directory' : 'edit', resources: [file.path], patches };
@@ -206,6 +216,12 @@ export function permissionAsk(call: AcpToolCall, root: string): { action: string
       return { action: 'webfetch', resources: [String(input.url ?? '*')], patches };
     case 'websearch':
       return { action: 'websearch', resources: [String(input.query ?? '*')], patches };
+    // Which skill, and what a helper is for, so the card can say.
+    case 'skill':
+      return { action: 'skill', resources: [String(input.skill ?? input.name ?? '*')], patches };
+    case 'agent':
+    case 'task':
+      return { action: name, resources: [String(input.description ?? '*')], patches };
   }
   return { action: name, resources: ['*'], patches };
 }

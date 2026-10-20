@@ -3,6 +3,7 @@ import { contextTokens, itemsFromContext } from '../../app/tasks';
 import { readOf } from '../../app/ai-marks';
 import recorded from './__fixtures__/acp-claude.jsonl?raw';
 import recordedCodex from './__fixtures__/acp-codex.jsonl?raw';
+import recordedPlan from './__fixtures__/acp-plan.jsonl?raw';
 import { AcpAdapter, isSignedOut, stripInstructions, type AcpTransport } from './acp';
 import { appTool, conversationTitle, decide, permissionAsk, toolOutput, type AcpToolCall } from './acp-events';
 import { PRESETS, sessionRules } from './permissions';
@@ -38,6 +39,27 @@ describe('ACP tool calls as the app’s tools', () => {
     expect(out.split('\n')[1]).toBe('26: == Inner products');
     const marks = readOf(ROOT, tool.name, tool.input, out)!;
     expect([marks.path, marks.start, marks.start + marks.lines.length - 1]).toEqual(['chapters/ch1-vectors.typ', 25, 34]);
+  });
+
+  it('plan mode: its plan written down, then a request to leave plan mode with the plan', () => {
+    // Recorded: plan mode, the plan written to Claude Code's own folder, ExitPlanMode asked and allowed.
+    const plan = recordedPlan
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    const asks = plan.filter((m) => m.method === 'session/request_permission').map((m) => m.params.toolCall as AcpToolCall);
+    const [write, exit] = asks;
+    expect(appTool(write)).toMatchObject({ name: 'plan_write', input: { filePath: '/Users/ada/.claude/plans/plan-a-change-rename-fizzy-scroll.md' } });
+    expect(String((appTool(write).input as { content: string }).content)).toMatch(/^# Plan: rename chapter heading/);
+    // A write outside the book to the rules, as any other: the author's setting for outside files decides.
+    expect(permissionAsk(write, ROOT)).toMatchObject({ action: 'external_directory', resources: ['/Users/ada/.claude/plans/plan-a-change-rename-fizzy-scroll.md'] });
+    expect(appTool(exit)).toEqual({ name: 'plan_exit', input: { plan: (exit.rawInput as { plan: string }).plan } });
+    expect(permissionAsk(exit, ROOT)).toEqual({ action: 'plan_exit', resources: ['*'], patches: [] });
+    // Asked before the plan was written down, it comes without one.
+    expect(appTool({ toolCallId: 'p', name: 'ExitPlanMode', kind: 'switch_mode', rawInput: {} })).toEqual({ name: 'plan_exit', input: { plan: undefined } });
+    // Only a Markdown file right in a .claude/plans folder is a plan.
+    expect(appTool({ toolCallId: 'q', name: 'Write', rawInput: { file_path: '/Users/ada/.claude/plans/../settings.md', content: 'x' } }).name).toBe('write');
+    expect(appTool({ toolCallId: 'r', name: 'Write', rawInput: { file_path: '/Users/ada/.claude/plans/x.json', content: 'x' } }).name).toBe('write');
   });
 
   it('a permission request: the action, the file in the book, the edit as a patch', () => {

@@ -15,3 +15,20 @@ Be explicit about your reasoning and the trade-offs. Use plain prose and lists, 
 /** Sent by "Write it": leave plan mode and carry out the plan. */
 export const WRITE_FROM_PLAN_PROMPT =
   "Let's write it now. Follow the plan we agreed above, in the book's voice and style guide, and edit the files directly. Afterwards, say in a sentence or two what you wrote and where.";
+
+/**
+ * Claude Code's own plan mode, in a conversation had in it (older ones, from
+ * before Plan mode was the app's own): its steps in and out of planning, as
+ * the app names them (a tool's name, a permission request's action). It
+ * writes its plan down in a file of its own, outside the book, then asks to
+ * leave plan mode and carry it out (ExitPlanMode, with the plan); it can also
+ * ask to plan first (EnterPlanMode).
+ */
+export const PLAN_WRITE = 'plan_write';
+export const PLAN_EXIT = 'plan_exit';
+export const PLAN_ENTER = 'plan_enter';
+
+/** One of Claude Code's plan files: a Markdown file right in a `.claude/plans` folder (~/.claude/plans/<name>.md). */
+export function isPlanFile(path: unknown): boolean {
+  return typeof path === 'string' && path.startsWith('/') && /\/\.claude\/plans\/[^/]+\.md$/.test(path) && !path.split('/').includes('..');
+}
