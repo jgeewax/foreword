@@ -92,7 +92,6 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 
 /* One column, the window's width: no content (a long line kept on one line) widens it past the window. */
 .app { display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); height: 100%; }
-.statusbar { display: flex; align-items: center; gap: 10px; padding: 0 8px; background: var(--bg-2); white-space: nowrap; overflow: hidden; }
 /*
  * The title bar, as VS Code's: the window's buttons (drawn by macOS) at the
  * left, the book's name centred in the window, the pane toggles at the right.
@@ -139,23 +138,44 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .chrome-icon .icon-svg { width: 18px; height: 18px; }
 .chrome-icon:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); border-color: transparent; }
 .chrome-icon.on { color: var(--fg); }
-.statusbar .zoom-indicator { font-size: 11.5px; }
-.statusbar { height: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-.statusbar .status-file { color: var(--fg); }
-.statusbar .perf { opacity: 0.7; }
-.indicator { display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; padding: 1px 6px; margin: 0 -2px; border-radius: 4px; font: inherit; color: inherit; height: 20px; }
-button.indicator:hover { background: var(--bg-3); }
-.indicator-icon:empty { display: none; }
-.indicator.ok .indicator-icon { color: var(--good); }
-.indicator.warn { color: var(--warn); }
-.indicator.bad { color: var(--bad); }
-.indicator.busy .indicator-icon { color: var(--accent); }
-.sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
-.sdot.ok { background: var(--good); }
-.sdot.warn { background: var(--warn); }
-.sdot.bad { background: var(--bad); }
-.sdot.busy { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
-.sdot.off { background: transparent; box-shadow: inset 0 0 0 1px var(--muted); }
+/*
+ * The status bar, as VS Code's: 22 pt tall, 12 pt text, line icons, the items
+ * evenly spaced and clear of the window's rounded corners. Like the title bar
+ * it doesn't zoom out (--s, from studio.applyTitleBar): it sits in those
+ * corners, which macOS draws in points, and below 100% it was shorter than
+ * their curve, which then ran up into the panes and into its first and last
+ * words.
+ */
+.statusbar {
+  --s: var(--titlebar-scale, 1);
+  display: flex; align-items: center; justify-content: space-between; gap: calc(12px * var(--s));
+  height: calc(22px * var(--s)); padding: 0 calc(7px * var(--s));
+  background: var(--bg-2); border-top: 1px solid var(--border); color: var(--muted);
+  font-size: calc(12px * var(--s)); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+}
+.statusbar-side { display: flex; align-items: center; flex: none; min-width: 0; }
+.statusbar :is(.problems, .perf) { display: contents; }
+.statusbar :is(.indicator, .status-file) {
+  display: inline-flex; align-items: center; gap: calc(4px * var(--s)); flex: none;
+  height: calc(18px * var(--s)); padding: 0 calc(6px * var(--s));
+  border: none; border-radius: calc(4px * var(--s)); background: transparent; font: inherit; color: inherit;
+}
+.statusbar .indicator .icon-svg { flex: none; width: calc(14px * var(--s)); height: calc(14px * var(--s)); }
+.statusbar button.indicator:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); color: var(--fg); }
+.statusbar .status-file { gap: 0; color: var(--fg); }
+.statusbar .status-dir { opacity: 0.6; }
+.statusbar :is(.status-dir, .status-name, .indicator-label) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* In a narrow window the book's side gives way: the file's folder, then its name, then the other items' ends. */
+.statusbar-side:first-child { flex: 0 1 auto; overflow: hidden; }
+.statusbar-side:first-child :is(.indicator, .status-file) { flex-shrink: 1; min-width: 0; }
+.statusbar-side:first-child :is(.status-file, .status-dir) { flex-shrink: 1000; }
+.statusbar .perf .indicator { opacity: 0.7; }
+.statusbar .indicator.ok .icon-svg { color: var(--good); }
+.statusbar .indicator.busy .icon-svg { color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.statusbar .indicator.warn { color: var(--warn); }
+.statusbar .indicator.bad, .statusbar button.indicator.bad:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 15%, transparent); }
+.statusbar button.indicator.bad:hover { background: color-mix(in srgb, var(--bad) 24%, transparent); }
+.statusbar .indicator.off { opacity: 0.6; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
@@ -232,10 +252,13 @@ button.indicator:hover { background: var(--bg-3); }
 [data-book-color] .activity-bar .chrome-icon:is(:hover:not(:disabled), .on) .icon-svg { opacity: 1; }
 [data-book-color] .activity-bar .chrome-icon.on::before { background: var(--book-bar-fg); }
 [data-book-color] .activity-badge { background: var(--book-badge); color: var(--book-badge-fg); box-shadow: 0 0 0 2px var(--book-bar); }
+/* On the book's colour everything is in its text colour, as with Peacock; what's wrong stands out as VS Code's error items do. */
 [data-book-color] .statusbar { background: var(--book); color: var(--book-fg); border-top-color: transparent; }
-[data-book-color] .statusbar :is(.status-file, .indicator, .indicator-icon, .link, .perf) { color: inherit; }
-[data-book-color] .statusbar :is(button.indicator, .link):hover { background: var(--book-hover); }
-[data-book-color] .statusbar .sdot { box-shadow: 0 0 0 1px var(--book-fg-dim); }
+[data-book-color] .statusbar :is(.status-file, .indicator, .indicator .icon-svg) { color: inherit; }
+[data-book-color] .statusbar button.indicator:hover { background: var(--book-hover); color: var(--book-fg); }
+[data-book-color] .statusbar .indicator.warn { background: color-mix(in srgb, var(--book-fg) 16%, transparent); }
+[data-book-color] .statusbar .indicator.bad { background: #c72e0f; color: #fff; }
+[data-book-color] .statusbar button.indicator.bad:hover { background: #b0280d; color: #fff; }
 
 /*
  * A count over the icon's bottom-right corner, as VS Code's: a 16px pill that
@@ -467,8 +490,6 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .editor-pane .guide-body { padding: 4px max(24px, calc((100% - 720px) / 2)) 32px; font-size: 13px; }
 .guide-title { font-size: 20px; margin: 18px 0 8px; }
 .agent-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.statusbar .problems { display: inline-flex; gap: 8px; }
-.statusbar .link { font-size: 11.5px; padding: 0; }
 
 /* code examples */
 .code-panel { overflow-y: auto; flex: 1; padding: 8px 0; }

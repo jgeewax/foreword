@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Stat } from '../app/studio';
-import { Icon } from './icons';
+import { Icon, type IconName } from './icons';
 import type { ToolInfo } from '../lib/ipc';
 import { baseName, dirName, tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
@@ -67,23 +68,25 @@ export function TitleBar({ panes }: { panes?: { visible: Record<Pane, boolean>; 
 
 type Tone = 'ok' | 'busy' | 'warn' | 'bad' | 'off';
 
-/** A status item with a coloured dot; clickable when it offers an action. */
-function Indicator({ tone, icon, label, title, onClick }: { tone: Tone; icon: string; label: string; title: string; onClick?: () => void }) {
+/**
+ * A status item, as VS Code's: an icon and a few words. Its tone colours the
+ * icon (on a book's colour, only what's wrong shows); clickable when it offers
+ * an action.
+ */
+function Indicator({ tone, icon, label, title, onClick }: { tone?: Tone; icon?: IconName; label: ReactNode; title?: string; onClick?: () => void }) {
+  const className = tone ? `indicator ${tone}` : 'indicator';
   const body = (
     <>
-      <span className={`sdot ${tone}`} aria-hidden />
-      <span className="indicator-icon" aria-hidden>
-        {icon}
-      </span>
-      {label}
+      {icon && <Icon name={icon} size={14} />}
+      <span className="indicator-label">{label}</span>
     </>
   );
   return onClick ? (
-    <button className={`indicator ${tone}`} title={title} onClick={onClick}>
+    <button className={className} title={title} onClick={onClick}>
       {body}
     </button>
   ) : (
-    <span className={`indicator ${tone}`} title={title}>
+    <span className={className} title={title}>
       {body}
     </span>
   );
@@ -124,70 +127,65 @@ export function StatusBar() {
   const agentLabel =
     agent === 'error' ? 'Assistant unavailable' : agent === 'starting' ? 'Assistant starting…' : connection === 'lost' ? 'Reconnecting…' : running ? 'Assistant working…' : agent === 'ready' ? 'Assistant ready' : 'Assistant off';
 
+  const slash = active ? active.lastIndexOf('/') + 1 : 0;
+
+  // The book at the left, this window's session at the right, as VS Code's.
   return (
     <footer className="statusbar">
-      <span className="status-file">{active ?? 'No file'}</span>
-      {cursor && active && (
-        <span>
-          Ln {cursor.line}, Col {cursor.column}
-        </span>
-      )}
-      {problems.errors > 0 ? (
-        <span className="problems">
-          <button className="indicator bad" title="Go to the next error" onClick={() => void studio.nextProblem()}>
-            <span className="indicator-icon">⊗</span>
-            {problems.errors} {problems.errors === 1 ? 'error' : 'errors'}
-          </button>
-          {canAsk && (
-            <button className="link" title="The assistant explains the error in plain words and fixes it" onClick={() => void studio.fixProblem()}>
-              Ask the assistant to fix it
-            </button>
+      <div className="statusbar-side">
+        <span className="status-file" title={active ?? undefined}>
+          {active ? (
+            <>
+              <span className="status-dir">{active.slice(0, slash)}</span>
+              <span className="status-name">{active.slice(slash)}</span>
+            </>
+          ) : (
+            'No file'
           )}
         </span>
-      ) : (
-        <span className="indicator ok" title="No Typst errors">
-          <span className="indicator-icon">✓</span>No errors
+        {problems.errors > 0 ? (
+          <span className="problems">
+            <Indicator tone="bad" icon="error" label={`${problems.errors} ${problems.errors === 1 ? 'error' : 'errors'}`} title="Go to the next error" onClick={() => void studio.nextProblem()} />
+            {canAsk && <Indicator icon="sparkle" label="Ask the assistant to fix it" title="The assistant explains the error in plain words and fixes it" onClick={() => void studio.fixProblem()} />}
+          </span>
+        ) : (
+          <Indicator tone="ok" icon="passed" label="No errors" title="No Typst errors" />
+        )}
+        {problems.warnings > 0 && (
+          <Indicator
+            tone="warn"
+            icon="warning"
+            label={`${problems.warnings} ${problems.warnings === 1 ? 'warning' : 'warnings'}`}
+            title="Typst warnings (hover the yellow squiggles in the editor)"
+          />
+        )}
+        {compileLabel && <Indicator tone={compileTone} icon="book" label={compileLabel} title="Typesetting status of the whole book" />}
+        {todos > 0 && <Indicator icon="checklist" label={`${todos} to do`} title="TODOs left in the book" onClick={() => studio.showSidebar('todos')} />}
+      </div>
+      <div className="statusbar-side">
+        {cursor && active && <Indicator label={`Ln ${cursor.line}, Col ${cursor.column}`} />}
+        {Math.abs(zoom - 1) > 0.001 && (
+          <Indicator icon="search" label={`${Math.round(zoom * 100)}%`} title="Zoom (⌘= / ⌘− / ⌘0). Click to reset." onClick={() => void studio.zoom('reset', 'key')} />
+        )}
+        <span className="perf">
+          <Indicator icon="keyboard" label={stat(perf.input)} title="Keystroke → editor paint, p50/p95 (SPEC §6 target ≤16 ms p95)" />
+          <Indicator icon="eye" label={stat(perf.preview)} title="Edit → preview paint, p50/p95 (SPEC §6 target ≤150/400 ms)" />
         </span>
-      )}
-      {problems.warnings > 0 && (
-        <span className="indicator warn" title="Typst warnings (hover the yellow squiggles in the editor)">
-          <span className="indicator-icon">⚠</span>
-          {problems.warnings} {problems.warnings === 1 ? 'warning' : 'warnings'}
-        </span>
-      )}
-      {compileLabel && <Indicator tone={compileTone} icon="" label={compileLabel} title="Typesetting status of the whole book" />}
-      {todos > 0 && (
-        <button className="indicator" title="TODOs left in the book" onClick={() => studio.showSidebar('todos')}>
-          <span className="indicator-icon">☐</span>
-          {todos} to do
-        </button>
-      )}
-      <span className="spacer" />
-      {Math.abs(zoom - 1) > 0.001 && (
-        <button className="link zoom-indicator" title="Zoom (⌘= / ⌘− / ⌘0). Click to reset." onClick={() => void studio.zoom('reset', 'key')}>
-          Zoom {Math.round(zoom * 100)}%
-        </button>
-      )}
-      <span className="perf" title="Keystroke → editor paint, p50/p95 (SPEC §6 target ≤16 ms p95)">
-        ⌨ {stat(perf.input)}
-      </span>
-      <span className="perf" title="Edit → preview paint, p50/p95 (SPEC §6 target ≤150/400 ms)">
-        ⇢ {stat(perf.preview)}
-      </span>
-      <Indicator
-        tone={previewTone}
-        icon="◧"
-        label={preview.status === 'error' ? 'Preview stopped' : preview.status === 'starting' ? 'Preview starting…' : preview.status === 'ready' ? 'Preview' : 'Preview off'}
-        title={preview.status === 'error' ? `${preview.error ?? 'The preview stopped.'} Click to restart it.` : 'Live preview (Tinymist)'}
-        onClick={preview.status === 'error' ? () => void studio.restartTypst() : undefined}
-      />
-      <Indicator
-        tone={agentTone}
-        icon="✦"
-        label={`${agentLabel}${model && agent === 'ready' ? ` · ${model.id}` : ''}`}
-        title={agent === 'error' ? `${agentError ?? `${assistantName} is not running.`} Click to try again.` : model ? `${model.providerID}/${model.id}` : `Writing assistant (${assistantName})`}
-        onClick={agent === 'error' ? () => void studio.startAgent() : undefined}
-      />
+        <Indicator
+          tone={previewTone}
+          icon="paneMiddle"
+          label={preview.status === 'error' ? 'Preview stopped' : preview.status === 'starting' ? 'Preview starting…' : preview.status === 'ready' ? 'Preview' : 'Preview off'}
+          title={preview.status === 'error' ? `${preview.error ?? 'The preview stopped.'} Click to restart it.` : 'Live preview (Tinymist)'}
+          onClick={preview.status === 'error' ? () => void studio.restartTypst() : undefined}
+        />
+        <Indicator
+          tone={agentTone}
+          icon="sparkle"
+          label={`${agentLabel}${model && agent === 'ready' ? ` · ${model.id}` : ''}`}
+          title={agent === 'error' ? `${agentError ?? `${assistantName} is not running.`} Click to try again.` : model ? `${model.providerID}/${model.id}` : `Writing assistant (${assistantName})`}
+          onClick={agent === 'error' ? () => void studio.startAgent() : undefined}
+        />
+      </div>
     </footer>
   );
 }

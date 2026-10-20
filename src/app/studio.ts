@@ -4337,7 +4337,8 @@ export class Studio {
    * The title bar is sized in points whatever the zoom, since macOS draws the
    * window's buttons in it at one size. What's in the bar never gets smaller
    * than at 100% (as in VS Code, whose title bar doesn't zoom out), and grows
-   * with the zoom above it: `--titlebar-scale` undoes a zoom below 100%.
+   * with the zoom above it: `--titlebar-scale` undoes a zoom below 100%. The
+   * status bar uses it too, being in the window's corners, which are in points.
    */
   private applyTitleBar() {
     const style = document.documentElement.style;

@@ -235,6 +235,38 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7 9.5l2.5 2.5L7 14.5M12 15h5" />
     </>
   ),
+  // The status bar's, as codicons': errors, warnings, none, to-dos, typing.
+  error: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" />
+    </>
+  ),
+  warning: (
+    <>
+      <path d="M10.3 4.9a2 2 0 0 1 3.4 0l6.9 12a2 2 0 0 1-1.7 3H5.1a2 2 0 0 1-1.7-3z" />
+      <path d="M12 9.6v4M12 16.9v.01" />
+    </>
+  ),
+  passed: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.4 12.3l2.5 2.5 4.8-5.2" />
+    </>
+  ),
+  checklist: (
+    <>
+      <rect x="3.5" y="4" width="6.5" height="6.5" rx="1.6" />
+      <path d="M5.2 7.3l1.3 1.3 2-2.3M13.5 7.25h7M13.5 16.75h7" />
+      <rect x="3.5" y="13.5" width="6.5" height="6.5" rx="1.6" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="2.5" y="6" width="19" height="12" rx="2.2" />
+      <path d="M6.5 9.8h.01M10 9.8h.01M14 9.8h.01M17.5 9.8h.01M8 14.2h8" />
+    </>
+  ),
 };
 
 /** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, images. */
