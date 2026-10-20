@@ -195,10 +195,12 @@ button.indicator:hover { background: var(--bg-3); }
 .activity-bar { flex: none; display: flex; flex-direction: column; align-items: stretch; padding: 2px 0; border-right: 1px solid var(--border); background: var(--bg-2); }
 .activity-views, .activity-bottom { display: flex; flex-direction: column; }
 .activity-bottom { margin-top: auto; padding-bottom: 2px; }
-.activity-bar .chrome-icon { position: relative; width: 44px; height: 42px; border-radius: 0; color: var(--muted); opacity: 0.85; }
-.activity-bar .chrome-icon .icon-svg { width: 22px; height: 22px; }
-.activity-bar .chrome-icon:hover:not(:disabled) { background: transparent; color: var(--fg); opacity: 1; }
-.activity-bar .chrome-icon.on { color: var(--fg); background: transparent; opacity: 1; }
+.activity-bar .chrome-icon { position: relative; width: 44px; height: 42px; border-radius: 0; color: var(--muted); }
+/* Dimmed, the icon alone: a badge on it stays at full strength. */
+.activity-bar .chrome-icon .icon-svg { width: 22px; height: 22px; opacity: 0.85; }
+.activity-bar .chrome-icon:hover:not(:disabled) { background: transparent; color: var(--fg); }
+.activity-bar .chrome-icon.on { color: var(--fg); background: transparent; }
+.activity-bar .chrome-icon:is(:hover:not(:disabled), .on) .icon-svg { opacity: 1; }
 .activity-bar .chrome-icon.on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
 /* An icon's hover card, to its right: name (and shortcut), what it's for, how things stand. */
 .view-tip {
@@ -224,8 +226,10 @@ button.indicator:hover { background: var(--bg-3); }
 [data-book-color] .command-center { color: var(--book-fg); border-color: var(--book-fg-dim); background: color-mix(in srgb, var(--book-fg) 10%, transparent); }
 [data-book-color] .command-center:hover:not(:disabled) { color: var(--book-fg); border-color: var(--book-fg); background: color-mix(in srgb, var(--book-fg) 18%, transparent); }
 [data-book-color] .activity-bar { background: var(--book-bar); border-right-color: transparent; }
-[data-book-color] .activity-bar .chrome-icon { color: var(--book-bar-fg); opacity: 0.6; }
-[data-book-color] .activity-bar .chrome-icon:hover:not(:disabled), [data-book-color] .activity-bar .chrome-icon.on { color: var(--book-bar-fg); opacity: 1; }
+[data-book-color] .activity-bar .chrome-icon { color: var(--book-bar-fg); }
+[data-book-color] .activity-bar .chrome-icon .icon-svg { opacity: 0.6; }
+[data-book-color] .activity-bar .chrome-icon:hover:not(:disabled), [data-book-color] .activity-bar .chrome-icon.on { color: var(--book-bar-fg); }
+[data-book-color] .activity-bar .chrome-icon:is(:hover:not(:disabled), .on) .icon-svg { opacity: 1; }
 [data-book-color] .activity-bar .chrome-icon.on::before { background: var(--book-bar-fg); }
 [data-book-color] .activity-badge { background: var(--book-badge); color: var(--book-badge-fg); box-shadow: 0 0 0 2px var(--book-bar); }
 [data-book-color] .statusbar { background: var(--book); color: var(--book-fg); border-top-color: transparent; }
@@ -233,8 +237,12 @@ button.indicator:hover { background: var(--bg-3); }
 [data-book-color] .statusbar :is(button.indicator, .link):hover { background: var(--book-hover); }
 [data-book-color] .statusbar .sdot { box-shadow: 0 0 0 1px var(--book-fg-dim); }
 
-/* A count, small and in the icon's light corner, cut out of it by a ring of the bar's colour. */
-.activity-badge { position: absolute; left: 25px; top: 23px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--accent); color: var(--accent-fg); font-size: 9px; font-weight: 700; line-height: 13px; text-align: center; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg-2); }
+/*
+ * A count over the icon's bottom-right corner, as VS Code's: a 16px pill that
+ * grows leftward from a fixed right edge, so "99+" stays inside the bar. Cut
+ * out of the icon by a ring of the bar's colour.
+ */
+.activity-badge { position: absolute; right: 3px; top: 22px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-size: 9px; font-weight: 600; line-height: 16px; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg-2); }
 .tree { overflow: auto; flex: 1; padding: 4px 0; }
 .tree-row { display: flex; align-items: center; gap: 4px; height: 22px; padding-right: 8px; white-space: nowrap; }
 .tree-row:hover { background: var(--bg-3); }
