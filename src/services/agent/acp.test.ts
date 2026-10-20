@@ -89,6 +89,36 @@ function harness() {
 }
 
 describe('AcpAdapter', () => {
+  it('keeps "always" for the app: Claude asks it about every command, and hears "once"', async () => {
+    const { adapter, sent, events, deliver } = harness();
+    await adapter.start();
+    // Its own settings could allow "Bash(*)"; the app's ask rules win over those.
+    expect(sent.find((m) => m.method === 'session/new').params._meta.claudeCode.options.settings.permissions.ask).toEqual(expect.arrayContaining(['Bash', 'Edit', 'Read', 'WebFetch']));
+    const sessionId = await adapter.createSession(null, { permissions: PRESETS.ask.permissions });
+    const ask = (id: number, command: string, options: { optionId: string; kind: string }[]) =>
+      deliver({ jsonrpc: '2.0', id, method: 'session/request_permission', params: { sessionId, toolCall: { toolCallId: `t${id}`, kind: 'execute', rawInput: { command }, _meta: { claudeCode: { toolName: 'Bash' } } }, options } });
+    // Its "always" option first, as Codex's execpolicy amendment can be.
+    const options = [
+      { optionId: 'amend', kind: 'allow_always' },
+      { optionId: 'yes', kind: 'allow_once' },
+      { optionId: 'no-always', kind: 'reject_always' },
+      { optionId: 'no', kind: 'reject_once' },
+    ];
+    ask(901, 'uv run python src/scripts/lint.py 17', options);
+    const asked = events.find((e) => e.type === 'permission-asked') as Extract<AgentEvent, { type: 'permission-asked' }>;
+    await adapter.replyPermission(sessionId, asked.requestId, 'always');
+    expect(sent.at(-1)).toEqual({ jsonrpc: '2.0', id: 901, result: { outcome: { outcome: 'selected', optionId: 'yes' } } });
+    // The rule is the app's: the same command, asked again, is answered by it, still "once".
+    await adapter.setPermissions(sessionId, PRESETS.ask.permissions, false, [{ action: 'shell', resource: 'uv run python src/scripts/lint.py *', effect: 'allow' }]);
+    ask(902, 'uv run python src/scripts/lint.py 18', options);
+    expect(sent.at(-1)).toEqual({ jsonrpc: '2.0', id: 902, result: { outcome: { outcome: 'selected', optionId: 'yes' } } });
+    // A no is a no for now, not for ever.
+    ask(903, 'rm -rf build', options);
+    const second = events.filter((e) => e.type === 'permission-asked').at(-1) as Extract<AgentEvent, { type: 'permission-asked' }>;
+    await adapter.replyPermission(sessionId, second.requestId, 'reject');
+    expect(sent.at(-1).result.outcome.optionId).toBe('no');
+  });
+
   it('runs a turn: instructions once, the rules or the author answer, events, transcript, queue', async () => {
     const { adapter, sent, events, deliver } = harness();
     await adapter.start();

@@ -4,6 +4,10 @@
 // itself stays one click away.
 import { bookPath } from './ai-marks';
 import { fileName, type BookNames } from './tool-labels';
+import { splitCommands, words } from '../services/agent/shell-words';
+import { commandAnatomy, unwrapped } from './command-anatomy';
+
+export { splitCommands, words };
 
 export type CommandWords = {
   /** "Read “The Storm” (chapter 1)". */
@@ -19,61 +23,6 @@ export type CommandWords = {
 };
 
 type Step = { past: string; ing: string; base: string; note?: string; path?: string };
-
-/** Here-documents' bodies (`cat > f <<'EOF'` … `EOF`) are text, not commands. */
-const withoutHeredocs = (line: string) => line.replace(/(<<-?\s*(['"]?)(\w+)\2)[^\n]*\n[\s\S]*?\n\s*\3[ \t]*(?=\n|$)/g, '$1');
-
-/**
- * Commands, split at && || ; and newlines outside quotes, and at | too unless
- * `pipes` is false (then a pipeline stays one piece).
- */
-export function splitCommands(line: string, { pipes = true } = {}): string[] {
-  const out: string[] = [];
-  let cur = '';
-  let quote: string | null = null;
-  const text = withoutHeredocs(line);
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quote) {
-      if (c === '\\' && quote === '"') {
-        cur += c + (text[i + 1] ?? '');
-        i++;
-        continue;
-      }
-      if (c === quote) quote = null;
-      cur += c;
-      continue;
-    }
-    if (c === "'" || c === '"') quote = c;
-    if (c === '\\') {
-      cur += c + (text[i + 1] ?? '');
-      i++;
-      continue;
-    }
-    const two = text.slice(i, i + 2);
-    if (two === '&&' || two === '||') {
-      out.push(cur);
-      cur = '';
-      i++;
-      continue;
-    }
-    if (c === ';' || c === '\n' || (pipes && c === '|')) {
-      out.push(cur);
-      cur = '';
-      continue;
-    }
-    cur += c;
-  }
-  out.push(cur);
-  return out.map((s) => s.trim()).filter(Boolean);
-}
-
-/** Words, with quotes removed ("grep -n 'two words' f" → grep, -n, two words, f). */
-export function words(command: string): string[] {
-  const out: string[] = [];
-  for (const m of command.matchAll(/'([^']*)'|"((?:[^"\\]|\\.)*)"|(\S+)/g)) out.push(m[1] ?? (m[2] !== undefined ? m[2].replace(/\\(.)/g, '$1') : m[3]));
-  return out;
-}
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const step = (verb: [past: string, ing: string, base: string], object: string, extra: Partial<Step> = {}): Step => ({
@@ -91,7 +40,10 @@ function list(items: string[]): string {
   return `${items.slice(0, 2).join(', ')} and ${items.length - 2} more`;
 }
 
-function describeStep(command: string, names: BookNames): Step | null {
+function describeStep(typed: string, names: BookNames): Step | null {
+  // What runs the program (uv run, npx, env settings, time) says nothing about it.
+  const command = unwrapped(typed);
+  if (command !== typed.trim()) return describeStep(command, names);
   // Redirections: into /dev/null (or 2>&1) say nothing; into a file, that file is written.
   const target = /(?:^|\s)\d?>>?\s*(?!\/dev\/null)([^\s&|;<>]+)/.exec(command.replace(/\d?>&\d/g, ''))?.[1];
   const w = words(command.replace(/(?:^|\s)(?:\d|&)?>>?\s*\S+|\d?>&\d|<<-?\s*'?\w+'?/g, ' '));
@@ -257,7 +209,9 @@ function describeStep(command: string, names: BookNames): Step | null {
 }
 
 /** A shell command line in words. Steps that only arrange the others (cd, echo) are left out. */
-export function describeCommand(command: string, names: BookNames): CommandWords {
+export function describeCommand(typed: string, names: BookNames): CommandWords {
+  // A line the shell is given whole (`zsh -lc "cd x && …"`) is the line it runs.
+  const command = commandAnatomy(typed).command;
   // In a pipeline, the first command does the work (reads, searches); the rest only shapes its output.
   const all = splitCommands(command, { pipes: false }).map((c) => splitCommands(c)[0] ?? c);
   const steps = all.map((c) => describeStep(c, names)).filter((s): s is Step => !!s);

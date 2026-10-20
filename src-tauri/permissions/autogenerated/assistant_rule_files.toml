@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-assistant-rule-files"
+description = "Enables the assistant_rule_files command without any pre-configured scope."
+commands.allow = ["assistant_rule_files"]
+
+[[permission]]
+identifier = "deny-assistant-rule-files"
+description = "Denies the assistant_rule_files command without any pre-configured scope."
+commands.deny = ["assistant_rule_files"]

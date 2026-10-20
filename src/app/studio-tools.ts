@@ -88,6 +88,8 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
 /** Settings only the author changes: what the assistant may do, and the programs the app runs. */
 const AUTHOR_ONLY: Record<string, string> = {
   permissions: 'what you may do without asking',
+  alwaysAllow: 'the commands you may run without asking',
+  neverAllow: 'the commands you may never run',
   allowCommands: 'the commands you may run without asking',
   toolPaths: 'the programs Typst Studio runs',
   skippedUpdate: 'a skipped update',

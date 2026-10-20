@@ -18,6 +18,7 @@ import { useStore } from '../lib/store';
 import { parseOptions } from '../services/agent/options-mode';
 import { answerText, questionText, splitQuestions } from '../services/agent/questions';
 import { AssistantMark } from './AssistantSettings';
+import { CommandPermission, RuleChip, scopeWords } from './CommandPermission';
 import { FileIcon, Icon, type IconName } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
 
@@ -153,6 +154,8 @@ function ToolStep({ item, editOpen }: { item: ToolItem; editOpen: boolean }) {
   const look = tone === 'look' && (!TOOL_ICONS[item.name] || TOOL_ICONS[item.name] === 'terminal') ? lookOf(label.done) : null;
   const edit = tone === 'change' ? editOf(item, names.root) : null;
   const time = item.started && item.ended ? spanWords(item.ended - item.started) : undefined;
+  // A command that did more than look: the command itself, and the rule that let it run without asking.
+  const command = (item.name === 'bash' || item.name === 'shell') && tone !== 'look' ? (item.input as { command?: unknown } | undefined)?.command : undefined;
   const open = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -181,6 +184,12 @@ function ToolStep({ item, editOpen }: { item: ToolItem; editOpen: boolean }) {
         {label.code && <pre className="tool-command">{label.code}</pre>}
         {item.detail && <pre className="tool-detail">{item.detail}</pre>}
       </details>
+      {typeof command === 'string' && command.trim() && (
+        <div className="tool-cmdline">
+          <code title={command}>{command.trim().split('\n')[0]}</code>
+          <RuleChip command={command} at={item.started} />
+        </div>
+      )}
       {item.read && <ReadBar read={item.read} />}
       {edit && <EditCard edit={edit} initiallyOpen={editOpen && item.status === 'done'} made={item.status === 'done'} />}
     </Step>
@@ -349,15 +358,31 @@ function Patch({ text }: { text: string }) {
 
 /** A question about something the assistant may not do without asking, in words; what it would change, word by word. */
 function PermissionCard({ item }: { item: Extract<ChatItem, { kind: 'permission' }> }) {
+  if ((item.action === 'shell' || item.action === 'bash') && !item.local) return <CommandPermission item={item} />;
+  return <RequestPermission item={item} />;
+}
+
+/** A request that isn't a command: an edit (word by word), a page, a folder outside the book, a setting. */
+function RequestPermission({ item }: { item: Extract<ChatItem, { kind: 'permission' }> }) {
   const names = useStore(studio.store, (s) => s.names);
   const assistant = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
+  const book = useStore(studio.store, (s) => s.workspace?.name ?? 'this book');
   const pending = item.state === 'pending' || item.state === 'sending';
   const { what, code } = describePermission(item.action, item.resources, names);
+  const r = item.remembered;
   return (
     <div className={`permission ${pending ? 'pending' : item.state}`}>
       <div className="permission-title">
-        {pending ? `${assistant} asks to` : item.state === 'reject' ? 'You didn’t let the assistant' : 'You let the assistant'} {what}.
+        {pending ? `${assistant} asks to` : item.state === 'reject' ? 'You didn’t let the assistant' : 'You let the assistant'} {what}
+        {r && !r.removed ? `, and allowed ${r.label} ${scopeWords(r.scope, book)}` : ''}.
       </div>
+      {r && (
+        <div className="perm-remembered">
+          <button className="link" onClick={() => void studio.forgetRemembered(item.id, !!r.removed)}>
+            {r.removed ? 'Allow for this task again' : 'Undo for the rest of the task'}
+          </button>
+        </div>
+      )}
       {pending && !item.local && (
         <div className="permission-why">
           You chose to be asked first, in{' '}
@@ -396,7 +421,7 @@ function PermissionCard({ item }: { item: Extract<ChatItem, { kind: 'permission'
             Allow
           </button>
           {!item.local && (
-            <button disabled={item.state === 'sending'} title="Allow this kind of request for the rest of this task" onClick={() => void studio.replyPermission(item.id, 'always')}>
+            <button disabled={item.state === 'sending'} title="Allow this kind of request until this task ends; nothing is kept after it" onClick={() => void studio.replyPermission(item.id, 'always')}>
               Allow for this task
             </button>
           )}

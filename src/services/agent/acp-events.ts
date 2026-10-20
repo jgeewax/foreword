@@ -4,6 +4,7 @@
 // Code's ACP program (__fixtures__/acp-claude.jsonl).
 import { diff, splitLines } from '../../lib/diff';
 import { ruleEffect, withoutHarmlessRedirects, type Level, type PermissionRule } from './permissions';
+import { splitCommands } from './shell-words';
 import { STUDIO_TOOL_ACTION, STUDIO_TOOLS, studioToolName } from './studio-tool';
 import type { FilePatch } from './types';
 
@@ -208,17 +209,19 @@ export function permissionAsk(call: AcpToolCall, root: string): { action: string
 
 /**
  * What the app's permission rules say about a request (OpenCode applies them
- * itself; an ACP agent asks the app). A command line is checked whole and
- * command by command: any part denied denies it, and it runs without asking
- * only when every part may.
+ * itself; an ACP agent asks the app). A command line is checked command by
+ * command, split as the shell would (quotes, newlines, a lone &): any part
+ * denied denies it, and it runs without asking only when every part may. The
+ * whole line is checked too, for denies that span it ("cd x && typst compile").
  */
 export function decide(action: string, resources: readonly string[], rules: readonly PermissionRule[]): Level {
   const effects = resources.flatMap((r) => {
     if (action !== 'shell') return [ruleEffect(action, r, rules) ?? 'ask'];
-    const line = withoutHarmlessRedirects(r);
-    if (/\$\(|`/.test(line)) return [ruleEffect('shell', line, rules) === 'deny' ? 'deny' : 'ask'];
-    const parts = line.split(/\s*(?:&&|\|\||;|\|)\s*/).filter(Boolean);
-    return [ruleEffect('shell', line, rules) ?? 'ask', ...parts.map((p) => ruleEffect('shell', p, rules) ?? 'ask')];
+    const whole = ruleEffect('shell', withoutHarmlessRedirects(r), rules);
+    if (whole === 'deny') return ['deny' as Level];
+    if (/\$\(|`|<\(|>\(/.test(r)) return ['ask' as Level];
+    const parts = splitCommands(r).map(withoutHarmlessRedirects).filter(Boolean);
+    return parts.length ? parts.map((p) => ruleEffect('shell', p, rules) ?? 'ask') : [whole ?? 'ask'];
   });
   if (effects.includes('deny')) return 'deny';
   return effects.length && effects.every((e) => e === 'allow') ? 'allow' : 'ask';

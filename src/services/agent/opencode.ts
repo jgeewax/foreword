@@ -5,7 +5,7 @@ import { formatSelectionContext } from '../../editor/selection';
 import { formatAuthorEdits } from './author-edits';
 import { Channel, ipc } from '../../lib/ipc';
 import { mapOpenCodeEvent, toFormRequest } from './opencode-events';
-import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
+import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { effortKey, effortOption } from './models';
 import { DEFAULT_EFFORT, type AgentAdapter, type AgentEvent, type Delivery, type Efforts, type FormAnswer, type FormRequest, type ModelInfo, type ModelRef, type PermissionDecision } from './types';
 
@@ -102,20 +102,20 @@ export class OpenCodeAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[], effort = null as string | null } = {},
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', rules = [] as PermissionRule[], effort = null as string | null } = {},
   ): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? modelBody(model, effort) : null,
       agent: agent === 'build' ? null : agent,
-      permissions: sessionRules(permissions, readOnly, allowCommands),
+      permissions: sessionRules(permissions, readOnly, rules),
     });
     return res.data.id;
   }
 
   /** Update a live session's rules (verified to apply mid-session). */
-  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, allowCommands: string[] = []) {
-    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly, allowCommands) });
+  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, rules: PermissionRule[] = []) {
+    await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly, rules) });
   }
 
   /** OpenCode's built-in agents: `build` (default) or `plan`. */
@@ -235,7 +235,8 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   async replyPermission(sessionId: string, requestId: string, decision: PermissionDecision) {
-    await call('POST', `/api/session/${sessionId}/permission/${requestId}/reply`, { decision });
+    // "Always" is the app's to keep (command-rules.ts), in this session's rules: OpenCode's own would save `*`.
+    await call('POST', `/api/session/${sessionId}/permission/${requestId}/reply`, { decision: decision === 'always' ? 'once' : decision });
   }
 
   /** A rejected permission ends a turn without a session.execution.* event, so the UI also polls this. */

@@ -8,11 +8,13 @@ describe('the settings file', () => {
     const c = parseConfig('{ "sendKey": "mod-enter", "allowCommands": ["python3", "rm -rf *", "uv run"], "zoom": 1.25, "myNote": "hi" }');
     expect(c.error).toBeNull();
     expect(c.settings.sendKey).toBe('mod-enter');
-    expect(c.settings.allowCommands).toEqual(['python3', 'uv run']);
+    // Commands allowed by name, from before rules: each with anything after it.
+    expect(c.settings.alwaysAllow).toEqual(['python3 *', 'uv run *']);
     expect(c.zoom).toBe(1.25);
     expect(c.settings.permissions).toEqual(PRESETS.ask.permissions);
     const text = serializeConfig(c.raw, { ...c.settings, markAiReads: false, formatOnSave: false }, 1.25);
-    expect(JSON.parse(text)).toMatchObject({ sendKey: 'mod-enter', markAiReads: false, formatOnSave: false, zoom: 1.25, myNote: 'hi', allowCommands: ['python3', 'uv run'] });
+    expect(JSON.parse(text)).toMatchObject({ sendKey: 'mod-enter', markAiReads: false, formatOnSave: false, zoom: 1.25, myNote: 'hi', alwaysAllow: ['python3 *', 'uv run *'], neverAllow: [] });
+    expect(JSON.parse(text).allowCommands).toBeUndefined();
     expect(text.endsWith('}\n')).toBe(true);
   });
 

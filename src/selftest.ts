@@ -3695,30 +3695,35 @@ async function configChecks() {
   await ipc.configWrite(JSON.stringify(edited, null, 2));
   window.dispatchEvent(new Event('focus'));
   await sleep(400);
-  out.externalEdit = { sendKey: studio.state.settings.sendKey, allowCommands: studio.state.settings.allowCommands };
-  // The Settings page: add a command for every book, and one for this book.
+  out.externalEdit = { sendKey: studio.state.settings.sendKey, alwaysAllow: studio.state.settings.alwaysAllow };
+  // The Settings page: a rule for every book, and one for this book.
   studio.openSettings();
   await sleep(300);
   [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((b) => b.textContent === 'Permissions')?.click();
   await sleep(300);
-  const add = async (index: number, command: string) => {
-    const input = document.querySelectorAll<HTMLInputElement>('.command-list input')[index];
+  const add = async (where: 'all' | 'book', command: string) => {
+    const input = document.querySelector<HTMLInputElement>('.rule-add input')!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, command);
     input.dispatchEvent(new Event('input', { bubbles: true }));
+    const select = document.querySelector<HTMLSelectElement>('.rule-add select');
+    if (select) {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, where);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     await sleep(100);
     input.closest('form')?.requestSubmit();
     await sleep(700);
   };
-  await add(0, 'Rscript');
-  await add(1, 'node');
+  await add('all', 'Rscript *');
+  await add('book', 'node scripts/build.js');
   out.snapshot = await snap('settings-commands');
   studio.closeSettings();
   const file = JSON.parse((await ipc.configRead()).text ?? '{}');
   out.afterUi = {
-    fileCommands: file.allowCommands,
+    fileRules: file.alwaysAllow,
     keptUnknownKey: file.myNote,
-    bookCommands: JSON.parse((await ipc.fsRead('.typst-studio.json')).text).allowCommands,
-    effective: studio.allowedCommands(),
+    bookRules: JSON.parse((await ipc.fsRead('.typst-studio.json')).text).alwaysAllow,
+    effective: studio.commandRules().map((r) => `${r.scope}: ${r.pattern}`),
   };
   // Put everything back.
   studio.updateSettings({ ...saved });

@@ -610,6 +610,8 @@ pub fn run() {
             acp::acp_send,
             acp::acp_stop,
             acp::assistants_status,
+            acp::assistant_rule_files,
+            acp::assistant_rule_reveal,
             acp::assistant_sign_in,
             acp::assistant_download,
             mcp::mcp_serve,

@@ -63,6 +63,8 @@ fn main() {
             "acp_send",
             "acp_stop",
             "assistants_status",
+            "assistant_rule_files",
+            "assistant_rule_reveal",
             "assistant_sign_in",
             "assistant_download",
             "mcp_serve",

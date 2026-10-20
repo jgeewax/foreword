@@ -3,6 +3,7 @@ import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
 import { PERMISSION_ITEMS, presetOf, PRESETS, type Level, type PresetId } from '../services/agent/permissions';
+import { CommandRules } from './CommandRules';
 
 const LEVEL_LABELS: [Level, string][] = [
   ['ask', 'Ask'],
@@ -65,7 +66,9 @@ export function PermissionsEditor() {
 /** The permissions chip in the composer; opens the editor upward. */
 export function PermissionsMenu() {
   const permissions = useStore(studio.store, (s) => s.settings.permissions);
+  const rules = useStore(studio.store, (s) => s.settings.alwaysAllow.length + s.settings.neverAllow.length + (s.project.settings.alwaysAllow?.length ?? 0) + (s.project.settings.neverAllow?.length ?? 0) + (s.agent.sessionId ? (s.taskRules[s.agent.sessionId]?.alwaysAllow.length ?? 0) : 0));
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'kinds' | 'rules'>('kinds');
   const rootRef = useRef<HTMLDivElement>(null);
   const preset = presetOf(permissions);
 
@@ -93,12 +96,23 @@ export function PermissionsMenu() {
       >
         <Icon name="shield" size={14} />
         {/* Hidden when the chat is narrow; the shield's colour still tells. */}
-        <span className="perm-trigger-label">{preset === 'custom' ? 'Custom' : PRESETS[preset].label}</span>
+        <span className="perm-trigger-label">
+          {preset === 'custom' ? 'Custom' : PRESETS[preset].label}
+          {rules > 0 && <span className="perm-trigger-rules"> · {rules === 1 ? '1 rule' : `${rules} rules`}</span>}
+        </span>
       </button>
       {open && (
         <div className="perm-popover" role="dialog" aria-label="Permissions">
           <div className="perm-title">What the assistant may do</div>
-          <PermissionsEditor />
+          <div className="perm-tabs" role="tablist">
+            <button role="tab" aria-selected={tab === 'kinds'} className={tab === 'kinds' ? 'active' : ''} onClick={() => setTab('kinds')}>
+              Kinds of action
+            </button>
+            <button role="tab" aria-selected={tab === 'rules'} className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}>
+              Your rules{rules > 0 ? ` · ${rules}` : ''}
+            </button>
+          </div>
+          {tab === 'kinds' ? <PermissionsEditor /> : <CommandRules scopes={['task', 'book', 'all']} builtIn own />}
         </div>
       )}
     </div>

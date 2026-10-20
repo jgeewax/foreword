@@ -1,6 +1,7 @@
 // App preferences (per machine, not per project). Project settings live in
 // .typst-studio.json instead.
 import { DEFAULT_PERMISSIONS, PRESETS, sanitizePermissions, type AgentPermissions } from '../services/agent/permissions';
+import { rulesFrom } from '../services/agent/command-rules';
 
 export type SendKey = 'enter' | 'mod-enter';
 
@@ -38,8 +39,13 @@ export type AppSettings = {
   /** The colours of those marks (#rrggbb). */
   aiEditColor: string;
   aiReadColor: string;
-  /** Commands the assistant may run without asking, in every book (e.g. "python3"), besides those that only look. */
-  allowCommands: string[];
+  /**
+   * Commands the assistant may run without asking in every book, and ones it
+   * may never run, as rules ("python3 *", "git push *": command-rules.ts),
+   * besides those that only look.
+   */
+  alwaysAllow: string[];
+  neverAllow: string[];
   /** Format Typst files (typstyle, through Tinymist) when the author saves them. */
   formatOnSave: boolean;
   /** Save files with unsaved changes every this many minutes (0: never), as Word's AutoRecover. */
@@ -69,7 +75,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markAiReads: true,
   aiEditColor: '#a371f7',
   aiReadColor: '#58a6ff',
-  allowCommands: [],
+  alwaysAllow: [],
+  neverAllow: [],
   formatOnSave: true,
   autoSaveMinutes: 5,
   editorFontSize: 12,
@@ -137,15 +144,6 @@ export const MARK_COLORS = [
 
 const isColor = (c: unknown): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
 
-/** A command name to allow ("python3", "git add"): one or two plain words, no wildcards or shell syntax. */
-export const isCommandName = (c: string) => /^[A-Za-z0-9][\w.+-]*( [A-Za-z0-9][\w.+-]*)?$/.test(c) && c.length <= 40;
-
-export function sanitizeCommands(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const out: string[] = [];
-  for (const c of raw) if (typeof c === 'string' && isCommandName(c.trim()) && !out.includes(c.trim())) out.push(c.trim());
-  return out.slice(0, 50);
-}
 
 export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const out: Partial<AppSettings> = {};
@@ -158,7 +156,7 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (typeof raw.markAiReads === 'boolean') out.markAiReads = raw.markAiReads;
   if (isColor(raw.aiEditColor)) out.aiEditColor = raw.aiEditColor.toLowerCase();
   if (isColor(raw.aiReadColor)) out.aiReadColor = raw.aiReadColor.toLowerCase();
-  if (Array.isArray(raw.allowCommands)) out.allowCommands = sanitizeCommands(raw.allowCommands);
+  if ('alwaysAllow' in raw || 'neverAllow' in raw || 'allowCommands' in raw) Object.assign(out, rulesFrom(raw));
   if (typeof raw.formatOnSave === 'boolean') out.formatOnSave = raw.formatOnSave;
   if (isAutoSaveMinutes(raw.autoSaveMinutes)) out.autoSaveMinutes = raw.autoSaveMinutes;
   const size = raw.editorFontSize;

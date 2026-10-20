@@ -9,7 +9,7 @@ import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
 import { appTool, conversationTitle, decide, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
 import { formatAuthorEdits } from './author-edits';
-import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions } from './permissions';
+import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
 import { effortOption } from './models';
 import type { AgentAdapter, AgentEvent, Delivery, Efforts, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
@@ -74,7 +74,8 @@ type Session = {
   turn: number;
   permissions: AgentPermissions;
   readOnly: boolean;
-  allowCommands: string[];
+  /** The author's own rules (command-rules.ts), over the kinds of action. */
+  rules: PermissionRule[];
   instructions: Map<string, string>;
   /** The instructions as last sent (sent again when they change). */
   sentInstructions: string;
@@ -95,6 +96,23 @@ type Session = {
   /** Replaying (session/load): updates fill the transcript but aren't live events. */
   replaying: boolean;
 };
+
+/** Claude Code's tools whose every use the app's rules decide (see sessionMeta). */
+export const CLAUDE_ASKS = ['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'] as const;
+
+/**
+ * The agent's option of the first of `kinds` it offers. Its "always" options
+ * keep rules of the agent's own, out of the app's sight (Claude Code in the
+ * book's .claude/settings.local.json, Codex in ~/.codex/rules), so they're only
+ * the last resort, when it offers nothing else.
+ */
+function pickOption(options: { optionId: string; kind: string }[], kinds: string[]): string | undefined {
+  for (const kind of kinds) {
+    const option = options.find((o) => o.kind === kind);
+    if (option) return option.optionId;
+  }
+  return undefined;
+}
 
 export class AcpError extends Error {
   code?: number;
@@ -227,8 +245,21 @@ export class AcpAdapter implements AgentAdapter {
   // ---- sessions and their settings -----------------------------------------------------
 
   private async newSession(): Promise<Session> {
-    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers() });
+    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta() });
     return this.track(res.sessionId, res);
+  }
+
+  /**
+   * Claude Code asks the app about every command, edit, read and web request,
+   * whatever its own settings allow: the user's ~/.claude settings can allow
+   * "Bash(*)", which would run every command without Typst Studio's rules ever
+   * seeing it. An ask rule wins over an allow there, and these settings are
+   * its highest layer. The app answers what its rules allow at once
+   * (askPermission), so only what they ask about reaches the author.
+   */
+  private sessionMeta() {
+    if (this.kind !== 'claude') return {};
+    return { _meta: { claudeCode: { options: { settings: { permissions: { ask: [...CLAUDE_ASKS] } } } } } };
   }
 
   private track(id: string, res: any): Session {
@@ -241,7 +272,7 @@ export class AcpAdapter implements AgentAdapter {
       turn: 0,
       permissions: DEFAULT_PERMISSIONS,
       readOnly: false,
-      allowCommands: [],
+      rules: [],
       instructions: new Map(),
       sentInstructions: '',
       queue: [],
@@ -283,12 +314,12 @@ export class AcpAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', allowCommands = [] as string[], effort = null as string | null } = {},
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', rules = [] as PermissionRule[], effort = null as string | null } = {},
   ) {
     const warm = this.warm ? await this.warm : null;
     this.warm = null;
     const s = warm ?? (await this.newSession());
-    Object.assign(s, { permissions, readOnly, allowCommands });
+    Object.assign(s, { permissions, readOnly, rules });
     if (model && model.providerID === this.kind) await this.switchModel(s.id, model).catch(() => {});
     // After the model: a model sets its own effort (Claude Code's Haiku starts at high).
     if (model && effort) await this.switchEffort(s.id, model, effort).catch(() => {});
@@ -297,9 +328,9 @@ export class AcpAdapter implements AgentAdapter {
     return s.id;
   }
 
-  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, allowCommands: string[] = []) {
+  async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, rules: PermissionRule[] = []) {
     const s = this.session(sessionId);
-    Object.assign(s, { permissions, readOnly, allowCommands });
+    Object.assign(s, { permissions, readOnly, rules });
     await this.applyMode(s);
   }
 
@@ -415,7 +446,7 @@ export class AcpAdapter implements AgentAdapter {
       s = this.track(sessionId, null);
       s.replaying = true;
       try {
-        const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: this.mcpServers() });
+        const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta() });
         s.config = Array.isArray(res?.configOptions) ? res.configOptions : [];
         s.modes = (res?.modes?.availableModes ?? []).map((m: any) => String(m.id));
       } catch (e) {
@@ -642,10 +673,10 @@ export class AcpAdapter implements AgentAdapter {
   private askPermission(rpcId: number | string, params: any) {
     const s = this.sessions.get(params?.sessionId);
     const options = (params?.options ?? []) as { optionId: string; kind: string }[];
-    const pick = (kinds: string[]) => options.find((o) => kinds.includes(o.kind))?.optionId;
+    const pick = (kinds: string[]) => pickOption(options, kinds);
     if (!s) return this.respond(rpcId, { outcome: { outcome: 'cancelled' } });
     const ask = permissionAsk(params.toolCall as AcpToolCall, this.root);
-    const effect = decide(ask.action, ask.resources, sessionRules(s.permissions, s.readOnly, s.allowCommands));
+    const effect = decide(ask.action, ask.resources, sessionRules(s.permissions, s.readOnly, s.rules));
     if (effect !== 'ask') {
       const optionId = effect === 'allow' ? pick(['allow_once', 'allow_always']) : pick(['reject_once', 'reject_always']);
       return this.respond(rpcId, optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } });
@@ -660,8 +691,8 @@ export class AcpAdapter implements AgentAdapter {
     const a = s.asking.get(requestId);
     if (!a) throw new AcpError('That request is no longer open.');
     s.asking.delete(requestId);
-    const kinds = decision === 'once' ? ['allow_once'] : decision === 'always' ? ['allow_always', 'allow_once'] : ['reject_once', 'reject_always'];
-    const optionId = a.options.find((o) => kinds.includes(o.kind))?.optionId;
+    // "Always" is the app's to keep (command-rules.ts): the agent hears "once" either way.
+    const optionId = pickOption(a.options, decision === 'reject' ? ['reject_once', 'reject_always'] : ['allow_once', 'allow_always']);
     this.respond(a.rpcId, optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } });
     this.emit({ type: 'permission-replied', sessionId, requestId, reply: decision });
   }

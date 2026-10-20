@@ -1,7 +1,7 @@
 // Project settings: `.typst-studio.json` in the project root (SPEC §4). Only
 // non-secret, per-book settings. Unknown keys are preserved when saving.
 import { normalizeHex } from './book-color';
-import { sanitizeCommands } from './settings';
+import { rulesFrom } from '../services/agent/command-rules';
 
 export const PROJECT_FILE = '.typst-studio.json';
 
@@ -20,8 +20,9 @@ export type ProjectSettings = {
   outputDir?: string;
   /** Extra font folders (relative to the project root, or absolute). */
   fontPaths?: string[];
-  /** Commands the assistant may run in this book without asking (e.g. "python3"). */
-  allowCommands?: string[];
+  /** Commands the assistant may run in this book without asking, and never, as rules ("python3 *": command-rules.ts). */
+  alwaysAllow?: string[];
+  neverAllow?: string[];
   /**
    * The window's colour for this book ("#00ad9f"), on its title, activity and
    * status bars; "none" for none, even where VS Code's Peacock gives it one.
@@ -53,7 +54,7 @@ export function parseProjectSettings(text: string | null): ParsedProjectSettings
   if (typeof r.root === 'string') settings.root = r.root;
   if (typeof r.outputDir === 'string') settings.outputDir = r.outputDir;
   if (Array.isArray(r.fontPaths)) settings.fontPaths = r.fontPaths.filter((p): p is string => typeof p === 'string');
-  if (Array.isArray(r.allowCommands)) settings.allowCommands = sanitizeCommands(r.allowCommands);
+  if ('alwaysAllow' in r || 'neverAllow' in r || 'allowCommands' in r) Object.assign(settings, rulesFrom(r));
   const color = r.color === 'none' ? 'none' : normalizeHex(r.color);
   if (color) settings.color = color;
   return { settings, raw: r, error: null };
@@ -76,6 +77,8 @@ export function validateProjectSettings(s: ProjectSettings, typFiles: string[]):
 /** JSON text for the file: `patch` merged over the existing object, empty values removed. */
 export function serializeProjectSettings(raw: Record<string, unknown>, patch: ProjectSettings): string {
   const next: Record<string, unknown> = { ...raw, ...patch };
+  // Commands allowed by name, from before rules: they're among alwaysAllow now.
+  if ('alwaysAllow' in patch || 'neverAllow' in patch) delete next.allowCommands;
   for (const [k, v] of Object.entries(next)) {
     if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) delete next[k];
   }

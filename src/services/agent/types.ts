@@ -1,4 +1,4 @@
-import type { AgentPermissions } from './permissions';
+import type { AgentPermissions, PermissionRule } from './permissions';
 // Provider-neutral agent interface (SPEC §4). The UI depends only on this;
 // OpenCodeAdapter is the first implementation.
 import type { AuthorEdit } from './author-edits';
@@ -111,7 +111,7 @@ export interface AgentAdapter {
   /** `effort`: one of the model's levels (efforts()), or null for its own. */
   createSession(
     model: ModelRef | null,
-    opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan'; allowCommands?: string[]; effort?: string | null },
+    opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan'; rules?: PermissionRule[]; effort?: string | null },
   ): Promise<string>;
   /**
    * The model's levels of effort, and the one in use: in the conversation, or
@@ -122,10 +122,10 @@ export interface AgentAdapter {
   /** Think with this effort from the next message on. */
   switchEffort(sessionId: string, model: ModelRef, effort: string): Promise<void>;
   /**
-   * What the agent may do (`readOnly` forces no changes: Plan and Options; `allowCommands`
-   * run without asking); applies to a running session.
+   * What the agent may do (`readOnly` forces no changes: Plan and Options; `rules`: the
+   * author's own, from command-rules.ts); applies to a running session.
    */
-  setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean, allowCommands?: string[]): Promise<void>;
+  setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean, rules?: PermissionRule[]): Promise<void>;
   switchAgent(sessionId: string, agent: 'build' | 'plan'): Promise<void>;
   /** Add (or replace) a named instruction block in the session's system context. */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;

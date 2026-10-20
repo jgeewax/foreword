@@ -71,6 +71,8 @@
     "allow-acp-send",
     "allow-acp-stop",
     "allow-assistants-status",
+    "allow-assistant-rule-files",
+    "allow-assistant-rule-reveal",
     "allow-assistant-sign-in",
     "allow-assistant-download",
     "allow-mcp-serve",

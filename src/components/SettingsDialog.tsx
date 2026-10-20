@@ -10,13 +10,14 @@ import { hasWords, searchWords, wordSpans } from '../lib/word-search';
 import { PermissionsEditor } from './Permissions';
 import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
+import { CommandRules } from './CommandRules';
 import { AssistantPage } from './AssistantSettings';
 import { BookFilesPage } from './BookFilesSettings';
 import { Choice, ColorChoice, SwitchRow, TypedSetting } from './SettingControls';
 import { ToolPicker } from './ToolPicker';
 import { DownloadProgress, InstallSteps, RELEASES } from './UpdateDialog';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
-import { AUTO_SAVE_MINUTES, DEFAULT_SETTINGS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, isAutoSaveMinutes, isCommandName, MARK_COLORS, parseRulers, rulersText, type ToolName } from '../app/settings';
+import { AUTO_SAVE_MINUTES, DEFAULT_SETTINGS, EDITOR_COLUMNS, EDITOR_FONT_SIZES, isAutoSaveMinutes, MARK_COLORS, parseRulers, rulersText, type ToolName } from '../app/settings';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -102,15 +103,12 @@ function BookAssistantPage() {
           )}
         </p>
       </Section>
-      <Section title="Commands to run without asking, in this book">
-        <p className="settings-help">On top of those allowed in every book (Typst Studio ▸ Permissions), for the tools this book needs, like a book’s own scripts.</p>
-        <div className="settings-field">
-          <CommandList
-            commands={project.settings.allowCommands ?? []}
-            disabled={!!project.error}
-            onChange={(allowCommands) => void studio.updateProjectSettings({ allowCommands })}
-          />
-        </div>
+      <Section title="Commands, in this book">
+        <p className="settings-help">
+          Commands the assistant runs here without asking, or never, on top of those for every book (Typst Studio ▸ Permissions): the tools this book needs, like its own
+          scripts. Kept in .typst-studio.json; “Always allow…” on a request adds to them.
+        </p>
+        <CommandRules scopes={['book']} add={project.error ? [] : ['book']} />
       </Section>
       {code.trusted && (
         <Section title="Code examples">
@@ -454,46 +452,7 @@ function EditorPage() {
   );
 }
 
-/** A list of commands to allow, with an add box. */
-function CommandList({ commands, onChange, disabled = false }: { commands: string[]; onChange: (next: string[]) => void; disabled?: boolean }) {
-  const [draft, setDraft] = useState('');
-  const valid = isCommandName(draft.trim()) && !commands.includes(draft.trim());
-  const add = () => {
-    if (!valid) return;
-    onChange([...commands, draft.trim()]);
-    setDraft('');
-  };
-  return (
-    <div className="command-list">
-      <div className="command-chips">
-        {commands.length === 0 && <span className="settings-help">None yet.</span>}
-        {commands.map((c) => (
-          <span key={c} className="command-chip editable">
-            <code>{c}</code>
-            <button className="icon chip-remove" aria-label={`Stop allowing ${c}`} disabled={disabled} onClick={() => onChange(commands.filter((x) => x !== c))}>
-              <Icon name="close" size={11} />
-            </button>
-          </span>
-        ))}
-      </div>
-      <form
-        className="settings-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          add();
-        }}
-      >
-        <input className="settings-input" aria-label="Command to allow" placeholder="e.g. python3" value={draft} disabled={disabled} onChange={(e) => setDraft(e.target.value)} />
-        <button type="submit" disabled={!valid || disabled}>
-          Allow
-        </button>
-      </form>
-    </div>
-  );
-}
-
 function PermissionsPage() {
-  const settings = useStore(studio.store, (s) => s.settings);
   const ws = useStore(studio.store, (s) => s.workspace);
   return (
     <>
@@ -510,15 +469,12 @@ function PermissionsPage() {
           ))}
         </div>
       </Section>
-      <Section title="More commands to run without asking, in every book">
+      <Section title="Your rules for commands">
         <p className="settings-help">
-          Tools your books use, like <code>python3</code> or <code>Rscript</code>. A command line still asks if any part of it isn’t allowed, writes with &gt;, or
-          deletes; building the book stays blocked.
+          Commands the assistant runs without asking, or never: made with “Always allow…” on a request, or here. Each command of a line needs a rule (or to only look) to
+          run without asking; writing into a file with &gt; still asks; building the book stays blocked.
         </p>
-        <div className="settings-field">
-          <CommandList commands={settings.allowCommands} onChange={(allowCommands) => studio.updateSettings({ allowCommands })} />
-          {ws && <p className="settings-help">Those for one book only are in that book’s settings (This book ▸ Assistant).</p>}
-        </div>
+        <CommandRules scopes={['task', 'book', 'all']} add={ws ? ['book', 'all'] : ['all']} own />
       </Section>
     </>
   );

@@ -37,6 +37,8 @@ export function parseConfig(text: string): ParsedConfig {
 const RETIRED = [
   // History below the files: History is a view of its own now, like the others.
   'historyPlacement',
+  // Commands to allow, by name: rules now (alwaysAllow, with "python3" as "python3 *").
+  'allowCommands',
 ];
 
 /** The file's text: the settings (and zoom) over what was there, in a stable order, 2-space JSON. */
@@ -59,7 +61,8 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     skippedUpdate: settings.skippedUpdate,
     zoom: Math.round(zoom * 100) / 100,
     permissions: settings.permissions,
-    allowCommands: settings.allowCommands,
+    alwaysAllow: settings.alwaysAllow,
+    neverAllow: settings.neverAllow,
   };
   const rest = Object.fromEntries(Object.entries(raw).filter(([k]) => !(k in ours) && !RETIRED.includes(k)));
   return `${JSON.stringify({ ...ours, ...rest }, null, 2)}\n`;

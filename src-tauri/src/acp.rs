@@ -501,6 +501,81 @@ pub async fn assistants_status() -> CmdResult<Setups> {
     .await?)
 }
 
+/// A file where an assistant keeps rules of its own, and what's in it.
+#[derive(Serialize)]
+pub struct RuleFile {
+    path: String,
+    text: String,
+}
+
+/// Where an assistant keeps rules of its own outside the book (Claude Code's
+/// settings in ~/.claude, Codex's rules in $CODEX_HOME/rules): rules that let
+/// it run commands without asking Typst Studio.
+fn rule_paths(kind: &str) -> Vec<PathBuf> {
+    let Some(home) = discover::home() else {
+        return vec![];
+    };
+    match kind {
+        "claude" => {
+            let dir = std::env::var_os("CLAUDE_CONFIG_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".claude"));
+            vec![dir.join("settings.json"), dir.join("settings.local.json")]
+        }
+        "codex" => {
+            let dir = std::env::var_os("CODEX_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".codex"))
+                .join("rules");
+            let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+                .map(|d| {
+                    d.filter_map(|e| e.ok().map(|e| e.path()))
+                        .filter(|p| p.extension().is_some_and(|x| x == "rules"))
+                        .collect()
+                })
+                .unwrap_or_default();
+            files.sort();
+            files
+        }
+        _ => vec![],
+    }
+}
+
+/// Settings ▸ Permissions: an assistant's own rule files, to show (read only).
+#[tauri::command]
+pub async fn assistant_rule_files(kind: String) -> CmdResult<Vec<RuleFile>> {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
+        rule_paths(&kind)
+            .into_iter()
+            .filter_map(|p| {
+                let text = std::fs::read_to_string(&p).ok()?;
+                (text.len() < 1_000_000).then(|| RuleFile {
+                    path: p.to_string_lossy().into_owned(),
+                    text,
+                })
+            })
+            .take(20)
+            .collect()
+    })
+    .await?)
+}
+
+/// Show one of an assistant's rule files in Finder.
+#[tauri::command]
+pub async fn assistant_rule_reveal(kind: String, path: String) -> CmdResult<()> {
+    let p = PathBuf::from(&path);
+    if !rule_paths(&kind).contains(&p) {
+        return Err(CmdError::Invalid(format!(
+            "not one of {kind}'s rule files: {path}"
+        )));
+    }
+    std::process::Command::new("/usr/bin/open")
+        .arg("-R")
+        .arg(&p)
+        .status()?;
+    Ok(())
+}
+
 /// One download at a time, whichever window asks.
 static DOWNLOADING: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));

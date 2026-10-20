@@ -108,6 +108,7 @@ describe('Typst Studio’s tools, as an MCP server', () => {
     for (const [args, says] of [
       [{ permissions: { shell: 'allow' } }, /can’t change what you may do without asking.*open_settings/],
       [{ allowCommands: ['rm'] }, /can’t change the commands you may run/],
+      [{ alwaysAllow: ['rm *'] }, /can’t change the commands you may run/],
       [{ toolPaths: { git: '/tmp/x' } }, /programs Typst Studio runs/],
       [{ assistant: 'claude' }, /use switch_assistant/],
       [{ effort: 'high' }, /use set_model/],

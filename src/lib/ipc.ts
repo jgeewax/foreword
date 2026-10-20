@@ -215,6 +215,9 @@ export const ipc = {
   assistantsStatus: () => invoke<AssistantsSetup>('assistants_status'),
   /** Open Terminal on the assistant's sign-in command. */
   assistantSignIn: (kind: string) => invoke<void>('assistant_sign_in', { kind }),
+  /** An assistant's own rule files outside the book (~/.claude settings, Codex's rules), read only; and one shown in Finder. */
+  assistantRuleFiles: (kind: string) => invoke<{ path: string; text: string }[]>('assistant_rule_files', { kind }),
+  assistantRuleReveal: (kind: string, path: string) => invoke<void>('assistant_rule_reveal', { kind, path }),
   /** Typst Studio's update: what's known, a check, install now (then it restarts), or at quit. Changes arrive as `update` events. */
   updateState: () => invoke<UpdateState>('update_state'),
   updateCheck: () => invoke<UpdateState>('update_check'),

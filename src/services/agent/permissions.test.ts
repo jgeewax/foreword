@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { commandPermissionRules } from './command-rules';
 import {
   onlyLooks,
   describePermissions,
@@ -15,6 +16,8 @@ import {
 
 /** Last matching rule wins (verified against OpenCode 2.0.20). */
 const effect = (action: string, resource: string, rules: readonly PermissionRule[]) => ruleEffect(action, resource, rules) ?? 'none';
+
+const python3 = commandPermissionRules([{ pattern: 'python3 *', effect: 'allow', scope: 'all' }]);
 
 const ask = sessionRules(PRESETS.ask.permissions);
 const edit = sessionRules(PRESETS.edit.permissions);
@@ -97,10 +100,30 @@ describe('commands that only look', () => {
     expect(effect('shell', 'make', edit)).toBe('deny');
   });
 
-  it('take more commands from the config file', () => {
-    const rules = sessionRules(PRESETS.ask.permissions, false, ['python3']);
+  it('take the author’s rules, but not for writing into a file with >', () => {
+    const rules = sessionRules(PRESETS.ask.permissions, false, python3);
     expect(effect('shell', 'python3 count.py', rules)).toBe('allow');
+    expect(effect('shell', 'python3', rules)).toBe('allow');
     expect(effect('shell', 'python3 x.py > out.txt', rules)).toBe('ask');
+    expect(effect('shell', 'python3 x.py > out.txt', sessionRules({ ...PRESETS.ask.permissions, shell: 'deny' }, false, python3))).toBe('deny');
+    // Exactly as the author allowed it, with its ">".
+    const exact = sessionRules(PRESETS.ask.permissions, false, commandPermissionRules([{ pattern: 'python3 x.py > out.txt', effect: 'allow', scope: 'book' }]));
+    expect(effect('shell', 'python3 x.py > out.txt', exact)).toBe('allow');
+    // An author's rule wins over a kind of action: they said so for this command.
+    const rmTmp = sessionRules(PRESETS.ask.permissions, false, commandPermissionRules([{ pattern: 'rm -rf tmp', effect: 'allow', scope: 'book' }]));
+    expect(effect('shell', 'rm -rf tmp', rmTmp)).toBe('allow');
+    expect(effect('shell', 'rm -rf tmp2', rmTmp)).toBe('ask');
+  });
+});
+
+describe('files that say what the assistant may do', () => {
+  it('always ask before the assistant changes them, even with edits allowed for the task', () => {
+    const task = [{ action: 'edit', resource: '*', effect: 'allow' as const }];
+    for (const rules of [edit, sessionRules(PRESETS.edit.permissions, false, task)]) {
+      for (const f of ['.typst-studio.json', 'book/.typst-studio.json', '.claude/settings.local.json', 'x/.claude/settings.json']) expect(effect('edit', f, rules), f).toBe('ask');
+      expect(effect('edit', 'chapters/ch1.typ', rules)).toBe('allow');
+    }
+    expect(effect('edit', '.typst-studio.json', ro)).toBe('deny');
   });
 });
 
@@ -175,9 +198,9 @@ describe('redirections that write nothing', () => {
     expect(onlyLooks('edit', ['main.typ'], edit)).toBe(false);
     expect(onlyLooks('shell', [], edit)).toBe(false);
     // Commands the author allowed count too, but not in read-only modes.
-    expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, false, ['python3']))).toBe(true);
-    expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(false);
-    expect(onlyLooks('shell', ['ls 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, ['python3']))).toBe(true);
+    expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, false, python3))).toBe(true);
+    expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, python3))).toBe(false);
+    expect(onlyLooks('shell', ['ls 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, python3))).toBe(true);
   });
 
   it('count sed printing line ranges as looking, and no other sed', () => {

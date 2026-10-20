@@ -58,7 +58,7 @@ import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsF
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
-import { AcpAdapter, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
+import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
@@ -68,7 +68,10 @@ import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_C
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
-import { describePermissions, onlyLooks, PRESETS, sessionRules } from '../services/agent/permissions';
+import { describePermissions, onlyLooks, PRESETS, sessionRules, type PermissionRule } from '../services/agent/permissions';
+import { commandPermissionRules, ruleKey, rulesUsed, type CommandRule, type RuleEffect, type RuleScope } from '../services/agent/command-rules';
+import { decide } from '../services/agent/acp-events';
+import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
@@ -76,6 +79,25 @@ import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent
 import { TypstService } from '../services/typst';
 
 export type ToastAction = { label: string; run: () => void };
+
+/** What the author allowed for one task (a conversation): commands, as rules, and other requests. Kept while the app runs. */
+export type TaskRules = { alwaysAllow: string[]; actions: PermissionRule[] };
+
+/** When a rule was made and how often it let a command run (kept in the app, not in the settings files). */
+export type RuleStat = { created: number; uses: number; last: number };
+
+/** What an "always" answer kept: command rules where they apply, or a task's allowance; `removed` once taken back. */
+export type Remembered = { scope: RuleScope; label: string; patterns: string[]; actions: PermissionRule[]; removed?: boolean };
+
+const RULE_STATS_KEY = 'studio.ruleStats';
+function loadRuleStats(): Record<string, RuleStat> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RULE_STATS_KEY) ?? '{}');
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
 
 /** A conversation that isn't shown: what it's doing, and whether it needs the author. */
 export type BackgroundTask = {
@@ -181,6 +203,10 @@ export type ChatItem =
       state: 'pending' | 'sending' | 'once' | 'always' | 'reject';
       /** Asked by Typst Studio itself (its settings tools, for an assistant that asks no one): answered here, not by the assistant. */
       local?: boolean;
+      /** For "always": what the app kept (command-rules.ts). */
+      remembered?: Remembered;
+      /** Answered by a rule the author made while it waited. */
+      byRule?: boolean;
     }
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
 
@@ -319,6 +345,9 @@ export type StudioState = {
   };
   perf: { input: Stat; preview: Stat };
   toast: { text: string; tone: 'info' | 'error'; actions?: ToastAction[] } | null;
+  /** What the author allowed for each task (by conversation), and how the command rules have been used. */
+  taskRules: Record<string, TaskRules>;
+  ruleStats: Record<string, RuleStat>;
   /** UI zoom factor (1 = 100%). */
   zoom: number;
   settings: AppSettings;
@@ -441,6 +470,8 @@ const initialState: StudioState = {
   },
   perf: { input: { p50: null, p95: null, n: 0 }, preview: { p50: null, p95: null, n: 0 } },
   toast: null,
+  taskRules: {},
+  ruleStats: loadRuleStats(),
   zoom: 1,
   settings: loadSettings(),
   settingsOpen: false,
@@ -525,6 +556,53 @@ function takeSession(key: string): string | null {
     return v;
   } catch {
     return null;
+  }
+}
+
+/** Whether two settings' command rules differ. */
+const rulesDiffer = (a: { alwaysAllow?: string[]; neverAllow?: string[] }, b: { alwaysAllow?: string[]; neverAllow?: string[] }) =>
+  (a.alwaysAllow ?? []).join('\n') !== (b.alwaysAllow ?? []).join('\n') || (a.neverAllow ?? []).join('\n') !== (b.neverAllow ?? []).join('\n');
+
+/** What "allow for this task" lets in, for a request that isn't a command: its edits, that site, that folder or file. */
+export function taskAllowance(action: string, resources: string[]): PermissionRule[] {
+  const allow = (resource: string): PermissionRule => ({ action, resource, effect: 'allow' });
+  switch (action) {
+    case 'edit':
+      // Every change to the book's files, except .env files, which ask each time.
+      return [allow('*'), { action, resource: '*.env', effect: 'ask' }, { action, resource: '*.env.*', effect: 'ask' }];
+    case 'websearch':
+      return [allow('*')];
+    case 'webfetch':
+      return resources.flatMap((r) => {
+        try {
+          const { origin } = new URL(r);
+          return [allow(origin), allow(`${origin}/*`)];
+        } catch {
+          return [allow(r)];
+        }
+      });
+    default:
+      return resources.map(allow);
+  }
+}
+
+/** That allowance in words, for the chat and the toast. */
+export function taskAllowanceWords(action: string, resources: string[]): string {
+  switch (action) {
+    case 'edit':
+      return 'changes to the book’s files';
+    case 'websearch':
+      return 'web searches';
+    case 'webfetch': {
+      const hosts = [...new Set(resources.map((r) => (/^https?:\/\/([^/]+)/.exec(r)?.[1] ?? r)))];
+      return `pages on ${hosts.join(', ')}`;
+    }
+    case 'external_directory':
+      return `files in ${resources.join(', ')}`;
+    case 'shell':
+      return 'this command';
+    default:
+      return resources.length ? resources.join(', ') : 'this';
   }
 }
 
@@ -3246,7 +3324,7 @@ export class Studio {
     const config = modeConfig(mode);
     try {
       await this.agent.switchAgent(sessionId, config.agent);
-      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands());
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId));
       if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
@@ -3470,7 +3548,7 @@ export class Studio {
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
       await agent.switchAgent(sessionId, config.agent).catch(() => {});
-      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.allowedCommands()).catch(() => {});
+      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId)).catch(() => {});
       await this.applyInstructions(sessionId);
       void this.refreshEfforts();
     } catch (e) {
@@ -3699,7 +3777,7 @@ export class Studio {
           permissions: this.state.settings.permissions,
           readOnly: config.readOnly,
           agent: config.agent,
-          allowCommands: this.allowedCommands(),
+          rules: this.authorRules(null),
           effort: this.state.agent.effort,
         });
         this.setAgent({ sessionId });
@@ -3872,17 +3950,34 @@ export class Studio {
     void this.checkTurnEnded(800);
   }
 
-  async replyPermission(requestId: string, decision: PermissionDecision) {
+  /**
+   * The author's answer to a permission request. "Always" is the app's to keep
+   * (command-rules.ts): `remember` says which command rules and where; without
+   * it, what was asked is allowed for the rest of the task. The assistant hears
+   * "once" either way, so it keeps no rules of its own.
+   */
+  async replyPermission(requestId: string, decision: PermissionDecision, remember?: { patterns: string[]; scope: RuleScope; label: string }) {
     const item = this.state.agent.items.find((it) => it.id === requestId);
     if (item?.kind === 'permission' && item.local) return this.answerLocalAsk(requestId, decision !== 'reject');
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
     this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'sending' } : it));
     try {
+      // The rules first, so requests it makes meanwhile meet them.
+      const remembered = decision === 'always' && item?.kind === 'permission' ? await this.rememberFor(item, sessionId, remember) : undefined;
       await this.agent.replyPermission(sessionId, requestId, decision);
+      this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: decision, ...(remembered ? { remembered } : {}) } : it));
       // A yes for one of the settings tools: the tool won't ask again.
       const tool = item?.kind === 'permission' ? (item.action === STUDIO_TOOL_ACTION ? item.resources[0] : studioToolName(item.action)) : null;
       if (tool && decision !== 'reject') this.studioApprovals.set(tool, Date.now());
+      if (remembered) {
+        const where = remembered.scope === 'task' ? 'Allowed for this task' : `Remembered ${remembered.scope === 'book' ? `in ${this.state.workspace?.name ?? 'this book'}` : 'in every book'}`;
+        this.toast(`${where}: ${remembered.label}.`, 'info', [
+          { label: 'Undo', run: () => void this.forgetRemembered(requestId) },
+          { label: 'Rules', run: () => this.openSettings('permissions') },
+        ]);
+        this.answerCovered();
+      }
     } catch (e) {
       this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'pending' } : it));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Permission reply failed: ${errorMessage(e)}` });
@@ -4129,7 +4224,7 @@ export class Studio {
     const agent = this.agent;
     if (!agent || this.answered.has(e.requestId)) return false;
     const foreground = e.sessionId === this.state.agent.sessionId;
-    const rules = sessionRules(this.state.settings.permissions, foreground ? modeConfig(this.state.agent.mode).readOnly : true, this.allowedCommands());
+    const rules = sessionRules(this.state.settings.permissions, foreground ? modeConfig(this.state.agent.mode).readOnly : true, this.authorRules(e.sessionId));
     if (!onlyLooks(e.action, e.resources, rules)) return false;
     this.answered.add(e.requestId);
     agent.replyPermission(e.sessionId, e.requestId, 'once').catch(() => this.onAgentEvent(e)); // the author answers after all
@@ -4248,6 +4343,7 @@ export class Studio {
         this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '', started: Date.now() });
         break;
       case 'tool-called':
+        this.countRuleUse(e.sessionId, e.callId, e.input);
         this.toolCalls.set(e.callId, { name: this.toolCalls.get(e.callId)?.name ?? '', input: e.input });
         this.setActivity({ phase: 'tool', label: toolActivity(this.toolCalls.get(e.callId)!.name, e.input, this.state.names) });
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, input: e.input, summary: summarizeToolInput(e.input) } : it));
@@ -4292,7 +4388,8 @@ export class Studio {
         break;
       case 'permission-replied':
         this.updateItem(e.requestId, (it) =>
-          it.kind === 'permission' ? { ...it, state: (['once', 'always', 'reject'].includes(e.reply) ? e.reply : 'reject') as 'once' } : it,
+          // An "always" the app kept reaches the assistant as "once" (OpenCode says so back).
+          it.kind === 'permission' && !(it.state === 'always' && e.reply === 'once') ? { ...it, state: (['once', 'always', 'reject'].includes(e.reply) ? e.reply : 'reject') as 'once' } : it,
         );
         if (this.state.agent.activity?.phase === 'asking' && this.activityBeforeAsking) {
           const { since: _since, ...before } = this.activityBeforeAsking;
@@ -4367,7 +4464,8 @@ export class Studio {
     saveSettings(settings);
     this.store.set({ settings });
     if (write) this.scheduleConfigWrite();
-    if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions) || settings.allowCommands.join() !== before.allowCommands.join()) void this.applyPermissions();
+    if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
+    else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
     if (settings.assistant !== before.assistant && this.state.workspace) {
       // Another program's conversations: start a new one with it.
       this.newSession();
@@ -4426,9 +4524,207 @@ export class Studio {
   }
   private toolRestarts = Promise.resolve();
 
-  /** Commands the assistant may run without asking: from the settings file and from this book's. */
-  allowedCommands(): string[] {
-    return [...new Set([...this.state.settings.allowCommands, ...(this.state.project.settings.allowCommands ?? [])])];
+  // ---- the author's rules (command-rules.ts) ---------------------------------------------
+
+  /** The author's command rules where they apply: every book's, this book's, and the task's (`sessionId`). */
+  commandRules(sessionId: string | null = this.state.agent.sessionId): CommandRule[] {
+    const app = this.state.settings;
+    const book = this.state.project.settings;
+    const task = sessionId ? this.state.taskRules[sessionId] : undefined;
+    const rules = (patterns: string[] | undefined, effect: RuleEffect, scope: RuleScope) => (patterns ?? []).map((pattern): CommandRule => ({ pattern, effect, scope }));
+    return [
+      ...rules(app.alwaysAllow, 'allow', 'all'),
+      ...rules(book.alwaysAllow, 'allow', 'book'),
+      ...rules(task?.alwaysAllow, 'allow', 'task'),
+      ...rules(app.neverAllow, 'deny', 'all'),
+      ...rules(book.neverAllow, 'deny', 'book'),
+    ];
+  }
+
+  /** A conversation's rules on top of the kinds of action: the author's commands, and what they allowed for the task. */
+  private authorRules(sessionId: string | null): PermissionRule[] {
+    return [...commandPermissionRules(this.commandRules(sessionId)), ...(sessionId ? (this.state.taskRules[sessionId]?.actions ?? []) : [])];
+  }
+
+  /** When a rule was made and how often it's been used. */
+  ruleStat(r: CommandRule, sessionId = this.state.agent.sessionId): RuleStat | undefined {
+    return this.state.ruleStats[this.ruleStatKey(r, sessionId)];
+  }
+
+  private ruleStatKey(r: CommandRule, sessionId: string | null) {
+    return ruleKey(r, r.scope === 'book' ? (this.state.workspace?.root ?? '') : r.scope === 'task' ? (sessionId ?? '') : '');
+  }
+
+  private setRuleStats(update: (stats: Record<string, RuleStat>) => void) {
+    const ruleStats = { ...this.state.ruleStats };
+    update(ruleStats);
+    this.store.set({ ruleStats });
+    try {
+      localStorage.setItem(RULE_STATS_KEY, JSON.stringify(ruleStats));
+    } catch {
+      // Counts are a nicety.
+    }
+  }
+
+  private updateTaskRules(sessionId: string, update: (t: TaskRules) => TaskRules) {
+    this.store.set((s) => ({ taskRules: { ...s.taskRules, [sessionId]: update(s.taskRules[sessionId] ?? { alwaysAllow: [], actions: [] }) } }));
+  }
+
+  /** The conversation's rules, brought up to date (the last change's, awaited by whoever made it). */
+  private permissionsApplied: Promise<void> = Promise.resolve();
+
+  /**
+   * Let commands run without asking (`allow`) or never (`deny`): for this task,
+   * in this book (its .typst-studio.json) or in every book (the settings file).
+   * The conversation has them at once.
+   */
+  async rememberCommands(patterns: string[], scope: RuleScope, effect: RuleEffect = 'allow') {
+    const key = effect === 'allow' ? 'alwaysAllow' : 'neverAllow';
+    const sessionId = this.state.agent.sessionId;
+    const add = (list: string[] | undefined) => [...new Set([...(list ?? []), ...patterns])];
+    if (scope === 'task') {
+      if (!sessionId || effect !== 'allow') throw new Error('A task’s rules are for commands to allow, in a conversation.');
+      this.updateTaskRules(sessionId, (t) => ({ ...t, alwaysAllow: add(t.alwaysAllow) }));
+      this.permissionsApplied = this.applyPermissions({ notice: false });
+    } else if (scope === 'book') {
+      const errors = await this.updateProjectSettings({ [key]: add(this.state.project.settings[key]) });
+      if (errors.length) throw new Error(errors.join(' '));
+    } else this.updateSettings({ [key]: add(this.state.settings[key]) });
+    const now = Date.now();
+    this.setRuleStats((stats) => {
+      for (const pattern of patterns) {
+        const k = this.ruleStatKey({ pattern, effect, scope }, sessionId);
+        stats[k] ??= { created: now, uses: 0, last: 0 };
+      }
+    });
+    await this.permissionsApplied;
+  }
+
+  /** Take rules back; asking again from the next request. */
+  async forgetCommands(patterns: string[], scope: RuleScope, effect: RuleEffect = 'allow') {
+    const key = effect === 'allow' ? 'alwaysAllow' : 'neverAllow';
+    const sessionId = this.state.agent.sessionId;
+    const without = (list: string[] | undefined) => (list ?? []).filter((p) => !patterns.includes(p));
+    if (scope === 'task') {
+      if (sessionId) this.updateTaskRules(sessionId, (t) => ({ ...t, alwaysAllow: without(t.alwaysAllow) }));
+      this.permissionsApplied = this.applyPermissions({ notice: false });
+    } else if (scope === 'book') {
+      const errors = await this.updateProjectSettings({ [key]: without(this.state.project.settings[key]) });
+      if (errors.length) throw new Error(errors.join(' '));
+    } else this.updateSettings({ [key]: without(this.state.settings[key]) });
+    await this.permissionsApplied;
+  }
+
+  /** What "always" keeps for a request: the command rules the card chose, or else this kind of request for the task. */
+  private async rememberFor(item: Extract<ChatItem, { kind: 'permission' }>, sessionId: string, remember?: { patterns: string[]; scope: RuleScope; label: string }): Promise<Remembered> {
+    if (remember?.patterns.length) {
+      await this.rememberCommands(remember.patterns, remember.scope);
+      return { scope: remember.scope, label: remember.label, patterns: remember.patterns, actions: [] };
+    }
+    const actions = taskAllowance(item.action, item.resources);
+    this.updateTaskRules(sessionId, (t) => ({ ...t, actions: [...t.actions, ...actions] }));
+    this.permissionsApplied = this.applyPermissions({ notice: false });
+    await this.permissionsApplied;
+    return { scope: 'task', label: remember?.label ?? taskAllowanceWords(item.action, item.resources), patterns: [], actions };
+  }
+
+  /** Take back what an "always" kept (`restore`: put it back). */
+  async forgetRemembered(itemId: string, restore = false) {
+    const item = this.state.agent.items.find((it) => it.id === itemId);
+    const r = item?.kind === 'permission' ? item.remembered : undefined;
+    const { sessionId } = this.state.agent;
+    if (!r || !!r.removed === !restore) return;
+    try {
+      if (r.patterns.length) await (restore ? this.rememberCommands(r.patterns, r.scope) : this.forgetCommands(r.patterns, r.scope));
+      if (r.actions.length && sessionId) {
+        const same = (a: PermissionRule) => r.actions.some((b) => JSON.stringify(a) === JSON.stringify(b));
+        this.updateTaskRules(sessionId, (t) => ({ ...t, actions: restore ? [...t.actions, ...r.actions] : t.actions.filter((a) => !same(a)) }));
+        this.permissionsApplied = this.applyPermissions({ notice: false });
+        await this.permissionsApplied;
+      }
+      this.updateItem(itemId, (it) => (it.kind === 'permission' && it.remembered ? { ...it, remembered: { ...it.remembered, removed: !restore } } : it));
+    } catch (e) {
+      this.toast(`Couldn't change the rule: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** Requests still waiting that the author's rules now answer (the same command, asked again meanwhile). */
+  private answerCovered() {
+    const { sessionId } = this.state.agent;
+    if (!sessionId) return;
+    const rules = sessionRules(this.state.settings.permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(sessionId));
+    for (const it of this.state.agent.items) {
+      if (it.kind !== 'permission' || it.state !== 'pending' || it.local || decide(it.action, it.resources, rules) !== 'allow') continue;
+      this.updateItem(it.id, (x) => (x.kind === 'permission' ? { ...x, byRule: true } : x));
+      void this.replyPermission(it.id, 'once');
+    }
+  }
+
+  /**
+   * The author's rules that let a command run without asking: those that cover
+   * it, made before it ran (`at`), where the kinds of action alone would have asked.
+   */
+  rulesThatAllowed(command: string, at = Infinity): CommandRule[] {
+    const readOnly = modeConfig(this.state.agent.mode).readOnly;
+    if (decide('shell', [command], sessionRules(this.state.settings.permissions, readOnly)) === 'allow') return [];
+    return rulesUsed(command, this.commandRules()).filter((r) => r.effect === 'allow' && (this.ruleStat(r)?.created ?? 0) <= at);
+  }
+
+  /**
+   * How the rules see one command of a line: it only looks (never asks), the
+   * kinds of action allow it, a rule of the author's does, it needs asking, or
+   * it may never run.
+   */
+  commandStatus(command: string): 'looks' | 'allowed' | 'rule' | 'asks' | 'never' {
+    const readOnly = modeConfig(this.state.agent.mode).readOnly;
+    const effect = decide('shell', [command], sessionRules(this.state.settings.permissions, readOnly, this.authorRules(this.state.agent.sessionId)));
+    if (effect === 'deny') return 'never';
+    if (effect === 'ask') return 'asks';
+    if (this.rulesThatAllowed(command).length) return 'rule';
+    return decide('shell', [command], sessionRules(PRESETS.readonly.permissions, true)) === 'allow' ? 'looks' : 'allowed';
+  }
+
+  /**
+   * The rules the assistant keeps of its own, which let it act without asking
+   * (so Typst Studio never sees those requests): Codex's rules files, and
+   * Claude Code's settings in the book's .claude folder and in ~/.claude, for
+   * the tools it doesn't ask the app about anyway. Read only.
+   */
+  async assistantOwnRules(): Promise<{ path: string; inBook: boolean; rules: OwnRule[] }[]> {
+    const kind = this.state.settings.assistant;
+    if (kind !== 'claude' && kind !== 'codex') return [];
+    const files: { path: string; text: string; inBook: boolean }[] = [];
+    if (kind === 'claude' && this.state.workspace) {
+      for (const path of ['.claude/settings.local.json', '.claude/settings.json']) {
+        const text = await ipc.fsRead(path).then((f) => f.text, () => null);
+        if (text) files.push({ path, text, inBook: true });
+      }
+    }
+    for (const f of await ipc.assistantRuleFiles(kind).catch(() => [])) files.push({ ...f, inBook: false });
+    // Claude Code asks the app about commands, edits, reads and the web whatever its rules say (CLAUDE_ASKS);
+    // a skill's commands and edits ask too. Its MCP tools are what still act unasked.
+    const stillUnasked = (r: OwnRule) => kind !== 'claude' || (!r.command && !(CLAUDE_ASKS as readonly string[]).includes(r.text.replace(/\(.*$/s, '')) && /^mcp__/.test(r.text));
+    return files
+      .map((f) => ({ path: f.path, inBook: f.inBook, rules: (kind === 'claude' ? claudeRules : codexRules)(f.text).filter((r) => r.effect === 'allow' && stillUnasked(r)) }))
+      .filter((f) => f.rules.length);
+  }
+
+  /** Commands it ran: how often each rule let one run. */
+  private counted = new Set<string>();
+  private countRuleUse(sessionId: string, callId: string, input: unknown) {
+    const command = input && typeof input === 'object' ? (input as { command?: unknown }).command : undefined;
+    if (typeof command !== 'string' || this.counted.has(callId)) return;
+    const used = rulesUsed(command, this.commandRules(sessionId)).filter((r) => r.effect === 'allow');
+    if (!used.length) return;
+    this.counted.add(callId);
+    const now = Date.now();
+    this.setRuleStats((stats) => {
+      for (const r of used) {
+        const k = this.ruleStatKey(r, sessionId);
+        const was = stats[k] ?? { created: 0, uses: 0, last: 0 };
+        stats[k] = { ...was, uses: was.uses + 1, last: now };
+      }
+    });
   }
 
   // ---- the settings file (~/.typst-studio/settings.json) ---------------------------------
@@ -4490,19 +4786,14 @@ export class Studio {
   }
 
   /** Apply the permission settings to the current conversation, and say so in the chat. */
-  private async applyPermissions() {
+  /** Give the conversation the permissions and rules as they are now; `notice`: say so in the chat (not for a rule the author just made there). */
+  private async applyPermissions({ notice = true } = {}) {
     const { sessionId } = this.state.agent;
     if (!sessionId || !this.agent) return;
     const permissions = this.state.settings.permissions;
     try {
-      const commands = this.allowedCommands();
-      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly, commands);
-      this.pushItem({
-        kind: 'notice',
-        id: uid('n'),
-        tone: 'info',
-        text: `${describePermissions(permissions)}${commands.length ? ` Also runs without asking: ${commands.join(', ')}.` : ''}`,
-      });
+      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(sessionId));
+      if (notice) this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: describePermissions(permissions) });
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change permissions for this conversation: ${errorMessage(e)}` });
     }
@@ -4529,7 +4820,7 @@ export class Studio {
     const parsed = parseProjectSettings(text);
     this.store.set({ project: { settings: parsed.settings, raw: parsed.raw, hash, error: parsed.error } });
     if (restartIfNeeded && needsRestart(before, parsed.settings)) await this.applyEntryAndRestart(parsed.settings);
-    if ((before.allowCommands ?? []).join() !== (parsed.settings.allowCommands ?? []).join()) void this.applyPermissions();
+    if (rulesDiffer(before, parsed.settings)) this.permissionsApplied = this.applyPermissions({ notice: false });
   }
 
   /** The colour VS Code's Peacock gives the book, which the window wears until the book has its own. */
@@ -4583,7 +4874,7 @@ export class Studio {
       return [`Couldn't save ${PROJECT_FILE}: ${errorMessage(e)}`];
     }
     if (needsRestart(project.settings, next)) await this.applyEntryAndRestart(next);
-    if ((project.settings.allowCommands ?? []).join() !== (next.allowCommands ?? []).join()) void this.applyPermissions();
+    if (rulesDiffer(project.settings, next)) this.permissionsApplied = this.applyPermissions({ notice: false });
     return [];
   }
 

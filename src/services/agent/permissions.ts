@@ -10,6 +10,7 @@
 // "cat"; `$(…)` and backticks are checked on their own too). Redirections
 // and flags stay in the command ("echo hi > f.txt"). Verified live, 2.0.20.
 
+import { splitCommands } from './shell-words';
 import { STUDIO_LOOK_TOOLS, STUDIO_TOOL_ACTION, STUDIO_TOOL_NAMES, STUDIO_TOOLS } from './studio-tool';
 
 export type Level = 'allow' | 'ask' | 'deny';
@@ -106,6 +107,9 @@ export const NO_COMPILE_RULES: readonly PermissionRule[] = [
   { action: 'shell', resource: '*&&make*', effect: 'deny' },
 ];
 
+/** The book's settings (its command rules) and Claude Code's (its own rules), in the book. */
+const PERMISSION_FILES = ['.typst-studio.json', '*/.typst-studio.json', '.claude/*', '*/.claude/*'];
+
 /** Plan and Options modes: no file changes and no commands, whatever the settings. */
 export const READ_ONLY_RULES: readonly PermissionRule[] = [
   { action: 'edit', resource: '*', effect: 'deny' },
@@ -123,8 +127,8 @@ export const LOOK_COMMANDS = [
   'git status', 'git log', 'git diff', 'git show', 'git blame', 'git ls-files',
 ] as const;
 
-const lookRules = (extra: readonly string[] = []): PermissionRule[] =>
-  [...LOOK_COMMANDS, ...extra].flatMap((c) => [
+const lookRules = (): PermissionRule[] =>
+  LOOK_COMMANDS.flatMap((c) => [
     { action: 'shell', resource: c, effect: 'allow' },
     { action: 'shell', resource: `${c} *`, effect: 'allow' },
   ]);
@@ -140,10 +144,12 @@ const writingRules = (effect: Level): PermissionRule[] => WRITING_FORMS.map((res
 const commandPatterns = (cmds: string[]) => cmds.flatMap((c) => [`${c} *`, `* ${c} *`, `*;${c} *`, `*&&${c} *`, `*|${c} *`]);
 
 /**
- * `allowCommands`: more commands the author lets run without asking (from the
- * config file, e.g. "python3"), on top of LOOK_COMMANDS.
+ * `extra`: the author's own rules on top of these (command-rules.ts: commands
+ * they always or never allow, and what they allowed for this task). They win
+ * over the kinds of action above them; read-only modes and the build commands
+ * still win over an allow, and a "never" holds in every mode.
  */
-export function sessionRules(p: AgentPermissions, readOnly = false, allowCommands: readonly string[] = []): PermissionRule[] {
+export function sessionRules(p: AgentPermissions, readOnly = false, extra: readonly PermissionRule[] = []): PermissionRule[] {
   const studioEffect: Level = p.settings === 'ask' ? 'ask' : 'allow';
   return [
     // Anything not named below asks.
@@ -163,7 +169,7 @@ export function sessionRules(p: AgentPermissions, readOnly = false, allowCommand
         ] as PermissionRule[])
       : []),
     { action: 'shell', resource: '*', effect: p.shell },
-    ...lookRules(allowCommands),
+    ...lookRules(),
     ...writingRules(p.shell),
     ...commandPatterns(['mv', 'git mv']).map((resource): PermissionRule => ({ action: 'shell', resource, effect: p.move })),
     ...commandPatterns(['rm', 'rmdir', 'unlink', 'trash', 'git rm', 'shred']).map((resource): PermissionRule => ({ action: 'shell', resource, effect: p.delete })),
@@ -180,10 +186,24 @@ export function sessionRules(p: AgentPermissions, readOnly = false, allowCommand
     { action: STUDIO_TOOL_ACTION, resource: '*', effect: studioEffect },
     ...STUDIO_LOOK_TOOLS.map((t): PermissionRule => ({ action: STUDIO_TOOL_ACTION, resource: t, effect: 'allow' })),
     ...STUDIO_TOOL_NAMES.map((t): PermissionRule => ({ action: `${STUDIO_TOOLS}_${t}`, resource: '*', effect: STUDIO_LOOK_TOOLS.includes(t) ? 'allow' : studioEffect })),
+    ...authorRules(extra, p.shell),
+    // Files that say what the assistant may do: changing them is the author's to allow, each time, whatever else is allowed.
+    ...PERMISSION_FILES.map((resource): PermissionRule => ({ action: 'edit', resource, effect: p.edit === 'deny' ? 'deny' : 'ask' })),
     // Read-only: commands that only look still run; writing forms never do.
-    ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny')] : []),
+    ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny'), ...extra.filter((r) => r.effect === 'deny')] : []),
     ...NO_COMPILE_RULES,
   ];
+}
+
+/**
+ * The author's rules, allows before nevers. A rule that covers a command with
+ * anything after it ("lint.py *") doesn't cover writing into a file with ">"
+ * ("lint.py --help > ~/.zshrc"): that's for the setting for other commands.
+ */
+function authorRules(extra: readonly PermissionRule[], shell: Level): PermissionRule[] {
+  const allows = extra.filter((r) => r.effect !== 'deny');
+  const guards = allows.filter((r) => r.action === 'shell' && r.resource.endsWith(' *')).map((r): PermissionRule => ({ action: 'shell', resource: `${r.resource} *>*`.replace(/ \* \*>\*$/, ' *>*'), effect: shell }));
+  return [...allows, ...guards, ...extra.filter((r) => r.effect === 'deny')];
 }
 
 /** OpenCode's wildcard matching for permission resources (`*` = any run of characters). */
@@ -203,7 +223,8 @@ export function withoutHarmlessRedirects(command: string): string {
   return command
     .replace(/(^|\s)(?:\d|&)?>>?\s*\/dev\/null(?=\s|$)/g, '$1')
     .replace(/(^|\s)\d?>&\d(?=\s|$)/g, '$1')
-    .replace(/\s+/g, ' ')
+    // Spaces only: a newline ends a command, and must still split the line.
+    .replace(/[ \t]+/g, ' ')
     .trim();
 }
 
@@ -228,9 +249,8 @@ export function onlyLooks(action: string, resources: readonly string[], rules: r
   if (action !== 'shell' || !resources.length) return false;
   return resources.every((r) => {
     if (/\$\(|`/.test(r)) return false;
-    const bare = withoutHarmlessRedirects(r);
-    if (/[<>]/.test(bare)) return false;
-    return SED_PRINT.test(bare) || ruleEffect('shell', bare, rules) === 'allow';
+    const parts = splitCommands(r).map(withoutHarmlessRedirects);
+    return parts.length > 0 && parts.every((bare) => !/[<>]/.test(bare) && (SED_PRINT.test(bare) || ruleEffect('shell', bare, rules) === 'allow'));
   });
 }
 
