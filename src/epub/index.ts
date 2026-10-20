@@ -13,6 +13,8 @@
 // This file builds the EPUB's parts as text; epub.rs compiles the book and
 // writes the zip.
 
+import { scanIncludes } from '../app/includes';
+
 export type EpubKind = 'reflow' | 'fixed';
 
 /** One file in the EPUB: text, bytes (base64), or one of the export's own temporary files. */
@@ -27,26 +29,36 @@ export const EPUB_RULES = `// Typst Studio's EPUB export: rules for e-readers, a
 #show figure.where(kind: image): it => html.elem("figure", { html.frame(it.body); if it.caption != none { html.elem("figcaption", it.caption) } })
 `;
 
-const INCLUDE = /^([ \t]*)#include\s+"([^"]+)"/gm;
-
 /**
  * The main file for the reflowing export: the rules first, and before each
- * chapter it includes (an `#include "…"` at the start of a line) a marker where
- * the EPUB starts a new chapter.
+ * chapter it includes a marker where the EPUB starts a new chapter. A
+ * `#include "…"` gets the marker on the line before it; an `include "…"` in
+ * code, as in `#chapter(include "…")`, becomes the marker and the chapter in
+ * one content block, so the chapter's own markup around it still applies.
  */
 export function epubSource(main: string): { source: string; chapters: number } {
-  let chapters = 0;
-  const marked = main.replace(INCLUDE, (_, indent: string, file: string) => {
-    chapters++;
-    return `${indent}#html.elem("hr", attrs: (class: "epub-chapter", "data-file": "${file}"))\n${indent}#include "${file}"`;
-  });
-  return { source: `${EPUB_RULES}\n${marked}`, chapters };
+  const includes = scanIncludes(main);
+  let marked = '';
+  let at = 0;
+  for (const inc of includes) {
+    const marker = `#html.elem("hr", attrs: (class: "epub-chapter", "data-file": "${inc.spec}"))`;
+    if (inc.code) {
+      marked += `${main.slice(at, inc.start)}[${marker}#${main.slice(inc.start, inc.end)}]`;
+      at = inc.end;
+    } else {
+      const hash = inc.start - 1;
+      const indent = main.slice(main.lastIndexOf('\n', hash - 1) + 1, hash);
+      marked += `${main.slice(at, hash)}${marker}${/^[ \t]*$/.test(indent) ? `\n${indent}` : ''}`;
+      at = hash;
+    }
+  }
+  return { source: `${EPUB_RULES}\n${marked}${main.slice(at)}`, chapters: includes.length };
 }
 
 /** A book whose pages are its pictures, or a paper: fixed layout without asking (null: try reflowing text). */
 export function fixedFor(book: { files: readonly string[]; main: string }): string | null {
   if (book.files.includes('story.typ') || /#(story-page|spread)\(/.test(book.main)) return 'it’s a picture book, so every page stays as drawn';
-  const included = /^[ \t]*#include\s+"/m.test(book.main);
+  const included = scanIncludes(book.main).length > 0;
   if (!included && (book.files.some((f) => f.endsWith('.bib')) || /bibliography\(/.test(book.main))) return 'it’s a paper, so every page stays as typeset';
   return null;
 }

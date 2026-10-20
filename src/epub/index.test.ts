@@ -11,6 +11,15 @@ describe('the main file for the reflowing export', () => {
     expect(source).toContain('  #html.elem("hr", attrs: (class: "epub-chapter", "data-file": "chapters/02.typ"))\n  #include "chapters/02.typ"');
     expect(source).toContain('// #include "draft.typ" is a comment');
   });
+
+  it('marks chapters included in code too, keeping the markup around them', () => {
+    const main = '#{\n  set heading(numbering: none)\n  include "front/preface.typ"\n}\n#book-chapter(include "chapters/ch01.typ")\nSee #include "notes.typ" here.';
+    const { source, chapters } = epubSource(main);
+    expect(chapters).toBe(3);
+    expect(source).toContain('#{\n  set heading(numbering: none)\n  [#html.elem("hr", attrs: (class: "epub-chapter", "data-file": "front/preface.typ"))#include "front/preface.typ"]\n}');
+    expect(source).toContain('#book-chapter([#html.elem("hr", attrs: (class: "epub-chapter", "data-file": "chapters/ch01.typ"))#include "chapters/ch01.typ"])');
+    expect(source).toContain('See #html.elem("hr", attrs: (class: "epub-chapter", "data-file": "notes.typ"))#include "notes.typ" here.');
+  });
 });
 
 describe('which kind of EPUB', () => {
@@ -20,6 +29,7 @@ describe('which kind of EPUB', () => {
     // A book with chapters and a bibliography is a book.
     expect(fixedFor({ files: ['main.typ', 'refs.bib'], main: '#include "chapters/01.typ"' })).toBeNull();
     expect(fixedFor({ files: ['main.typ'], main: '#include "chapters/01.typ"' })).toBeNull();
+    expect(fixedFor({ files: ['main.typ', 'refs.bib'], main: '#book-chapter(include "chapters/01.typ")\n#bibliography("refs.bib")' })).toBeNull();
   });
 
   it('math on most pages', () => {
