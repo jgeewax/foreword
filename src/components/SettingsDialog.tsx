@@ -207,6 +207,24 @@ function GeneralPage() {
           <p className="settings-help">⌘= and ⌘− too, ⌘0 for actual size. Everything in the window follows it except the preview, whose pages always fit the pane.</p>
         </div>
       </Section>
+      <Section title="Preview">
+        <div className="settings-field">
+          <div className="settings-label">Pages kept drawn</div>
+          <Choice
+            label="Pages kept drawn"
+            value={settings.previewPages}
+            onChange={(v) => studio.updateSettings({ previewPages: v })}
+            options={[
+              { value: 'nearby', label: 'Nearby pages', detail: 'The pages around the ones on screen; the rest are drawn as you scroll to them. Light on memory, even for a long book.' },
+              {
+                value: 'all',
+                label: 'Every page',
+                detail: 'Scrolling far shows pages at once, never blank. A long book takes gigabytes, and macOS may reload the preview while you’re away (it comes back where you were).',
+              },
+            ]}
+          />
+        </div>
+      </Section>
       <UpdatesSection />
     </>
   );

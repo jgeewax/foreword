@@ -63,7 +63,7 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', alwaysAllow: [], neverAllow: [], formatOnSave: true, autoSaveMinutes: 5, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], toolPaths: {}, assistant: 'opencode', checkForUpdates: true, skippedUpdate: '' });
+    expect(loadSettings()).toEqual({ sendKey: 'enter', permissions: PRESETS.ask.permissions, markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', alwaysAllow: [], neverAllow: [], formatOnSave: true, autoSaveMinutes: 5, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], previewPages: 'nearby', toolPaths: {}, assistant: 'opencode', checkForUpdates: true, skippedUpdate: '' });
     store.set('studio.settings', '{"markAiReads":false}');
     expect(loadSettings()).toMatchObject({ markAiEdits: true, markAiReads: false });
     store.set('studio.settings', '{"aiEditColor":"#3FB950","aiReadColor":"blue"}');
@@ -90,6 +90,10 @@ describe('settings storage', () => {
     expect(loadSettings()).toMatchObject({ wordWrap: 'window', wordWrapColumn: 80, rulers: [80, 120] });
     store.set('studio.settings', '{"rulers":"80"}');
     expect(loadSettings().rulers).toEqual([]);
+    store.set('studio.settings', '{"previewPages":"all"}');
+    expect(loadSettings().previewPages).toBe('all');
+    store.set('studio.settings', '{"previewPages":"some"}');
+    expect(loadSettings().previewPages).toBe('nearby');
     store.set('studio.settings', '{"toolPaths":{"git":" /usr/bin/git ","tinymist":"","opencode":7,"python":"/usr/bin/python3"}}');
     expect(loadSettings().toolPaths).toEqual({ git: '/usr/bin/git' });
     store.set('studio.settings', '{"assistant":"claude"}');

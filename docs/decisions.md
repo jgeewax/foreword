@@ -3167,6 +3167,49 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   outlined in the chat (its question tool asked placement, proof, exercises),
   with no plan file and no ExitPlanMode; Write it wrote the section.
 
+### The preview keeps nearby pages drawn, and its place
+
+- **Asked for:** "when i navigate away for a while, screen goes to sleep, etc.
+  i come back (swipe left) and the preview panel has lost its scroll
+  position … i have a feeling theres memory pressure involved here."
+- **Found:** WebKit killed the preview's process 11 times in 27 hours on a
+  739-page book, each `reason=ExceededMemoryLimit` (system log: "Unable to
+  shrink memory footprint of process (6.1–7.9 GB) below the kill threshold
+  (4096 MB)"). WebKit's cap is 3 GB + 1 GB per page while a process's window
+  isn't in front, 16 GB while it is, checked every 30 s, so the kill came
+  just after the author came back. Tauri's default then reloads the webview,
+  and Tinymist's page starts at page 1. The memory is typst.ts's canvases:
+  every page off screen is drawn into one at 3 px per pt and kept, about
+  10.6 MB a page there (7.8 GB), held in the page's own process by our
+  `willReadFrequently` workaround.
+- **Now:** a setting, Settings ▸ General ▸ Preview (`previewPages`):
+  **Nearby pages** (the default) keeps canvases for the 6 pages either side
+  of the ones on screen and frees the rest's pixels at once; farther pages
+  are white until the scroll settles near them. **Every page** is
+  Tinymist's own behaviour. And wherever the preview's page loads again (a
+  kill, Restart Preview, reopening the book, the cover and back), it returns
+  to where the reader was, unless they scroll, click or jump first.
+- **How:** `PAGES_SCRIPT` in preview.rs hooks the renderer as its page opens
+  the WebSocket (the document is in `#typst-container.documents` by then,
+  before any data): `updateCanvas` gets only the near pages, nearest first;
+  the others' canvases go to 0×0 and lose their cache attributes, so they're
+  drawn again when they come near; canvases left behind by pages drawn as
+  SVG are freed too. The page reports the place (page from 0, fraction down
+  it) as scrolling settles; the app keeps it per book and per book/cover in
+  localStorage (`studio.previewPlace:<root>`) and sends it back, with the
+  setting, when the page reports `loaded`.
+- Measured on that book (739 pages, 441×666 pt), `footprint` of the
+  preview's process after reading through 12 places: 528 MB nearby; 8,004 MB
+  with every page; 535 MB on switching back.
+- Verified: unit tests (settings, the settings file); self-test
+  `previewpages` on a copy of the book (6 canvases at the top, 10 mid-book;
+  every page: 523 drawn after 6 s; nearby again: 10, none left behind;
+  `location.reload()` back to page 446, 0.80 down). A one-off run killed the
+  preview's process with SIGKILL: Tauri reloaded it and it came back to
+  page 261 at 0.045 down, as before the kill.
+- **Not done:** the Tinymist process itself held 12.7 GB after 15 hours on
+  that book (it isn't killed; worth a look).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

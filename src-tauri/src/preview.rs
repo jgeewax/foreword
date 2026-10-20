@@ -66,7 +66,8 @@ const WEBKIT_FIX_SCRIPT: &str = r#"
 "#;
 
 /// Tells the app when Tinymist makes the preview jump (source → preview sync),
-/// so it can stop trying fallback positions after the first one that works.
+/// so it can stop trying fallback positions after the first one that works,
+/// and the page (`studio-jump`: PAGES_SCRIPT doesn't restore over a jump).
 /// Wraps WebSocket before the preview's own scripts run.
 const JUMP_SCRIPT: &str = r#"
 (() => {
@@ -82,6 +83,7 @@ const JUMP_SCRIPT: &str = r#"
       super(...args);
       this.addEventListener('message', (e) => {
         if (!isJump(e.data)) return;
+        window.dispatchEvent(new Event('studio-jump'));
         try { window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'jump' } }); } catch (_) {}
       });
     }
@@ -95,6 +97,178 @@ const JUMP_SCRIPT: &str = r#"
     (document.head || document.documentElement).appendChild(style);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
+})();
+"#;
+
+/// Which pages the preview keeps drawn, and where the reader is in it.
+///
+/// 1. Off screen, typst.ts draws each page into a canvas (3 px per pt) and
+///    keeps every one: about 8 GB for a 700-page book, held in this process
+///    (`willReadFrequently`, above). Once its window isn't in front, WebKit
+///    kills a page's process over 4 GB (`ExceededMemoryLimit` in the system
+///    log) and Tauri loads it again, back at page 1. With `nearby` pages (the
+///    default setting), only the pages near the ones on screen keep a canvas;
+///    the others' pixels are freed, blank until they come near. The renderer
+///    is hooked as its page opens the WebSocket, before the document arrives.
+/// 2. Where the reader is (the page at the top, and how far down it) goes to
+///    the app as they scroll. When the page loads again (after such a kill,
+///    Restart Preview, reopening the book), the app sends it back and the
+///    preview returns there, unless the reader moved first.
+///
+/// The page reports `loaded`; the app answers with
+/// `__studioPreview.configure({ pages, place })`, and with `pages` alone when
+/// the setting changes.
+const PAGES_SCRIPT: &str = r#"
+(() => {
+  const NEAR = 6; // pages kept drawn before and after the ones on screen
+  const report = (r) => { try { window.__TAURI_INTERNALS__.invoke('preview_report', { report: r }); } catch (_) {} };
+  let pages = 'nearby', hooked = 0;
+  const drawn = new Set(); // canvases given pixels
+
+  // The pages in the document's units (pt), sorted, and the part on screen.
+  const layout = () => {
+    const main = document.getElementById('typst-container-main');
+    const svg = document.querySelector('#typst-app > svg');
+    const height = svg ? parseFloat(svg.getAttribute('data-height')) : NaN;
+    if (!main || !(height > 0)) return null;
+    const box = svg.getBoundingClientRect(), scale = box.height / height;
+    if (!(scale > 0)) return null;
+    const list = [];
+    for (const g of svg.children) {
+      if (!g.classList.contains('typst-page')) continue;
+      const i = parseInt(g.getAttribute('data-page-number'), 10);
+      const y = parseFloat(g.getAttribute('data-y')), h = parseFloat(g.getAttribute('data-page-height'));
+      if (i >= 0 && Number.isFinite(y) && h > 0) list.push({ i, y, h });
+    }
+    list.sort((a, b) => a.y - b.y);
+    const top = (main.getBoundingClientRect().top - box.top) / scale;
+    return { main, scale, pages: list, top, bottom: top + main.clientHeight / scale };
+  };
+
+  // A canvas's pixels go now (not at the next GC), and its page is drawn
+  // again when it comes near (typst.ts sees no size and no cache key).
+  const free = (canvas) => {
+    if (canvas.width || canvas.height) { canvas.width = 0; canvas.height = 0; }
+    canvas.removeAttribute('data-cache-key');
+    const box = canvas.parentElement;
+    if (box) for (const a of ['data-page-width', 'data-page-height', 'data-cache-key']) box.removeAttribute(a);
+    drawn.delete(canvas);
+  };
+
+  // typst.ts calls updateCanvas with every off-screen page after each render.
+  const hook = (impl) => {
+    if (!impl || impl.__studioPages || typeof impl.updateCanvas !== 'function') return;
+    impl.__studioPages = true;
+    hooked++;
+    const update = impl.updateCanvas;
+    impl.updateCanvas = function (list, opts) {
+      // A page drawn on screen (as SVG) leaves its canvas behind.
+      for (const c of drawn) if (!c.isConnected) free(c);
+      let keep = list;
+      if (pages !== 'all') {
+        const l = layout();
+        let first = 0, last = 0;
+        const seen = l ? l.pages.filter((p) => p.y + p.h >= l.top && p.y <= l.bottom) : [];
+        if (seen.length) { first = seen[0].i; last = seen[seen.length - 1].i; }
+        const away = (p) => (p.index < first ? first - p.index : p.index > last ? p.index - last : 0);
+        keep = [];
+        for (const p of list) {
+          const c = p.elem && p.elem.firstElementChild;
+          if (away(p) <= NEAR) keep.push(p);
+          else if (c) free(c);
+        }
+        keep.sort((a, b) => away(a) - away(b));
+      }
+      for (const p of keep) {
+        const c = p.elem && p.elem.firstElementChild;
+        if (c) drawn.add(c);
+      }
+      return update.call(this, keep, opts);
+    };
+  };
+  const Native = window.WebSocket;
+  window.WebSocket = class extends Native {
+    constructor(...args) {
+      super(...args);
+      const docs = (document.getElementById('typst-container') || {}).documents || [];
+      for (const d of docs) hook(d && d.impl);
+    }
+  };
+
+  // Where the reader is: the page at the top of the preview, and how far down it (0 to 1).
+  const where = () => {
+    const l = layout();
+    if (!l || !l.pages.length) return null;
+    const p = l.pages.find((x) => l.top < x.y + x.h) || l.pages[l.pages.length - 1];
+    return { page: p.i, offset: Math.round(Math.min(1, Math.max(0, (l.top - p.y) / p.h)) * 1000) / 1000 };
+  };
+
+  // Scroll there (a shorter book: its last page); false until the pages are laid out.
+  const goTo = (place) => {
+    const l = layout();
+    if (!l || !l.pages.length) return false;
+    const end = l.pages[l.pages.length - 1];
+    const p = l.pages.find((x) => x.i === place.page) || (place.page > end.i ? end : null);
+    if (!p) return false;
+    const y = p.y + (p === end && place.page > end.i ? 0 : place.offset) * p.h;
+    l.main.scrollTop += (y - l.top) * l.scale;
+    const now = layout();
+    const bottom = l.main.scrollTop >= l.main.scrollHeight - l.main.clientHeight - 1;
+    return !!now && (Math.abs(now.top - y) * now.scale < 2 || bottom);
+  };
+
+  let place = null, until = 0, armed = false, moved = false;
+  // Places are reported once there's none to go back to (or it's been gone to).
+  const arm = () => { place = null; armed = true; };
+  const restore = () => {
+    if (!place) return;
+    if (Date.now() > until || goTo(place)) return arm();
+    setTimeout(restore, 100);
+  };
+  // The reader scrolls or clicks first, or the editor's cursor makes it jump: that place wins.
+  const mine = () => { moved = true; if (place) arm(); };
+  for (const t of ['wheel', 'mousedown', 'keydown', 'touchstart']) window.addEventListener(t, mine, { capture: true, passive: true });
+  window.addEventListener('studio-jump', mine);
+
+  let timer = 0, last = '';
+  document.addEventListener('scroll', () => {
+    if (!armed) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const p = where();
+      if (!p || `${p.page}:${p.offset}` === last) return;
+      last = `${p.page}:${p.offset}`;
+      report({ tag: 'place', page: p.page, offset: p.offset });
+    }, 400);
+  }, true);
+
+  window.__studioPreview = {
+    configure(o) {
+      if ((o.pages === 'nearby' || o.pages === 'all') && o.pages !== pages) {
+        pages = o.pages;
+        window.dispatchEvent(new Event('resize')); // draw again: far pages freed, or every page drawn
+      }
+      if (!('place' in o) || armed || place) return;
+      const p = o.place;
+      if (moved || !p || !Number.isInteger(p.page) || p.page < 0 || !(p.offset >= 0 && p.offset <= 1)) return arm();
+      place = { page: p.page, offset: p.offset };
+      until = Date.now() + 120000; // a book opening compiles first
+      restore();
+    },
+    // For the self-test.
+    stats() {
+      const canvases = [...document.querySelectorAll('#typst-app canvas')];
+      const live = canvases.filter((c) => c.width && c.height);
+      const l = layout();
+      return {
+        pages, hooked, total: l ? l.pages.length : 0, canvases: canvases.length, drawn: live.length,
+        megapixels: Math.round(live.reduce((n, c) => n + c.width * c.height, 0) / 1e5) / 10,
+        leftBehind: [...drawn].filter((c) => !c.isConnected && c.width).length,
+        place: where(), restoring: !!place, armed,
+      };
+    },
+  };
+  report({ tag: 'loaded' });
 })();
 "#;
 
@@ -219,6 +393,7 @@ pub async fn preview_open(
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
         .initialization_script(WEBKIT_FIX_SCRIPT)
         .initialization_script(JUMP_SCRIPT)
+        .initialization_script(PAGES_SCRIPT)
         .initialization_script(PERF_SCRIPT)
         .initialization_script(CONTEXT_MENU_SCRIPT)
         .initialization_script(SELECTION_SCRIPT)

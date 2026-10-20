@@ -71,6 +71,11 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   wordWrapColumn: { about: 'The column long lines wrap at, with wordWrap "column".', values: `${EDITOR_COLUMNS.min} to ${EDITOR_COLUMNS.max}`, schema: { type: 'integer', minimum: EDITOR_COLUMNS.min, maximum: EDITOR_COLUMNS.max } },
   rulers: { about: 'Vertical lines in the editor at these columns (e.g. [80, 120]); [] for none.', values: `up to 8 columns, ${EDITOR_COLUMNS.min} to ${EDITOR_COLUMNS.max}`, schema: { type: 'array', items: { type: 'integer' } } },
   formatOnSave: { about: 'Format Typst files (typstyle) when the author saves them.', values: 'true, false', schema: { type: 'boolean' } },
+  previewPages: {
+    about: 'Which pages the preview keeps drawn: those near the ones on screen (nearby; light on memory), or every page (all; no blank pages when scrolling far, but a long book takes gigabytes).',
+    values: 'nearby, all',
+    schema: { type: 'string', enum: ['nearby', 'all'] },
+  },
   autoSaveMinutes: {
     about: 'Save files with unsaved changes every this many minutes; 0 turns auto save off.',
     values: `0 to ${AUTO_SAVE_MINUTES.max}`,

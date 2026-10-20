@@ -59,12 +59,16 @@ const REPORT_JS = (tag: string) => `(() => {
   } });
 })();`;
 
-async function previewState(tag: string): Promise<Record<string, unknown>> {
+/** What the preview keeps drawn and where the reader is (PAGES_SCRIPT in preview.rs). */
+const PAGES_JS = (tag: string) =>
+  `window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: ${JSON.stringify(tag)}, ...(window.__studioPreview ? window.__studioPreview.stats() : { missing: true }) } });`;
+
+async function previewState(tag: string, script = REPORT_JS): Promise<Record<string, unknown>> {
   const { listen } = await import('@tauri-apps/api/event');
   let resolve!: (v: Record<string, unknown>) => void;
   const result = new Promise<Record<string, unknown>>((r) => (resolve = r));
   const off = await listen<Record<string, unknown>>('preview:report', (e) => e.payload?.tag === tag && resolve(e.payload));
-  await ipc.previewEval(REPORT_JS(tag));
+  await ipc.previewEval(script(tag));
   const report = await Promise.race([result, sleep(3000).then(() => ({ tag, error: 'no report from preview' }))]);
   off();
   return report;
@@ -149,6 +153,61 @@ async function previewChecks(chapter: string, editor: monaco.editor.IStandaloneC
   };
   await snap('p8-after-click');
   return { states, snapshots, clickToSource };
+}
+
+/**
+ * The preview keeps only the pages near the ones on screen drawn (the
+ * default), every page when asked, and goes back to where the reader was when
+ * its page loads again, as after macOS takes back its memory. Wants a book of
+ * more than 20 pages.
+ */
+async function previewPagesChecks() {
+  const out: Record<string, unknown> = {};
+  const before = studio.state.settings.previewPages;
+  const places: Record<string, unknown>[] = [];
+  const offPlaces = await listen<Record<string, unknown>>('preview:report', (e) => void (e.payload?.tag === 'place' && places.push(e.payload)));
+  const state = (tag: string) => previewState(tag, PAGES_JS);
+  const drawnOnce = async (tag: string) => {
+    let s: Record<string, unknown> = {};
+    for (const end = Date.now() + 120000; Date.now() < end; await sleep(300)) {
+      s = await state(tag);
+      if (s.armed && (s.total as number) > 0) break;
+    }
+    return s;
+  };
+  try {
+    studio.updateSettings({ previewPages: 'nearby' }, { write: false });
+    await drawnOnce('pages-first');
+    await sleep(2000);
+    out.top = await state('pages-top');
+    // Scrolled to the book's middle, as the reader would: only the pages around it drawn.
+    await scrollPreview('c.scrollHeight * 0.6');
+    await sleep(2500);
+    out.middle = await state('pages-middle');
+    out.placeReported = places.at(-1) ?? null;
+    out.snapshotMiddle = await ipc.previewSnapshot('pages-middle').catch(errorMessage);
+    // Loaded again, as Tauri does after WebKit kills its process: back where it was.
+    await ipc.previewEval('location.reload()');
+    await sleep(1000);
+    await drawnOnce('pages-reloaded');
+    await sleep(1500);
+    out.reloaded = await state('pages-reloaded-settled');
+    const want = out.placeReported as { page?: number; offset?: number } | null;
+    const got = (out.reloaded as { place?: { page: number; offset: number } }).place;
+    out.samePlace = !!want && !!got && want.page === got.page && Math.abs((want.offset ?? 0) - got.offset) < 0.02;
+    out.snapshotReloaded = await ipc.previewSnapshot('pages-reloaded').catch(errorMessage);
+    // Every page drawn; then nearby again, the others freed.
+    studio.updateSettings({ previewPages: 'all' }, { write: false });
+    await sleep(6000);
+    out.all = await state('pages-all');
+    studio.updateSettings({ previewPages: 'nearby' }, { write: false });
+    await sleep(2500);
+    out.nearbyAgain = await state('pages-nearby-again');
+  } finally {
+    offPlaces();
+    studio.updateSettings({ previewPages: before }, { write: false });
+  }
+  return out;
 }
 
 /**
@@ -7582,6 +7641,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('historyabout')) result.historyabout = await historyAboutChecks();
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
+    if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
     if (only?.includes('epub')) result.epub = await epubChecks(outDir);
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('stylerevisions')) result.stylerevisions = await styleRevisionsChecks();

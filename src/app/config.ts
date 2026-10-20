@@ -55,6 +55,7 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     wordWrap: settings.wordWrap,
     wordWrapColumn: settings.wordWrapColumn,
     rulers: settings.rulers,
+    previewPages: settings.previewPages,
     toolPaths: settings.toolPaths,
     assistant: settings.assistant,
     checkForUpdates: settings.checkForUpdates,

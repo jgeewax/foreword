@@ -527,6 +527,10 @@ const AI_EDIT_VERSIONS = 12;
 
 export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
+/** Per book: where the preview was, in the book and in its cover. */
+const previewPlaceKey = (root: string) => `studio.previewPlace:${root}`;
+/** A place in the preview: the page at its top (from 0), and how far down that page (0 to 1). */
+type PreviewPlace = { page: number; offset: number };
 let seq = 0;
 const uid = (p: string) => `${p}${++seq}`;
 
@@ -763,7 +767,9 @@ export class Studio {
     void getCurrentWebview().listen<string>('menu', (e) => void this.menuCommand(e.payload));
     // The update is the app's: any window's check, download or install shows in all of them.
     void listen<UpdateState>('update', (e) => this.store.set({ update: e.payload }));
-    void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; selection?: string }>('preview:report', (e) => {
+    void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; selection?: string; page?: number; offset?: number }>('preview:report', (e) => {
+      if (e.payload?.tag === 'loaded') this.configurePreview({ place: true });
+      if (e.payload?.tag === 'place') this.rememberPreviewPlace(e.payload);
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
       if (e.payload?.tag === 'selection') void this.previewSelection(e.payload as { text: string; end?: boolean });
@@ -3073,6 +3079,31 @@ export class Studio {
     }
   }
 
+  /**
+   * The preview's page loaded (opened, or again: after macOS took back its
+   * memory, Restart Preview, reopening the book): which pages it keeps drawn,
+   * and with `place`, where the reader was, to go back to (see PAGES_SCRIPT
+   * in preview.rs).
+   */
+  private configurePreview({ place = false } = {}) {
+    if (!this.previewOpened) return;
+    const options = { pages: this.state.settings.previewPages, ...(place ? { place: this.previewPlace() } : {}) };
+    void ipc.previewEval(`window.__studioPreview && window.__studioPreview.configure(${JSON.stringify(options)})`).catch(() => {});
+  }
+
+  /** Where the preview was in what it shows now (the book or its cover), if it's been shown. */
+  private previewPlace(): PreviewPlace | null {
+    const root = this.state.workspace?.root;
+    return (root && readJson<Partial<Record<'book' | 'cover', PreviewPlace>>>(previewPlaceKey(root))?.[this.state.previewTarget]) || null;
+  }
+
+  private rememberPreviewPlace({ page, offset }: { page?: number; offset?: number }) {
+    const root = this.state.workspace?.root;
+    if (!root || !Number.isInteger(page) || page! < 0 || typeof offset !== 'number' || !(offset >= 0 && offset <= 1)) return;
+    const saved = readJson<Partial<Record<'book' | 'cover', PreviewPlace>>>(previewPlaceKey(root)) ?? {};
+    writeJson(previewPlaceKey(root), { ...saved, [this.state.previewTarget]: { page, offset } });
+  }
+
   async restartTypst() {
     await this.typst.stop().catch(() => {});
     await ipc.previewClose().catch(() => {});
@@ -4489,6 +4520,7 @@ export class Studio {
     saveSettings(settings);
     this.store.set({ settings });
     if (write) this.scheduleConfigWrite();
+    if (settings.previewPages !== before.previewPages) this.configurePreview();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
     else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
     if (settings.assistant !== before.assistant && this.state.workspace) {
