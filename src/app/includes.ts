@@ -1,7 +1,7 @@
 // The files a Typst file includes, read the way Typst reads it: `#include "…"`
 // in markup and `include "…"` in code, as in `#{ include "…" }` or
 // `#chapter(include "…")`, but not in comments, strings, raw text or maths.
-// Pure; the book's chapter order and the EPUB export use it.
+// Pure; the book's chapter order, New Chapter and the EPUB export use it.
 
 /**
  * An `include "…"` in the text: its path as written, where it is (`start` at

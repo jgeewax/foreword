@@ -28,6 +28,11 @@ describe('nextChapterPath', () => {
   it('ignores unnumbered files when numbering', () => {
     expect(nextChapterPath(['chapters/a.typ', 'chapters/02-x.typ'], 'X')).toBe('chapters/03-x.typ');
   });
+
+  it('names it like the others', () => {
+    const files = ['src/chapters/ch01_what_is_a_vector.typ', 'src/chapters/ch25_linear_algebra_in_production.typ', 'src/chapters/a1_notation.typ'];
+    expect(nextChapterPath(files, 'Tensors, Briefly', 'src/chapters')).toBe('src/chapters/ch26_tensors_briefly.typ');
+  });
 });
 
 describe('chapter text', () => {
@@ -43,6 +48,24 @@ describe('include placement', () => {
   it('goes after the last chapter include', () => {
     const main = '#show: book\n#include "chapters/01.typ"\n#include "chapters/02.typ"\n\n#bibliography("refs.bib")\n';
     expect(includeInsertion(main, 'chapters/03.typ')).toEqual({ line: 3, text: '#include "chapters/03.typ"' });
+  });
+
+  it('goes after the last chapter, written as the book writes them, not after the back matter', () => {
+    const main = [
+      '#{',
+      '  set heading(numbering: none)',
+      '  include "frontmatter/preface.typ"',
+      '}',
+      '#book-chapter(include "chapters/ch01_vectors.typ")',
+      '#book-chapter(include "chapters/ch02_matrices.typ")',
+      '',
+      '#{',
+      '  include "backmatter/afterword.typ"',
+      '}',
+    ].join('\n');
+    expect(includeInsertion(main, 'chapters/ch03_tensors.typ')).toEqual({ line: 6, text: '#book-chapter(include "chapters/ch03_tensors.typ")' });
+    // Two on one line: an #include line of its own, after the last one.
+    expect(includeInsertion('#include "c/x.typ"\n#chapters(include "c/a.typ", include "c/b.typ")\n', 'c/z.typ')).toEqual({ line: 1, text: '#include "c/z.typ"' });
   });
 
   it('goes before the bibliography, or at the end', () => {
