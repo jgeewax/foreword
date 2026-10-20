@@ -636,17 +636,64 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .todo-ask:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .todo-row:hover .todo-ask, .todo-row:focus-visible .todo-ask, .todo-ask:focus-visible { visibility: visible; }
 .todo-row:hover .todo-line, .todo-row:focus-visible .todo-line, .todo-row:has(.todo-ask:focus-visible) .todo-line { visibility: hidden; }
-.suggestion.todo { display: flex; gap: 8px; justify-content: space-between; border-style: dashed; }
-.suggestion-where { color: var(--muted); font-size: 11px; white-space: nowrap; }
-
-/* agent starter */
-.starter { padding: 10px 4px; display: flex; flex-direction: column; gap: 6px; color: var(--fg); }
-.starter h3 { margin: 0; font-size: 13px; }
-.starter p { margin: 0; color: var(--muted); line-height: 1.45; }
-.starter-label { margin-top: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-.suggestion { text-align: left; white-space: normal; height: auto; padding: 6px 9px; border-radius: 7px; background: var(--bg-2); line-height: 1.35; }
-.suggestion:hover:not(:disabled) { border-color: var(--accent); }
-.starter-tips { margin: 8px 0 0; padding-left: 16px; color: var(--muted); line-height: 1.5; font-size: 12px; }
+/*
+ * The chat before its first message (Starter): a welcome in the middle of the
+ * pane, things to ask in the colours of what they do (the trace's: blue looks,
+ * green checks, purple writes, Typst's teal), the style guide's offer, a tip.
+ */
+.starter { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 360px; margin: auto; padding: 12px 2px 6px; color: var(--fg); }
+.starter > * { animation: rise-in 0.45s ease-out both; }
+.starter > :nth-child(2) { animation-delay: 0.05s; }
+.starter > :nth-child(3) { animation-delay: 0.1s; }
+.starter > :nth-child(4) { animation-delay: 0.15s; }
+.starter > :nth-child(5) { animation-delay: 0.2s; }
+.starter-hero { isolation: isolate; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.starter-emblem {
+  position: relative; display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 14px; border-radius: 13px;
+  color: #fff; background: linear-gradient(145deg, var(--look), var(--change));
+  box-shadow: 0 8px 22px -8px color-mix(in srgb, var(--change) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.starter-emblem::before {
+  content: ""; position: absolute; inset: -30px; z-index: -1; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--look) 26%, transparent), color-mix(in srgb, var(--change) 11%, transparent) 62%, transparent);
+  animation: starter-glow 7s ease-in-out infinite;
+}
+@keyframes starter-glow { 50% { opacity: 0.6; transform: scale(0.9); } }
+.starter-hero h3 { margin: 0; font: 500 22px/1.2 var(--serif); letter-spacing: -0.01em; }
+.starter-hero p { max-width: 260px; margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: balance; }
+.starter-group { display: flex; flex-direction: column; gap: 1px; }
+.starter-label { margin: 0 0 5px 9px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.suggestion {
+  --tone: var(--muted); display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 4px 8px;
+  border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; white-space: normal; line-height: 1.35;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.suggestion:hover:not(:disabled) { border-color: color-mix(in srgb, var(--tone) 24%, transparent); background: color-mix(in srgb, var(--tone) 8%, transparent); }
+.suggestion:focus-visible { outline: none; border-color: var(--tone); }
+.suggestion.tone-look { --tone: var(--look); }
+.suggestion.tone-check { --tone: var(--ok); }
+.suggestion.tone-change { --tone: var(--change); }
+.suggestion.tone-typst { --tone: var(--lane-3); }
+.suggestion.tone-todo { --tone: var(--ask); }
+.suggestion-icon { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--tone); background: color-mix(in srgb, var(--tone) 15%, transparent); }
+.suggestion-icon .icon-svg { stroke-width: 2; }
+.suggestion-text { flex: 1; min-width: 0; }
+.suggestion.todo .suggestion-text::first-letter { text-transform: uppercase; }
+.suggestion-where { display: block; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+/* Send it: the send button's arrow, in its colour, on hover. */
+.suggestion-go { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: var(--tone); opacity: 0; transform: scale(0.7); transition: opacity 0.12s, transform 0.12s; }
+.suggestion-go .icon-svg { stroke-width: 2.6; }
+.suggestion:hover:not(:disabled) .suggestion-go, .suggestion:focus-visible .suggestion-go { opacity: 1; transform: none; }
+.starter-tip { margin: 0; padding: 0 10px; font-size: 11.5px; line-height: 1.6; color: var(--muted); text-align: center; text-wrap: balance; }
+.starter-tip > .icon-svg { margin-right: 5px; vertical-align: -2px; color: var(--milestone); }
+.starter-tip strong { font-weight: 600; color: var(--fg); }
+.starter-tip kbd {
+  display: inline-block; min-width: 18px; margin: 0 1px; padding: 0 4px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+  background: var(--bg-2); font: 500 10.5px/15px -apple-system, BlinkMacSystemFont, sans-serif; color: var(--fg); text-align: center; opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .starter > *, .starter-emblem::before { animation: none; }
+}
 
 /* dialogs */
 /* One cell the size of the window: a dialog's % height is of that, not of its own content (which ran past the bottom). */
@@ -874,6 +921,19 @@ button.switch:active:not(:disabled) { transform: none; }
 .style-bar.drafting { gap: 8px; padding: 7px 10px; background: var(--bg-2); line-height: 1.4; color: var(--muted); }
 .style-bar.drafting strong { color: var(--fg); font-weight: 600; }
 .style-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button.link.quiet { color: var(--muted); }
+/* In the starter: a card tinted from the looks' blue to the changes' purple. */
+.style-bar.setup.card {
+  gap: 11px; padding: 12px 12px 11px; border: 1px solid color-mix(in srgb, var(--change) 22%, var(--border)); border-radius: 12px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--look) 6%, var(--bg)), color-mix(in srgb, var(--change) 9%, var(--bg)));
+}
+.style-card-head { display: flex; align-items: flex-start; gap: 10px; }
+.style-card-mark { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; font: 600 14px/1 var(--serif); color: var(--change); background: color-mix(in srgb, var(--change) 15%, transparent); }
+.style-card-words { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.style-card-words strong { font-size: 12.5px; font-weight: 650; }
+.style-card-words span { color: var(--muted); line-height: 1.45; }
+.style-bar.card .style-actions { gap: 4px 12px; padding-left: 38px; }
+.style-bar.card .style-actions button:not(.link) { height: 24px; padding: 0 10px; border-radius: 7px; }
 .perm-menu { flex: none; }
 .perm-trigger { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px; font-size: 11.5px; background: transparent; border-color: transparent; white-space: nowrap; }
 .perm-trigger:hover:not(:disabled) { border-color: transparent; background: var(--bg-3); }
@@ -1723,6 +1783,8 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 @media (prefers-color-scheme: light) {
   .strip-chip.tone-look, .trace-step.tone-look.live .step-verb { color: color-mix(in srgb, var(--look) 62%, #000); }
   .strip-chip.tone-change, .trace-step.tone-change.live .step-verb, .permission-line { color: color-mix(in srgb, var(--change) 70%, #000); }
+  .suggestion-icon { color: color-mix(in srgb, var(--tone) 78%, #000); }
+  .style-card-mark { color: color-mix(in srgb, var(--change) 75%, #000); }
 }
 
 /*

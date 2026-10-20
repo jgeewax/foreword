@@ -1,12 +1,12 @@
 import { ASSISTANT_NAMES } from '../app/settings';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { pendingQuestion, studio, type QuestionItem } from '../app/studio';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
-import { Icon } from './icons';
+import { Icon, type IconName } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
 import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
@@ -726,13 +726,13 @@ function QueuedMessages() {
 /** Fewer words than this in the book: the interview, not the draft, is the style bar's first choice. */
 const STYLE_INTERVIEW_BELOW_WORDS = 1500;
 
-function StyleGuideBar() {
+/** This conversation is drafting the style guide: say so, rather than offering to start it. */
+const useDraftingHere = () => useStore(studio.store, (s) => s.styleGuide.drafting !== null && (s.styleGuide.drafting === '' || s.styleGuide.drafting === s.agent.sessionId));
+
+/** The offer of a style guide, until there's one: before the first message, a card in the starter; after, a bar under the header. */
+function StyleGuideBar({ empty }: { empty: boolean }) {
   const guide = useStore(studio.store, (s) => s.styleGuide);
-  const ready = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
-  // This conversation is drafting the guide: say so, rather than offering to start it.
-  const drafting = useStore(studio.store, (s) => s.styleGuide.drafting !== null && (s.styleGuide.drafting === '' || s.styleGuide.drafting === s.agent.sessionId));
-  // Little written yet: a draft from the chapters has little to go on, so the interview comes first.
-  const fewWords = useStore(studio.store, (s) => (s.compile.words ?? 0) < STYLE_INTERVIEW_BELOW_WORDS);
+  const drafting = useDraftingHere();
   if (drafting) {
     return (
       <div className="style-bar drafting">
@@ -753,34 +753,60 @@ function StyleGuideBar() {
     );
   }
   // The guide, once there is one, is in the strip under the header (TaskStrip).
-  if (guide.exists) return null;
-  if (guide.dismissed) return null;
+  if (guide.exists || guide.dismissed || empty) return null;
+  return <StyleGuideSetup />;
+}
+
+/** Draft it from the chapters, an interview, or a template; the likelier one first (in the card, the only button). */
+function StyleGuideSetup({ card }: { card?: boolean }) {
+  const ready = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
+  // Little written yet: a draft from the chapters has little to go on, so the interview comes first.
+  const fewWords = useStore(studio.store, (s) => (s.compile.words ?? 0) < STYLE_INTERVIEW_BELOW_WORDS);
+  const draft = (
+    <button
+      key="draft"
+      className={fewWords ? (card ? 'link' : '') : 'primary'}
+      disabled={!ready}
+      title="The assistant reads your chapters and writes WRITING_STYLE.md from how the book is written"
+      onClick={() => void studio.draftStyleGuide()}
+    >
+      Draft from my chapters
+    </button>
+  );
+  const interview = (
+    <button
+      key="interview"
+      className={`style-interview${fewWords ? ' primary' : card ? ' link' : ''}`}
+      disabled={!ready}
+      title="The assistant asks you a few rounds of questions about the book (answers to pick from), then writes WRITING_STYLE.md from your answers"
+      onClick={() => void studio.interviewStyleGuide()}
+    >
+      Interview me
+    </button>
+  );
   return (
-    <div className="style-bar setup">
-      <div>
-        <strong>No writing style guide yet.</strong> A short guide (voice, tone, terminology, formatting) keeps every edit sounding like your book.
-      </div>
+    <div className={`style-bar setup${card ? ' card' : ''}`}>
+      {card ? (
+        <div className="style-card-head">
+          <span className="style-card-mark" aria-hidden>
+            Aa
+          </span>
+          <div className="style-card-words">
+            <strong>Teach it your voice</strong>
+            <span>A short style guide (voice, tone, terminology) keeps every edit sounding like your book.</span>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <strong>No writing style guide yet.</strong> A short guide (voice, tone, terminology, formatting) keeps every edit sounding like your book.
+        </div>
+      )}
       <div className="style-actions">
-        <button
-          className={fewWords ? '' : 'primary'}
-          disabled={!ready}
-          title="The assistant reads your chapters and writes WRITING_STYLE.md from how the book is written"
-          onClick={() => void studio.draftStyleGuide()}
-        >
-          Draft from my chapters
-        </button>
-        <button
-          className={`style-interview${fewWords ? ' primary' : ''}`}
-          disabled={!ready}
-          title="The assistant asks you a few rounds of questions about the book (answers to pick from), then writes WRITING_STYLE.md from your answers"
-          onClick={() => void studio.interviewStyleGuide()}
-        >
-          Interview me
-        </button>
-        <button title="Pick one made for your kind of book (a novel, a textbook, a picture book…), then change it" onClick={() => studio.openStyleTemplates()}>
+        {fewWords ? [interview, draft] : [draft, interview]}
+        <button className={card ? 'link' : ''} title="Pick one made for your kind of book (a novel, a textbook, a picture book…), then change it" onClick={() => studio.openStyleTemplates()}>
           Start from a template
         </button>
-        <button className="link" onClick={() => studio.dismissStyleGuidePrompt()}>
+        <button className="link quiet" onClick={() => studio.dismissStyleGuidePrompt()}>
           Not now
         </button>
       </div>
@@ -788,56 +814,97 @@ function StyleGuideBar() {
   );
 }
 
-const SUGGESTIONS = [
-  'Explain how the files of this book fit together.',
-  'Suggest an outline for my next chapter.',
-  "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet.",
-  'How do I add a footnote?',
+/** Things to try, each in the colour of what it does: look (blue), check (green), write (purple), Typst (its teal). */
+const SUGGESTIONS: { icon: IconName; tone: string; label: string; prompt: string }[] = [
+  { icon: 'book', tone: 'look', label: 'Explain how this book fits together', prompt: 'Explain how the files of this book fit together.' },
+  { icon: 'passed', tone: 'check', label: 'Proofread the open chapter', prompt: "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet." },
+  { icon: 'edit', tone: 'change', label: 'Outline my next chapter', prompt: 'Suggest an outline for my next chapter.' },
+  { icon: 'help', tone: 'typst', label: 'How do I add a footnote?', prompt: 'How do I add a footnote?' },
 ];
 
-/** Shown before the first message: what the assistant does, and things to try. */
+/** One of these under the starter, a different one each new task. */
+const TIPS: ReactNode[] = [
+  <>
+    Select some text and press <kbd>⌘</kbd>
+    <kbd>I</kbd> to ask about it.
+  </>,
+  <>
+    <kbd>⇧</kbd>
+    <kbd>Tab</kbd> switches to <strong>Plan</strong>: it talks it through before it writes.
+  </>,
+  <>
+    <strong>Options</strong> writes three versions of a passage for you to pick from.
+  </>,
+  <>
+    Type <kbd>/</kbd> in the message box for commands.
+  </>,
+  <>
+    New to Typst?{' '}
+    <button className="link" onClick={() => studio.openGuide()}>
+      Typst basics
+    </button>
+  </>,
+];
+
+const greeting = (hour: number) => (hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening');
+
+/** Shown before the first message: a welcome, things to ask (your TODOs first), the style guide's offer, and a tip. */
 function Starter() {
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const todos = useStore(studio.store, (s) => s.todos);
+  const titles = useStore(studio.store, (s) => s.names.titles);
+  const offerGuide = useStore(studio.store, (s) => !s.styleGuide.exists && !s.styleGuide.dismissed);
+  const drafting = useDraftingHere();
+  const [hello] = useState(() => greeting(new Date().getHours()));
+  const [tip] = useState(() => Math.floor(Math.random() * TIPS.length));
   return (
     <div className="starter">
-      <h3>Your writing assistant</h3>
-      <p>
-        It reads your book, follows your style guide, and can edit for you. Every change shows up in the preview, and History keeps a version from before it.
-      </p>
+      <div className="starter-hero">
+        <span className="starter-emblem" aria-hidden>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9zM18.5 16l.8 2 2 .7-2 .8-.8 2-.7-2-2-.8 2-.7z" />
+          </svg>
+        </span>
+        <h3>{hello}</h3>
+        <p>What shall we work on? Every change it makes is marked in your text, and can be undone.</p>
+      </div>
       {todos.length > 0 && (
-        <>
+        <div className="starter-group">
           <div className="starter-label">From your TODOs</div>
           {todos.slice(0, 3).map((t) => (
-            <button key={`${t.path}:${t.line}`} className="suggestion todo" disabled={!ready} title="Ask the assistant to do this now" onClick={() => void studio.askTodo(t)}>
-              {t.text}
-              <span className="suggestion-where">
-                {t.path.split('/').pop()}:{t.line}
+            <button key={`${t.path}:${t.line}`} className="suggestion todo tone-todo" disabled={!ready} title="Ask the assistant to do this now" onClick={() => void studio.askTodo(t)}>
+              <span className="suggestion-icon">
+                <Icon name="todos" size={13} />
+              </span>
+              <span className="suggestion-text">
+                {t.text}
+                <span className="suggestion-where">
+                  {titles[t.path] ?? basename(t.path)} · line {t.line}
+                </span>
               </span>
             </button>
           ))}
-        </>
+        </div>
       )}
-      <div className="starter-label">Try asking</div>
-      {SUGGESTIONS.map((s) => (
-        <button key={s} className="suggestion" disabled={!ready} title="Ask this now" onClick={() => void studio.send(s)}>
-          {s}
-        </button>
-      ))}
-      <ul className="starter-tips">
-        <li>
-          Select text and press <kbd>⌘I</kbd> to ask about it.
-        </li>
-        <li>
-          <strong>Plan</strong> talks it through and outlines before writing. <strong>Options</strong> gives you three versions to pick from.
-        </li>
-        <li>
-          New to Typst?{' '}
-          <button className="link" onClick={() => studio.openGuide()}>
-            Typst basics
+      <div className="starter-group">
+        <div className="starter-label">Try asking</div>
+        {SUGGESTIONS.map((s) => (
+          <button key={s.label} className={`suggestion tone-${s.tone}`} disabled={!ready} title={`Ask: “${s.prompt}”`} onClick={() => void studio.send(s.prompt)}>
+            <span className="suggestion-icon">
+              <Icon name={s.icon} size={13} />
+            </span>
+            <span className="suggestion-text">{s.label}</span>
+            <span className="suggestion-go">
+              <Icon name="arrowUp" size={12} />
+            </span>
           </button>
-        </li>
-      </ul>
+        ))}
+      </div>
+      {offerGuide && !drafting && <StyleGuideSetup card />}
+      <p className="starter-tip">
+        <Icon name="bulb" size={12} />
+        <span>{TIPS[tip]}</span>
+      </p>
     </div>
   );
 }
@@ -851,7 +918,8 @@ export function AgentPane() {
 
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    // The newest at the bottom in view; with nothing yet, the starter from its top.
+    if (el && stick.current) el.scrollTop = agent.items.length ? el.scrollHeight : 0;
   }, [agent.items, agent.activity]);
 
   return (
@@ -920,7 +988,7 @@ export function AgentPane() {
             )}
           </div>
         )}
-        <StyleGuideBar />
+        <StyleGuideBar empty={agent.items.length === 0} />
         <TaskStrip />
         <div
           className="transcript"
