@@ -56,8 +56,8 @@ export function PermissionsEditor() {
         </div>
       ))}
       <p className="perm-always">
-        Always: it can read this book’s files, asks before reading .env files, and can never build or compile the book (the preview does that). Plan and Options
-        never change files. Changes apply to the current conversation right away.
+        Always: it can read this book’s files, asks before reading .env files, and can never build or compile the book (the preview does that). Ask, Plan and
+        Options never change files. Changes apply to the current conversation right away.
       </p>
     </div>
   );

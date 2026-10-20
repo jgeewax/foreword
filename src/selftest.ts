@@ -6300,7 +6300,40 @@ async function layoutChecks() {
   return out;
 }
 
-/** Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks edits. Scratch book only. */
+/**
+ * Send, and end the turn whatever it waits on: a permission card is refused
+ * and a question skipped, each noted in `waited`. The last reply.
+ */
+async function settleTurn(text: string, waited: string[]): Promise<string> {
+  await studio.send(text);
+  await sleep(1000);
+  for (const t0 = Date.now(); studio.state.agent.running && Date.now() - t0 < 180000; await sleep(500)) {
+    const card = studio.state.agent.items.find((i) => (i.kind === 'permission' || i.kind === 'question') && i.state === 'pending');
+    if (card?.kind === 'permission') {
+      waited.push(`permission: ${card.action} ${card.resources.join(', ')}`);
+      await studio.replyPermission(card.id, 'reject');
+    } else if (card?.kind === 'question') {
+      waited.push(`question: ${card.title} ${card.fields.map((f) => `${f.title ?? ''} [${f.options?.map((o) => o.label).join(' | ') ?? ''}]`).join('; ')}`);
+      await studio.dismissQuestion(card.id);
+    }
+  }
+  return (studio.state.agent.items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text ?? '';
+}
+
+/** The chat's tool rows and permission cards from item `from` on: what the agent did, and what it asked. */
+function turnTools(from: number) {
+  const items = studio.state.agent.items.slice(from);
+  return {
+    tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}${(i as any).status === 'failed' ? `: ${(i as any).detail}` : ''}`),
+    asked: items.filter((i) => i.kind === 'permission').map((i) => `${(i as any).action} ${(i as any).resources.join(', ')} → ${(i as any).state}`),
+  };
+}
+
+/**
+ * Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks
+ * edits. The app's own: the plan is in the chat, with no plan file and no
+ * asking to leave plan mode (Claude Code's own did both). Scratch book only.
+ */
 async function planModeChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
@@ -6310,20 +6343,22 @@ async function planModeChecks() {
   studio.newSession();
   await studio.setMode('plan');
   const hashBefore = await ipc.fsHash(file);
+  const waited: string[] = [];
 
-  const plan = await askAgent('Plan a short new section for chapter 2 about the trace of a matrix and how it relates to the eigenvalues.');
+  const plan = await settleTurn('Plan a short new section for chapter 2 about the trace of a matrix and how it relates to the eigenvalues.', waited);
   const sid = studio.state.agent.sessionId!;
-  const session = (await ipc.agentRequest('GET', `/api/session/${sid}`)).body?.data;
   out.plan = {
-    agent: session?.agent,
+    model: studio.state.agent.model,
     instructionKeys: (await studio.agent!.getInstructions(sid)).map((e) => e.key),
     numberedOutline: /^\s*(\d+[.)]|#+\s*\d)/m.test(plan),
     endsWithQuestion: /\?\s*(\*\*)?\s*$/.test(plan.trim()) || /\?[^?]{0,200}$/.test(plan.trim()),
     replyStart: plan.slice(0, 500),
+    ...turnTools(0),
+    waited: waited.splice(0),
     fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
   };
   await sleep(300);
-  out.writeItButtonShown = !!document.querySelector('.plan-actions button');
+  out.carryOutButton = document.querySelector('.carry-out-actions button')?.textContent ?? null;
   try {
     out.snapshot = await ipc.previewSnapshot('plan-mode', 'main');
   } catch (e) {
@@ -6332,27 +6367,91 @@ async function planModeChecks() {
 
   // Asked to write while still planning: nothing changes.
   const from = studio.state.agent.items.length;
-  const pushy = await askAgent(`Go ahead and add that section to ${file} right now.`);
-  const items = studio.state.agent.items.slice(from);
-  out.writeWhilePlanning = {
-    tools: items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} → ${(i as any).status}${(i as any).status === 'failed' ? `: ${(i as any).detail}` : ''}`),
-    fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
-    reply: pushy.slice(0, 300),
-  };
+  const pushy = await settleTurn(`Go ahead and add that section to ${file} right now.`, waited);
+  out.writeWhilePlanning = { ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, reply: pushy.slice(0, 300) };
 
   // "Write it": back to write mode, and the plan gets written.
-  await studio.writeFromPlan();
+  await studio.carryOut();
   await sleep(1000);
   await waitFor(() => !studio.state.agent.running, 180000, 'write from plan').catch(() => {});
   await sleep(1500);
   const after = (await ipc.fsRead(file)).text;
   out.writeIt = {
     mode: studio.state.agent.mode,
-    agent: (await ipc.agentRequest('GET', `/api/session/${sid}`)).body?.data?.agent,
     fileChanged: (await ipc.fsHash(file)) !== hashBefore,
     mentionsTrace: /trace/i.test(after),
     addedLines: after.split('\n').length,
   };
+  studio.updateSettings({ permissions: savedPolicy });
+  return out;
+}
+
+/** `checks` with Claude Code's Haiku (cheap); the assistant, its model and the settings go back after. */
+async function withClaude(checks: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  try {
+    studio.updateSettings({ assistant: 'claude' }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { error: studio.state.agent.error };
+    const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+    if (haiku) await studio.selectModel(haiku);
+    return await checks();
+  } finally {
+    await studio.setMode('write');
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+}
+
+/**
+ * Ask mode, with auto-edit ON: a question answered in the chat, nothing
+ * changed or written anywhere (asked to change it, it says Go ahead), then Go
+ * ahead switches to Write and makes the change. Scratch book only.
+ */
+async function askModeChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  const savedPolicy = studio.state.settings.permissions;
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
+  studio.newSession();
+  await studio.setMode('ask');
+  const hashBefore = await ipc.fsHash(file);
+  const waited: string[] = [];
+
+  const answer = await settleTurn(`Can you check the first paragraph of ${file}? Explain to me what you'd change before changing anything.`, waited);
+  out.answer = {
+    model: studio.state.agent.model,
+    instructionKeys: (await studio.agent!.getInstructions(studio.state.agent.sessionId!)).map((e) => e.key),
+    replyStart: answer.slice(0, 700),
+    replyLength: answer.length,
+    ...turnTools(0),
+    waited: waited.splice(0),
+    fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
+  };
+  await sleep(300);
+  out.carryOutButton = document.querySelector('.carry-out-actions button')?.textContent ?? null;
+  out.modeTrigger = document.querySelector('.mode-trigger')?.textContent ?? null;
+  try {
+    out.snapshot = await ipc.previewSnapshot('ask-mode', 'main');
+  } catch (e) {
+    out.snapshot = errorMessage(e);
+  }
+
+  // Asked to make the change in Ask mode: nothing changes, and it says how.
+  const from = studio.state.agent.items.length;
+  const pushy = await settleTurn('Yes, make that change now.', waited);
+  out.changeWhileAsking = { ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, mentionsGoAhead: /go ahead|write mode/i.test(pushy), reply: pushy.slice(0, 300) };
+
+  // "Go ahead": back to Write, and the change is made.
+  const before = studio.state.agent.items.length;
+  await studio.carryOut();
+  await sleep(1000);
+  await waitFor(() => !studio.state.agent.running, 180000, 'go ahead').catch(() => {});
+  await sleep(1500);
+  out.goAhead = { mode: studio.state.agent.mode, fileChanged: (await ipc.fsHash(file)) !== hashBefore, ...turnTools(before) };
   studio.updateSettings({ permissions: savedPolicy });
   return out;
 }
@@ -7642,6 +7741,15 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('plan')) {
         log('plan mode');
         result.planMode = await planModeChecks();
+      }
+      if (want('ask')) {
+        log('ask mode');
+        result.askMode = await askModeChecks();
+      }
+      // Ask and Plan with Claude Code, whose own plan mode they once used.
+      if (want('claude-modes')) {
+        log('ask and plan modes, Claude Code');
+        result.claudeModes = await withClaude(async () => ({ ask: await askModeChecks(), plan: await planModeChecks() }));
       }
       if (want('edits')) {
         log('edit policy');

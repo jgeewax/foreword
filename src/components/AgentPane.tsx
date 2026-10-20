@@ -423,15 +423,17 @@ function ModeMenu() {
   );
 }
 
-/** Shown in plan mode once the agent has replied: carry out the plan. */
-function PlanActions() {
-  const show = useStore(studio.store, (s) => s.agent.mode === 'plan' && !s.agent.running && s.agent.items.some((i) => i.kind === 'assistant'));
-  if (!show) return null;
+/** Shown in Ask and Plan once the agent has replied: switch to Write and make what was agreed. */
+function CarryOutActions() {
+  const mode = useStore(studio.store, (s) => s.agent.mode);
+  const replied = useStore(studio.store, (s) => !s.agent.running && s.agent.items.some((i) => i.kind === 'assistant'));
+  const carry = modeConfig(mode).carryOut;
+  if (!carry || !replied) return null;
   return (
-    <div className="plan-actions">
-      <span className="muted">Happy with the plan?</span>
-      <button className="primary" onClick={() => void studio.writeFromPlan()}>
-        Write it
+    <div className="carry-out-actions">
+      <span className="muted">{carry.question}</span>
+      <button className="primary" onClick={() => void studio.carryOut()}>
+        {carry.label}
       </button>
     </div>
   );
@@ -557,7 +559,7 @@ function Composer() {
   return (
     <div className="composer">
       <QueuedMessages />
-      <PlanActions />
+      <CarryOutActions />
       {(attachments.length > 0 || liveShown) && (
         <div className="context-cards">
           {attachments.map((a) => (

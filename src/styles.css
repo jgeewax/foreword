@@ -975,6 +975,7 @@ button.link.quiet { color: var(--muted); }
 .effort-meter span.on { background: var(--accent); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
+.mode-trigger.mode-ask { --mode: #1f8fa5; }
 .mode-trigger.mode-plan { --mode: var(--milestone); }
 .mode-trigger.mode-options { --mode: var(--good); }
 .mode-trigger.mode-figures { --mode: #a35bd6; }
@@ -985,7 +986,7 @@ button.link.quiet { color: var(--muted); }
 .mode-text { display: flex; flex-direction: column; gap: 1px; flex: 1; }
 .mode-name { font-weight: 600; }
 .mode-description { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
-.plan-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
+.carry-out-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
 /* The assistant menu, beside the model: its mark (and name, when there's room); opens upward. */
 .assistant-menu { flex: none; }
 .assistant-trigger { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 5px; font-size: 11.5px; color: var(--muted); background: transparent; border-color: transparent; white-space: nowrap; }

@@ -102,25 +102,25 @@ export class OpenCodeAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', rules = [] as PermissionRule[], effort = null as string | null } = {},
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, rules = [] as PermissionRule[], effort = null as string | null } = {},
   ): Promise<string> {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? modelBody(model, effort) : null,
-      agent: agent === 'build' ? null : agent,
+      agent: null,
       permissions: sessionRules(permissions, readOnly, rules),
     });
     return res.data.id;
   }
 
-  /** Update a live session's rules (verified to apply mid-session). */
+  /**
+   * Update a live session's rules (verified to apply mid-session). Always the
+   * `build` agent: a conversation from when Plan used OpenCode's `plan` agent
+   * goes back to it (the app's modes are its own, modes.ts).
+   */
   async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, rules: PermissionRule[] = []) {
     await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly, rules) });
-  }
-
-  /** OpenCode's built-in agents: `build` (default) or `plan`. */
-  async switchAgent(sessionId: string, agent: 'build' | 'plan') {
-    await call('POST', `/api/session/${sessionId}/agent`, { agent });
+    if ((await call('GET', `/api/session/${sessionId}`)).data?.agent === 'plan') await call('POST', `/api/session/${sessionId}/agent`, { agent: 'build' });
   }
 
   // Experimental in OpenCode 2.0.20; entries appear as `api/<key>` in the system context (verified).

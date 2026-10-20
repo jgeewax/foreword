@@ -116,6 +116,8 @@ describe('AcpAdapter', () => {
     await adapter.start();
     // Its own settings could allow "Bash(*)"; the app's ask rules win over those.
     expect(sent.find((m) => m.method === 'session/new').params._meta.claudeCode.options.settings.permissions.ask).toEqual(expect.arrayContaining(['Bash', 'Edit', 'Read', 'WebFetch']));
+    // Never its own plan mode: the app's modes answer in the chat.
+    expect(sent.find((m) => m.method === 'session/new').params._meta.claudeCode.options.disallowedTools).toEqual(['EnterPlanMode', 'ExitPlanMode']);
     const sessionId = await adapter.createSession(null, { permissions: PRESETS.ask.permissions });
     const ask = (id: number, command: string, options: { optionId: string; kind: string }[]) =>
       deliver({ jsonrpc: '2.0', id, method: 'session/request_permission', params: { sessionId, toolCall: { toolCallId: `t${id}`, kind: 'execute', rawInput: { command }, _meta: { claudeCode: { toolName: 'Bash' } } }, options } });
@@ -139,6 +141,32 @@ describe('AcpAdapter', () => {
     const second = events.filter((e) => e.type === 'permission-asked').at(-1) as Extract<AgentEvent, { type: 'permission-asked' }>;
     await adapter.replyPermission(sessionId, second.requestId, 'reject');
     expect(sent.at(-1).result.outcome.optionId).toBe('no');
+  });
+
+  it('read-only changes no file, outside the book either', async () => {
+    const { adapter, sent, events, deliver } = harness();
+    await adapter.start();
+    // Edits and files outside the book allowed: read-only still wins.
+    const permissions = { ...PRESETS.edit.permissions, outside: 'allow' as const };
+    const sessionId = await adapter.createSession(null, { permissions, readOnly: true });
+    const options = [
+      { optionId: 'yes', kind: 'allow_once' },
+      { optionId: 'no', kind: 'reject_once' },
+    ];
+    const ask = (id: number, kind: string, toolName: string, path: string) =>
+      deliver({ jsonrpc: '2.0', id, method: 'session/request_permission', params: { sessionId, toolCall: { toolCallId: `t${id}`, kind, rawInput: { file_path: path, content: 'x' }, locations: [{ path }], _meta: { claudeCode: { toolName } } }, options } });
+    ask(911, 'edit', 'Write', '/Users/ada/.claude/plans/the-plan.md');
+    expect(sent.at(-1)).toEqual({ jsonrpc: '2.0', id: 911, result: { outcome: { outcome: 'selected', optionId: 'no' } } });
+    ask(912, 'edit', 'Edit', `${ROOT}/chapters/ch1-vectors.typ`);
+    expect(sent.at(-1).result.outcome.optionId).toBe('no');
+    // Reading outside the book is still the setting's to say.
+    ask(913, 'read', 'Read', '/Users/ada/notes.md');
+    expect(sent.at(-1).result.outcome.optionId).toBe('yes');
+    expect(events.some((e) => e.type === 'permission-asked')).toBe(false);
+    // Write mode: the same write outside the book is the setting's again.
+    await adapter.setPermissions(sessionId, permissions, false);
+    ask(914, 'edit', 'Write', '/Users/ada/notes.md');
+    expect(sent.at(-1).result.outcome.optionId).toBe('yes');
   });
 
   it('runs a turn: instructions once, the rules or the author answer, events, transcript, queue', async () => {
@@ -340,9 +368,15 @@ describe('Codex', () => {
     expect(sent.find((m) => m.method === 'session/set_mode')?.params).toEqual({ sessionId, modeId: 'read-only' });
     await adapter.setPermissions(sessionId, PRESETS.edit.permissions);
     expect(sent.filter((m) => m.method === 'session/set_mode').at(-1).params.modeId).toBe('workspace-write');
-    await adapter.switchAgent(sessionId, 'plan');
-    expect(sent.at(-1)).toMatchObject({ method: 'session/set_config_option', params: { configId: 'collaboration_mode', value: 'plan' } });
-    await adapter.switchAgent(sessionId, 'build');
+    // A conversation left in Codex's own plan mode (from before Plan was the app's own) leaves it.
+    const configOptions = codex.find((r) => r.result?.configOptions).result.configOptions.map((o: any) => (o.id === 'collaboration_mode' ? { ...o, currentValue: 'plan' } : o));
+    deliver({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update: { sessionUpdate: 'config_option_update', configOptions } } });
+    await adapter.setPermissions(sessionId, PRESETS.edit.permissions, true);
+    expect(sent.filter((m) => m.method === 'session/set_config_option').at(-1).params).toMatchObject({ configId: 'collaboration_mode', value: 'default' });
+    expect(sent.filter((m) => m.method === 'session/set_mode').at(-1).params.modeId).toBe('read-only');
+    const plans = sent.filter((m) => m.method === 'session/set_config_option').length;
+    await adapter.setPermissions(sessionId, PRESETS.edit.permissions);
+    expect(sent.filter((m) => m.method === 'session/set_config_option').length).toBe(plans);
 
     await adapter.send(sessionId, 'Change it.', []);
     const prompt = sent.at(-1);

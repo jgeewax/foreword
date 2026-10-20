@@ -131,10 +131,11 @@ selected lines attached as `chapters/ch2-eigenvalues.typ:3–4`, the agent ran
 - **The model list fills in lazily.** The first `/api/model` call after startup
   listed only `openai`; a few seconds later it listed all providers. The server
   default (`opencode/exo-free`) isn't in the list at all.
-- **Modes** (`src/services/agent/modes.ts`): Write, Plan (OpenCode's `plan`
-  agent) and Options (the `build` agent). Plan and Options are read-only by
-  permission rules (edit and shell denied, whatever the edit setting), and each
-  sets the `mode` instruction entry.
+- **Modes** (`src/services/agent/modes.ts`): Write, Plan and Options. Plan
+  and Options are read-only by permission rules (edit and shell denied,
+  whatever the edit setting), and each sets the `mode` instruction entry.
+  (Plan first used OpenCode's `plan` agent; see "The chat's modes are the
+  app's own".)
 - **Options mode** asks for exactly three `### Option N: label` sections, each
   with a fenced code block holding the full replacement. The UI turns them into
   cards (`parseOptions`). Picking one is an ordinary Monaco edit
@@ -3121,6 +3122,50 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   with the same identifier; changing it would have started every installed
   copy afresh. Nobody sees it. An updated copy keeps its old file name in
   Applications ("Typst Studio.app") until it's downloaded again.
+
+### The chat's modes are the app's own, and Ask
+
+- **Asked for:** in Plan mode, a question ("check this TODO, explain before
+  changing anything") ended with a card asking to use "exitplanmode", and
+  the answer was never shown. "Relying on Claude's plan mode is wrong… maybe
+  we need an ask mode? Sometimes I need an answer to a question, not edits."
+- **Why it happened:** Plan put Claude Code into its own plan mode (Codex
+  into its plan collaboration mode, OpenCode onto its `plan` agent). Claude
+  Code's plan mode outranks our instructions: it writes the answer to
+  `~/.claude/plans/<name>.md`, outside the book, then calls ExitPlanMode to
+  ask to start editing. The panel showed neither the file nor the plan, and
+  turning the request down ends the turn.
+- **Now:** every mode is the app's own. The agent stays in its usual mode
+  (Claude Code's "default", Codex's "default" collaboration), the read-only
+  rules block changes, and the mode's instruction entry shapes the reply,
+  as Options always did. `switchAgent` is gone; a conversation from before
+  that's still in an agent's plan mode leaves it when it's opened.
+- **Ask mode** (`ask-mode.ts`), after Write in the menu and ⇧Tab: answer
+  first, point to the lines, say what you'd change and why, but change
+  nothing; everything goes in the reply, never a file. **Go ahead**, shown
+  after a reply as **Write it** is in Plan, switches to Write and has the
+  agent make what was discussed. Both buttons are one `carryOut` in each
+  mode's config. Plan's instructions now say the plan stays in the chat too.
+- **Claude Code never has EnterPlanMode or ExitPlanMode:** `disallowedTools`
+  in the session's `_meta.claudeCode.options` (claude-agent-acp adds its
+  own to the list), so it can't enter its plan mode in Write either.
+- **Read-only means no change anywhere:** an ACP edit, delete or move is
+  refused in Ask, Plan and Options even outside the book, where the rules
+  only see "outside" (that's how Claude Code's plan file was written: the
+  setting for files outside the book allowed it). Reading outside the book
+  is still the setting's.
+- **What it can't hear:** ACP has no reason on a refusal, so Claude Code
+  hears "User refused permission". Ask's instructions say changes are
+  refused there and the author can't approve them, so pushed to change
+  something it says to press Go ahead.
+- Verified: unit tests (modes, the session's `disallowedTools`, read-only
+  refusing a write to `~/.claude/plans`, a Codex conversation leaving plan
+  collaboration mode). In-app self-test `claude-modes` with Claude Code's
+  Haiku, edits allowed: Ask answered in the chat (one read, no file, no
+  question), showed Go ahead; told "make that change now" it tried one
+  edit, was refused, and pointed to Go ahead; Go ahead made it. Plan
+  outlined in the chat (its question tool asked placement, proof, exercises),
+  with no plan file and no ExitPlanMode; Write it wrote the section.
 
 ### Open questions
 

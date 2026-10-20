@@ -63,7 +63,6 @@ import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../service
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
-import { WRITE_FROM_PLAN_PROMPT } from '../services/agent/plan-mode';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
@@ -3340,7 +3339,7 @@ export class Studio {
     }
   }
 
-  /** Switch between Write, Plan and Options (applies to the current conversation). */
+  /** Switch between Write, Ask, Plan, Options and Figures (applies to the current conversation). */
   async setMode(mode: AgentMode) {
     const previous = this.state.agent.mode;
     if (mode === previous) return;
@@ -3349,7 +3348,6 @@ export class Studio {
     if (!sessionId || !this.agent) return;
     const config = modeConfig(mode);
     try {
-      await this.agent.switchAgent(sessionId, config.agent);
       await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId));
       if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
@@ -3360,10 +3358,12 @@ export class Studio {
     }
   }
 
-  /** "Write it": leave plan mode and carry out the agreed plan. */
-  async writeFromPlan() {
+  /** "Write it" (Plan) and "Go ahead" (Ask): back to Write mode, to make what was agreed. */
+  async carryOut() {
+    const carry = modeConfig(this.state.agent.mode).carryOut;
+    if (!carry) return;
     await this.setMode('write');
-    if (this.state.agent.mode === 'write') await this.send(WRITE_FROM_PLAN_PROMPT);
+    if (this.state.agent.mode === 'write') await this.send(carry.prompt);
   }
 
   newSession() {
@@ -3573,7 +3573,6 @@ export class Studio {
       void this.syncQuestions();
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
-      await agent.switchAgent(sessionId, config.agent).catch(() => {});
       await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId)).catch(() => {});
       await this.applyInstructions(sessionId);
       void this.refreshEfforts();
@@ -3802,7 +3801,6 @@ export class Studio {
         sessionId = await agent.createSession(this.state.agent.model, {
           permissions: this.state.settings.permissions,
           readOnly: config.readOnly,
-          agent: config.agent,
           rules: this.authorRules(null),
           effort: this.state.agent.effort,
         });
@@ -4112,6 +4110,7 @@ export class Studio {
     const say = (t: string, tone: 'info' | 'error' = 'info') => this.pushItem({ kind: 'notice', id: uid('n'), tone, text: t });
     switch (cmd.name) {
       case 'write':
+      case 'ask':
       case 'plan':
       case 'options':
       case 'figures':

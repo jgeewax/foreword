@@ -110,7 +110,7 @@ export const NO_COMPILE_RULES: readonly PermissionRule[] = [
 /** The book's settings (its command rules) and Claude Code's (its own rules), in the book. */
 const PERMISSION_FILES = ['.foreword.json', '*/.foreword.json', '.claude/*', '*/.claude/*'];
 
-/** Plan and Options modes: no file changes and no commands, whatever the settings. */
+/** Ask, Plan and Options modes: no file changes and no commands, whatever the settings. */
 export const READ_ONLY_RULES: readonly PermissionRule[] = [
   { action: 'edit', resource: '*', effect: 'deny' },
   { action: 'shell', resource: '*', effect: 'deny' },

@@ -12,6 +12,7 @@ export type SlashCommand = {
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'write', description: 'Write mode: the assistant writes and edits the book', immediate: true },
+  { name: 'ask', description: 'Ask mode: questions and discussion, answered in the chat, no changes', immediate: true },
   { name: 'plan', description: 'Plan mode: talk it through and outline first, no changes', immediate: true },
   { name: 'options', description: 'Options mode: three versions of a passage to pick from', immediate: true },
   { name: 'figures', description: 'Figures mode: diagrams and plots in Typst (CeTZ, fletcher, lilaq)', immediate: true },

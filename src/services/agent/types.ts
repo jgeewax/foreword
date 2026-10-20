@@ -111,7 +111,7 @@ export interface AgentAdapter {
   /** `effort`: one of the model's levels (efforts()), or null for its own. */
   createSession(
     model: ModelRef | null,
-    opts?: { permissions?: AgentPermissions; readOnly?: boolean; agent?: 'build' | 'plan'; rules?: PermissionRule[]; effort?: string | null },
+    opts?: { permissions?: AgentPermissions; readOnly?: boolean; rules?: PermissionRule[]; effort?: string | null },
   ): Promise<string>;
   /**
    * The model's levels of effort, and the one in use: in the conversation, or
@@ -122,11 +122,11 @@ export interface AgentAdapter {
   /** Think with this effort from the next message on. */
   switchEffort(sessionId: string, model: ModelRef, effort: string): Promise<void>;
   /**
-   * What the agent may do (`readOnly` forces no changes: Plan and Options; `rules`: the
-   * author's own, from command-rules.ts); applies to a running session.
+   * What the agent may do (`readOnly` forces no changes: Ask, Plan and Options; `rules`: the
+   * author's own, from command-rules.ts); applies to a running session. It also
+   * keeps the agent in its usual mode, never its own plan mode (see modes.ts).
    */
   setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean, rules?: PermissionRule[]): Promise<void>;
-  switchAgent(sessionId: string, agent: 'build' | 'plan'): Promise<void>;
   /** Add (or replace) a named instruction block in the session's system context. */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;
   getInstructions(sessionId: string): Promise<{ key: string; value: unknown }[]>;

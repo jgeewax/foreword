@@ -101,6 +101,16 @@ type Session = {
 export const CLAUDE_ASKS = ['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'] as const;
 
 /**
+ * Claude Code's tools it never has here: its own plan mode, which writes the
+ * answer to a file outside the book and asks to leave. The app's modes do that
+ * job, in the chat (modes.ts).
+ */
+export const CLAUDE_DISALLOWED = ['EnterPlanMode', 'ExitPlanMode'] as const;
+
+/** ACP tool kinds that change files: never in a read-only mode, in the book or outside it. */
+const CHANGE_KINDS = new Set(['edit', 'delete', 'move']);
+
+/**
  * The agent's option of the first of `kinds` it offers. Its "always" options
  * keep rules of the agent's own, out of the app's sight (Claude Code in the
  * book's .claude/settings.local.json, Codex in ~/.codex/rules), so they're only
@@ -255,11 +265,12 @@ export class AcpAdapter implements AgentAdapter {
    * "Bash(*)", which would run every command without Foreword's rules ever
    * seeing it. An ask rule wins over an allow there, and these settings are
    * its highest layer. The app answers what its rules allow at once
-   * (askPermission), so only what they ask about reaches the author.
+   * (askPermission), so only what they ask about reaches the author. Its plan
+   * mode's tools are taken away (claude-agent-acp adds them to its own list).
    */
   private sessionMeta() {
     if (this.kind !== 'claude') return {};
-    return { _meta: { claudeCode: { options: { settings: { permissions: { ask: [...CLAUDE_ASKS] } } } } } };
+    return { _meta: { claudeCode: { options: { settings: { permissions: { ask: [...CLAUDE_ASKS] } }, disallowedTools: [...CLAUDE_DISALLOWED] } } } };
   }
 
   private track(id: string, res: any): Session {
@@ -314,7 +325,7 @@ export class AcpAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, agent = 'build' as 'build' | 'plan', rules = [] as PermissionRule[], effort = null as string | null } = {},
+    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, rules = [] as PermissionRule[], effort = null as string | null } = {},
   ) {
     const warm = this.warm ? await this.warm : null;
     this.warm = null;
@@ -324,7 +335,6 @@ export class AcpAdapter implements AgentAdapter {
     // After the model: a model sets its own effort (Claude Code's Haiku starts at high).
     if (model && effort) await this.switchEffort(s.id, model, effort).catch(() => {});
     await this.applyMode(s).catch(() => {});
-    if (agent === 'plan') await this.switchAgent(s.id, 'plan').catch(() => {});
     return s.id;
   }
 
@@ -338,32 +348,23 @@ export class AcpAdapter implements AgentAdapter {
    * The agent's own mode that lets the app's permission rules decide: Claude
    * Code's "default" asks before changes, and the rules answer. Codex asks
    * only in "read-only"; with edits allowed, "workspace-write" lets it edit the
-   * book without asking (and still asks about the rest).
+   * book without asking (and still asks about the rest). Never the agent's own
+   * plan mode (modes.ts): a conversation from when Plan used it leaves it.
    */
   private async applyMode(s: Session) {
     let mode = '';
-    if (s.modes.includes('default')) mode = s.mode === 'plan' ? 'plan' : 'default';
+    if (s.modes.includes('default')) mode = 'default';
     else if (s.modes.includes('read-only') && s.modes.includes('workspace-write')) mode = s.readOnly || s.permissions.edit !== 'allow' ? 'read-only' : 'workspace-write';
     if (mode && mode !== s.mode) {
       await this.request('session/set_mode', { sessionId: s.id, modeId: mode });
       s.mode = mode;
     }
-  }
-
-  /** Plan: the agent's own planning, when it has it (Claude Code's plan mode, Codex's plan collaboration mode); the read-only rules apply either way. */
-  async switchAgent(sessionId: string, agent: 'build' | 'plan') {
-    const s = this.session(sessionId);
-    const collaboration = s.config.find((o) => o.id === 'collaboration_mode' && optionValues(o).some((v) => v.value === 'plan'));
-    if (collaboration) {
-      const res = await this.request('session/set_config_option', { sessionId, configId: collaboration.id, value: agent === 'plan' ? 'plan' : 'default' });
+    const collaboration = s.config.find((o) => o.id === 'collaboration_mode');
+    if (collaboration?.currentValue === 'plan') {
+      const res = await this.request('session/set_config_option', { sessionId: s.id, configId: collaboration.id, value: 'default' });
       if (Array.isArray(res?.configOptions)) s.config = res.configOptions;
-      return;
+      else collaboration.currentValue = 'default';
     }
-    if (!s.modes.includes('plan')) return;
-    const mode = agent === 'plan' ? 'plan' : 'default';
-    if (mode === s.mode) return;
-    await this.request('session/set_mode', { sessionId, modeId: mode });
-    s.mode = mode;
   }
 
   async setInstructions(sessionId: string, key: string, text: string) {
@@ -676,7 +677,8 @@ export class AcpAdapter implements AgentAdapter {
     const pick = (kinds: string[]) => pickOption(options, kinds);
     if (!s) return this.respond(rpcId, { outcome: { outcome: 'cancelled' } });
     const ask = permissionAsk(params.toolCall as AcpToolCall, this.root);
-    const effect = decide(ask.action, ask.resources, sessionRules(s.permissions, s.readOnly, s.rules));
+    // Read-only: no file changes, outside the book either (the rules see one there as only "outside").
+    const effect = s.readOnly && CHANGE_KINDS.has(params.toolCall?.kind) ? 'deny' : decide(ask.action, ask.resources, sessionRules(s.permissions, s.readOnly, s.rules));
     if (effect !== 'ask') {
       const optionId = effect === 'allow' ? pick(['allow_once', 'allow_always']) : pick(['reject_once', 'reject_always']);
       return this.respond(rpcId, optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } });
