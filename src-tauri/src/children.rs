@@ -57,7 +57,7 @@ pub fn init(dir: PathBuf) {
     let exe = std::env::current_exe()
         .ok()
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-        .unwrap_or_else(|| "typst-studio".into());
+        .unwrap_or_else(|| "foreword".into());
     for file in fs::read_dir(&dir).into_iter().flatten().flatten() {
         let path = file.path();
         let Some(owner) = owner_pid(&path) else {

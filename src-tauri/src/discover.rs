@@ -99,7 +99,7 @@ pub fn on_path(name: &str) -> Option<PathBuf> {
         .find(|p| is_executable(p))
 }
 
-/// The programs Typst Studio runs itself. Settings ▸ Tools can choose each one.
+/// The programs Foreword runs itself. Settings ▸ Tools can choose each one.
 #[derive(Clone, Copy)]
 pub enum Tool {
     Tinymist,
@@ -121,7 +121,7 @@ impl Tool {
         match self {
             Tool::Tinymist => "TINYMIST_PATH",
             Tool::OpenCode => "OPENCODE_PATH",
-            Tool::Git => "TYPST_STUDIO_GIT",
+            Tool::Git => "FOREWORD_GIT",
         }
     }
 
@@ -205,7 +205,7 @@ fn bundled(name: &str) -> Vec<(PathBuf, String)> {
         is_executable(&p).then_some(p)
     });
     found
-        .map(|p| (p, "bundled with Typst Studio".to_string()))
+        .map(|p| (p, "bundled with Foreword".to_string()))
         .into_iter()
         .collect()
 }
@@ -557,7 +557,7 @@ mod tests {
 
     #[test]
     fn newest_node_version_wins() {
-        let dir = std::env::temp_dir().join(format!("typst-studio-nvm-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("foreword-nvm-{}", std::process::id()));
         for v in ["v9.11.2", "v24.15.0", "v18.20.1"] {
             std::fs::create_dir_all(dir.join(v)).unwrap();
         }

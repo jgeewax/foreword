@@ -1,4 +1,4 @@
-// About Typst Studio (the app menu's first item): its icon, name and version,
+// About Foreword (the app menu's first item): its icon, name and version,
 // who made it, and where it lives.
 import { useEffect } from 'react';
 import { studio } from '../app/studio';
@@ -7,8 +7,8 @@ import { useStore } from '../lib/store';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { Icon } from './icons';
 
-const SITE = 'https://jgeewax.github.io/typststudio/';
-const SOURCE = 'https://github.com/jgeewax/typststudio';
+const SITE = 'https://jgeewax.github.io/foreword/';
+const SOURCE = 'https://github.com/jgeewax/foreword';
 
 export function AboutDialog() {
   const update = useStore(studio.store, (s) => s.update);
@@ -31,12 +31,12 @@ export function AboutDialog() {
         : null;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeAbout()}>
-      <div className="modal about-dialog" role="dialog" aria-modal="true" aria-label="About Typst Studio">
+      <div className="modal about-dialog" role="dialog" aria-modal="true" aria-label="About Foreword">
         <button className="icon modal-close about-close" aria-label="Close" title="Close (Esc)" onClick={() => studio.closeAbout()}>
           <Icon name="close" size={14} />
         </button>
         <img className="about-icon" src={appIcon} alt="" width={112} height={112} />
-        <h1>Typst Studio</h1>
+        <h1>Foreword</h1>
         <p className="about-version">
           Version {version}
           {status && <span className={`about-status${update?.status === 'none' ? '' : ' new'}`}>{status}</span>}

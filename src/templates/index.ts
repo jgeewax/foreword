@@ -401,7 +401,7 @@ const PAPER_STYLE: Partial<Record<StyleSection, string>> = {
 - Keep to the venue's page limit: watch the page count in the status bar.`,
 };
 
-/** Files Typst Studio adds to a paper made from a template package (never replacing the template's own). */
+/** Files Foreword adds to a paper made from a template package (never replacing the template's own). */
 export function paperExtras(info: { title: string }): { path: string; text: string }[] {
   return [
     { path: PROJECT_FILE, text: serializeProjectSettings({}, { entryPoint: 'main.typ', outputDir: 'export' }) },

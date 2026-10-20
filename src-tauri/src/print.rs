@@ -1,5 +1,5 @@
 //! Printing: facts about exported PDFs (for the print checks before an order)
-//! and opening a printer's website. Typst Studio never places an order itself.
+//! and opening a printer's website. Foreword never places an order itself.
 use std::path::Path;
 
 use lopdf::{Dictionary, Document};
@@ -87,7 +87,7 @@ pub async fn pdf_info(state: Win, path: String) -> CmdResult<PdfInfo> {
         .map_err(|e| CmdError::Io(e.to_string()))?
 }
 
-/// Printer websites Typst Studio may open in the browser.
+/// Printer websites Foreword may open in the browser.
 const PRINTER_HOSTS: &[&str] = &["mixam.com", "mixam.co.uk", "mixam.ca", "mixam.com.au"];
 
 pub fn allowed_url(url: &str) -> bool {
@@ -104,7 +104,7 @@ pub fn allowed_url(url: &str) -> bool {
 pub async fn open_url(url: String) -> CmdResult<()> {
     if !allowed_url(&url) {
         return Err(CmdError::Invalid(format!(
-            "not a printer page Typst Studio opens: {url}"
+            "not a printer page Foreword opens: {url}"
         )));
     }
     let status = std::process::Command::new("/usr/bin/open")
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn reads_pages_sizes_and_bleed_from_typst_pdfs() {
-        let dir = std::env::temp_dir().join(format!("typst-studio-pdf-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("foreword-pdf-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let Some(plain) = typst_pdf(
             &dir,

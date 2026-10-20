@@ -1,12 +1,12 @@
 // Review comments: notes on passages of the book, kept beside the text in
-// .typst-studio/review.json (the book itself is untouched). The assistant
+// .foreword/review.json (the book itself is untouched). The assistant
 // fixes one or all of them and reports on each; a changed passage waits for
 // the author to keep it or undo it. Each comment is anchored like a web
 // annotation: the quoted text, a little context either side, and a line hint,
 // so it follows the passage as the text around it changes.
 import { diff, splitLines } from '../lib/diff';
 
-export const REVIEW_FILE = '.typst-studio/review.json';
+export const REVIEW_FILE = '.foreword/review.json';
 
 export type ReviewComment = {
   id: string;

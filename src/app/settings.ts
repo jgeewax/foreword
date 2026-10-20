@@ -1,5 +1,5 @@
 // App preferences (per machine, not per project). Project settings live in
-// .typst-studio.json instead.
+// .foreword.json instead.
 import { DEFAULT_PERMISSIONS, PRESETS, sanitizePermissions, type AgentPermissions } from '../services/agent/permissions';
 import { rulesFrom } from '../services/agent/command-rules';
 
@@ -23,7 +23,7 @@ export function assistantsFor(word: string): AssistantId[] {
 /** Where the editor wraps a long line: at its edge, at a column (or the edge, if that comes first), or nowhere. */
 export type WordWrap = 'window' | 'column' | 'off';
 
-/** The programs Typst Studio runs itself; Settings ▸ Tools can choose each one. */
+/** The programs Foreword runs itself; Settings ▸ Tools can choose each one. */
 export type ToolName = 'tinymist' | 'opencode' | 'git';
 export const TOOL_NAMES: ToolName[] = ['tinymist', 'opencode', 'git'];
 
@@ -62,7 +62,7 @@ export type AppSettings = {
   toolPaths: Partial<Record<ToolName, string>>;
   /** Which program runs the writing assistant. */
   assistant: AssistantId;
-  /** Look for a new version of Typst Studio when it starts. */
+  /** Look for a new version of Foreword when it starts. */
   checkForUpdates: boolean;
   /** A version the author chose to skip: not offered at start ('' for none). */
   skippedUpdate: string;

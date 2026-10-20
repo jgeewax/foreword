@@ -61,7 +61,7 @@ export class TypstSession {
     const rootUri = pathToFileURL(this.root).href;
     this.initResult = await this.lsp.request('initialize', {
       processId: process.pid,
-      clientInfo: { name: 'typst-studio-prototype' },
+      clientInfo: { name: 'foreword-prototype' },
       rootUri,
       workspaceFolders: [{ uri: rootUri, name: 'book' }],
       capabilities: {

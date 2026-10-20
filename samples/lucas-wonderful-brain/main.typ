@@ -1,4 +1,4 @@
-// The main file: Typst Studio previews and exports this one. The story
+// The main file: Foreword previews and exports this one. The story
 // itself is in story.typ.
 #import "style.typ": *
 

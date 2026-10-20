@@ -1,4 +1,4 @@
-# Typst Studio — plan
+# Foreword — plan
 
 Source of truth: [SPEC.md](SPEC.md). Decisions, measurements and open questions: [docs/decisions.md](docs/decisions.md).
 
@@ -34,13 +34,13 @@ prototypes/live-preview/      throwaway spike that de-risked live preview (kept 
 | What | Command |
 |---|---|
 | Run the app | `npm run app` (= `tauri dev`) |
-| Open a folder at launch | `TYPST_STUDIO_WORKSPACE=/path/to/book npm run app` |
+| Open a folder at launch | `FOREWORD_WORKSPACE=/path/to/book npm run app` |
 | Typecheck / unit tests / build | `npm run typecheck` · `npm test` · `npm run build` |
 | Rust tests / lint / format | `cd src-tauri && cargo test && cargo clippy --all-targets && cargo fmt --check` |
 | Stress book | `npm run stress-book` → `fixtures/stress-book/` |
 | Templates + guide examples compile | `npm run check-templates` (all of `src/templates/*` and `src/help/typst-basics.json` with the installed `typst`; errors and warnings fail) |
-| In-app self-test | `TYPST_STUDIO_WORKSPACE=… TYPST_STUDIO_SELFTEST=/tmp/out.json [TYPST_STUDIO_SELFTEST_AGENT=1] npm run app` |
-| Self-test options | `TYPST_STUDIO_SELFTEST_EDITS=1` lets the agent edit (scratch copies only) · `TYPST_STUDIO_SELFTEST_ONLY=preview,geometry,zoom,settings,models,typing,agent,markdown,project,style,onboarding,templates,history,options,plan,edits` runs only those groups |
+| In-app self-test | `FOREWORD_WORKSPACE=… FOREWORD_SELFTEST=/tmp/out.json [FOREWORD_SELFTEST_AGENT=1] npm run app` |
+| Self-test options | `FOREWORD_SELFTEST_EDITS=1` lets the agent edit (scratch copies only) · `FOREWORD_SELFTEST_ONLY=preview,geometry,zoom,settings,models,typing,agent,markdown,project,style,onboarding,templates,history,options,plan,edits` runs only those groups |
 
 ## Phases
 

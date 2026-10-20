@@ -9,7 +9,7 @@ import { FileIcon, Icon, type IconName } from './icons';
 import { TypstSnippet } from './TypstSnippet';
 
 const KIND_TITLE: Record<string, string> = {
-  opened: 'Opened in Typst Studio',
+  opened: 'Opened in Foreword',
   save: 'Your edits',
   agent: 'Changes by the assistant',
   milestone: 'Named version',

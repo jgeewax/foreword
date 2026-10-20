@@ -1,6 +1,6 @@
 # Changelog
 
-What's new in each version of Typst Studio. The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
+What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
 ## 0.3.0 · 19 October 2026
 

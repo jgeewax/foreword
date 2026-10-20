@@ -42,8 +42,8 @@ const AUTH_REQUIRED = -32000;
 export const isSignedOut = (e: unknown) => e instanceof AcpError && e.code === AUTH_REQUIRED;
 
 /** Instructions go before the author's message, inside these, and are taken out again when a conversation is replayed. */
-const INSTRUCTIONS_OPEN = '<typst-studio-instructions>';
-const INSTRUCTIONS_CLOSE = '</typst-studio-instructions>';
+const INSTRUCTIONS_OPEN = '<foreword-instructions>';
+const INSTRUCTIONS_CLOSE = '</foreword-instructions>';
 export const stripInstructions = (text: string) => text.replace(new RegExp(`^${INSTRUCTIONS_OPEN}[\\s\\S]*?${INSTRUCTIONS_CLOSE}\\s*`), '');
 
 type Pending = { resolve: (v: any) => void; reject: (e: Error) => void };
@@ -134,7 +134,7 @@ export class AcpAdapter implements AgentAdapter {
     private readonly transport: AcpTransport = tauriTransport,
     /** Sign in first, with this of the agent's ways (its `authMethods`): it may wait for the author, in the browser. */
     private readonly signIn?: string,
-    /** Typst Studio's own tools (its settings), an MCP server over HTTP: given to every conversation. */
+    /** Foreword's own tools (its settings), an MCP server over HTTP: given to every conversation. */
     private readonly tools: { name: string; url: string } | null = null,
   ) {}
 
@@ -142,7 +142,7 @@ export class AcpAdapter implements AgentAdapter {
     return this.mcpServers().length > 0;
   }
 
-  /** The MCP servers a conversation gets: Typst Studio's own tools, when the agent takes HTTP servers. */
+  /** The MCP servers a conversation gets: Foreword's own tools, when the agent takes HTTP servers. */
   private mcpServers() {
     return this.tools && this.caps.agentCapabilities?.mcpCapabilities?.http ? [{ type: 'http', name: this.tools.name, url: this.tools.url, headers: [] }] : [];
   }
@@ -157,7 +157,7 @@ export class AcpAdapter implements AgentAdapter {
       // Forms: Claude Code's AskUserQuestion and Codex's request_user_input ask
       // through them (without, Claude Code leaves its question tool out).
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, elicitation: { form: {} } },
-      clientInfo: { name: 'typst-studio', title: 'Typst Studio', version: '0.1.0' },
+      clientInfo: { name: 'foreword', title: 'Foreword', version: '0.1.0' },
     });
     this.caps = init ?? {};
     // A failure here is the start's failure: signed out, it says how to sign in; otherwise in the agent's own words.
@@ -252,7 +252,7 @@ export class AcpAdapter implements AgentAdapter {
   /**
    * Claude Code asks the app about every command, edit, read and web request,
    * whatever its own settings allow: the user's ~/.claude settings can allow
-   * "Bash(*)", which would run every command without Typst Studio's rules ever
+   * "Bash(*)", which would run every command without Foreword's rules ever
    * seeing it. An ask rule wins over an allow there, and these settings are
    * its highest layer. The app answers what its rules allow at once
    * (askPermission), so only what they ask about reaches the author.

@@ -391,7 +391,7 @@ function ProgramRow({ id, setup, opencode }: { id: AssistantId; setup: Assistant
           <code className="selectable">{tildePath(setup.program)}</code>
         </span>
         <span className="assistant-row-help">
-          Downloaded from Google; Typst Studio talks to it over the Agent Client Protocol. Using it, you agree to <TermsLink />.
+          Downloaded from Google; Foreword talks to it over the Agent Client Protocol. Using it, you agree to <TermsLink />.
         </span>
       </>
     ) : (
@@ -408,7 +408,7 @@ function ProgramRow({ id, setup, opencode }: { id: AssistantId; setup: Assistant
           <span>Installed</span>
           <code className="selectable">{tildePath(setup.program)}</code>
         </span>
-        <span className="assistant-row-help">Typst Studio talks to it over the Agent Client Protocol.</span>
+        <span className="assistant-row-help">Foreword talks to it over the Agent Client Protocol.</span>
       </>
     );
   }
@@ -420,7 +420,7 @@ function ProgramRow({ id, setup, opencode }: { id: AssistantId; setup: Assistant
           <code className="selectable">npx {setup.package}</code>
         </span>
         <span className="assistant-row-help">
-          {id === 'gemini' ? 'It isn’t installed' : 'Its connector isn’t installed'}, so the first start downloads it. Typst Studio talks to it over the Agent Client Protocol.
+          {id === 'gemini' ? 'It isn’t installed' : 'Its connector isn’t installed'}, so the first start downloads it. Foreword talks to it over the Agent Client Protocol.
         </span>
       </>
     );
@@ -448,7 +448,7 @@ function ConnectorDownload({ setup, download }: { setup: AssistantSetup | undefi
   const pct = working && total ? Math.min(100, Math.round(((download.received ?? 0) / total) * 100)) : 0;
   return (
     <div className="assistant-fix">
-      <p>Typst Studio talks to Antigravity through Google’s connector for editors. Download it once from Google{size ? `, ${size}` : ''}; it needs nothing else installed.</p>
+      <p>Foreword talks to Antigravity through Google’s connector for editors. Download it once from Google{size ? `, ${size}` : ''}; it needs nothing else installed.</p>
       {working ? (
         <div className="download-progress" role="progressbar" aria-label="Downloading Antigravity’s connector" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <span className="download-bar">

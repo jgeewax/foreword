@@ -44,7 +44,7 @@ pub fn copy_pdf(from: &Path, to: &Path) -> CmdResult<()> {
         .and_then(|n| n.to_str())
         .unwrap_or("export.pdf");
     let tmp = dir.join(format!(
-        ".{name}.{}.typst-studio.tmp",
+        ".{name}.{}.foreword.tmp",
         uuid::Uuid::new_v4().simple()
     ));
     let result = fs::copy(from, &tmp).and_then(|_| fs::rename(&tmp, to));
@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn copies_pdfs_only_and_replaces_atomically() {
-        let dir = std::env::temp_dir().join(format!("typst-studio-export-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("foreword-export-{}", std::process::id()));
         fs::create_dir_all(dir.join("out")).unwrap();
         let src = dir.join("main.pdf");
         fs::write(&src, b"%PDF-1.7 new").unwrap();

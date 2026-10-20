@@ -1,3 +1,3 @@
-// The cover as it's printed: export this file (Typst Studio: Export Cover).
+// The cover as it's printed: export this file (Foreword: Export Cover).
 #import "design.typ": cover
 #cover()

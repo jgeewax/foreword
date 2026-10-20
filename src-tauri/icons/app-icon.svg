@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
 <!--
-  Typst Studio's app icon: a book open at its source (left) and its typeset
+  Foreword's app icon: a book open at its source (left) and its typeset
   page (right), with a ribbon. On macOS's icon grid: a 1024 canvas, the tile
   824 square with continuous corners (a superellipse, n = 5), and its shadow.
   Every size and format in this folder comes from it: npm run icons

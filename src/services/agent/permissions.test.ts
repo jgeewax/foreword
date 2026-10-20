@@ -120,10 +120,10 @@ describe('files that say what the assistant may do', () => {
   it('always ask before the assistant changes them, even with edits allowed for the task', () => {
     const task = [{ action: 'edit', resource: '*', effect: 'allow' as const }];
     for (const rules of [edit, sessionRules(PRESETS.edit.permissions, false, task)]) {
-      for (const f of ['.typst-studio.json', 'book/.typst-studio.json', '.claude/settings.local.json', 'x/.claude/settings.json']) expect(effect('edit', f, rules), f).toBe('ask');
+      for (const f of ['.foreword.json', 'book/.foreword.json', '.claude/settings.local.json', 'x/.claude/settings.json']) expect(effect('edit', f, rules), f).toBe('ask');
       expect(effect('edit', 'chapters/ch1.typ', rules)).toBe('allow');
     }
-    expect(effect('edit', '.typst-studio.json', ro)).toBe('deny');
+    expect(effect('edit', '.foreword.json', ro)).toBe('deny');
   });
 });
 
@@ -159,7 +159,7 @@ describe('presets and descriptions', () => {
     expect(presetOf({ ...PRESETS.ask.permissions, web: 'allow' })).toBe('custom');
     expect(describePermissions(PRESETS.readonly.permissions)).toMatch(/^Permissions: Read-only/);
     expect(describePermissions({ ...PRESETS.ask.permissions, web: 'allow', delete: 'deny' })).toBe(
-      'Permissions changed (allowed: search and read the web; asks first: edit and create files, rename or move files, files outside this book, run other commands, change Typst Studio’s settings; never: delete files).',
+      'Permissions changed (allowed: search and read the web; asks first: edit and create files, rename or move files, files outside this book, run other commands, change Foreword’s settings; never: delete files).',
     );
   });
 

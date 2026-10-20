@@ -56,10 +56,13 @@ function unquote(command: string | undefined): string | undefined {
 
 /** A conversation's title, unless it's only the start of the instructions the app sent first (Codex names a conversation by its first message). */
 export function conversationTitle(title: string): string {
-  const open = '<typst-studio-instructions>';
-  if (!title.startsWith(open)) return title;
-  const end = title.indexOf('</typst-studio-instructions>');
-  return end < 0 ? '' : title.slice(end + '</typst-studio-instructions>'.length).trim();
+  // Conversations from before the rename open with the legacy tag.
+  for (const tag of ['foreword-instructions', 'typst-studio-instructions' /* legacy */]) {
+    if (!title.startsWith(`<${tag}>`)) continue;
+    const end = title.indexOf(`</${tag}>`);
+    return end < 0 ? '' : title.slice(end + `</${tag}>`.length).trim();
+  }
+  return title;
 }
 
 /**
@@ -70,7 +73,7 @@ export function conversationTitle(title: string): string {
 export function appTool(call: AcpToolCall): { name: string; input: Record<string, unknown> } {
   const raw = (call.rawInput && typeof call.rawInput === 'object' ? call.rawInput : {}) as Record<string, unknown>;
   const tool = str(call._meta?.claudeCode?.toolName) ?? call.name ?? '';
-  // Typst Studio's own tools (its settings): named as OpenCode names them, with their arguments.
+  // Foreword's own tools (its settings): named as OpenCode names them, with their arguments.
   const own = studioToolName(tool) ?? studioToolName(call.title) ?? (raw.server === STUDIO_TOOLS ? studioToolName(`${STUDIO_TOOLS}_${String(raw.tool ?? '')}`) : null);
   if (own) return { name: `${STUDIO_TOOLS}_${own}`, input: raw.server === STUDIO_TOOLS && raw.arguments && typeof raw.arguments === 'object' ? (raw.arguments as Record<string, unknown>) : raw };
   const where = call.locations?.[0]?.path;

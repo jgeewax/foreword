@@ -1,6 +1,6 @@
-// Runnable code examples (Typst Studio).
+// Runnable code examples (Foreword).
 //
-// Write an example like this, then click ▶ Run above it in Typst Studio:
+// Write an example like this, then click ▶ Run above it in Foreword:
 //
 //   #run("greeting", ```python
 //   print("Hello")
@@ -9,7 +9,7 @@
 // The book shows the code and, below it, its output. Give every example its
 // own name. Add expect: "Hello" to check the output (marked ✓ or ✗).
 // Outputs are kept in code-output/outputs.json, so the book also builds
-// without Typst Studio. Change how examples look in this file.
+// without Foreword. Change how examples look in this file.
 
 #let code-outputs = json("/code-output/outputs.json")
 
@@ -36,7 +36,7 @@
     if show-code { src }
     if not show-output { return }
     if entry == none {
-      code-panel(warn, code-note(warn)[Not run yet: run this example in Typst Studio (▶ Run above it).])
+      code-panel(warn, code-note(warn)[Not run yet: run this example in Foreword (▶ Run above it).])
       return
     }
     let out = entry.at("stdout", default: "")

@@ -1,5 +1,5 @@
 // The cover's design: change the words, colours and fonts here. Its size
-// comes from spec.typ, which Typst Studio keeps in step with the book.
+// comes from spec.typ, which Foreword keeps in step with the book.
 #import "spec.typ": *
 #import "guides.typ": guide-layer
 

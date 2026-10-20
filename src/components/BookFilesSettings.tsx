@@ -104,7 +104,7 @@ export function BookFilesPage() {
   const entry = s.entryPoint ?? ws.entry ?? '';
   const entryDir = parentOf(entry);
   const pdfName = (baseName(entry) || 'main.typ').replace(/\.typ$/, '.pdf');
-  // Not Typst Studio's own (.typst-studio/) or other hidden folders', unless it's the main file now.
+  // Not Foreword's own (.foreword/) or other hidden folders', unless it's the main file now.
   const typFiles = ws.files
     .filter((f) => f.endsWith('.typ') && (f === entry || !f.split('/').some((p) => p.startsWith('.'))))
     .sort((a, b) => Number(!!parentOf(a)) - Number(!!parentOf(b)) || parentOf(a).localeCompare(parentOf(b)) || a.localeCompare(b));

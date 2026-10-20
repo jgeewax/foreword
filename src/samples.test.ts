@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SAMPLES } from './samples';
 
 const texts = import.meta.glob('/samples/*/**/*.{typ,md,bib,txt,json,svg}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
-const extras = import.meta.glob('/samples/*/{.typst-studio.json,.gitignore,Makefile}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const extras = import.meta.glob('/samples/*/{.foreword.json,.gitignore,Makefile}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const styles = import.meta.glob('/src/templates/*/style.typ', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const codeHelper = import.meta.glob('/src/code/code.typ', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -20,7 +20,7 @@ describe('sample books', () => {
       expect(file(s.id, s.firstFile), s.firstFile).toBeDefined();
       expect(file(s.id, 'WRITING_STYLE.md')).toMatch(/^# Writing style: /);
       // A sample may bring its own fonts, in folders the Makefile passes to typst too.
-      const { fontPaths = [], ...settings } = JSON.parse(file(s.id, '.typst-studio.json'));
+      const { fontPaths = [], ...settings } = JSON.parse(file(s.id, '.foreword.json'));
       expect(settings).toEqual({ entryPoint: 'main.typ', outputDir: 'export' });
       expect(file(s.id, '.gitignore')).toContain('export/');
       expect(file(s.id, 'Makefile')).toMatch(/^pdf:$/m);

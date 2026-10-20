@@ -268,7 +268,7 @@ pub fn preview_eval(app: AppHandle, state: Win, js: String) -> CmdResult<()> {
 }
 
 /// Self-test only: save a PNG of a webview (`target`: "preview", the default,
-/// or "main") exactly as displayed to `<TYPST_STUDIO_SELFTEST>.<name>.png`.
+/// or "main") exactly as displayed to `<FOREWORD_SELFTEST>.<name>.png`.
 #[tauri::command]
 pub async fn preview_snapshot(
     app: AppHandle,
@@ -276,7 +276,7 @@ pub async fn preview_snapshot(
     name: String,
     target: Option<String>,
 ) -> CmdResult<String> {
-    let out = std::env::var("TYPST_STUDIO_SELFTEST")
+    let out = std::env::var("FOREWORD_SELFTEST")
         .map_err(|_| CmdError::Invalid("snapshots are only available in self-test mode".into()))?;
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err(CmdError::Invalid(format!("bad snapshot name: {name:?}")));

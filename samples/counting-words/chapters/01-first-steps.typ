@@ -13,7 +13,7 @@ This book teaches you enough Python to answer questions like these yourself, one
 
 Every program in this book runs, and the output under it is what it really printed.
 When the output says _Output ✓_, the book also checked it against what the text says it should be.
-To run a program yourself, click Run above it in Typst Studio.
+To run a program yourself, click Run above it in Foreword.
 Or type it into a file called, say, `hello.py`, and run it in a terminal with `python3 hello.py`.
 
 == Your first program

@@ -202,7 +202,7 @@ export type ChatItem =
       resources: string[];
       patches: FilePatch[];
       state: 'pending' | 'sending' | 'once' | 'always' | 'reject';
-      /** Asked by Typst Studio itself (its settings tools, for an assistant that asks no one): answered here, not by the assistant. */
+      /** Asked by Foreword itself (its settings tools, for an assistant that asks no one): answered here, not by the assistant. */
       local?: boolean;
       /** For "always": what the app kept (command-rules.ts). */
       remembered?: Remembered;
@@ -231,7 +231,7 @@ export type Attachment = { id: string; label: string; selection: SourceSelection
 /** Identifies a selection for "leave it out" (same place and same text). */
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
 
-/** Settings' pages: Typst Studio's own (every book), then this book's (saved with it). */
+/** Settings' pages: Foreword's own (every book), then this book's (saved with it). */
 /** The Search view's state. */
 export type SearchState = {
   query: string;
@@ -355,10 +355,10 @@ export type StudioState = {
   settingsOpen: boolean;
   /** The tour's step, while it's on (see app/tour.ts). */
   tour: number | null;
-  /** Typst Studio's update (the same in every window), and whether its dialog is open. */
+  /** Foreword's update (the same in every window), and whether its dialog is open. */
   update: UpdateState | null;
   updateDialog: boolean;
-  /** About Typst Studio (the app menu's first item). */
+  /** About Foreword (the app menu's first item). */
   aboutOpen: boolean;
   /** The Settings page to open at (null: the one last shown). */
   settingsPage: SettingsPage | null;
@@ -371,7 +371,7 @@ export type StudioState = {
   recent: string[];
   /** A one-line text question (our own dialog: WKWebView has no window.prompt). */
   prompt: PromptRequest | null;
-  /** `.typst-studio.json` of the open workspace. */
+  /** `.foreword.json` of the open workspace. */
   project: { settings: ProjectSettings; raw: Record<string, unknown>; hash: string | null; error: string | null };
   /** The colour VS Code's Peacock gives the book (`peacock.color` in its .vscode/settings.json), if any. */
   peacockColor: string | null;
@@ -390,7 +390,7 @@ export type StudioState = {
   /** TODOs left in the book's files. */
   todos: Todo[];
   /**
-   * Review comments (beside the text, in .typst-studio/review.json), and the one
+   * Review comments (beside the text, in .foreword/review.json), and the one
    * being written in the editor (a passage of the open file).
    */
   review: { comments: ReviewComment[]; draft: { path: string; start: number; end: number } | null; busy: string[] };
@@ -1045,7 +1045,7 @@ export class Studio {
     const ws = this.state.workspace;
     if (!ws) return [];
     const skip = this.historyExcludes();
-    const files = ws.files.filter((f) => SEARCHABLE.test(f) && !f.startsWith('.typst-studio/') && f !== PROJECT_FILE && !skip.some((x) => `/${f}`.startsWith(x)));
+    const files = ws.files.filter((f) => SEARCHABLE.test(f) && !f.startsWith('.foreword/') && f !== PROJECT_FILE && !skip.some((x) => `/${f}`.startsWith(x)));
     const first = [ws.entry, ...this.state.names.chapters].filter((f): f is string => !!f && files.includes(f));
     return [...new Set([...first, ...files.filter((f) => !first.includes(f)).sort()])];
   }
@@ -1564,7 +1564,7 @@ export class Studio {
     for (const p of paths) await this.closeTab(p);
   }
 
-  /** Make a .typ file the book's main file (saved in .typst-studio.json). */
+  /** Make a .typ file the book's main file (saved in .foreword.json). */
   async setEntryPoint(path: string) {
     const errors = await this.updateProjectSettings({ entryPoint: path });
     if (errors.length) this.toast(errors.join(' '), 'error');
@@ -1573,7 +1573,7 @@ export class Studio {
 
   /**
    * The Typst root, relative to the folder opened ('' for the folder itself):
-   * where paths starting with "/" begin. `root` in .typst-studio.json, else the
+   * where paths starting with "/" begin. `root` in .foreword.json, else the
    * main file's folder, as `typst compile` does.
    */
   typstRoot(): string {
@@ -1692,7 +1692,7 @@ export class Studio {
   }
 
   /**
-   * Open a sample book: its copy in ~/Documents/Typst Studio Samples, made
+   * Open a sample book: its copy in ~/Documents/Foreword Samples, made
    * the first time (later, the same copy opens with the author's changes).
    * Throws (for the dialog) if that fails. `parent` is for self-tests.
    */
@@ -1821,7 +1821,7 @@ export class Studio {
     await this.send(todoPrompt(todo));
   }
 
-  /** A Makefile so the book builds without Typst Studio (`make` → export/<name>.pdf). */
+  /** A Makefile so the book builds without Foreword (`make` → export/<name>.pdf). */
   async addMakefile() {
     const ws = this.state.workspace;
     if (!ws) return;
@@ -1851,7 +1851,7 @@ export class Studio {
     this.store.set((s) => ({ review: { ...s.review, comments } }));
     try {
       const hash = await ipc.fsHash(REVIEW_FILE);
-      if (hash === null) await ipc.fsMkdir('.typst-studio').catch(() => {});
+      if (hash === null) await ipc.fsMkdir('.foreword').catch(() => {});
       await ipc.fsWrite(REVIEW_FILE, serializeReview(comments), hash);
       if (hash === null) await this.refreshFiles();
     } catch (e) {
@@ -2102,7 +2102,7 @@ export class Studio {
   async updateCoverFromBook(pages?: number) {
     const book = await this.bookMeasurements();
     if (pages) book.pages = pages;
-    if (!book.pages) return this.toast('Show the book in the preview once, so Typst Studio knows its page count.', 'error');
+    if (!book.pages) return this.toast('Show the book in the preview once, so Foreword knows its page count.', 'error');
     try {
       await this.editForExport(COVER_SPEC, (text) => updateSpec(text, book));
       this.toast(`Cover updated: ${book.pages} pages${book.width ? `, ${book.width} × ${book.height}` : ''}.`);
@@ -2329,12 +2329,12 @@ export class Studio {
       const unsaved = (await this.docs?.saveAll()) ?? [];
       if (unsaved.length) throw new Error(`couldn't save ${unsaved.map((f) => f.path).join(', ')}`);
 
-      // The wrapper is Typst Studio's own file; never write over anything else there.
+      // The wrapper is Foreword's own file; never write over anything else there.
       const existing = await ipc.fsRead(PRINT_WRAPPER).catch(() => null);
-      if (existing && !existing.text.startsWith('// Typst Studio writes this file for printing')) throw new Error(`${PRINT_WRAPPER} isn't Typst Studio's; move it away first`);
+      if (existing && !existing.text.startsWith('// Foreword writes this file for printing')) throw new Error(`${PRINT_WRAPPER} isn't Foreword's; move it away first`);
       const wrapper = printWrapper(ws.entry);
       if (!existing) {
-        await ipc.fsMkdir('.typst-studio').catch(() => {});
+        await ipc.fsMkdir('.foreword').catch(() => {});
         await ipc.fsWrite(PRINT_WRAPPER, wrapper, null);
       }
       await this.editForExport(PRINT_WRAPPER, () => wrapper);
@@ -2364,7 +2364,7 @@ export class Studio {
       const trim = main ? trimFromMain(main) : null;
       const edgeToEdge: string[] = [];
       for (const f of ws.files) {
-        if (!f.endsWith('.typ') || f.startsWith('cover/') || f.startsWith('.typst-studio/')) continue;
+        if (!f.endsWith('.typ') || f.startsWith('cover/') || f.startsWith('.foreword/')) continue;
         const text = await this.currentText(f);
         if (text && edgeToEdgeWithoutBleed(text)) edgeToEdge.push(f);
       }
@@ -3024,7 +3024,7 @@ export class Studio {
       const { previewUrl } = await this.typst.start(ws.root, entry, {
         outputPath: outputPathPattern(project, ws.root),
         fontPaths: absoluteFontPaths(project, ws.root),
-        // The book's root; the cover's files live outside it, in .typst-studio/.
+        // The book's root; the cover's files live outside it, in .foreword/.
         rootPath: this.state.previewTarget === 'cover' ? ws.root : `${ws.root}/${this.typstRoot()}`.replace(/\/$/, ''),
       });
       this.docs?.syncLsp();
@@ -3152,7 +3152,7 @@ export class Studio {
     if (!ws) return;
     // OpenCode, or Claude Code, Gemini CLI, Codex or Antigravity over ACP (Settings ▸ Assistant).
     const which = this.state.settings.assistant;
-    // Typst Studio's own tools (its settings), for every conversation.
+    // Foreword's own tools (its settings), for every conversation.
     const url = await this.studioToolsUrl();
     const tools = url ? { name: STUDIO_TOOLS, url } : null;
     const agent = which === 'opencode' ? new OpenCodeAdapter(ws.root, tools) : new AcpAdapter(ws.root, which, undefined, signIn, tools);
@@ -3199,7 +3199,7 @@ export class Studio {
   }
 
   /**
-   * Is there a newer Typst Studio? From the menu, the dialog opens at once and
+   * Is there a newer Foreword? From the menu, the dialog opens at once and
    * says (up to date, or what's new). At start, it opens only for a version
    * that wasn't skipped; Settings shows the answer in place.
    */
@@ -3233,7 +3233,7 @@ export class Studio {
   async installUpdateOnQuit() {
     const version = this.state.update?.version;
     this.closeUpdateDialog();
-    this.toast(`Typst Studio ${version} is downloading, and installs when you quit.`);
+    this.toast(`Foreword ${version} is downloading, and installs when you quit.`);
     await ipc.updateInstallOnQuit().catch((e) => this.toast(`The update didn’t download: ${errorMessage(e)}`, 'error'));
   }
 
@@ -4601,7 +4601,7 @@ export class Studio {
 
   /**
    * Let commands run without asking (`allow`) or never (`deny`): for this task,
-   * in this book (its .typst-studio.json) or in every book (the settings file).
+   * in this book (its .foreword.json) or in every book (the settings file).
    * The conversation has them at once.
    */
   async rememberCommands(patterns: string[], scope: RuleScope, effect: RuleEffect = 'allow') {
@@ -4712,7 +4712,7 @@ export class Studio {
 
   /**
    * The rules the assistant keeps of its own, which let it act without asking
-   * (so Typst Studio never sees those requests): Codex's rules files, and
+   * (so Foreword never sees those requests): Codex's rules files, and
    * Claude Code's settings in the book's .claude folder and in ~/.claude, for
    * the tools it doesn't ask the app about anyway. Read only.
    */
@@ -4753,7 +4753,7 @@ export class Studio {
     });
   }
 
-  // ---- the settings file (~/.typst-studio/settings.json) ---------------------------------
+  // ---- the settings file (~/.foreword/settings.json) ---------------------------------
 
   /** The file's last known text (to notice edits made elsewhere) and its parsed object (to keep unknown keys). */
   private config: { text: string | null; raw: Record<string, unknown> } = { text: null, raw: {} };
@@ -4825,7 +4825,7 @@ export class Studio {
     }
   }
 
-  // ---- project settings (.typst-studio.json) -----------------------------------------
+  // ---- project settings (.foreword.json) -----------------------------------------
 
   /** Read the project file. With `restartIfNeeded`, restart Typst when an entry/font/output setting changed on disk. */
   async loadProjectSettings({ restartIfNeeded = false } = {}) {
@@ -5185,7 +5185,7 @@ export class Studio {
     }
   }
 
-  // ---- the assistant's own tools: Typst Studio's settings (studio-tools.ts) ----------
+  // ---- the assistant's own tools: Foreword's settings (studio-tools.ts) ----------
 
   private toolsUrl: Promise<string | null> | null = null;
   /** What the tools asked for, to do when the assistant's reply ends. */
@@ -5205,7 +5205,7 @@ export class Studio {
       try {
         return await ipc.mcpServe(page);
       } catch (e) {
-        console.warn('Typst Studio’s tools for the assistant are off:', e);
+        console.warn('Foreword’s tools for the assistant are off:', e);
         return null;
       }
     })();
@@ -5214,7 +5214,7 @@ export class Studio {
 
   /** The author's yes to an assistant's own ask about a settings tool, by tool (when): used once, by the tool. */
   private studioApprovals = new Map<string, number>();
-  /** Typst Studio's own asks, waiting: their answers. */
+  /** Foreword's own asks, waiting: their answers. */
   private localAsks = new Map<string, (yes: boolean) => void>();
 
   /**

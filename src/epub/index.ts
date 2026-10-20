@@ -21,7 +21,7 @@ export type EpubKind = 'reflow' | 'fixed';
 export type EpubFile = { name: string; text?: string; base64?: string; temp?: string };
 
 /** Rules ahead of the book's own, for the reflowing export: what HTML can't show is drawn as a picture. */
-export const EPUB_RULES = `// Typst Studio's EPUB export: rules for e-readers, ahead of the book's own.
+export const EPUB_RULES = `// Foreword's EPUB export: rules for e-readers, ahead of the book's own.
 #show math.equation.where(block: true): it => html.elem("div", attrs: (class: "equation"), html.frame(it))
 #show math.equation.where(block: false): it => html.elem("span", attrs: (class: "math"), html.frame(it))
 #show ref: it => if it.form == "page" { none } else { it }

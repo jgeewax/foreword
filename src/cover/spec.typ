@@ -1,4 +1,4 @@
-// The cover's measurements. Typst Studio fills these in from the book (page
+// The cover's measurements. Foreword fills these in from the book (page
 // size and page count) when you choose Update Cover from Book; change them by
 // hand if your printer tells you otherwise.
 

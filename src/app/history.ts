@@ -118,7 +118,7 @@ export class History {
       const repo = await ipc.historyInit(exclude);
       this.started = true;
       const first = (await ipc.historyList(1)).length === 0;
-      await ipc.historySnapshot('opened', first ? 'Started keeping history' : 'Changed outside Typst Studio: {files}');
+      await ipc.historySnapshot('opened', first ? 'Started keeping history' : 'Changed outside Foreword: {files}');
       this.host.set({ status: 'ready', repo });
       await this.refresh();
     } catch (e) {

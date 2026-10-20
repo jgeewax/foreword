@@ -1,4 +1,4 @@
-// The settings file (~/.typst-studio/settings.json): every app preference as
+// The settings file (~/.foreword/settings.json): every app preference as
 // JSON the author can edit by hand. Keys this version doesn't know are kept.
 import { DEFAULT_SETTINGS, sanitize, type AppSettings } from './settings';
 
@@ -33,7 +33,7 @@ export function parseConfig(text: string): ParsedConfig {
   return { settings: { ...DEFAULT_SETTINGS, ...sanitize(r) }, zoom, raw: r, error: null };
 }
 
-/** Settings Typst Studio had once and no longer has: dropped when the file is written, not kept as unknown. */
+/** Settings Foreword had once and no longer has: dropped when the file is written, not kept as unknown. */
 const RETIRED = [
   // History below the files: History is a view of its own now, like the others.
   'historyPlacement',

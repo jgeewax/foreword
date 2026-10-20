@@ -74,7 +74,7 @@ fn is_internal(rel: &str) -> bool {
         || rel.starts_with(".git/")
         || rel.starts_with("node_modules/")
         || rel.ends_with(".DS_Store")
-        || rel.ends_with(".typst-studio.tmp")
+        || rel.ends_with(".foreword.tmp")
 }
 
 /// Files under `root`, honouring .gitignore, sorted by path.
@@ -126,7 +126,7 @@ pub fn write_text(path: &Path, text: &str, expected_hash: Option<&str>) -> CmdRe
         .ok_or_else(|| CmdError::Invalid("no parent directory".into()))?;
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
     let tmp = dir.join(format!(
-        ".{name}.{}.typst-studio.tmp",
+        ".{name}.{}.foreword.tmp",
         uuid::Uuid::new_v4().simple()
     ));
     let result = (|| -> CmdResult<()> {
@@ -186,11 +186,29 @@ pub struct WorkspaceInfo {
     files: Vec<String>,
 }
 
+/// What a book's settings file and folder were called before the app was
+/// renamed (legacy): `.typst-studio.json` and `.typst-studio/`.
+const LEGACY: &str = ".typst-studio";
+
+/// A book from before the rename: its settings file and folder take the new
+/// names, unless it has them already.
+fn migrate_legacy(root: &Path) {
+    for (old, new) in [
+        (format!("{LEGACY}.json"), ".foreword.json"),
+        (LEGACY.to_string(), ".foreword"),
+    ] {
+        let (old, new) = (root.join(old), root.join(new));
+        if old.exists() && !new.exists() {
+            let _ = fs::rename(&old, &new);
+        }
+    }
+}
+
 /// The main file: the configured one; else `main.typ` in the configured root;
 /// else the shallowest `main.typ` (a book kept in src/ of a larger folder);
 /// else the shallowest .typ file.
 fn find_entry(root: &Path, files: &[String]) -> Option<String> {
-    let settings = fs::read_to_string(root.join(".typst-studio.json"))
+    let settings = fs::read_to_string(root.join(".foreword.json"))
         .ok()
         .and_then(|s| serde_json::from_str::<StudioSettings>(&s).ok())
         .unwrap_or_default();
@@ -271,6 +289,7 @@ pub async fn workspace_open(
             "This book is open in another window.".into(),
         ));
     }
+    migrate_legacy(&root);
     let files = list_files(&root);
     let entry = find_entry(&root, &files);
 
@@ -547,7 +566,7 @@ mod tests {
 
     fn temp_root() -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "typst-studio-test-{}",
+            "foreword-test-{}",
             uuid::Uuid::new_v4().simple()
         ));
         fs::create_dir_all(&dir).unwrap();
@@ -570,7 +589,7 @@ mod tests {
             &[
                 file("main.typ", "= Hi"),
                 file("chapters/01.typ", "x"),
-                file(".typst-studio.json", "{}"),
+                file(".foreword.json", "{}"),
             ],
         )
         .unwrap();
@@ -579,7 +598,7 @@ mod tests {
             fs::read_to_string(root.join("chapters/01.typ")).unwrap(),
             "x"
         );
-        assert!(root.join(".typst-studio.json").exists());
+        assert!(root.join(".foreword.json").exists());
         // Never into an existing folder.
         let again = create_project(&parent, "My Novel", &[file("main.typ", "other")]);
         assert!(matches!(again, Err(CmdError::Conflict(_))));
@@ -674,7 +693,7 @@ mod tests {
         )
         .unwrap();
         fs::write(samples.join("tale/.DS_Store"), "x").unwrap();
-        let parent = temp_root().join("Typst Studio Samples");
+        let parent = temp_root().join("Foreword Samples");
         let copy = copy_sample(&samples, "tale", &parent, "The Tale").unwrap();
         assert_eq!(
             fs::read(copy.join("illustrations/01.jpg")).unwrap(),
@@ -711,12 +730,30 @@ mod tests {
     }
 
     #[test]
+    fn a_book_from_before_the_rename_takes_the_new_names() {
+        let root = temp_root();
+        fs::create_dir_all(root.join(LEGACY)).unwrap();
+        fs::write(root.join(LEGACY).join("review.json"), "{}").unwrap();
+        fs::write(root.join(format!("{LEGACY}.json")), r#"{"entryPoint":"a.typ"}"#).unwrap();
+        migrate_legacy(&root);
+        assert!(root.join(".foreword/review.json").exists());
+        assert!(root.join(".foreword.json").exists());
+        assert!(!root.join(LEGACY).exists());
+        // A book that has both keeps the new ones.
+        fs::write(root.join(format!("{LEGACY}.json")), "{}").unwrap();
+        migrate_legacy(&root);
+        assert!(root.join(format!("{LEGACY}.json")).exists());
+        assert!(fs::read_to_string(root.join(".foreword.json")).unwrap().contains("a.typ"));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
     fn entry_point_prefers_settings_then_main() {
         let root = temp_root();
         let files = vec!["book.typ".to_string(), "main.typ".to_string()];
         assert_eq!(find_entry(&root, &files).as_deref(), Some("main.typ"));
         fs::write(
-            root.join(".typst-studio.json"),
+            root.join(".foreword.json"),
             r#"{"entryPoint":"book.typ"}"#,
         )
         .unwrap();
@@ -736,7 +773,7 @@ mod tests {
         assert_eq!(find_entry(&root, &files).as_deref(), Some("src/main.typ"));
         // A configured root picks its main.typ.
         fs::write(
-            root.join(".typst-studio.json"),
+            root.join(".foreword.json"),
             r#"{"root":"templates/x/"}"#,
         )
         .unwrap();
@@ -746,7 +783,7 @@ mod tests {
         );
         // Without any main.typ, the shallowest .typ file.
         let others = vec!["b/c/deep.typ".to_string(), "a/top.typ".to_string()];
-        fs::write(root.join(".typst-studio.json"), "{}").unwrap();
+        fs::write(root.join(".foreword.json"), "{}").unwrap();
         assert_eq!(find_entry(&root, &others).as_deref(), Some("a/top.typ"));
     }
 }

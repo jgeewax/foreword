@@ -155,7 +155,7 @@ for (const id of readdirSync(samplesRoot).filter((n) => statSync(join(samplesRoo
   const work = mkdtempSync(join(tmpdir(), `typst-sample-${id}-`));
   cpSync(join(samplesRoot, id), work, { recursive: true });
   // Its own fonts, as the app passes them to Tinymist.
-  const fonts = (JSON.parse(readFileSync(join(work, '.typst-studio.json'), 'utf8')).fontPaths ?? []).flatMap((p) => ['--font-path', p]);
+  const fonts = (JSON.parse(readFileSync(join(work, '.foreword.json'), 'utf8')).fontPaths ?? []).flatMap((p) => ['--font-path', p]);
   const run = spawnSync('typst', ['compile', '--diagnostic-format', 'short', '--root', '.', ...fonts, 'main.typ', 'out.pdf'], { cwd: work, encoding: 'utf8' });
   const output = `${run.stdout}${run.stderr}`.trim();
   if (run.status !== 0 || /warning/i.test(output)) {

@@ -1,4 +1,4 @@
-# Typst Studio — Product & Engineering Specification
+# Foreword — Product & Engineering Specification
 
 **Status:** Draft v0.1  
 **Target:** macOS (Apple Silicon first), local-first  
@@ -18,7 +18,7 @@ Four simultaneously visible, horizontally arranged, resizable panes:
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Typst Studio  |  Book project  |  main  |  Build status  |  Settings                                 │
+│ Foreword  |  Book project  |  main  |  Build status  |  Settings                                 │
 ├────────────────┬────────────────────────────┬──────────────────────────┬──────────────────────────┤
 │ EXPLORER + GIT │ SOURCE EDITOR              │ LIVE TYPST PREVIEW       │ AI AGENT                 │
 │                │                            │                          │                          │
@@ -194,7 +194,7 @@ Types above express app behavior rather than literal upstream SDK signatures. Ad
 
 ### Workspace settings
 
-A small optional `.typst-studio.json` in the project root, for nonsecret project settings:
+A small optional `.foreword.json` in the project root, for nonsecret project settings:
 
 ```json
 {

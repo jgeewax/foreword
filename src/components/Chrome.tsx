@@ -228,7 +228,7 @@ function ToolRow({ label, name, tool, install, purpose }: { label: string; name:
   }
   return (
     <li className="missing">
-      <span className="bad">✕</span> {label} is off: {name} isn't installed. {purpose} Install it in Terminal with <code className="selectable">{install}</code>, then restart Typst Studio.
+      <span className="bad">✕</span> {label} is off: {name} isn't installed. {purpose} Install it in Terminal with <code className="selectable">{install}</code>, then restart Foreword.
     </li>
   );
 }
@@ -245,7 +245,7 @@ export function Welcome() {
       <TitleBar />
       <div className="welcome">
         <div className="welcome-card">
-          <h1>Typst Studio</h1>
+          <h1>Foreword</h1>
           <p className="welcome-lede">Write books in plain text, with the typeset pages updating beside you as you type, and a writing assistant on hand.</p>
           {opening ? (
             <p className="muted">Opening {opening}…</p>

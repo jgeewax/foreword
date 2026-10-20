@@ -67,8 +67,8 @@ export function PrintDialog() {
         </div>
         <div className="modal-body">
           <p className="settings-help">
-            Typst Studio makes the print files and checks them. You order on Mixam’s website: choose the size, paper and binding there, see the price, and upload the
-            files. Nothing is ordered or paid from Typst Studio.
+            Foreword makes the print files and checks them. You order on Mixam’s website: choose the size, paper and binding there, see the price, and upload the
+            files. Nothing is ordered or paid from Foreword.
           </p>
           {working ? (
             <p className="muted">Making the print files…</p>

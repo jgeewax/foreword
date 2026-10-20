@@ -51,7 +51,7 @@ try {
   mkdirSync(dir, { recursive: true });
   copyFileSync(join(work, `tinymist-${triple}`, 'tinymist'), `${dir}tinymist`);
   chmodSync(`${dir}tinymist`, 0o755);
-  writeFileSync(`${dir}LICENSE`, `Tinymist ${VERSION}, bundled with Typst Studio.\nSource: https://github.com/Myriad-Dreamin/tinymist\n\n${licence.toString('utf8')}`);
+  writeFileSync(`${dir}LICENSE`, `Tinymist ${VERSION}, bundled with Foreword.\nSource: https://github.com/Myriad-Dreamin/tinymist\n\n${licence.toString('utf8')}`);
   // It runs (its --version doesn't say the version).
   execFileSync(`${dir}tinymist`, ['--version']);
   const mb = Math.round(statSync(`${dir}tinymist`).size / 1e6);

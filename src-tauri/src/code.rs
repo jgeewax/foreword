@@ -74,16 +74,16 @@ pub async fn run_code(
     timeout_ms: u64,
 ) -> CmdResult<RunResult> {
     let (exe, args, ext) = interpreter(lang).ok_or_else(|| {
-        CmdError::Invalid(format!("Typst Studio can't run “{lang}” examples yet"))
+        CmdError::Invalid(format!("Foreword can't run “{lang}” examples yet"))
     })?;
-    let bin = discover::find(exe, &format!("TYPST_STUDIO_{}", exe.to_ascii_uppercase()))
+    let bin = discover::find(exe, &format!("FOREWORD_{}", exe.to_ascii_uppercase()))
         .ok_or_else(|| {
             CmdError::Unavailable(format!(
                 "{exe} isn't installed; it's needed to run {lang} examples"
             ))
         })?;
     let dir = std::env::temp_dir().join(format!(
-        "typst-studio-run-{}",
+        "foreword-run-{}",
         uuid::Uuid::new_v4().simple()
     ));
     std::fs::create_dir_all(&dir)?;
@@ -164,7 +164,7 @@ mod tests {
 
     fn temp() -> std::path::PathBuf {
         let d = std::env::temp_dir().join(format!(
-            "typst-studio-code-{}",
+            "foreword-code-{}",
             uuid::Uuid::new_v4().simple()
         ));
         std::fs::create_dir_all(&d).unwrap();

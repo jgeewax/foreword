@@ -294,7 +294,7 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
         >
           <Icon name="help" />
         </button>
-        <button className="chrome-icon" aria-label="Settings" onClick={() => studio.openSettings()} {...tips.props('settings', { name: 'Settings', keys: '⌘,', about: 'Typst Studio’s settings, and this book’s: the editor, the assistant, permissions, fonts and more.' })}>
+        <button className="chrome-icon" aria-label="Settings" onClick={() => studio.openSettings()} {...tips.props('settings', { name: 'Settings', keys: '⌘,', about: 'Foreword’s settings, and this book’s: the editor, the assistant, permissions, fonts and more.' })}>
           <Icon name="settings" />
         </button>
       </div>

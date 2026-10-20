@@ -3,7 +3,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 /** Events sent to this window (each window has its own). */
 const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) => getCurrentWebview().listen(event, handler);
 // Scripted end-to-end check run inside the real app (WKWebView, Tinymist,
-// OpenCode) when TYPST_STUDIO_SELFTEST=<out.json> is set. Never saves files;
+// OpenCode) when FOREWORD_SELFTEST=<out.json> is set. Never saves files;
 // agent edit requests are rejected.
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
 import { studio, type ChatItem } from './app/studio';
@@ -152,13 +152,13 @@ async function previewChecks(chapter: string, editor: monaco.editor.IStandaloneC
 }
 
 /**
- * Project settings (TODO #5): .typst-studio.json from the Settings UI. Writes
- * files, so only with TYPST_STUDIO_SELFTEST_EDITS=1 on a scratch book that has
- * an alt.typ entry and a .typst-studio.json with an unknown "custom" key.
+ * Project settings (TODO #5): .foreword.json from the Settings UI. Writes
+ * files, so only with FOREWORD_SELFTEST_EDITS=1 on a scratch book that has
+ * an alt.typ entry and a .foreword.json with an unknown "custom" key.
  */
 async function projectSettingsChecks() {
   const out: Record<string, unknown> = {};
-  const raw = async () => JSON.parse((await ipc.fsRead('.typst-studio.json')).text);
+  const raw = async () => JSON.parse((await ipc.fsRead('.foreword.json')).text);
   const compiled = async () => {
     await sleep(500);
     await waitFor(() => studio.state.preview.status !== 'starting' && studio.state.compile.status === 'ok', 30000, 'compile').catch(() => {});
@@ -195,8 +195,8 @@ async function projectSettingsChecks() {
   out.fileAfter = await raw();
 
   // External edit of the file is picked up (and restarts on the main file again).
-  const current = await ipc.fsRead('.typst-studio.json');
-  await ipc.fsWrite('.typst-studio.json', JSON.stringify({ ...JSON.parse(current.text), entryPoint: 'main.typ' }, null, 2) + '\n', current.hash);
+  const current = await ipc.fsRead('.foreword.json');
+  await ipc.fsWrite('.foreword.json', JSON.stringify({ ...JSON.parse(current.text), entryPoint: 'main.typ' }, null, 2) + '\n', current.hash);
   await sleep(1500);
   out.afterExternalEdit = { entry: studio.state.workspace?.entry, pages: await compiled(), settingsEntry: studio.state.project.settings.entryPoint };
   return out;
@@ -370,7 +370,7 @@ async function optionsChecks() {
 }
 
 /**
- * The assistant changes Typst Studio's settings with its tools, asked in plain
+ * The assistant changes Foreword's settings with its tools, asked in plain
  * words, with a real assistant (Claude Code on Haiku, Codex on Luna, OpenCode
  * on a free model): a preference at once, no permission asked; a request for
  * more permissions refused; and switching to another assistant with its
@@ -2426,7 +2426,7 @@ async function fileChecks() {
   await waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok', 30000, 'restart').catch(() => {});
   out.renameMain = {
     entry: studio.state.workspace?.entry,
-    settings: (await ipc.fsRead('.typst-studio.json')).text.trim(),
+    settings: (await ipc.fsRead('.foreword.json')).text.trim(),
     compile: studio.state.compile,
     errors: studio.state.problems.errors,
   };
@@ -2683,7 +2683,7 @@ async function reviewChecks(withAgent: boolean) {
     }
   }
   await ipc.fsWrite(file, original, await ipc.fsHash(file));
-  await ipc.fsWrite('.typst-studio/review.json', '{"comments": []}\n', await ipc.fsHash('.typst-studio/review.json'));
+  await ipc.fsWrite('.foreword/review.json', '{"comments": []}\n', await ipc.fsHash('.foreword/review.json'));
   await studio.loadReview();
   await sleep(500);
   studio.showSidebar('files');
@@ -3720,7 +3720,7 @@ async function eventProbe() {
 async function configChecks() {
   const out: Record<string, unknown> = {};
   const saved = studio.state.settings;
-  const projectBefore = await ipc.fsRead('.typst-studio.json').catch(() => null);
+  const projectBefore = await ipc.fsRead('.foreword.json').catch(() => null);
   await sleep(500);
   const first = await ipc.configRead();
   out.firstWrite = { path: first.path, written: first.text !== null, keys: first.text ? Object.keys(JSON.parse(first.text)) : [] };
@@ -3759,12 +3759,12 @@ async function configChecks() {
   out.afterUi = {
     fileRules: file.alwaysAllow,
     keptUnknownKey: file.myNote,
-    bookRules: JSON.parse((await ipc.fsRead('.typst-studio.json')).text).alwaysAllow,
+    bookRules: JSON.parse((await ipc.fsRead('.foreword.json')).text).alwaysAllow,
     effective: studio.commandRules().map((r) => `${r.scope}: ${r.pattern}`),
   };
   // Put everything back.
   studio.updateSettings({ ...saved });
-  if (projectBefore) await ipc.fsWrite('.typst-studio.json', projectBefore.text, (await ipc.fsHash('.typst-studio.json')) ?? null);
+  if (projectBefore) await ipc.fsWrite('.foreword.json', projectBefore.text, (await ipc.fsHash('.foreword.json')) ?? null);
   await studio.loadProjectSettings();
   return out;
 }
@@ -5711,7 +5711,7 @@ async function previewCloseChecks() {
   return { ok, before, shot, button, closed, shownAgain };
 }
 
-/** The chat's ⚙ opens Settings at Typst Studio ▸ Assistant; the header still fits beside it. */
+/** The chat's ⚙ opens Settings at Foreword ▸ Assistant; the header still fits beside it. */
 async function agentSettingsChecks() {
   const header = document.querySelector<HTMLElement>('.agent-pane .pane-header')!;
   const gear = header.querySelector<HTMLButtonElement>('.agent-settings');
@@ -5751,7 +5751,7 @@ async function assistantMenuChecks(real = false) {
   const saved = studio.state.settings.assistant;
   const update = studio.updateSettings.bind(studio);
   const patches: unknown[] = [];
-  // Never Typst Studio's settings file (the user's own app reads it); when not real, not even the setting.
+  // Never Foreword's settings file (the user's own app reads it); when not real, not even the setting.
   studio.updateSettings = (patch, opts) => (real ? update(patch, { ...opts, write: false }) : void patches.push(patch));
   const trigger = () => document.querySelector<HTMLButtonElement>('.composer-controls .assistant-trigger');
   const rows = () => [...document.querySelectorAll<HTMLButtonElement>('.assistant-menu-row')];
@@ -5784,7 +5784,7 @@ async function assistantMenuChecks(real = false) {
     studio.store.set((s) => ({ agent: { ...s.agent, running: false } }));
     studio.store.set({ toast: null });
     await sleep(100);
-    // Settings… opens Typst Studio ▸ Assistant.
+    // Settings… opens Foreword ▸ Assistant.
     document.querySelector<HTMLButtonElement>('.assistant-menu-settings')?.click();
     await sleep(300);
     out.settings = { open: studio.state.settingsOpen, page: document.querySelector('.settings-nav button.active')?.textContent, menuClosed: !document.querySelector('.assistant-menu-popover') };
@@ -5838,7 +5838,7 @@ async function settingControlsChecks() {
     studio.openSettings('general');
     await sleep(300);
     const native = (sel = '.settings-content') => document.querySelectorAll(`${sel} input[type="checkbox"], ${sel} input[type="radio"]`).length;
-    // Each page in turn: Typst Studio's, then this book's.
+    // Each page in turn: Foreword's, then this book's.
     out.nativeOnPages = {} as Record<string, number>;
     for (const [i, tab] of [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')].entries()) {
       tab.click();
@@ -5937,7 +5937,7 @@ async function settingControlsChecks() {
 
 /**
  * Updates, end to end, in a release build of an older version run with
- * TYPST_STUDIO_UPDATE_URL at a feed of a newer one. `updater`: the dialog
+ * FOREWORD_UPDATE_URL at a feed of a newer one. `updater`: the dialog
  * offers it with what's new, Install Now downloads (with progress), installs
  * and restarts; the new version, started with the same environment, runs this
  * group again and finds itself up to date. `updater-quit`: Install When I
@@ -6000,7 +6000,7 @@ async function updaterChecks(onQuit: boolean) {
  * Antigravity in Settings ▸ Assistant: its card, Download from Google with
  * progress, then a start that's signed out with Sign in with Google (not
  * clicked: that opens the browser). Downloads 113 MB: only when asked for,
- * with TYPST_STUDIO_ASSISTANTS_DIR set to a scratch folder so the app's own
+ * with FOREWORD_ASSISTANTS_DIR set to a scratch folder so the app's own
  * stays as it was.
  */
 async function antigravityChecks() {
@@ -6050,7 +6050,7 @@ async function antigravityChecks() {
   return out;
 }
 
-/** About Typst Studio: from the menu's id, what it says, and Esc closes it. */
+/** About Foreword: from the menu's id, what it says, and Esc closes it. */
 async function aboutChecks() {
   const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
   await studio.menuCommand('about');
@@ -6106,7 +6106,7 @@ async function closeButtonChecks() {
 /**
  * Settings ▸ This book ▸ Files: a card per setting, menus instead of path
  * boxes; the main file's menu, a typed output folder, and a book's own font
- * folder offered and used. Saves .typst-studio.json (put back at the end), so
+ * folder offered and used. Saves .foreword.json (put back at the end), so
  * a scratch book only, with a font in fonts/.
  */
 async function filesPageChecks() {
@@ -6233,7 +6233,7 @@ async function explicitDefaultsChecks() {
   const files = out.files as Record<string, string>;
   const tools = out.tools as Record<string, string>;
   out.ok =
-    files.banner.includes(`${book}/.typst-studio.json`) &&
+    files.banner.includes(`${book}/.foreword.json`) &&
     files.root.includes('Default') &&
     files.root.includes(book) &&
     files.output.includes('Default') &&
@@ -6359,7 +6359,7 @@ async function planModeChecks() {
 
 /**
  * Edit setting (TODO #7). Makes real edits, so it only runs with
- * TYPST_STUDIO_SELFTEST_EDITS=1 against a scratch copy of a book.
+ * FOREWORD_SELFTEST_EDITS=1 against a scratch copy of a book.
  */
 async function editPolicyChecks() {
   const out: Record<string, unknown> = {};
@@ -6503,7 +6503,7 @@ async function bundleChecks() {
   await studio.refreshTools();
   const copies = studio.state.tools?.opencode.copies ?? [];
   out.copies = copies.map((c) => `${c.version} · ${c.source} · ${c.path}`);
-  const bundled = copies.find((c) => c.source === 'bundled with Typst Studio');
+  const bundled = copies.find((c) => c.source === 'bundled with Foreword');
   if (bundled) {
     await studio.setToolPath('opencode', bundled.path);
     await sleep(1000);
@@ -7176,7 +7176,7 @@ async function settingsChecks() {
   for (const [i, t] of tabs.entries()) {
     t.click();
     await sleep(250);
-    // Typst Studio's pages, then this book's (two have the same name).
+    // Foreword's pages, then this book's (two have the same name).
     const name = `${i + 1}-${(t.textContent ?? 'page').toLowerCase().replace(/\s+/g, '-')}`;
     (out.pages as Record<string, unknown>)[name] = {
       headings: [...document.querySelectorAll('.settings-content h2')].map((h) => h.textContent),
@@ -7464,9 +7464,9 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && want('filespage')) result.filespage = await filesPageChecks();
     if (want('closebutton')) result.closebutton = await closeButtonChecks();
     if (want('about')) result.about = await aboutChecks();
-    // Downloads Antigravity's connector (113 MB): only when asked for, into TYPST_STUDIO_ASSISTANTS_DIR.
+    // Downloads Antigravity's connector (113 MB): only when asked for, into FOREWORD_ASSISTANTS_DIR.
     if (only?.includes('antigravity')) result.antigravity = await antigravityChecks();
-    // A release build with TYPST_STUDIO_UPDATE_URL at a local feed: it installs over itself.
+    // A release build with FOREWORD_UPDATE_URL at a local feed: it installs over itself.
     if (only?.includes('updater')) result.updater = await updaterChecks(false);
     if (only?.includes('updater-quit')) result.updaterQuit = await updaterChecks(true);
     // It starts Claude Code: only when asked for.

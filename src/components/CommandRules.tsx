@@ -2,7 +2,7 @@
 // every book. Each says how often it has let a command run, and can be
 // removed (with Undo) or, in Settings, added. Below them, what never asks or
 // never runs whatever the rules, and the rules the assistant keeps of its own,
-// which Typst Studio can only show.
+// which Foreword can only show.
 import { useEffect, useState } from 'react';
 import { commandAnatomy } from '../app/command-anatomy';
 import { ASSISTANT_NAMES } from '../app/settings';
@@ -185,7 +185,7 @@ function AddRule({ scopes }: { scopes: RuleScope[] }) {
 
 const PROGRAMS: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' };
 
-/** The assistant's own rules: it acts on these without asking, so Typst Studio never sees those requests. Read only. */
+/** The assistant's own rules: it acts on these without asking, so Foreword never sees those requests. Read only. */
 function AssistantOwnRules() {
   const assistant = useStore(studio.store, (s) => s.settings.assistant);
   const root = useStore(studio.store, (s) => s.workspace?.root);
@@ -213,7 +213,7 @@ function AssistantOwnRules() {
         </span>
       </div>
       <p>
-        It does these without asking, so Typst Studio never sees them first.{elsewhere ? ' Those outside the book apply in every project you use it in.' : ''} They’re {program}’s, from before or from using it
+        It does these without asking, so Foreword never sees them first.{elsewhere ? ' Those outside the book apply in every project you use it in.' : ''} They’re {program}’s, from before or from using it
         elsewhere: change them there.
       </p>
       <ul className="own-rules-list">

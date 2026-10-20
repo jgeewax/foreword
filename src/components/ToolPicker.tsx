@@ -220,7 +220,7 @@ export function ToolPicker({ tool, label, info, install, error, notInstalled }: 
           </div>
         </div>
       )}
-      {unusable && <div className="settings-help bad">There’s no program at {tildePath(configured ?? chosen)}, so Typst Studio uses {info?.path ? 'the first one it found' : 'none'}.</div>}
+      {unusable && <div className="settings-help bad">There’s no program at {tildePath(configured ?? chosen)}, so Foreword uses {info?.path ? 'the first one it found' : 'none'}.</div>}
       {info && !info.path && notInstalled !== null && (
         <div className="settings-help">
           {notInstalled ?? (

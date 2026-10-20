@@ -1,4 +1,4 @@
-// The main file: Typst Studio previews and exports this one.
+// The main file: Foreword previews and exports this one.
 // The #set lines below decide how every page looks; the chapters are pulled
 // in with #include at the bottom, in order.
 

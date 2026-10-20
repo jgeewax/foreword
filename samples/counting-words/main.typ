@@ -1,4 +1,4 @@
-// The main file: Typst Studio previews and exports this one. It sets up the
+// The main file: Foreword previews and exports this one. It sets up the
 // book and pulls in the chapters, in the order listed below.
 // To add a chapter: File → New Chapter (⌥⌘N), or create a file in chapters/
 // and add an #include line for it below.
@@ -6,7 +6,7 @@
 
 #let title = "Counting Words"
 #let subtitle = "Python for writers, one small program at a time"
-#let author = "The Typst Studio team"
+#let author = "The Foreword team"
 
 // The page (trim) size: change both numbers to resize every page.
 #show: book.with(title: title, author: author, width: 7.5in, height: 9.25in)
@@ -19,14 +19,14 @@
 #title-page(title: title, subtitle: subtitle, author: author, edition: "First edition")
 
 // The copyright page, written here instead of #copyright-page: this book is a
-// sample that comes with Typst Studio, and it quotes a public-domain novel.
+// sample that comes with Foreword, and it quotes a public-domain novel.
 #page(header: none, footer: none)[
   #set text(size: 8.5pt)
   #v(1fr)
   #emph(title) \
-  Copyright © 2026 The Typst Studio team.
+  Copyright © 2026 The Foreword team.
 
-  This is a sample book that comes with Typst Studio, to show what a finished programming book looks like.
+  This is a sample book that comes with Foreword, to show what a finished programming book looks like.
   Open it, change it and run its examples as much as you like.
 
   The examples quote the opening of _Pride and Prejudice_ by Jane Austen, first published in 1813.

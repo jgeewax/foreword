@@ -61,8 +61,8 @@ export function QuickOpen() {
 
   const rows = useMemo((): Row[] => {
     if (commandMode) return [];
-    // Files the book ignores (.typst-studio, the export folder) aren't in `files` already.
-    const candidates = files.filter((f) => !f.startsWith('.typst-studio/'));
+    // Files the book ignores (.foreword, the export folder) aren't in `files` already.
+    const candidates = files.filter((f) => !f.startsWith('.foreword/'));
     if (!query.trim()) {
       // Open tabs first (the one you're in last), then the rest by name.
       const recent = fileTabs(tabs)

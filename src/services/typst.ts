@@ -77,7 +77,7 @@ export class TypstService extends Emitter<Events> {
     const rootUri = relativeToUri('', root).replace(/\/$/, '');
     await this.request('initialize', {
       processId: null,
-      clientInfo: { name: 'typst-studio' },
+      clientInfo: { name: 'foreword' },
       rootUri,
       workspaceFolders: [{ uri: rootUri, name: root.split('/').pop() }],
       capabilities: {

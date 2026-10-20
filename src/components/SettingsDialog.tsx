@@ -105,15 +105,15 @@ function BookAssistantPage() {
       </Section>
       <Section title="Commands, in this book">
         <p className="settings-help">
-          Commands the assistant runs here without asking, or never, on top of those for every book (Typst Studio ▸ Permissions): the tools this book needs, like its own
-          scripts. Kept in .typst-studio.json; “Always allow…” on a request adds to them.
+          Commands the assistant runs here without asking, or never, on top of those for every book (Foreword ▸ Permissions): the tools this book needs, like its own
+          scripts. Kept in .foreword.json; “Always allow…” on a request adds to them.
         </p>
         <CommandRules scopes={['book']} add={project.error ? [] : ['book']} />
       </Section>
       {code.trusted && (
         <Section title="Code examples">
           <div className="settings-list-row">
-            <span>Typst Studio may run this book’s code examples.</span>
+            <span>Foreword may run this book’s code examples.</span>
             <button onClick={() => studio.code.revokeTrust()}>Stop allowing</button>
           </div>
         </Section>
@@ -122,7 +122,7 @@ function BookAssistantPage() {
   );
 }
 
-/** Where a page's settings are kept: Typst Studio's settings file, or the book's own. */
+/** Where a page's settings are kept: Foreword's settings file, or the book's own. */
 function ScopeBanner({ scope }: { scope: 'app' | 'book' }) {
   const file = useStore(studio.store, (s) => s.configFile);
   const ws = useStore(studio.store, (s) => s.workspace);
@@ -130,13 +130,13 @@ function ScopeBanner({ scope }: { scope: 'app' | 'book' }) {
     return (
       <div className="settings-scope">
         <span>
-          <strong>For every book.</strong> Saved in <code className="selectable">{tildePath(file?.path ?? '~/.typst-studio/settings.json')}</code>; edit it by hand if you like, and changes apply when
-          you come back to Typst Studio.{' '}
+          <strong>For every book.</strong> Saved in <code className="selectable">{tildePath(file?.path ?? '~/.foreword/settings.json')}</code>; edit it by hand if you like, and changes apply when
+          you come back to Foreword.{' '}
           <button className="link" onClick={() => void studio.openConfigFile()}>
             Open in text editor
           </button>
         </span>
-        {file?.error && <span className="bad">The file can’t be read: {file.error} Typst Studio keeps your last settings and won’t change the file until it’s fixed.</span>}
+        {file?.error && <span className="bad">The file can’t be read: {file.error} Foreword keeps your last settings and won’t change the file until it’s fixed.</span>}
       </div>
     );
   }
@@ -212,7 +212,7 @@ function GeneralPage() {
   );
 }
 
-/** Typst Studio's version and updates: check now, install, and whether to check at start. */
+/** Foreword's version and updates: check now, install, and whether to check at start. */
 function UpdatesSection() {
   const update = useStore(studio.store, (s) => s.update);
   const settings = useStore(studio.store, (s) => s.settings);
@@ -223,7 +223,7 @@ function UpdatesSection() {
     idle: 'Not checked yet.',
     checking: 'Checking…',
     none: `Up to date${at ? `, checked at ${at}` : ''}.`,
-    available: `Typst Studio ${version} is available.`,
+    available: `Foreword ${version} is available.`,
     downloading: `Downloading ${version}…`,
     downloaded: update.onQuit ? `${version} installs when you quit.` : `${version} is downloaded.`,
     installing: `Installing ${version}…`,
@@ -237,7 +237,7 @@ function UpdatesSection() {
         <div className="update-row">
           <img src={appIcon} alt="" width={40} height={40} />
           <span className="settings-switch-text">
-            <span className="settings-switch-label">Typst Studio {update.current}</span>
+            <span className="settings-switch-label">Foreword {update.current}</span>
             <span className={`settings-help${status === 'error' ? ' bad' : ''}`}>{line}</span>
           </span>
           <button className="small" disabled={working} onClick={() => void studio.checkForUpdates({ dialog: false, inPlace: true })}>
@@ -287,7 +287,7 @@ function UpdatesSection() {
       </div>
       <div className="settings-field">
         <SwitchRow checked={settings.checkForUpdates} onChange={(checkForUpdates) => studio.updateSettings({ checkForUpdates })}>
-          <span className="settings-switch-label">Check for updates when Typst Studio starts</span>
+          <span className="settings-switch-label">Check for updates when Foreword starts</span>
           <span className="settings-help">A new version is offered once: install it now, when you quit, or skip it, and only a newer one is offered after.</span>
         </SwitchRow>
         {settings.skippedUpdate && (
@@ -299,12 +299,12 @@ function UpdatesSection() {
           </p>
         )}
         <p className="settings-help">
-          From Typst Studio’s releases on GitHub,{' '}
+          From Foreword’s releases on GitHub,{' '}
           <button className="link" onClick={() => void ipc.openUrl(RELEASES)}>
-            github.com/jgeewax/typststudio/releases
+            github.com/jgeewax/foreword/releases
           </button>
           , each checked against its signature before it’s installed.
-          {update.installable ? '' : ' This copy runs from source (npm run app), so it can’t replace itself: updates are for Typst Studio installed from its DMG.'}
+          {update.installable ? '' : ' This copy runs from source (npm run app), so it can’t replace itself: updates are for Foreword installed from its DMG.'}
         </p>
       </div>
     </Section>
@@ -340,7 +340,7 @@ function EditorPage() {
             <span className="settings-help">Tidy spacing and indentation in Typst files, line up &amp; and &amp;&amp; in equations, and leave a blank line above and below each heading.</span>
           </SwitchRow>
           <p className="settings-help">
-            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Typst Studio’s own. Your sentences and
+            With typstyle, the formatter VS Code’s Typst extension uses, so a file formatted here doesn’t change there; the blank lines around headings are Foreword’s own. Your sentences and
             line breaks stay as you wrote them. Format Document (⇧⌥F) formats the open file either way; ⌘Z undoes it.
           </p>
         </div>
@@ -514,10 +514,10 @@ function ToolsPage({ goToAssistant }: { goToAssistant: () => void }) {
   // A tool may have been installed or moved since the app started.
   useEffect(() => void search().catch(() => {}), []);
   return (
-    <Section title="Tools Typst Studio uses">
+    <Section title="Tools Foreword uses">
       <div className="tools-intro">
         <p className="settings-help">
-          Typst Studio looks in Homebrew, your PATH and editors’ Typst extensions, and uses the first copy it finds. Pick another and the preview or History starts again with it.
+          Foreword looks in Homebrew, your PATH and editors’ Typst extensions, and uses the first copy it finds. Pick another and the preview or History starts again with it.
           The assistant’s program is chosen with the assistant, in{' '}
           <button className="link" onClick={goToAssistant}>
             Assistant
@@ -534,7 +534,7 @@ function ToolsPage({ goToAssistant }: { goToAssistant: () => void }) {
         label="Git"
         purpose={
           <>
-            Keeps History, in Typst Studio’s own folder
+            Keeps History, in Foreword’s own folder
             {historyAt && (
               <>
                 {history.repo ? ' (this book’s: ' : ' ('}
@@ -612,7 +612,7 @@ function markBoxes(scroller: HTMLElement, ranges: Range[]): [number, number, num
 
 export function SettingsDialog() {
   const ws = useStore(studio.store, (s) => s.workspace);
-  const configPath = useStore(studio.store, (s) => s.configFile?.path ?? '~/.typst-studio/settings.json');
+  const configPath = useStore(studio.store, (s) => s.configFile?.path ?? '~/.foreword/settings.json');
   const dialogRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -631,7 +631,7 @@ export function SettingsDialog() {
       // Only a convenience.
     }
   };
-  // Typst Studio's own settings (every book), then this book's (saved with it), as VS Code's User and Workspace.
+  // Foreword's own settings (every book), then this book's (saved with it), as VS Code's User and Workspace.
   const pages: { id: Page; label: string; icon: IconName; scope: 'app' | 'book' }[] = [
     { id: 'general', label: 'General', icon: 'settings', scope: 'app' },
     { id: 'editor', label: 'Editor', icon: 'edit', scope: 'app' },
@@ -646,7 +646,7 @@ export function SettingsDialog() {
         ]
       : []),
   ];
-  const groupTitle = (scope: 'app' | 'book') => (scope === 'app' ? 'Typst Studio' : `This book · ${ws?.name ?? ''}`);
+  const groupTitle = (scope: 'app' | 'book') => (scope === 'app' ? 'Foreword' : `This book · ${ws?.name ?? ''}`);
   const current = pages.some((p) => p.id === page) ? page : 'general';
   const total = pages.reduce((n, p) => n + (counts[p.id] ?? 0), 0);
 

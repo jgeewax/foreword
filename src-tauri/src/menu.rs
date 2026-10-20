@@ -84,7 +84,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         MenuItem::with_id(handle, id, text, true, accelerator)
     };
     let sep = || PredefinedMenuItem::separator(handle);
-    // "Typst Studio", not the crate's name ("typst-studio"), in About, Hide and Quit.
+    // The product's name ("Foreword"), not the crate's ("foreword"), in About, Hide and Quit.
     let name = handle
         .config()
         .product_name

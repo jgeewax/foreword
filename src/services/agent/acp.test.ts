@@ -133,7 +133,7 @@ describe('AcpAdapter', () => {
     await adapter.send(sessionId, 'Count the words, then change one.', []);
     const prompt = sent.at(-1);
     expect(prompt.method).toBe('session/prompt');
-    expect(prompt.params.prompt[0].text).toBe('<typst-studio-instructions>\nYou are writing a Typst book.\n</typst-studio-instructions>\n\nCount the words, then change one.');
+    expect(prompt.params.prompt[0].text).toBe('<foreword-instructions>\nYou are writing a Typst book.\n</foreword-instructions>\n\nCount the words, then change one.');
     expect(stripInstructions(prompt.params.prompt[0].text)).toBe('Count the words, then change one.');
 
     // The turn as recorded; the edit waits for the author.
@@ -234,8 +234,9 @@ describe('Codex', () => {
   });
 
   it('a title that is only the instructions sent first isn’t used', () => {
-    expect(conversationTitle('<typst-studio-instructions>\n# Typst Studio: writing assistant…')).toBe('');
-    expect(conversationTitle('<typst-studio-instructions>\nx\n</typst-studio-instructions>\n\nTighten chapter 2')).toBe('Tighten chapter 2');
+    expect(conversationTitle('<foreword-instructions>\n# Foreword: writing assistant…')).toBe('');
+    expect(conversationTitle('<foreword-instructions>\nx\n</foreword-instructions>\n\nTighten chapter 2')).toBe('Tighten chapter 2');
+    expect(conversationTitle('<typst-studio-instructions>\nx\n</typst-studio-instructions>\n\nAn older task')).toBe('An older task'); // legacy
     expect(conversationTitle('Tighten chapter 2')).toBe('Tighten chapter 2');
   });
 

@@ -15,7 +15,7 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 
 ## Figures
 
-- AI image generation (photos, painted art). This needs an image model and a key Typst Studio holds itself (in the Keychain). Today OpenCode holds the LiteLLM key and has no image tool. Possible route: an "Image model" setting that calls LiteLLM's `/v1/images/generations`, saves the PNG to figures/ and inserts a `#figure`. History keeps the old file, so regenerating is safe.
+- AI image generation (photos, painted art). This needs an image model and a key Foreword holds itself (in the Keychain). Today OpenCode holds the LiteLLM key and has no image tool. Possible route: an "Image model" setting that calls LiteLLM's `/v1/images/generations`, saves the PNG to figures/ and inserts a `#figure`. History keeps the old file, so regenerating is safe.
 - A figure gallery: every figure in the book with its caption and number, with a jump to its source or a request to the assistant to restyle all figures consistently.
 - Charts that track their data: when data/\*.csv changes, the chart changes (Typst already does this). Show which figures read which data files.
 - Vision models: let the assistant look at a raster figure (send the image) so it can describe it, write alt text, or suggest a better caption.
@@ -43,7 +43,7 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 
 ## Permissions
 
-- Per-book permissions saved in `.typst-studio.json` (e.g. a shared book that's always read-only), overriding the app setting.
+- Per-book permissions saved in `.foreword.json` (e.g. a shared book that's always read-only), overriding the app setting.
 - "Allow for this book" on a permission card. OpenCode supports saved permissions (`/api/permission/saved`); show and revoke them in Settings.
 - Show which rule decided a refusal ("Delete files: Never") in the failed tool's details.
 
@@ -129,7 +129,7 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 ## Settings and the config file
 
 - A JSON schema for settings.json, so editors complete and check it.
-- Per-book overrides of any setting (send key, marks) in .typst-studio.json, not only commands.
+- Per-book overrides of any setting (send key, marks) in .foreword.json, not only commands.
 - Sync settings across Macs (iCloud Drive folder as the config location).
 
 ## Toolbar and layout
@@ -183,7 +183,7 @@ Ideas from [Ayakaleaf Pro](https://github.com/ayaka-notes/ayakaleaf-pro) (former
 - Search the whole book. A Find view for every file at once, with match case, whole word and regular expression, match counts per file, and Replace in all. Monaco only finds in the open file.
 - A symbol palette. Math symbols by group (Greek, arrows, relations, operators, sets) with search by name or by look, each shown rendered, inserting Typst's name (`arrow.r.double`, `subset.eq`). Typst's dotted names are hard to guess; Tinymist's symbol data has them all.
 - Two-way sync for people who don't use Git: "Back up to GitHub" (create a private repository and push each named version), and a Dropbox or iCloud Drive folder kept in step, with a sync status in the status bar.
-- "Open in Typst Studio" links, as Overleaf's "Open in Overleaf" API: a `typststudio://` URL that opens a snippet, a file URL or a zip as a new book, for template sites, Typst Universe pages and tutorials.
+- "Open in Foreword" links, as Overleaf's "Open in Overleaf" API: a `foreword://` URL that opens a snippet, a file URL or a zip as a new book, for template sites, Typst Universe pages and tutorials.
 - Scripts that make figures. Its Python runner runs a project's scripts. Here: a figure's script (`figures/growth.py` writes `figures/growth.svg`) runs again when it or its data changes, so a chart is never stale; History keeps the old images.
 - The assistant looks things up in Typst's documentation (a docs search tool, as Ayakaleaf has) instead of guessing at syntax, and in Typst Universe for packages.
 - Template gallery with pictures: each template's title page and a spread, rendered, in New Book.

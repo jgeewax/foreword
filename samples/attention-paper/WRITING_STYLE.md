@@ -10,7 +10,7 @@ Start from a template on the chat's style bar.
 
 Machine-learning researchers and graduate students. They know neural networks, softmax, backpropagation, BLEU and the encoder–decoder idea, and many know recurrent translation models. Don't explain the basics, but define every symbol where it first appears.
 
-This paper is a restatement, written for Typst Studio, of Vaswani et al., "Attention Is All You Need" (NIPS 2017, arxiv.org/abs/1706.03762). Everything added must be in new words, and every number must be one the original reports.
+This paper is a restatement, written for Foreword, of Vaswani et al., "Attention Is All You Need" (NIPS 2017, arxiv.org/abs/1706.03762). Everything added must be in new words, and every number must be one the original reports.
 
 ## Voice and tone
 

@@ -1,4 +1,4 @@
-// Typst Studio's updates, as iTerm2's: a dialog that offers a new version
+// Foreword's updates, as iTerm2's: a dialog that offers a new version
 // (what's new; skip it, install when you quit, or install now), then shows its
 // download, its install and the restart. Settings ▸ General ▸ Updates uses the
 // same progress and buttons.
@@ -11,7 +11,7 @@ import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { Icon } from './icons';
 import { Markdown } from './Markdown';
 
-export const RELEASES = 'https://github.com/jgeewax/typststudio/releases';
+export const RELEASES = 'https://github.com/jgeewax/foreword/releases';
 
 export const megabytes = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 10e6 ? 1 : 0)} MB`;
 
@@ -97,11 +97,11 @@ export function UpdateDialog() {
   let buttons: React.ReactNode;
   switch (status) {
     case 'available':
-      title = 'A new version of Typst Studio is available';
+      title = 'A new version of Foreword is available';
       body = (
         <>
           <p className="update-lede">
-            Typst Studio {version} is out; you have {current}.{update.installable ? ' Would you like to install it now?' : ''}
+            Foreword {version} is out; you have {current}.{update.installable ? ' Would you like to install it now?' : ''}
           </p>
           {update.notes && (
             <div className="update-notes">
@@ -135,11 +135,11 @@ export function UpdateDialog() {
       );
       break;
     case 'downloading':
-      title = `Downloading Typst Studio ${version}…`;
+      title = `Downloading Foreword ${version}…`;
       body = (
         <>
           <DownloadProgress update={update} />
-          <p className="update-note">{update.onQuit ? 'It installs when you quit.' : 'Then it installs, and Typst Studio starts again.'}</p>
+          <p className="update-note">{update.onQuit ? 'It installs when you quit.' : 'Then it installs, and Foreword starts again.'}</p>
         </>
       );
       buttons = (
@@ -150,8 +150,8 @@ export function UpdateDialog() {
       );
       break;
     case 'downloaded':
-      title = update.onQuit ? `Typst Studio ${version} installs when you quit` : `Typst Studio ${version} is downloaded`;
-      body = <p className="update-lede">Or install it now: Typst Studio starts again with it, your books as they were.</p>;
+      title = update.onQuit ? `Foreword ${version} installs when you quit` : `Foreword ${version} is downloaded`;
+      body = <p className="update-lede">Or install it now: Foreword starts again with it, your books as they were.</p>;
       buttons = (
         <>
           {update.onQuit && <button onClick={() => void studio.cancelUpdateOnQuit()}>Don’t Install at Quit</button>}
@@ -165,12 +165,12 @@ export function UpdateDialog() {
       break;
     case 'installing':
     case 'restarting':
-      title = status === 'restarting' ? 'Restarting Typst Studio…' : `Installing Typst Studio ${version}…`;
+      title = status === 'restarting' ? 'Restarting Foreword…' : `Installing Foreword ${version}…`;
       body = <InstallSteps update={update} />;
       buttons = null;
       break;
     case 'none':
-      title = 'Typst Studio is up to date';
+      title = 'Foreword is up to date';
       body = <p className="update-lede">{current} is the newest version.</p>;
       buttons = (
         <>
@@ -182,7 +182,7 @@ export function UpdateDialog() {
       );
       break;
     case 'error':
-      title = version ? `Typst Studio ${version} wasn’t installed` : 'Typst Studio couldn’t check for updates';
+      title = version ? `Foreword ${version} wasn’t installed` : 'Foreword couldn’t check for updates';
       body = <p className="update-error selectable">{update.error}</p>;
       buttons = (
         <>

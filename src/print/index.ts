@@ -1,5 +1,5 @@
 // Printing the book: print-ready PDFs (the interior with bleed, and the cover)
-// and checks on them before the author orders from a printer. Typst Studio
+// and checks on them before the author orders from a printer. Foreword
 // opens the printer's site; the order (and payment) happens there.
 //
 // Mixam's requirements (mixam.com/support/filesetup, checked 2026-10):
@@ -8,13 +8,13 @@
 // with the spine, perfect binding from 32–48 pages (depending on paper),
 // CMYK preferred (RGB is converted on upload).
 
-/** Generated for each print export: the book, with bleed. Lives with Typst Studio's other files. */
-export const PRINT_WRAPPER = '.typst-studio/interior.typ';
+/** Generated for each print export: the book, with bleed. Lives with Foreword's other files. */
+export const PRINT_WRAPPER = '.foreword/interior.typ';
 export const BLEED = '0.125in';
 export const BLEED_PT = 9;
 
 export function printWrapper(entry: string): string {
-  return `// Typst Studio writes this file for printing (File → Print with Mixam…) and
+  return `// Foreword writes this file for printing (File → Print with Mixam…) and
 // rewrites it each time: the book exactly as it is, with ${BLEED} bleed around
 // every page, which printers trim off. Edit the book, not this file.
 #set page(bleed: ${BLEED})

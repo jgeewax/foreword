@@ -1,7 +1,7 @@
 // Commands the author lets run without asking, or never: rules made from a
 // permission card ("Always allow…") or in Settings. They're kept as a person
 // would type them, in the settings file (every book) and the book's
-// .typst-studio.json (this book):
+// .foreword.json (this book):
 //
 //   "alwaysAllow": ["uv run python src/scripts/lint.py *", "python3 scripts/figures.py --all"],
 //   "neverAllow": ["git push *"]

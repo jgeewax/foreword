@@ -102,16 +102,16 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// The feed: tauri.conf.json's, or TYPST_STUDIO_UPDATE_URL (self-tests).
+/// The feed: tauri.conf.json's, or FOREWORD_UPDATE_URL (self-tests).
 fn updater(app: &AppHandle) -> CmdResult<tauri_plugin_updater::Updater> {
     let mut builder = app.updater_builder().timeout(Duration::from_secs(30));
-    if let Some(url) = std::env::var("TYPST_STUDIO_UPDATE_URL")
+    if let Some(url) = std::env::var("FOREWORD_UPDATE_URL")
         .ok()
         .filter(|u| !u.is_empty())
     {
         let url = url
             .parse()
-            .map_err(|e| CmdError::Invalid(format!("TYPST_STUDIO_UPDATE_URL: {e}")))?;
+            .map_err(|e| CmdError::Invalid(format!("FOREWORD_UPDATE_URL: {e}")))?;
         builder = builder.endpoints(vec![url]).map_err(fail)?;
     }
     builder.build().map_err(fail)

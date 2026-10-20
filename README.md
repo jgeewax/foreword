@@ -2,7 +2,7 @@
 
 <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="">
 
-# Typst Studio
+# Foreword
 
 **Write your book with AI. See every page as it'll print.**
 
@@ -11,16 +11,16 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20first-111?logo=apple&logoColor=white)
 ![Typst](https://img.shields.io/badge/Typst-0.15-239dad)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)
-![Release](https://img.shields.io/github/v/release/jgeewax/typststudio?label=release&color=2f63d8)
+![Release](https://img.shields.io/github/v/release/jgeewax/foreword?label=release&color=2f63d8)
 ![Status](https://img.shields.io/badge/status-early%20development-e0a040)
 
-**[Download for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** · [Website](https://jgeewax.github.io/typststudio/) · [Releases](https://github.com/jgeewax/typststudio/releases) · [What's new](CHANGELOG.md)
+**[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
 **New in 0.3:** search the whole book · Contents, every chapter with its sections and words · History as a timeline · a colour for each book, as Peacock gives a folder · a tour for someone new
 
 <br>
 
-<img src="docs/images/calculus.webp" alt="Typst Studio with Calculus Made Easy open: a chapter's Typst source with a passage selected, the typeset page with its equations, and Claude Code explaining why (dx)² can be dropped." width="100%">
+<img src="docs/images/calculus.webp" alt="Foreword with Calculus Made Easy open: a chapter's Typst source with a passage selected, the typeset page with its equations, and Claude Code explaining why (dx)² can be dropped." width="100%">
 
 <sub><i>Calculus Made Easy, one of the sample books: a passage selected in the source, its page in the preview, and Claude Code explaining the step.</i></sub>
 
@@ -40,7 +40,7 @@ Every tool for writing a book was made for something else.
 | **Typst** | Fast, readable and beautiful. But its editors are made for papers and programmers, not for writing a whole book. |
 | **AI in a code editor** | The assistant is brilliant; the room is wrong. Terminals, diffs and build commands, when all you wanted was the next chapter. |
 
-Typst Studio is made for one job: **writing a book**, with an AI assistant at your side and the pages in front of you.
+Foreword is made for one job: **writing a book**, with an AI assistant at your side and the pages in front of you.
 
 ## What it's like
 
@@ -50,7 +50,7 @@ Typst Studio is made for one job: **writing a book**, with an AI assistant at yo
 
 ### See the page as it'll print, while you type
 
-A book lives or dies on details: a figure that lands two pages late, a reference that points nowhere, a citation that didn't resolve. Typst Studio typesets the book from what you've typed, saved or not, so you catch them the moment they happen, not after a slow build.
+A book lives or dies on details: a figure that lands two pages late, a reference that points nowhere, a citation that didn't resolve. Foreword typesets the book from what you've typed, saved or not, so you catch them the moment they happen, not after a slow build.
 
 It redraws only the pages in view: in a 491-page book, a change shows up in about a tenth of a second. Click anything in the pages to jump to its source. A mistake is underlined where it is, in plain words, and the pages stay up while you fix it.
 
@@ -131,7 +131,7 @@ Comments sit beside the text, never in it.
 
 ### Go back to any version. No Git required
 
-Engineers keep every version in Git. Most writers keep *chapter-3-final-v2-REAL.docx*. Typst Studio keeps the versions for you, as you work and around every change the assistant makes, in a repository of its own outside the book's folder.
+Engineers keep every version in Git. Most writers keep *chapter-3-final-v2-REAL.docx*. Foreword keeps the versions for you, as you work and around every change the assistant makes, in a repository of its own outside the book's folder.
 
 History is a timeline of them, coloured by who made each one. Click a version to see what changed, line by line or word by word, then undo just that change or put the whole book back. Name a version, like “Draft sent to my editor”. Already keep your book in Git? Source Control stages, commits, pulls and pushes it.
 
@@ -160,7 +160,7 @@ Or start from a template made for your kind of book, or have it drafted from the
 
 The assistant is a program on your Mac, signed in with your own account, so there's no new subscription. Pick one in **Settings ▸ Assistant**, or from the chat, beside the model.
 
-| Assistant | From | Runs on | How Typst Studio talks to it |
+| Assistant | From | Runs on | How Foreword talks to it |
 | :-- | :-- | :-- | :-- |
 | **OpenCode** | Open source | Any model you've set up in it: OpenAI, Anthropic, Google, or one on your Mac | Its own server |
 | **Claude Code** | Anthropic | Your Claude plan or an API key | Agent Client Protocol |
@@ -168,7 +168,7 @@ The assistant is a program on your Mac, signed in with your own account, so ther
 | **Antigravity** | Google | Your Google account, a Gemini API key or Gemini Enterprise | Agent Client Protocol, through Google's connector (Settings downloads it) |
 | **Gemini CLI** | Google | A paid Gemini API key or a Gemini Code Assist work account | Agent Client Protocol |
 
-Each conversation is its own task, and several can run at once. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Typst Studio's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
+Each conversation is its own task, and several can run at once. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Foreword's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
 
 ## Everything else a book needs
 
@@ -176,20 +176,20 @@ Each conversation is its own task, and several can run at once. Choose the model
 - **Sample books to try.** Open a finished one and try the assistant on it: *Jekyll and Hyde*, *Calculus Made Easy*, *The Elements of Style*, *Luca's Wonderful Brain*, *Attention Is All You Need*, and *Counting Words*, whose Python examples run.
 - **Code that runs.** Examples in Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell run from the book, with their real output set beneath and checked against what you expect.
 - **Covers and printing.** Design a print cover with the spine worked out from the page count, check the files against the printer's rules, and order through Mixam.
-- **E-books.** Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, or every page exactly as typeset for picture books, papers and books full of math. Typst Studio picks for you and says what didn't carry over.
+- **E-books.** Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, or every page exactly as typeset for picture books, papers and books full of math. Foreword picks for you and says what didn't carry over.
 - **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. Start it from a template for your kind of book, let the assistant draft it from your chapters, or answer its questions and have it write the guide from your answers. Redraft it whenever it isn't quite right: it keeps the rules you wrote, and learns from how you've rewritten its text.
 - **Find anything.** Search every chapter at once and replace across the book (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd>), see the whole book in Contents (each chapter with its sections and how many words), and go to a chapter by its number or name (<kbd>⌘</kbd><kbd>P</kbd>).
 - **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons and status bar wear it. A book that already has a Peacock colour keeps it.
-- **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Typst Studio? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).
+- **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Foreword? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).
 - **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code, formatting on save, wrapping at a column with rulers, and a window for each book.
 
 ## Download
 
-**[Download Typst Studio for Mac](https://github.com/jgeewax/typststudio/releases/latest/download/Typst-Studio_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/typststudio/releases). Open it and drag Typst Studio to Applications. It carries Tinymist and OpenCode, so it needs nothing else installed. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
+**[Download Foreword for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/foreword/releases). Open it and drag Foreword to Applications. It carries Tinymist and OpenCode, so it needs nothing else installed. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
 
 The app isn't notarized yet, so the first time macOS may ask: open System Settings ▸ Privacy & Security and click **Open Anyway**. A copy fetched with `gh release download` opens without asking.
 
-After that it keeps itself up to date. When a new version is out, Typst Studio offers it as it starts: install it now (it downloads, installs and starts again), when you quit, or skip that version. **Settings ▸ General ▸ Updates** and **Typst Studio ▸ Check for Updates…** check any time. Every update is checked against its signature before it's installed.
+After that it keeps itself up to date. When a new version is out, Foreword offers it as it starts: install it now (it downloads, installs and starts again), when you quit, or skip that version. **Settings ▸ General ▸ Updates** and **Foreword ▸ Check for Updates…** check any time. Every update is checked against its signature before it's installed.
 
 ## Run it from source
 
@@ -200,8 +200,8 @@ It runs on macOS (Apple Silicon first) and needs Xcode's command line tools, Rus
 brew install rust node tinymist
 
 # the app
-git clone https://github.com/jgeewax/typststudio.git
-cd typststudio
+git clone https://github.com/jgeewax/foreword.git
+cd foreword
 npm install
 npm run app
 ```
@@ -235,12 +235,12 @@ The self-tests drive the real app, in a second window beside yours (once `npm ru
 
 ```sh
 cp -R fixtures/sample-book /tmp/book && mkdir -p /tmp/st
-cd src-tauri && TYPST_STUDIO_WORKSPACE=/tmp/book TYPST_STUDIO_SELFTEST=/tmp/st/out.json \
-  TYPST_STUDIO_SELFTEST_ONLY=settings target/debug/typst-studio
+cd src-tauri && FOREWORD_WORKSPACE=/tmp/book FOREWORD_SELFTEST=/tmp/st/out.json \
+  FOREWORD_SELFTEST_ONLY=settings target/debug/foreword
 ```
 
 <br>
 
 <div align="center">
-<sub>Made by JJ Geewax in Singapore. Typst Studio is an independent project: it isn't made by, or affiliated with, the Typst team.</sub>
+<sub>Made by JJ Geewax in Singapore. Foreword (called Typst Studio up to 0.3) is an independent project: it isn't made by, or affiliated with, the Typst team.</sub>
 </div>

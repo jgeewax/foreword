@@ -1,4 +1,4 @@
-# Build the book from the command line (Typst Studio's Export PDF does the
+# Build the book from the command line (Foreword's Export PDF does the
 # same). Needs the typst command: brew install typst
 #
 #   make          writes the PDF to export/

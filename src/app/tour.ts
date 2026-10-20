@@ -15,7 +15,7 @@ export type TourStep = {
 export const TOUR_STEPS: TourStep[] = [
   {
     target: null,
-    title: 'Welcome to Typst Studio',
+    title: 'Welcome to Foreword',
     text: 'A minute’s look around the window. Leave any time with Esc, and take the tour again from Help ▸ Take the Tour.',
   },
   {

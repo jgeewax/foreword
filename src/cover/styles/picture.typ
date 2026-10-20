@@ -1,5 +1,5 @@
 // The cover's design: change the words, colours and the picture here. Its
-// size comes from spec.typ, which Typst Studio keeps in step with the book.
+// size comes from spec.typ, which Foreword keeps in step with the book.
 // The picture should cover the whole front including the bleed.
 #import "spec.typ": *
 #import "guides.typ": guide-layer

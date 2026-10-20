@@ -54,7 +54,7 @@ export type AssistantSetup = {
   download: { url: string; bytes: number; version: string } | null;
 };
 export type AssistantsSetup = { node: boolean; opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup; antigravity: AssistantSetup };
-/** Typst Studio's own update, the same in every window (updater.rs). */
+/** Foreword's own update, the same in every window (updater.rs). */
 export type UpdateState = {
   status: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'restarting' | 'error';
   /** The version running, and the one offered with its notes and date. */
@@ -151,7 +151,7 @@ export const ipc = {
   clipboardRead: () => invoke<string | null>('clipboard_read'),
   /** Page count and page boxes of a PDF in the workspace (for the print checks). */
   pdfInfo: (path: string) => invoke<PdfInfo>('pdf_info', { path }),
-  /** The settings file (~/.typst-studio/settings.json): its text, or null when there's none yet. */
+  /** The settings file (~/.foreword/settings.json): its text, or null when there's none yet. */
   configRead: () => invoke<{ path: string; text: string | null }>('config_read'),
   configWrite: (text: string) => invoke<void>('config_write', { text }),
   /** Open it in the default text editor. */
@@ -199,7 +199,7 @@ export const ipc = {
   /** An assistant over ACP (Claude Code, Gemini CLI, Codex, Antigravity): its JSON-RPC lines arrive on `onMessage`. */
   acpStart: (kind: string, onMessage: Channel<any>) => invoke<{ program: string; args: string[] }>('acp_start', { kind, onMessage }),
   acpSend: (line: string) => invoke<void>('acp_send', { line }),
-  /** Typst Studio's own tools for the assistant (mcp.rs): this window's address; each request comes to `page`, answered with mcpReply. */
+  /** Foreword's own tools for the assistant (mcp.rs): this window's address; each request comes to `page`, answered with mcpReply. */
   mcpServe: (page: Channel<{ id: number; body: string }>) => invoke<string>('mcp_serve', { page }),
   mcpReply: (id: number, body: string | null) => invoke<void>('mcp_reply', { id, body }),
   /** EPUB export (epub.rs): the main file (`source` in its place) as HTML; every page as SVG with the outline; the zip. */
@@ -218,7 +218,7 @@ export const ipc = {
   /** An assistant's own rule files outside the book (~/.claude settings, Codex's rules), read only; and one shown in Finder. */
   assistantRuleFiles: (kind: string) => invoke<{ path: string; text: string }[]>('assistant_rule_files', { kind }),
   assistantRuleReveal: (kind: string, path: string) => invoke<void>('assistant_rule_reveal', { kind, path }),
-  /** Typst Studio's update: what's known, a check, install now (then it restarts), or at quit. Changes arrive as `update` events. */
+  /** Foreword's update: what's known, a check, install now (then it restarts), or at quit. Changes arrive as `update` events. */
   updateState: () => invoke<UpdateState>('update_state'),
   updateCheck: () => invoke<UpdateState>('update_check'),
   updateInstall: () => invoke<void>('update_install'),

@@ -312,7 +312,7 @@ section), the page starts at the window's top and the offset is measured.
     VS Code's layout icons: the window with the pane's column outlined, filled
     in while the pane shows.
 - **What the old toolbar had went where VS Code keeps it:**
-  - "Typst Studio" and "entry main.typ": gone. The Files view already marks
+  - "Foreword" and "entry main.typ": gone. The Files view already marks
     the main file.
   - Review: the activity bar's Review icon, which has the count.
   - Export PDF…: the preview's header, beside Open PDF (and Book → Export PDF…,
@@ -496,7 +496,7 @@ section), the page starts at the window's top and the offset is measured.
   self-test) is for the first window only, and it doesn't reopen the last
   book, which is open in the first window.
 - Verified (self-test `windows`):
-  - A new window started without a book, titled "Typst Studio".
+  - A new window started without a book, titled "Foreword".
   - It opened another book and was titled "book-in-src".
   - Asked to open the first window's book, it was refused and kept its own;
     the first window kept its book.
@@ -568,12 +568,12 @@ section), the page starts at the window's top and the offset is measured.
   - Tinymist used the opened folder as the Typst root, so `/figures/x.png`
     pointed outside `src/`. `typst compile src/main.typ` uses the main file's
     folder, so a book that builds on the command line failed here.
-- **The Typst root** is now `root` in .typst-studio.json (e.g. `"src"`;
+- **The Typst root** is now `root` in .foreword.json (e.g. `"src"`;
   `"."` for the folder opened). By default it's the main file's folder, as
   `typst compile` does. That changes nothing for a main file at the top.
   It applies to:
   - Tinymist (`rootPath`) for the book's preview and export (the cover keeps
-    the opened folder: its files live in .typst-studio/);
+    the opened folder: its files live in .foreword/);
   - the Makefile's `--root`;
   - reference handling (chapter names from `#include`, rename and delete
     updating references, root-absolute paths kept root-absolute).
@@ -729,8 +729,8 @@ section), the page starts at the window's top and the offset is measured.
   labels ("Close All  (⌘K W)").
 - **Now:** one menu per subject, built in full in `src-tauri/src/menu.rs`
   rather than patched into the default:
-  - **Typst Studio:** About, Settings… (⌘,), Services, Hide, Quit (named
-    "Typst Studio", not the crate's name).
+  - **Foreword:** About, Settings… (⌘,), Services, Hide, Quit (named
+    "Foreword", not the crate's name).
   - **File:**
     - New Book / Chapter / File;
     - Open Book… (⌘O), Go to File… (⌘P);
@@ -794,7 +794,7 @@ section), the page starts at the window's top and the offset is measured.
   versions, all compiled with Typst 0.15.1. Models guess versions otherwise,
   and mismatches fail: cetz-plot 0.1.4 only works with cetz 0.5.x, not 0.4.2.
 - No AI image generation. OpenCode has no image tool, and its LiteLLM key is in
-  OpenCode's own auth store, which Typst Studio doesn't read. The mode says so
+  OpenCode's own auth store, which Foreword doesn't read. The mode says so
   and offers diagrams, SVG or a placeholder instead (see IDEAS.md).
 - With four modes, the mode control became a compact menu (opens upward, a
   description per mode) next to the model picker. ⇧Tab in the message box
@@ -844,7 +844,7 @@ section), the page starts at the window's top and the offset is measured.
   snapshot. Arguments are arrays, and version ids are checked to be hex before
   they reach git.
 - **When versions are recorded:**
-  - on open ("Started keeping history", or "Changed outside Typst Studio: …");
+  - on open ("Started keeping history", or "Changed outside Foreword: …");
   - 10 s after the last save or disk change ("Edited {files}");
   - right before each agent turn, so the author's own edits are separate;
   - right after each agent turn (`Agent: …` with the message, only if files changed);
@@ -909,7 +909,7 @@ section), the page starts at the window's top and the offset is measured.
     Otherwise the title is indented and so is the first paragraph after it.
 - Creating a book uses `project_create`. It makes `parent/<title>` (refusing an
   existing folder), writes the files with `create_new`, and removes that new
-  folder again if anything fails. The book also gets `.typst-studio.json`
+  folder again if anything fails. The book also gets `.foreword.json`
   (entry `main.typ`, PDFs to `export/`), a `.gitignore` for `export/`, and a
   `WRITING_STYLE.md` starter with genre-specific prompts.
 
@@ -964,7 +964,7 @@ section), the page starts at the window's top and the offset is measured.
 
 ### Review comments (first version)
 
-- **Storage:** comments live beside the text in `.typst-studio/review.json`, in
+- **Storage:** comments live beside the text in `.foreword/review.json`, in
   the book so they travel with it. The source stays clean.
 - **Anchoring:** each comment keeps the quoted passage, 32 characters of
   context either side, and a line hint, like a web annotation's
@@ -1105,7 +1105,7 @@ section), the page starts at the window's top and the offset is measured.
     start of a command and after separators (`cd x && rm y`, `;rm`, `| xargs
     rm`). False positives like `echo "don't rm"` only ask or deny; nothing is
     wrongly allowed.
-- **OpenCode's `question` tool is denied.** Typst Studio doesn't render it,
+- **OpenCode's `question` tool is denied.** Foreword doesn't render it,
   so the agent asks in its reply.
 - **The control moved to the composer**, next to the mode and the model, and
   opens upward. Settings shows the same editor. Changes apply to the current
@@ -1134,7 +1134,7 @@ section), the page starts at the window's top and the offset is measured.
   with a renamed folder.
   - Open buffers are edited in place (undoable) and saved unless they were
     dirty; closed files are written with the expected hash.
-  - Renaming the main file updates `.typst-studio.json` and restarts the
+  - Renaming the main file updates `.foreword.json` and restarts the
     preview. The file list is refreshed first, or validation rejects the new
     name.
   - Open tabs move with the file. A rename is refused while an affected file
@@ -1234,7 +1234,7 @@ section), the page starts at the window's top and the offset is measured.
   - `cover.typ` is what's printed. `preview.typ` is the same with a guide layer
     showing bleed, trim, spine folds, safe areas, the barcode box and the
     spine width.
-- **Why separate files:** the author edits only `design.typ`. Typst Studio
+- **Why separate files:** the author edits only `design.typ`. Foreword
   rewrites only the `trim-width`, `trim-height` and `pages` lines of `spec.typ`
   ("Update from book"), so a changed bleed or exact spine width survives.
 - **Spine:** pages × thickness per page, using Amazon KDP's published figures
@@ -1729,7 +1729,7 @@ section), the page starts at the window's top and the offset is measured.
 
 ### The settings file, and commands allowed without asking
 
-- **`~/.typst-studio/settings.json`** holds every preference: send key,
+- **`~/.foreword/settings.json`** holds every preference: send key,
   History's place, editor marks, zoom, permissions and `allowCommands`. It's
   like Claude Code's `~/.claude/settings.json`: plain JSON, editable by hand.
   - Unknown keys are kept when the app writes.
@@ -1739,11 +1739,11 @@ section), the page starts at the window's top and the offset is measured.
     file's path and "Open in text editor".
   - On first start the file is written from the settings this Mac had (local
     storage, which stays as a fast cache).
-- **Self-tests never touch it.** With `TYPST_STUDIO_SELFTEST` set, the folder
-  is next to the results file (`TYPST_STUDIO_CONFIG_DIR` overrides). Before
+- **Self-tests never touch it.** With `FOREWORD_SELFTEST` set, the folder
+  is next to the results file (`FOREWORD_CONFIG_DIR` overrides). Before
   this, tests shared the author's local storage.
 - **Commands:** `allowCommands` in the settings file applies to every book; in
-  `.typst-studio.json` to one book (it travels with it). Both add to the
+  `.foreword.json` to one book (it travels with it). Both add to the
   built-in look commands and are edited in Settings → Permissions. Names are
   one or two plain words (`python3`, `uv run`), with no wildcards or shell
   syntax; the app adds `cmd` and `cmd *`. A line still asks if any part isn't
@@ -1762,7 +1762,7 @@ section), the page starts at the window's top and the offset is measured.
   - **Assistant:** the model in use, the editor marks, the style guide.
   - **Permissions:** presets, the detailed settings, and the commands that
     never need asking.
-  - **This book:** `.typst-studio.json`.
+  - **This book:** `.foreword.json`.
   - **Tools:** Tinymist, OpenCode and git, with versions and paths.
 - Open it with Settings… in the app menu (⌘,), as on any Mac app, or the
   settings icon at the bottom of the activity bar. The last section shown is
@@ -2040,9 +2040,9 @@ section), the page starts at the window's top and the offset is measured.
 
 ### Printing with Mixam
 
-- **What Typst Studio does:** it makes print-ready PDFs, checks them, and
+- **What Foreword does:** it makes print-ready PDFs, checks them, and
   opens Mixam's product page in the browser. Size, paper, binding, price,
-  upload and payment all happen on Mixam's site. Typst Studio never places
+  upload and payment all happen on Mixam's site. Foreword never places
   an order or handles money.
 - **Mixam's requirements** (mixam.com/support/filesetup and /support/bleed,
   October 2026):
@@ -2055,7 +2055,7 @@ section), the page starts at the window's top and the offset is measured.
     12mm or more).
 - **Interior bleed without touching the book:** Typst 0.15 has `page(bleed:)`.
   The PDF grows by the bleed, a TrimBox marks the finished page, and the page
-  `fill` runs into the bleed. Typst Studio writes `.typst-studio/interior.typ`
+  `fill` runs into the bleed. Foreword writes `.foreword/interior.typ`
   (`#set page(bleed: 0.125in)` + `#include "/main.typ"`) and exports that.
   Pagination is unchanged, since `100%` is still the trim size.
   - Content sized to the page stops at the trim. The picture-book template's
@@ -2090,7 +2090,7 @@ section), the page starts at the window's top and the offset is measured.
   production days and the spine width for an item specification. It needs a
   Mixam account approved for API use, and a JWT from `GET /api/user/token`
   (Basic auth). Orders need the PDFs at public URLs, plus billing and delivery
-  addresses. Quotes inside Typst Studio are worth doing once there's an
+  addresses. Quotes inside Foreword are worth doing once there's an
   account to test with (credentials in the Keychain). Ordering stays on
   Mixam's site.
 - **Verified in the app** (self-test `print`):
@@ -2208,7 +2208,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   eigenvalues of…", "so there are at most two eigenvalues"), and use the first
   three lines of each chapter. It's small on purpose: 9 pages.
 - **Ignored:** every PDF in the repository (exports, the print interior), and
-  the sample book's `.typst-studio/` (the print wrapper and review comments
+  the sample book's `.foreword/` (the print wrapper and review comments
   the app writes while the book is open in it).
 - **More like a real book:** a title page with an author, a copyright page,
   a preface, Contents, and in each chapter a few more sections (linear
@@ -2278,7 +2278,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
     was unavailable.
   Restarts run in the background, one at a time.
 - **Order:** the chosen path, then the old environment variables
-  (`TINYMIST_PATH`, `OPENCODE_PATH`, `TYPST_STUDIO_GIT`), then the search path
+  (`TINYMIST_PATH`, `OPENCODE_PATH`, `FOREWORD_GIT`), then the search path
   (with Homebrew's folders), then VS Code's Tinymist.
 - **A chosen path with no program there** isn't an error: the automatic one
   runs, and the page says "There's no program at …". A mistyped path shouldn't
@@ -2342,7 +2342,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 
 - **Six finished books** in `samples/<id>/`, each made as the app would make
   it: the template's `style.typ` unchanged (a test checks), its `main.typ`
-  layout, a filled-in `WRITING_STYLE.md`, the Makefile, `.typst-studio.json`
+  layout, a filled-in `WRITING_STYLE.md`, the Makefile, `.foreword.json`
   and `.gitignore` a new book gets.
   - **Novel:** Stevenson's *Strange Case of Dr Jekyll and Mr Hyde* (1886),
     complete: 10 chapters, the dedication, the letters set apart; 90 pages at
@@ -2373,7 +2373,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
     checks), and each copyright page says when the book was first published.
 - **Opening one:** New Book has a Samples tab (also the welcome screen's Open
   a Sample… and the palette's Open a Sample Book…). It copies the sample to
-  `~/Documents/Typst Studio Samples/<title>` and opens it at its first
+  `~/Documents/Foreword Samples/<title>` and opens it at its first
   chapter. The author can change anything; opening it again opens the same
   copy, as it is. The copy is made in Rust (`sample_create`), so the pictures
   come along: the repo's `samples/` in a dev build, the app's resources when
@@ -2425,7 +2425,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
     conversations rebuilds the chat (from `session/load`'s replay after a
     restart, with the instructions taken back out);
   - the instructions, sent before the author's message (in
-    `<typst-studio-instructions>`), and again only when they change. The
+    `<foreword-instructions>`), and again only when they change. The
     adapter only offers to replace Claude Code's own system prompt;
   - the permission rules: the agent asks, and the same `sessionRules` answer
     (allowed, denied, or the card). A command line is checked whole and part
@@ -2547,24 +2547,24 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   opened from the app's Resources, which is the release path for samples
   (Peter Rabbit, 27 pictures, 32 pages).
 
-### Settings: Typst Studio's, and this book's
+### Settings: Foreword's, and this book's
 
 - **Asked for:** "separate settings for your app config vs book config". The
   book's settings were one page among the app's, and the Permissions page
   mixed commands allowed in every book with those for this book only.
 - **Two groups, as VS Code's User and Workspace settings,** split by where
   they're saved:
-  - **Typst Studio** (General, Assistant, Permissions, Tools), for every book,
-    in `~/.typst-studio/settings.json`;
+  - **Foreword** (General, Assistant, Permissions, Tools), for every book,
+    in `~/.foreword/settings.json`;
   - **This book · *its name*** (Files, Assistant), in the book's
-    `.typst-studio.json`, so they travel with it. Files has the main file, the
+    `.foreword.json`, so they travel with it. Files has the main file, the
     Typst root, the PDF folder and the font folders. Assistant has the
     writing style guide, the commands allowed in this book only, and trust in
     its code examples.
 - **Each page starts by saying where it's saved:** "For every book. Saved in
-  ~/.typst-studio/settings.json…" with Open in text editor (and the file's
+  ~/.foreword/settings.json…" with Open in text editor (and the file's
   problem, if it can't be read), or "For *the book* only. Saved in
-  .typst-studio.json in the book's folder…" with Open the file. This
+  .foreword.json in the book's folder…" with Open the file. This
   replaces the Settings file section on General.
 - Search still shows every page of both groups, a book's pages titled "This
   book · …". A page's name counts toward its matches, so the book's first
@@ -2636,7 +2636,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - **Sign in in Terminal:** a button opens Terminal on the exact command for
   this Mac (`claude auth login`, `codex login`, `gemini`, `opencode auth
   login`; the npx form when the program isn't installed), through a
-  `.command` file that says what to do there. Back in Typst Studio, the
+  `.command` file that says what to do there. Back in Foreword, the
   assistant starts again by itself. The command is shown with Copy too. The
   chat's status line, signed out, says just "*Name* isn't signed in." with
   Sign in… (to this page) and Retry.
@@ -2960,7 +2960,7 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Colour. The window changes at once; the file is written once, a moment
   after the last change, so dragging in the picker doesn't write it at
   every step.
-- **Where it's kept:** `"color"` in the book's `.typst-studio.json`, so it
+- **Where it's kept:** `"color"` in the book's `.foreword.json`, so it
   travels with the book, as Peacock's does in the workspace settings.
   - A book with no colour of its own wears Peacock's, read from its
     `.vscode/settings.json` (comments and trailing commas allowed) when it
@@ -3095,6 +3095,32 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   NSApp.sendEvent) did the same; a JS-dispatched click doesn't reach
   Monaco. Self-tests `preview` and `typingsync`: the editor's own sync as
   before (one jump each way, no ripple while typing).
+
+### Foreword: the new name
+
+- **Why:** "Typst Studio" was taken by several other projects, and it tied
+  the app to Typst, when what it's for is writing a book. Foreword is the
+  page that opens a book, and it sounds like "forward".
+- **Renamed:** the app (productName, menus, About, every message), the
+  website, the README, the samples' and templates' comments, the GitHub repo
+  (jgeewax/foreword: GitHub redirects the repo's old URLs, so installed
+  copies still find updates, but not the website's, which moves to
+  jgeewax.github.io/foreword), the release assets
+  (Foreword_aarch64.dmg), the crate and package (`foreword`), the assistant's
+  tools server (`foreword`, so `mcp__foreword__set_model`), the
+  instructions' tag (`<foreword-instructions>`) and the environment
+  variables (`FOREWORD_SELFTEST`, …).
+- **A book's files move:** `.typst-studio.json` becomes `.foreword.json`
+  and `.typst-studio/` becomes `.foreword/` when the book is opened, and
+  `~/.typst-studio/` becomes `~/.foreword/` the first time the settings are
+  read. Neither moves if the new one is there already. Conversations from
+  before keep clean titles: the old instructions' tag is still recognised.
+- **Kept:** the bundle identifier, `org.typststudio.app`. macOS keys the
+  app's saved state (WebKit's localStorage: recent books, layout, the tour)
+  and History's data folder by it, and the updater installs over the app
+  with the same identifier; changing it would have started every installed
+  copy afresh. Nobody sees it. An updated copy keeps its old file name in
+  Applications ("Typst Studio.app") until it's downloaded again.
 
 ### Open questions
 

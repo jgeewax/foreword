@@ -15,7 +15,7 @@ const onActivate = (run: () => void) => (e: KeyboardEvent) => {
 
 /** Each kind of version, as its node on the timeline says it: in the editor's colours for the assistant. */
 const KIND: Record<string, { title: string; glyph?: IconName }> = {
-  opened: { title: 'When Typst Studio started keeping this book’s history' },
+  opened: { title: 'When Foreword started keeping this book’s history' },
   save: { title: 'Your edits' },
   agent: { title: 'Changes by the assistant', glyph: 'sparkle' },
   milestone: { title: 'A version you named' },
@@ -171,7 +171,7 @@ function HistoryAbout() {
       {open && (
         <div className="history-about">
           <p>
-            <b>Where:</b> in a Git repository Typst Studio keeps for this book, in its own data folder rather than in the book folder
+            <b>Where:</b> in a Git repository Foreword keeps for this book, in its own data folder rather than in the book folder
             {repo && (
               <>
                 {' '}
@@ -242,7 +242,7 @@ function NowRow() {
 
 /**
  * History: the book's versions as a timeline, newest first, from now down to
- * when Typst Studio started keeping them. Each version's node says who made
+ * when Foreword started keeping them. Each version's node says who made
  * it (you, the assistant, a name you gave it, a restore); a click shows what
  * it changed.
  */

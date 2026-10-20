@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, type AppSettings, type AssistantId } from './settings
 import { handleMcp, TOOLS, type ModelChoice, type StudioHost } from './studio-tools';
 import { describePermission, describeTool, NO_NAMES } from './tool-labels';
 
-/** A stand-in for Typst Studio: what the tools changed, and what waits for the reply's end. */
+/** A stand-in for Foreword: what the tools changed, and what waits for the reply's end. */
 function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' = 'yes') {
   const did: string[] = [];
   const asked: string[] = [];
@@ -57,11 +57,11 @@ const call = async (h: StudioHost, name: string, args: object = {}) => {
   return { text: r.result.content[0].text as string, error: !!r.result.isError };
 };
 
-describe('Typst Studio’s tools, as an MCP server', () => {
+describe('Foreword’s tools, as an MCP server', () => {
   it('says hello in the client’s version, lists its tools, and keeps quiet for notifications', async () => {
     const { h } = host();
     const init = await rpc(h, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-code' } });
-    expect(init.result).toMatchObject({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'typst-studio' } });
+    expect(init.result).toMatchObject({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'foreword' } });
     expect((await rpc(h, 'initialize', { protocolVersion: '1999-01-01' })).result.protocolVersion).toBe('2025-06-18');
     expect(await rpc(h, 'notifications/initialized', {}, 'none')).toBeNull();
     const list = await rpc(h, 'tools/list');
@@ -109,7 +109,7 @@ describe('Typst Studio’s tools, as an MCP server', () => {
       [{ permissions: { shell: 'allow' } }, /can’t change what you may do without asking.*open_settings/],
       [{ allowCommands: ['rm'] }, /can’t change the commands you may run/],
       [{ alwaysAllow: ['rm *'] }, /can’t change the commands you may run/],
-      [{ toolPaths: { git: '/tmp/x' } }, /programs Typst Studio runs/],
+      [{ toolPaths: { git: '/tmp/x' } }, /programs Foreword runs/],
       [{ assistant: 'claude' }, /use switch_assistant/],
       [{ effort: 'high' }, /use set_model/],
       [{ theme: 'dark' }, /No such preference: theme/],
@@ -128,7 +128,7 @@ describe('Typst Studio’s tools, as an MCP server', () => {
 
   it('the assistant, model, effort and mode change when the reply ends', async () => {
     const t = host();
-    expect((await call(t.h, 'switch_assistant', { assistant: 'claude', model: 'default' })).text).toMatch(/When your reply ends, Typst Studio switches to Claude Code \(model “default”\)\. This conversation stays with OpenCode/);
+    expect((await call(t.h, 'switch_assistant', { assistant: 'claude', model: 'default' })).text).toMatch(/When your reply ends, Foreword switches to Claude Code \(model “default”\)\. This conversation stays with OpenCode/);
     expect((await call(t.h, 'set_model', { model: 'sonnet', effort: 'high' })).text).toMatch(/switches the model to “sonnet” and sets the effort to “high”/);
     expect((await call(t.h, 'set_mode', { mode: 'plan' })).text).toBe('When your reply ends, the chat switches to Plan mode.');
     expect(t.did).toEqual([]);
@@ -206,17 +206,17 @@ describe('Typst Studio’s tools, as an MCP server', () => {
 
 describe('the tools as the assistants name them', () => {
   it('are known by every assistant’s name for them', () => {
-    expect(studioToolName('mcp__typst-studio__set_model')).toBe('set_model');
-    expect(studioToolName('typst-studio_get_settings')).toBe('get_settings');
-    expect(studioToolName('typst-studio.switch_assistant')).toBe('switch_assistant');
-    expect(studioToolName('typst_studio__open_settings')).toBe('open_settings');
+    expect(studioToolName('mcp__foreword__set_model')).toBe('set_model');
+    expect(studioToolName('foreword_get_settings')).toBe('get_settings');
+    expect(studioToolName('foreword.switch_assistant')).toBe('switch_assistant');
+    expect(studioToolName('foreword__open_settings')).toBe('open_settings');
     expect(studioToolName('mcp__other__set_model')).toBeNull();
     expect(studioToolName('Read')).toBeNull();
   });
 
   it('are all of them; OpenCode asks about each by name: those that look are allowed, those that change follow the settings permission', () => {
     expect([...STUDIO_TOOL_NAMES]).toEqual(TOOLS.map((t) => t.name));
-    const effect = (preset: keyof typeof PRESETS, t: string) => decide(`typst-studio_${t}`, ['*'], sessionRules(PRESETS[preset].permissions));
+    const effect = (preset: keyof typeof PRESETS, t: string) => decide(`foreword_${t}`, ['*'], sessionRules(PRESETS[preset].permissions));
     for (const t of ['get_settings', 'list_models', 'open_settings']) for (const p of ['ask', 'edit', 'readonly'] as const) expect(effect(p, t), `${p} ${t}`).toBe('allow');
     for (const t of ['change_settings', 'set_model', 'switch_assistant', 'set_mode']) {
       expect(effect('ask', t)).toBe('ask');
@@ -227,31 +227,31 @@ describe('the tools as the assistants name them', () => {
   });
 
   it('over ACP: the app’s name for them, their arguments, and the same permission', () => {
-    const claude = appTool({ toolCallId: 't', title: 'mcp__typst-studio__change_settings', kind: 'other', rawInput: { editorFontSize: 14 }, _meta: { claudeCode: { toolName: 'mcp__typst-studio__change_settings' } } });
-    expect(claude).toEqual({ name: 'typst-studio_change_settings', input: { editorFontSize: 14 } });
-    const codex = appTool({ toolCallId: 'u', title: 'Tool: typst-studio/get_settings', kind: 'other', rawInput: { server: 'typst-studio', tool: 'get_settings', arguments: {} } });
-    expect(codex.name).toBe('typst-studio_get_settings');
-    const ask = permissionAsk({ toolCallId: 't', title: 'mcp__typst-studio__set_model', _meta: { claudeCode: { toolName: 'mcp__typst-studio__set_model' } } }, '/book');
-    expect(ask).toEqual({ action: 'typst-studio', resources: ['set_model'], patches: [] });
+    const claude = appTool({ toolCallId: 't', title: 'mcp__foreword__change_settings', kind: 'other', rawInput: { editorFontSize: 14 }, _meta: { claudeCode: { toolName: 'mcp__foreword__change_settings' } } });
+    expect(claude).toEqual({ name: 'foreword_change_settings', input: { editorFontSize: 14 } });
+    const codex = appTool({ toolCallId: 'u', title: 'Tool: foreword/get_settings', kind: 'other', rawInput: { server: 'foreword', tool: 'get_settings', arguments: {} } });
+    expect(codex.name).toBe('foreword_get_settings');
+    const ask = permissionAsk({ toolCallId: 't', title: 'mcp__foreword__set_model', _meta: { claudeCode: { toolName: 'mcp__foreword__set_model' } } }, '/book');
+    expect(ask).toEqual({ action: 'foreword', resources: ['set_model'], patches: [] });
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.ask.permissions))).toBe('ask');
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.edit.permissions))).toBe('allow');
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.readonly.permissions, true))).toBe('allow');
     // Plan mode is read-only for the book, not for settings the author asked to change.
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.edit.permissions, true))).toBe('allow');
-    const look = permissionAsk({ toolCallId: 'l', title: 'mcp__typst-studio__get_settings', _meta: { claudeCode: { toolName: 'mcp__typst-studio__get_settings' } } }, '/book');
+    const look = permissionAsk({ toolCallId: 'l', title: 'mcp__foreword__get_settings', _meta: { claudeCode: { toolName: 'mcp__foreword__get_settings' } } }, '/book');
     expect(decide(look.action, look.resources, sessionRules(PRESETS.readonly.permissions, true))).toBe('allow');
     expect(describePermission(ask.action, ask.resources, NO_NAMES).what).toBe('change its model or effort');
-    expect(describePermission('typst-studio_change_settings', ['*'], NO_NAMES).what).toBe('change Typst Studio’s settings');
+    expect(describePermission('foreword_change_settings', ['*'], NO_NAMES).what).toBe('change Foreword’s settings');
     // Another server's tool still asks.
     const other = permissionAsk({ toolCallId: 'v', title: 'mcp__github__create_issue', _meta: { claudeCode: { toolName: 'mcp__github__create_issue' } } }, '/book');
     expect(decide(other.action, other.resources, sessionRules(PRESETS.edit.permissions))).toBe('ask');
   });
 
   it('in words, in the chat', () => {
-    expect(describeTool('typst-studio_change_settings', { editorFontSize: 14, rulers: [80, 120] }, NO_NAMES)).toMatchObject({ done: 'Changed Typst Studio’s settings', note: 'text size 14 px, rulers at 80, 120' });
-    expect(describeTool('mcp__typst-studio__switch_assistant', { assistant: 'claude' }, NO_NAMES).done).toBe('Switched the assistant to Claude Code');
-    expect(describeTool('typst-studio_set_model', { model: 'sonnet', effort: 'high' }, NO_NAMES).note).toBe('model “sonnet”, effort “high”, when it finishes');
-    expect(describeTool('typst-studio_get_settings', {}, NO_NAMES).running).toBe('Looking at Typst Studio’s settings');
+    expect(describeTool('foreword_change_settings', { editorFontSize: 14, rulers: [80, 120] }, NO_NAMES)).toMatchObject({ done: 'Changed Foreword’s settings', note: 'text size 14 px, rulers at 80, 120' });
+    expect(describeTool('mcp__foreword__switch_assistant', { assistant: 'claude' }, NO_NAMES).done).toBe('Switched the assistant to Claude Code');
+    expect(describeTool('foreword_set_model', { model: 'sonnet', effort: 'high' }, NO_NAMES).note).toBe('model “sonnet”, effort “high”, when it finishes');
+    expect(describeTool('foreword_get_settings', {}, NO_NAMES).running).toBe('Looking at Foreword’s settings');
   });
 });
 

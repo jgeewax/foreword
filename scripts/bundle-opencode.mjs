@@ -37,7 +37,7 @@ copyFileSync(real, `${dir}opencode`);
 chmodSync(`${dir}opencode`, 0o755);
 writeFileSync(
   `${dir}LICENSE`,
-  `OpenCode (${version}), bundled with Typst Studio.
+  `OpenCode (${version}), bundled with Foreword.
 Source: https://github.com/anomalyco/opencode
 
 MIT License

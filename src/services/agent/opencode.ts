@@ -41,7 +41,7 @@ export class OpenCodeAdapter implements AgentAdapter {
 
   constructor(
     private readonly root: string,
-    /** Typst Studio's own tools (its settings), an MCP server over HTTP. */
+    /** Foreword's own tools (its settings), an MCP server over HTTP. */
     private readonly tools: { name: string; url: string } | null = null,
   ) {}
 
@@ -61,7 +61,7 @@ export class OpenCodeAdapter implements AgentAdapter {
         config: { type: 'remote', url: this.tools.url, oauth: false, codemode: false },
       }).then(
         () => true,
-        (e) => (console.warn('opencode: Typst Studio’s tools not added', e), false),
+        (e) => (console.warn('opencode: Foreword’s tools not added', e), false),
       );
     }
   }

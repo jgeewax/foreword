@@ -8,14 +8,14 @@
 )
 
 #let authors = (
-  (name: "A Typst Studio sample", affl: "original"),
+  (name: "A Foreword sample", affl: "original"),
 )
 
 // The note at the foot of the first page. It replaces the template's
 // NeurIPS 2026 notice (the `aux` override in the package README): the paper
 // appeared at NIPS 2017, and this text is a restatement of it.
 #let notice(accepted) = [
-  A restatement, written for Typst Studio, of a paper presented at the 31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.
+  A restatement, written for Foreword, of a paper presented at the 31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.
   The wording is not the original authors'; their paper is at #url("https://arxiv.org/abs/1706.03762").
 ]
 

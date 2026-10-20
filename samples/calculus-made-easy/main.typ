@@ -1,4 +1,4 @@
-// The main file: Typst Studio previews and exports this one. It sets up the
+// The main file: Foreword previews and exports this one. It sets up the
 // book and pulls in the chapters, in the order listed below.
 // To add a chapter: File → New Chapter (⌥⌘N), or create a file in chapters/
 // and add an #include line for it below.

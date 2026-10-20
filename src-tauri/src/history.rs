@@ -24,7 +24,7 @@ const KIND_TRAILER: &str = "Studio-Kind";
 const FILES_PLACEHOLDER: &str = "{files}";
 
 /// Always excluded from snapshots (on top of the book's own .gitignore files).
-const BASE_EXCLUDES: &[&str] = &[".DS_Store", "*.typst-studio.tmp"];
+const BASE_EXCLUDES: &[&str] = &[".DS_Store", "*.foreword.tmp"];
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -91,9 +91,9 @@ async fn git(git_dir: &Path, root: &Path, args: &[&str]) -> CmdResult<Output> {
             "-c",
             "core.quotePath=false",
             "-c",
-            "user.name=Typst Studio",
+            "user.name=Foreword",
             "-c",
-            "user.email=history@typst-studio.invalid",
+            "user.email=history@foreword.invalid",
         ])
         .args(args)
         .current_dir(root)
@@ -207,7 +207,7 @@ async fn init(r: &Repo, exclude: &[String]) -> CmdResult<()> {
     std::fs::write(r.git_dir.join("info/exclude"), patterns.join("\n") + "\n")?;
     // For people inspecting the app data dir.
     std::fs::write(
-        r.git_dir.join("typst-studio-workspace"),
+        r.git_dir.join("foreword-workspace"),
         r.root.to_string_lossy().as_bytes(),
     )?;
     Ok(())
@@ -529,7 +529,7 @@ mod tests {
             return;
         }
         let base = std::env::temp_dir().join(format!(
-            "typst-studio-history-{}",
+            "foreword-history-{}",
             uuid::Uuid::new_v4().simple()
         ));
         let root = base.join("book");

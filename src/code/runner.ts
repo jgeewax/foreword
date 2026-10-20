@@ -90,7 +90,7 @@ export class CodeRunner {
     if (!root) return false;
     if (readTrusted().includes(root)) return true;
     const ok = await this.host.confirm(
-      `Run the code examples in “${root.split('/').pop()}”?\n\nThey run on your Mac with your permissions, so they can read and change your files. Only run code you trust. Typst Studio remembers this for this book (you can turn it off in Settings).`,
+      `Run the code examples in “${root.split('/').pop()}”?\n\nThey run on your Mac with your permissions, so they can read and change your files. Only run code you trust. Foreword remembers this for this book (you can turn it off in Settings).`,
       'Run code examples',
       'Allow and run',
     );
@@ -182,7 +182,7 @@ export class CodeRunner {
     const lines = broken.map((c) => `- ${describeProblem(c, this.state.outputs[c.name])} (${c.path}:${c.line})`);
     this.host.notice(`${broken.length} code example${broken.length > 1 ? 's' : ''} failed:\n${lines.join('\n')}`, 'error', {
       label: 'Ask the assistant to fix them',
-      prompt: `These code examples fail when Typst Studio runs them:\n${lines.join('\n')}\n\nFix each one so it runs and prints what the book says it does. Change the example code (or its expect: value, if the expectation itself is wrong). Don't run the code yourself: Typst Studio re-runs it after your changes.`,
+      prompt: `These code examples fail when Foreword runs them:\n${lines.join('\n')}\n\nFix each one so it runs and prints what the book says it does. Change the example code (or its expect: value, if the expectation itself is wrong). Don't run the code yourself: Foreword re-runs it after your changes.`,
     });
   }
 }

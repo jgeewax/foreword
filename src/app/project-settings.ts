@@ -1,9 +1,9 @@
-// Project settings: `.typst-studio.json` in the project root (SPEC §4). Only
+// Project settings: `.foreword.json` in the project root (SPEC §4). Only
 // non-secret, per-book settings. Unknown keys are preserved when saving.
 import { normalizeHex } from './book-color';
 import { rulesFrom } from '../services/agent/command-rules';
 
-export const PROJECT_FILE = '.typst-studio.json';
+export const PROJECT_FILE = '.foreword.json';
 
 
 export type ProjectSettings = {

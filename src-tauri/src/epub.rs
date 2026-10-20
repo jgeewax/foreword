@@ -26,7 +26,7 @@ use crate::{
 
 /// A whole book can take a while; past this, something is wrong.
 const TIMEOUT: Duration = Duration::from_secs(300);
-const TEMP_PREFIX: &str = "typst-studio-epub-";
+const TEMP_PREFIX: &str = "foreword-epub-";
 
 #[derive(Serialize)]
 pub struct HtmlOut {
@@ -344,7 +344,7 @@ pub async fn epub_write(path: String, files: Vec<EpubFile>) -> CmdResult<String>
     if target.extension().and_then(|e| e.to_str()) != Some("epub") {
         return Err(CmdError::Invalid("an EPUB's name ends in .epub".into()));
     }
-    let tmp = target.with_extension("epub.typst-studio.tmp");
+    let tmp = target.with_extension("epub.foreword.tmp");
     let result = (|| -> CmdResult<()> {
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&tmp)?);
         let stored = zip::write::SimpleFileOptions::default()
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn mirrors_a_book_with_links_and_the_main_file_replaced() {
         let base =
-            std::env::temp_dir().join(format!("typst-studio-mirror-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("foreword-mirror-test-{}", std::process::id()));
         let book = base.join("book");
         std::fs::create_dir_all(book.join("src/chapters")).unwrap();
         std::fs::write(book.join("src/main.typ"), "original").unwrap();

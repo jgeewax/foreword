@@ -1,4 +1,4 @@
-//! Typst Studio's own tools for the writing assistant: what the app is set to,
+//! Foreword's own tools for the writing assistant: what the app is set to,
 //! and changing it (the assistant, its model and effort, the app's
 //! preferences). They're an MCP server over HTTP on 127.0.0.1, "streamable
 //! HTTP" with JSON replies only. Each window has its own address, a secret

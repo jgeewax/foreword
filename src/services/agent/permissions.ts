@@ -28,7 +28,7 @@ export type AgentPermissions = {
   shell: Level;
   /** Web search and fetching pages. */
   web: Level;
-  /** Change Typst Studio's settings with its tools (studio-tools.ts): preferences, model, effort, mode, which assistant. */
+  /** Change Foreword's settings with its tools (studio-tools.ts): preferences, model, effort, mode, which assistant. */
   settings: Level;
 };
 
@@ -43,7 +43,7 @@ export const PERMISSION_ITEMS: { key: keyof AgentPermissions; label: string; det
   { key: 'web', label: 'Search and read the web', detail: 'Web search and fetching pages.' },
   {
     key: 'settings',
-    label: 'Change Typst Studio’s settings',
+    label: 'Change Foreword’s settings',
     detail: 'Preferences like the text size, and its own model, effort, mode or assistant, when you ask. Looking at them is always fine; these permissions are only yours to change.',
   },
 ];
@@ -58,7 +58,7 @@ export const PRESETS: Record<PresetId, { label: string; description: string; per
   },
   edit: {
     label: 'Edit freely',
-    description: 'Edits, creates and renames files in the book, and changes Typst Studio’s settings, without asking; asks for the rest.',
+    description: 'Edits, creates and renames files in the book, and changes Foreword’s settings, without asking; asks for the rest.',
     permissions: { edit: 'allow', move: 'allow', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask', settings: 'allow' },
   },
   readonly: {
@@ -108,7 +108,7 @@ export const NO_COMPILE_RULES: readonly PermissionRule[] = [
 ];
 
 /** The book's settings (its command rules) and Claude Code's (its own rules), in the book. */
-const PERMISSION_FILES = ['.typst-studio.json', '*/.typst-studio.json', '.claude/*', '*/.claude/*'];
+const PERMISSION_FILES = ['.foreword.json', '*/.foreword.json', '.claude/*', '*/.claude/*'];
 
 /** Plan and Options modes: no file changes and no commands, whatever the settings. */
 export const READ_ONLY_RULES: readonly PermissionRule[] = [
@@ -180,7 +180,7 @@ export function sessionRules(p: AgentPermissions, readOnly = false, extra: reado
     { action: 'subagent', resource: '*', effect: 'deny' },
     { action: 'task', resource: '*', effect: 'deny' },
     { action: 'question', resource: '*', effect: 'allow' },
-    // Typst Studio's own tools: changing its settings is the author's call (never these rules: the tools can't);
+    // Foreword's own tools: changing its settings is the author's call (never these rules: the tools can't);
     // looking at them, and opening Settings for the author, never needs asking. Never is the tools' own to
     // say: they refuse, with the reason, so the assistant can tell the author (a refusal here says nothing).
     { action: STUDIO_TOOL_ACTION, resource: '*', effect: studioEffect },
@@ -258,7 +258,7 @@ export function onlyLooks(action: string, resources: readonly string[], rules: r
 export function describePermissions(p: AgentPermissions): string {
   const preset = presetOf(p);
   if (preset !== 'custom') return `Permissions: ${PRESETS[preset].label}. ${PRESETS[preset].description}`;
-  // Lower case to go mid-sentence, but not the names in it ("Typst Studio").
+  // Lower case to go mid-sentence, but not the names in it ("Foreword").
   const by = (level: Level) => PERMISSION_ITEMS.filter((i) => p[i.key] === level).map((i) => i.label.charAt(0).toLowerCase() + i.label.slice(1));
   const parts = [
     by('allow').length ? `allowed: ${by('allow').join(', ')}` : '',

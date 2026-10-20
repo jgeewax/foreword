@@ -89,7 +89,7 @@ print(text[:60])
 print(len(text.split()), "words")
 ```, expect: "It is a truth universally acknowledged, that a single man in\n243 words")
 
-`open` looks for the file starting from the folder the program runs in, which in Typst Studio is the book's folder.
+`open` looks for the file starting from the folder the program runs in, which in Foreword is the book's folder.
 `with … as file:` opens it and calls it `file`, and the indented line below reads all of it into `text`.
 When the indented lines are done, Python closes the file again.
 `encoding="utf-8"` makes sure that accented letters and curly quotation marks come through correctly.

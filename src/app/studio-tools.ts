@@ -1,8 +1,8 @@
-// Typst Studio's own tools for the writing assistant, as an MCP server (the
+// Foreword's own tools for the writing assistant, as an MCP server (the
 // Rust side, mcp.rs, carries the requests here): what the app is set to, and
 // changing it when the author asks: another assistant, model, effort or mode,
 // or a preference (text size, wrapping, marks, …). It can't change what it may
-// do itself (permissions, commands it may run, the programs Typst Studio runs):
+// do itself (permissions, commands it may run, the programs Foreword runs):
 // only the author does that, in Settings, which it can open for them.
 //
 // Changes to the assistant itself (which one, model, effort, mode) wait until
@@ -27,7 +27,7 @@ export type ToolsSettingsPage = (typeof SETTINGS_PAGES)[number];
 /** Model and effort to use once an assistant is switched to (or now): a model's id or part of its name ("default": its own), an effort level. */
 export type ModelChoice = { model?: string; effort?: string };
 
-/** What the tools act on: Typst Studio (studio.ts), or a test's stand-in. */
+/** What the tools act on: Foreword (studio.ts), or a test's stand-in. */
 export type StudioHost = {
   state(): {
     settings: AppSettings;
@@ -81,7 +81,7 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   markAiReads: { about: 'Mark the lines the assistant read in this conversation.', values: 'true, false', schema: { type: 'boolean' } },
   aiEditColor: { about: 'The colour of the marks for lines the assistant changed.', values: '#rrggbb', schema: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
   aiReadColor: { about: 'The colour of the marks for lines the assistant read.', values: '#rrggbb', schema: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
-  checkForUpdates: { about: 'Look for a new version of Typst Studio when it starts.', values: 'true, false', schema: { type: 'boolean' } },
+  checkForUpdates: { about: 'Look for a new version of Foreword when it starts.', values: 'true, false', schema: { type: 'boolean' } },
   zoom: { about: 'The size of the whole window’s text and controls (1 is 100%).', values: ZOOM_STEPS.join(', '), schema: { type: 'number', minimum: ZOOM_STEPS[0], maximum: ZOOM_STEPS[ZOOM_STEPS.length - 1] } },
 };
 
@@ -91,13 +91,13 @@ const AUTHOR_ONLY: Record<string, string> = {
   alwaysAllow: 'the commands you may run without asking',
   neverAllow: 'the commands you may never run',
   allowCommands: 'the commands you may run without asking',
-  toolPaths: 'the programs Typst Studio runs',
+  toolPaths: 'the programs Foreword runs',
   skippedUpdate: 'a skipped update',
 };
 const AUTHOR_ONLY_NOTE =
-  'What the assistant may do (Settings ▸ Permissions), the commands it may run without asking, and the programs Typst Studio runs (Settings ▸ Tools) are the author’s to change, in Settings: open_settings opens the page for them.';
+  'What the assistant may do (Settings ▸ Permissions), the commands it may run without asking, and the programs Foreword runs (Settings ▸ Tools) are the author’s to change, in Settings: open_settings opens the page for them.';
 const BOOK_NOTE =
-  'This book’s own settings (its main file, Typst root, output folder, font folders) are in .typst-studio.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there.';
+  'This book’s own settings (its main file, Typst root, output folder, font folders) are in .foreword.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there.';
 
 type Tool = {
   name: string;
@@ -163,9 +163,9 @@ function unwrapped(input: Record<string, unknown>): Record<string, unknown> {
 export const TOOLS: Tool[] = [
   {
     name: 'get_settings',
-    title: 'Typst Studio’s settings',
+    title: 'Foreword’s settings',
     description:
-      'What Typst Studio is set to now: the writing assistant (which program, its model, effort and chat mode), the assistants it can switch to, and every app preference you can change with change_settings, with what each one does and the values it takes. Call this before changing anything.',
+      'What Foreword is set to now: the writing assistant (which program, its model, effort and chat mode), the assistants it can switch to, and every app preference you can change with change_settings, with what each one does and the values it takes. Call this before changing anything.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     readOnly: true,
     run: (_input, host) => {
@@ -191,7 +191,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: 'change_settings',
-    title: 'Change Typst Studio’s preferences',
+    title: 'Change Foreword’s preferences',
     description:
       'Change app preferences, at once: give only the ones to change, with the values get_settings lists (e.g. {"editorFontSize": 14, "rulers": [80]}). Not for the assistant, model, effort or mode (switch_assistant, set_model, set_mode), and not for permissions or programs, which only the author changes.',
     inputSchema: { type: 'object', properties: Object.fromEntries(Object.entries(PREFERENCES).map(([k, p]) => [k, { ...p.schema, description: p.about }])) },
@@ -270,7 +270,7 @@ export const TOOLS: Tool[] = [
       if (effort && !model && !s.efforts.length) throw new ToolError('This model has no effort setting.');
       await approved(host, 'set_model', [model && `model “${model}”`, effort && `effort “${effort}”`].filter(Boolean).join(', '));
       host.whenIdle(() => host.chooseModel({ model: model || undefined, effort: effort || undefined }));
-      return `When your reply ends, Typst Studio ${[model && `switches the model to “${model}”`, effort && `sets the effort to “${effort}”`].filter(Boolean).join(' and ')}, for the author’s next message. The chat says if it can’t.`;
+      return `When your reply ends, Foreword ${[model && `switches the model to “${model}”`, effort && `sets the effort to “${effort}”`].filter(Boolean).join(' and ')}, for the author’s next message. The chat says if it can’t.`;
     },
   },
   {
@@ -302,7 +302,7 @@ export const TOOLS: Tool[] = [
       }
       await approved(host, 'switch_assistant', `${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}`);
       host.whenIdle(() => host.switchAssistant(id as AssistantId, choice));
-      return `When your reply ends, Typst Studio switches to ${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}. This conversation stays with ${ASSISTANT_NAMES[s.assistant]}; the author's next message starts a new conversation with ${ASSISTANT_NAMES[id as AssistantId]}. Tell the author so.`;
+      return `When your reply ends, Foreword switches to ${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}. This conversation stays with ${ASSISTANT_NAMES[s.assistant]}; the author's next message starts a new conversation with ${ASSISTANT_NAMES[id as AssistantId]}. Tell the author so.`;
     },
   },
   {
@@ -324,7 +324,7 @@ export const TOOLS: Tool[] = [
     name: 'open_settings',
     title: 'Open Settings for the author',
     description:
-      'Open Typst Studio’s Settings at a page, for the author to see or change something themselves (the only way to change permissions or the programs it runs). Pages: general, editor, assistant, permissions, tools, book (this book’s settings), book-assistant (this book’s assistant permissions), book-color (the colour this book’s window wears).',
+      'Open Foreword’s Settings at a page, for the author to see or change something themselves (the only way to change permissions or the programs it runs). Pages: general, editor, assistant, permissions, tools, book (this book’s settings), book-assistant (this book’s assistant permissions), book-color (the colour this book’s window wears).',
     inputSchema: { type: 'object', properties: { page: { type: 'string', enum: [...SETTINGS_PAGES] } }, additionalProperties: false },
     run: (input, host) => {
       const page = words(input.page) as ToolsSettingsPage;
@@ -336,7 +336,7 @@ export const TOOLS: Tool[] = [
 ];
 
 const SERVER_INSTRUCTIONS =
-  'Typst Studio’s own settings: when the author asks to change how Typst Studio works (which assistant, model, effort or chat mode, the editor’s text size, wrapping, rulers, marks, zoom…), use these tools rather than editing files. get_settings first. Changes to the assistant itself happen when your reply ends.';
+  'Foreword’s own settings: when the author asks to change how Foreword works (which assistant, model, effort or chat mode, the editor’s text size, wrapping, rulers, marks, zoom…), use these tools rather than editing files. get_settings first. Changes to the assistant itself happen when your reply ends.';
 
 /** The MCP versions this server speaks (the newest first); a client's own is used when it's one of them. */
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -355,7 +355,7 @@ async function answer(m: RpcMessage, host: StudioHost): Promise<object | null> {
       return ok({
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[1],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: STUDIO_TOOLS, title: 'Typst Studio', version: '1' },
+        serverInfo: { name: STUDIO_TOOLS, title: 'Foreword', version: '1' },
         instructions: SERVER_INSTRUCTIONS,
       });
     }
@@ -379,7 +379,7 @@ async function answer(m: RpcMessage, host: StudioHost): Promise<object | null> {
         const text = await tool.run(args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {}, host);
         return ok({ content: [{ type: 'text', text }] });
       } catch (e) {
-        const message = e instanceof ToolError ? e.message : `Typst Studio couldn’t do it: ${e instanceof Error ? e.message : String(e)}`;
+        const message = e instanceof ToolError ? e.message : `Foreword couldn’t do it: ${e instanceof Error ? e.message : String(e)}`;
         return ok({ content: [{ type: 'text', text: message }], isError: true });
       }
     }

@@ -184,7 +184,7 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
       const answers = [...(output ?? '').matchAll(/"(?:[^"\\]|\\.)*?"="((?:[^"\\]|\\.)*?)"/g)].map((m) => m[1]);
       return { done: 'Asked you a question', running: 'Asking you a question', note: answers.length ? `you said ${answers.map((a) => `“${a}”`).join(', ')}` : undefined };
     }
-    // Claude Code looking up tools it hasn't loaded yet (Typst Studio's own, say).
+    // Claude Code looking up tools it hasn't loaded yet (Foreword's own, say).
     case 'toolsearch':
       return { done: 'Found the tools it needs', running: 'Finding the tools it needs' };
     case 'skill':
@@ -194,7 +194,7 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
   }
 }
 
-/** Typst Studio's preferences as the author knows them, for the chat. */
+/** Foreword's preferences as the author knows them, for the chat. */
 const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
   editorFontSize: (v) => `text size ${v} px`,
   wordWrap: (v) => (v === 'off' ? 'no wrapping' : v === 'column' ? 'wrapping at a column' : 'wrapping at the edge'),
@@ -210,23 +210,23 @@ const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
   zoom: (v) => `zoom ${Math.round(Number(v) * 100)}%`,
 };
 
-/** Typst Studio's own tools that change something, completing "The assistant wants to …" (what, exactly, is in the row above). */
+/** Foreword's own tools that change something, completing "The assistant wants to …" (what, exactly, is in the row above). */
 const STUDIO_TOOL_ASKS: Record<string, string> = {
-  change_settings: 'change Typst Studio’s settings',
+  change_settings: 'change Foreword’s settings',
   set_model: 'change its model or effort',
   switch_assistant: 'switch to another assistant',
   set_mode: 'change the chat’s mode',
 };
 
-/** Typst Studio's own tools (studio-tools.ts), in words. */
+/** Foreword's own tools (studio-tools.ts), in words. */
 function describeStudioTool(tool: string, o: Record<string, unknown>): ToolLabel {
   const said = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   switch (tool) {
     case 'get_settings':
-      return { done: 'Looked at Typst Studio’s settings', running: 'Looking at Typst Studio’s settings' };
+      return { done: 'Looked at Foreword’s settings', running: 'Looking at Foreword’s settings' };
     case 'change_settings': {
       const what = Object.entries(o).map(([k, v]) => PREFERENCE_WORDS[k]?.(v) ?? k);
-      return { done: 'Changed Typst Studio’s settings', running: 'Changing Typst Studio’s settings', note: what.join(', ') || undefined };
+      return { done: 'Changed Foreword’s settings', running: 'Changing Foreword’s settings', note: what.join(', ') || undefined };
     }
     case 'list_models':
       return { done: 'Looked at the models', running: 'Looking at the models', note: said(o.search) ? `“${said(o.search)}”` : undefined };
@@ -243,7 +243,7 @@ function describeStudioTool(tool: string, o: Record<string, unknown>): ToolLabel
     case 'open_settings':
       return { done: 'Opened Settings for you', running: 'Opening Settings for you', note: said(o.page) ?? undefined };
     default:
-      return { done: `Used Typst Studio’s ${tool}`, running: `Using Typst Studio’s ${tool}` };
+      return { done: `Used Foreword’s ${tool}`, running: `Using Foreword’s ${tool}` };
   }
 }
 
@@ -252,12 +252,12 @@ function describeStudioTool(tool: string, o: Record<string, unknown>): ToolLabel
  * "read “The Storm” (chapter 1), lines 205–242". `code` is the command, if any.
  */
 export function describePermission(action: string, resources: readonly string[], names: BookNames): { what: string; code?: string } {
-  // Typst Studio's own tools: ACP's asks name the tool as the resource, OpenCode's in the action.
+  // Foreword's own tools: ACP's asks name the tool as the resource, OpenCode's in the action.
   const tool = action === STUDIO_TOOL_ACTION ? resources[0] : studioToolName(action);
   if (tool) {
-    // Typst Studio's own asks (studio-tools.ts) say what the change is, after the tool.
+    // Foreword's own asks (studio-tools.ts) say what the change is, after the tool.
     const detail = action === STUDIO_TOOL_ACTION ? resources[1] : undefined;
-    return { what: `${STUDIO_TOOL_ASKS[tool] ?? 'use Typst Studio’s settings'}${detail ? `: ${detail}` : ''}` };
+    return { what: `${STUDIO_TOOL_ASKS[tool] ?? 'use Foreword’s settings'}${detail ? `: ${detail}` : ''}` };
   }
   const files = () => {
     const named = resources.map((r) => fileName(bookPath(names.root, r) ?? r, names));

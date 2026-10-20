@@ -168,7 +168,7 @@ function ToolStep({ item, editOpen }: { item: ToolItem; editOpen: boolean }) {
     </>
   );
   return (
-    <Step tone={tone} icon={item.status === 'failed' ? 'close' : look ? (look === 'read' ? 'book' : 'search') : (TOOL_ICONS[item.name] ?? (item.name.startsWith('typst-studio') ? 'settings' : 'more'))} live={item.status === 'running'} menu={itemMenu(`${item.name} ${item.summary}\n${item.detail}`, 'Details')}>
+    <Step tone={tone} icon={item.status === 'failed' ? 'close' : look ? (look === 'read' ? 'book' : 'search') : (TOOL_ICONS[item.name] ?? (item.name.startsWith('foreword') ? 'settings' : 'more'))} live={item.status === 'running'} menu={itemMenu(`${item.name} ${item.summary}\n${item.detail}`, 'Details')}>
       <details className={`tool ${item.status}`}>
         <summary title={`${item.name}: ${item.summary}`} data-time={time}>
           {label.path && (item.read || item.name !== 'read') ? (

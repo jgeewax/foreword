@@ -1,6 +1,6 @@
 // Task-based conversations: each OpenCode session is a task with one goal.
 // The assistant restates the goal first and, when it thinks the goal is met,
-// ends its reply with a marker line; Typst Studio hides the marker and asks the
+// ends its reply with a marker line; Foreword hides the marker and asks the
 // author to confirm. Finished tasks are remembered per book on this Mac.
 
 import { readLabel, readOf, type AiRead } from './ai-marks';
@@ -20,7 +20,7 @@ The author works in tasks: each conversation has one goal.
 - Stay on that goal. If the author asks for something unrelated, help briefly, or suggest starting a new task for it.
 - When you believe the goal is done, say in a sentence or two what you did, then end your reply with this exact line on its own:
 ${TASK_MARKER}
-Typst Studio shows the author buttons to confirm. Don't use that line at any other time.`;
+Foreword shows the author buttons to confirm. Don't use that line at any other time.`;
 
 // A whole line; other marker lines (e.g. ADDRESSED:) may come after it.
 const MARKER_LINE = /^[ \t]*[*_`]*TASK COMPLETE\?[*_`]*[ \t]*$/gm;
@@ -43,7 +43,7 @@ export type TaskRecord = { sessionId: string; status: 'open' | 'done'; doneAt?: 
 
 export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null };
 
-/** The context Typst Studio appends to a message: selections (editor/selection.ts) and the author's edits (agent/author-edits.ts). */
+/** The context Foreword appends to a message: selections (editor/selection.ts) and the author's edits (agent/author-edits.ts). */
 const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${AUTHOR_EDITS_INTRO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})[\\s\\S]*$`);
 
 /** User message text as the author typed it, plus the labels of what was attached. */

@@ -42,7 +42,7 @@ Writers (novelists, journalists, students, bloggers) who have never programmed. 
 - One sentence per line; a blank line between paragraphs.
 - Chapters `= Title` in title case; sections `== Like this` in sentence case; no `===`.
 - Every example is `#run("name", ```python … ```, expect: "…")`, with a lower-case, hyphenated name that says what it does (`count-long-words`). Names are unique across the book; exercises refer to examples by name.
-- Add `expect:` whenever the output is fixed and short enough to type (up to about ten lines). Write line breaks as `\n`. The expected text must not contain a `)`: Typst Studio stops reading the arguments at the first one. Long listings and charts (`split-sentences`, `rhythm`) have no `expect:`.
+- Add `expect:` whenever the output is fixed and short enough to type (up to about ten lines). Write line breaks as `\n`. The expected text must not contain a `)`: Foreword stops reading the arguments at the first one. Long listings and charts (`split-sentences`, `rhythm`) have no `expect:`.
 - New terms in `#definition("Term")[…]` the first time they matter (String, Variable, List, Dictionary), and in _italics_ in the sentence that introduces them.
 - Use `~` between "Mr." or "Mrs." and the name in prose, so the line can't break there.
 - Escape Typst's special characters in prose, or put them in backticks: `#`, `*`, `_`, `@`, `<`, `>`.

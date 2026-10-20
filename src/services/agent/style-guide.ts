@@ -152,7 +152,7 @@ export const STYLE_DRAFT_KEY = 'style-draft';
  * about the book, at most two, with answers to pick from.
  */
 /** What the guide is for: the same for a draft and an interview. */
-const GUIDE_PURPOSE = `Typst Studio gives the guide to the writing assistant with every request, so that new and revised text sounds like the rest of the book. The author reads and edits it too, so write it plainly.`;
+const GUIDE_PURPOSE = `Foreword gives the guide to the writing assistant with every request, so that new and revised text sounds like the rest of the book. The author reads and edits it too, so write it plainly.`;
 
 /** What's settled about the guide, so the author is never asked about it. */
 const GUIDE_SETTLED = `What the guide is about, decided already:
@@ -163,7 +163,7 @@ const GUIDE_SETTLED = `What the guide is about, decided already:
 export function styleDraftBrief(opts: StyleDraftOptions = {}): string {
   return `# Drafting the book's writing style guide
 
-The author pressed "Draft from my chapters" in Typst Studio. In this conversation your job is to write ${STYLE_GUIDE_FILE} in the book's folder (next to the main file): a short guide to how this book is written. ${GUIDE_PURPOSE}
+The author pressed "Draft from my chapters" in Foreword. In this conversation your job is to write ${STYLE_GUIDE_FILE} in the book's folder (next to the main file): a short guide to how this book is written. ${GUIDE_PURPOSE}
 
 ${GUIDE_SETTLED}
 ${opts.redraft ? redraftSection(opts.redraft) : ''}${revisionsSection(opts.revisions ?? [])}
@@ -188,7 +188,7 @@ export const STYLE_INTERVIEW_MESSAGE = 'Interview me to write my style guide.';
 export function styleInterviewBrief(opts: { revisions?: readonly AuthorRevision[]; existing?: boolean } = {}): string {
   return `# Writing the book's style guide by interview
 
-The author pressed "Interview me" in Typst Studio: they want ${STYLE_GUIDE_FILE}, a short guide to how this book should be written, built from their answers to your questions. Write it in the book's folder (next to the main file). ${GUIDE_PURPOSE}
+The author pressed "Interview me" in Foreword: they want ${STYLE_GUIDE_FILE}, a short guide to how this book should be written, built from their answers to your questions. Write it in the book's folder (next to the main file). ${GUIDE_PURPOSE}
 
 ${GUIDE_SETTLED}
 ${opts.existing ? `\n## The guide that's there\n${STYLE_GUIDE_FILE} exists already. Read it first: ask only about what it leaves open or what the author wants different, and keep the rules they wrote themselves unless their answers change them. Write the whole file again (History keeps the old one).\n` : ''}${revisionsSection(opts.revisions ?? [])}

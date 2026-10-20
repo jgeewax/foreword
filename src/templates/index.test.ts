@@ -10,9 +10,9 @@ describe('templateFiles', () => {
       const paths = files.map((f) => f.path);
       expect(paths).toContain('main.typ');
       expect(paths).toContain(t.firstFile);
-      expect(paths).toEqual(expect.arrayContaining(['.typst-studio.json', '.gitignore', 'Makefile', 'WRITING_STYLE.md']));
+      expect(paths).toEqual(expect.arrayContaining(['.foreword.json', '.gitignore', 'Makefile', 'WRITING_STYLE.md']));
       expect(files.find((f) => f.path === 'Makefile')!.text).toMatch(/^pdf:\n\t@mkdir -p export\n\ttypst compile --root \. \$\(MAIN\) \$\(PDF\)$/m);
-      expect(JSON.parse(files.find((f) => f.path === '.typst-studio.json')!.text)).toEqual({ entryPoint: 'main.typ', outputDir: 'export' });
+      expect(JSON.parse(files.find((f) => f.path === '.foreword.json')!.text)).toEqual({ entryPoint: 'main.typ', outputDir: 'export' });
       for (const f of files) expect(f.text, f.path).not.toMatch(/\{\{\w+\}\}/);
       const main = files.find((f) => f.path === 'main.typ')!.text;
       expect(main).toContain('#let title = "The \\"Quiet\\" Harbour \\\\ Part One"');
@@ -109,7 +109,7 @@ describe('paper templates', () => {
 
   it('adds project settings, a .gitignore and an academic style guide', () => {
     const files = paperExtras({ title: 'Sparse Attention' });
-    expect(files.map((f) => f.path)).toEqual(['.typst-studio.json', '.gitignore', 'Makefile', 'WRITING_STYLE.md']);
+    expect(files.map((f) => f.path)).toEqual(['.foreword.json', '.gitignore', 'Makefile', 'WRITING_STYLE.md']);
     expect(files[3].text).toContain('page limit');
   });
 

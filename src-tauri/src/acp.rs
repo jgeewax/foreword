@@ -34,7 +34,7 @@ pub const CLAUDE_ACP: &str = "@agentclientprotocol/claude-agent-acp@0.93.0";
 pub const GEMINI_CLI: &str = "@google/gemini-cli@0.64.0";
 pub const CODEX_ACP: &str = "@agentclientprotocol/codex-acp@2.2.2";
 /// Google's Antigravity connector (the ACP registry's antigravity-acp). It isn't
-/// on npm: Typst Studio downloads Google's build of it, once, when asked.
+/// on npm: Foreword downloads Google's build of it, once, when asked.
 pub const ANTIGRAVITY_ACP: &str = "1.4.1";
 /// Google LLC's Apple Developer ID team, which the downloaded programs must be signed by.
 const GOOGLE_TEAM: &str = "EQHXZ8M8AV";
@@ -60,9 +60,9 @@ pub fn init(data_dir: PathBuf) {
     let _ = DATA_DIR.set(data_dir);
 }
 
-/// The folder of downloaded connectors (TYPST_STUDIO_ASSISTANTS_DIR, for self-tests).
+/// The folder of downloaded connectors (FOREWORD_ASSISTANTS_DIR, for self-tests).
 fn assistants_dir() -> Option<PathBuf> {
-    std::env::var_os("TYPST_STUDIO_ASSISTANTS_DIR")
+    std::env::var_os("FOREWORD_ASSISTANTS_DIR")
         .map(PathBuf::from)
         .or_else(|| DATA_DIR.get().map(|d| d.join("assistants")))
 }
@@ -71,9 +71,9 @@ fn antigravity_dir() -> Option<PathBuf> {
     Some(assistants_dir()?.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}")))
 }
 
-/// Antigravity's connector: TYPST_STUDIO_ANTIGRAVITY_ACP, or the copy downloaded.
+/// Antigravity's connector: FOREWORD_ANTIGRAVITY_ACP, or the copy downloaded.
 fn antigravity_program() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("TYPST_STUDIO_ANTIGRAVITY_ACP").map(PathBuf::from)
+    if let Some(p) = std::env::var_os("FOREWORD_ANTIGRAVITY_ACP").map(PathBuf::from)
         && discover::is_executable(&p)
     {
         return Some(p);
@@ -121,16 +121,16 @@ fn package(kind: &str) -> Option<&'static str> {
 /// The assistant's own ACP program, if it's installed.
 fn own_program(kind: &str) -> Option<PathBuf> {
     match kind {
-        "claude" => discover::find("claude-agent-acp", "TYPST_STUDIO_CLAUDE_ACP"),
-        "gemini" => discover::find("gemini", "TYPST_STUDIO_GEMINI"),
-        "codex" => discover::find("codex-acp", "TYPST_STUDIO_CODEX_ACP"),
+        "claude" => discover::find("claude-agent-acp", "FOREWORD_CLAUDE_ACP"),
+        "gemini" => discover::find("gemini", "FOREWORD_GEMINI"),
+        "codex" => discover::find("codex-acp", "FOREWORD_CODEX_ACP"),
         "antigravity" => antigravity_program(),
         _ => None,
     }
 }
 
 fn npx() -> Option<PathBuf> {
-    discover::find("npx", "TYPST_STUDIO_NPX")
+    discover::find("npx", "FOREWORD_NPX")
 }
 
 /// How each assistant is started: its own command if it's installed, otherwise
@@ -260,7 +260,7 @@ fn sign_in_script(name: &str, sign_in: &SignIn, path: &str) -> String {
     let argv: Vec<String> = sign_in.argv.iter().map(|a| q(a)).collect();
     format!(
         "#!/bin/zsh\n\
-         # Typst Studio (Settings ▸ Assistant): sign in to {name}, once.\n\
+         # Foreword (Settings ▸ Assistant): sign in to {name}, once.\n\
          export PATH={path}\n\
          cd ~\n\
          clear\n\
@@ -268,10 +268,10 @@ fn sign_in_script(name: &str, sign_in: &SignIn, path: &str) -> String {
          {argv}\n\
          printf '\\n%s\\n' {done}\n",
         path = q(path),
-        title = q(&format!("Sign in to {name}, for Typst Studio")),
+        title = q(&format!("Sign in to {name}, for Foreword")),
         steps = q(sign_in.steps),
         argv = argv.join(" "),
-        done = q("Signed in? Go back to Typst Studio. You can close this window."),
+        done = q("Signed in? Go back to Foreword. You can close this window."),
     )
 }
 
@@ -510,7 +510,7 @@ pub struct RuleFile {
 
 /// Where an assistant keeps rules of its own outside the book (Claude Code's
 /// settings in ~/.claude, Codex's rules in $CODEX_HOME/rules): rules that let
-/// it run commands without asking Typst Studio.
+/// it run commands without asking Foreword.
 fn rule_paths(kind: &str) -> Vec<PathBuf> {
     let Some(home) = discover::home() else {
         return vec![];
@@ -899,7 +899,7 @@ mod tests {
             "{script}"
         );
         assert!(
-            script.contains("'Sign in to Claude Code, for Typst Studio' 'Your browser opens.'"),
+            script.contains("'Sign in to Claude Code, for Foreword' 'Your browser opens.'"),
             "{script}"
         );
     }

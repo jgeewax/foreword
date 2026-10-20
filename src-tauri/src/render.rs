@@ -45,7 +45,7 @@ async fn render_one(bin: &std::path::Path, source: &str, fill: &str, size_pt: f6
         return fail("too long to show".into());
     }
     let dir = std::env::temp_dir().join(format!(
-        "typst-studio-render-{}",
+        "foreword-render-{}",
         uuid::Uuid::new_v4().simple()
     ));
     if let Err(e) = std::fs::create_dir_all(&dir) {

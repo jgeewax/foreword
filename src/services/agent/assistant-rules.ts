@@ -1,9 +1,9 @@
 // The rules an assistant keeps of its own: what it does without asking
-// anyone, Typst Studio included, so the app never sees those requests. Claude
+// anyone, Foreword included, so the app never sees those requests. Claude
 // Code keeps them in its settings files ("permissions": {"allow":
 // ["Bash(npm run test:*)", "Edit"]}), in the book's .claude folder and in
 // ~/.claude; Codex in its rules files (prefix_rule(pattern=["uv", "run"],
-// decision="allow")). Typst Studio only shows them: they're the assistant's.
+// decision="allow")). Foreword only shows them: they're the assistant's.
 
 /** One of them, for the list: the command (or the tool, for one that isn't a command), and whether it covers what comes after. */
 export type OwnRule = { text: string; command: boolean; more: boolean; effect: 'allow' | 'deny' };

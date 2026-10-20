@@ -1,4 +1,4 @@
-// A Makefile so a book builds without Typst Studio: `make` writes the PDF to
+// A Makefile so a book builds without Foreword: `make` writes the PDF to
 // export/ with the typst command line (brew install typst).
 
 /** File name for the exported PDF: the book's folder name, made safe for make. */
@@ -15,7 +15,7 @@ export function pdfName(title: string): string {
 /** `root`: the Typst root (for paths starting with "/"), relative to the Makefile's folder. */
 export function makefile(title: string, main = 'main.typ', fontPaths: string[] = [], root = '.'): string {
   const fonts = fontPaths.map((p) => ` --font-path ${JSON.stringify(p)}`).join('');
-  return `# Build the book from the command line (Typst Studio's Export PDF does the
+  return `# Build the book from the command line (Foreword's Export PDF does the
 # same). Needs the typst command: brew install typst
 #
 #   make          writes the PDF to export/

@@ -611,7 +611,7 @@ mod tests {
             return;
         }
         let dir = std::env::temp_dir().join(format!(
-            "typst-studio-git-{}",
+            "foreword-git-{}",
             uuid::Uuid::new_v4().simple()
         ));
         let book = dir.join("book");
@@ -699,7 +699,7 @@ mod tests {
             return;
         }
         let dir = std::env::temp_dir().join(format!(
-            "typst-studio-stage-{}",
+            "foreword-stage-{}",
             uuid::Uuid::new_v4().simple()
         ));
         let book = dir.join("book");

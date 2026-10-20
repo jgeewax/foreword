@@ -1,4 +1,4 @@
-//! The author's settings file, `~/.typst-studio/settings.json`: every app
+//! The author's settings file, `~/.foreword/settings.json`: every app
 //! preference, editable by hand (like Claude Code's settings.json). Self-tests
 //! get their own folder next to their results, so they never touch it.
 use std::{
@@ -14,16 +14,22 @@ use crate::error::{CmdError, CmdResult};
 const MAX_BYTES: usize = 256 * 1024;
 
 pub fn config_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("TYPST_STUDIO_CONFIG_DIR") {
+    if let Ok(dir) = std::env::var("FOREWORD_CONFIG_DIR") {
         return PathBuf::from(dir);
     }
-    if let Ok(out) = std::env::var("TYPST_STUDIO_SELFTEST") {
+    if let Ok(out) = std::env::var("FOREWORD_SELFTEST") {
         return Path::new(&out).with_extension("config");
     }
-    std::env::var("HOME")
+    let home = std::env::var("HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp"))
-        .join(".typst-studio")
+        .unwrap_or_else(|_| PathBuf::from("/tmp"));
+    let dir = home.join(".foreword");
+    // Its name from before the app was renamed (legacy): moved, unless the new one is there.
+    let legacy = home.join(".typst-studio");
+    if !dir.exists() && legacy.is_dir() {
+        let _ = fs::rename(&legacy, &dir);
+    }
+    dir
 }
 
 pub fn config_file() -> PathBuf {
@@ -118,7 +124,7 @@ mod tests {
 
     #[test]
     fn writes_json_objects_only_and_whole() {
-        let dir = std::env::temp_dir().join(format!("typst-studio-config-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("foreword-config-{}", std::process::id()));
         let file = dir.join("nested/settings.json");
         assert_eq!(read_at(&file).unwrap(), None);
         write_at(&file, "{\n  \"sendKey\": \"enter\"\n}\n").unwrap();

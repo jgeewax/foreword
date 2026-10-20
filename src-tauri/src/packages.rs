@@ -156,7 +156,7 @@ pub async fn project_create_from_package(
     }
     let archive = download(&package).await?;
     let tmp: PathBuf = std::env::temp_dir().join(format!(
-        "typst-studio-pkg-{}",
+        "foreword-pkg-{}",
         uuid::Uuid::new_v4().simple()
     ));
     fs::create_dir_all(&tmp)?;
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn collects_regular_files_but_not_symlinks() {
         let dir = std::env::temp_dir().join(format!(
-            "typst-studio-collect-{}",
+            "foreword-collect-{}",
             uuid::Uuid::new_v4().simple()
         ));
         fs::create_dir_all(dir.join("sub")).unwrap();

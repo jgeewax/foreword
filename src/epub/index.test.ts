@@ -5,7 +5,7 @@ describe('the main file for the reflowing export', () => {
   it('puts the e-reader rules first and a marker before each chapter it includes', () => {
     const { source, chapters } = epubSource('#import "style.typ": book\n#show: book.with(title: "X")\n\n#include "chapters/01.typ"\n  #include "chapters/02.typ"\n// #include "draft.typ" is a comment\n');
     expect(chapters).toBe(2);
-    expect(source.startsWith("// Typst Studio's EPUB export")).toBe(true);
+    expect(source.startsWith("// Foreword's EPUB export")).toBe(true);
     expect(source).toContain('#show math.equation.where(block: true): it => html.elem("div", attrs: (class: "equation"), html.frame(it))');
     expect(source).toContain('#html.elem("hr", attrs: (class: "epub-chapter", "data-file": "chapters/01.typ"))\n#include "chapters/01.typ"');
     expect(source).toContain('  #html.elem("hr", attrs: (class: "epub-chapter", "data-file": "chapters/02.typ"))\n  #include "chapters/02.typ"');

@@ -39,6 +39,6 @@ pkg.version = version;
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 
 execFileSync('git', ['commit', '-m', `Version ${version}`, '--', ...files], { stdio: 'inherit' });
-execFileSync('git', ['tag', '-a', `v${version}`, '-m', `Typst Studio ${version}`], { stdio: 'inherit' });
+execFileSync('git', ['tag', '-a', `v${version}`, '-m', `Foreword ${version}`], { stdio: 'inherit' });
 execFileSync('git', ['push', 'origin', 'main', `v${version}`], { stdio: 'inherit' });
-console.log(`release: v${version} pushed; the release build is at https://github.com/jgeewax/typststudio/actions`);
+console.log(`release: v${version} pushed; the release build is at https://github.com/jgeewax/foreword/actions`);

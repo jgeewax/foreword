@@ -1,7 +1,7 @@
 // Sample books that come with the app: one finished book of each kind, to
 // look through and to try the assistant on. They're the repo's samples/
 // folder, bundled as the app's resources; opening one copies it into
-// ~/Documents/Typst Studio Samples (once), so the author can change anything.
+// ~/Documents/Foreword Samples (once), so the author can change anything.
 
 export type Sample = {
   id: string;
@@ -18,7 +18,7 @@ export type Sample = {
   firstFile: string;
 };
 
-export const SAMPLES_FOLDER = 'Typst Studio Samples';
+export const SAMPLES_FOLDER = 'Foreword Samples';
 
 export const SAMPLES: Sample[] = [
   {
@@ -54,7 +54,7 @@ export const SAMPLES: Sample[] = [
     kind: 'Programming book',
     template: 'programming',
     description: 'Python for writers: code examples that run, show their real output and check it.',
-    source: 'Written for Typst Studio',
+    source: 'Written for Foreword',
     firstFile: 'chapters/01-first-steps.typ',
   },
   {

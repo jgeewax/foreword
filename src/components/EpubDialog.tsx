@@ -10,7 +10,7 @@ const CHOICES: { id: Choice; name: string; description: string }[] = [
   {
     id: 'auto',
     name: 'Best for this book',
-    description: 'Typst Studio picks: fixed layout for a picture book, a paper, or a book with math on most pages; reflowing text for the rest.',
+    description: 'Foreword picks: fixed layout for a picture book, a paper, or a book with math on most pages; reflowing text for the rest.',
   },
   {
     id: 'reflow',

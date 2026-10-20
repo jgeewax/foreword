@@ -182,18 +182,18 @@ async fn tools_status() -> ToolsStatus {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LaunchOptions {
-    /// `TYPST_STUDIO_WORKSPACE`: open this folder at launch.
+    /// `FOREWORD_WORKSPACE`: open this folder at launch.
     workspace: Option<String>,
     /// Dev builds only: the repo's sample book, for the welcome screen.
     sample_book: Option<String>,
-    /// `TYPST_STUDIO_SELFTEST`: run the scripted self-test and write results here.
+    /// `FOREWORD_SELFTEST`: run the scripted self-test and write results here.
     selftest_out: Option<String>,
-    /// `TYPST_STUDIO_SELFTEST_AGENT=1`: include a real agent turn in the self-test.
+    /// `FOREWORD_SELFTEST_AGENT=1`: include a real agent turn in the self-test.
     selftest_agent: bool,
-    /// `TYPST_STUDIO_SELFTEST_EDITS=1`: let the self-test's agent edit files
+    /// `FOREWORD_SELFTEST_EDITS=1`: let the self-test's agent edit files
     /// (only ever pointed at a scratch copy of a book).
     selftest_edits: bool,
-    /// `TYPST_STUDIO_SELFTEST_ONLY=a,b`: run only these self-test groups.
+    /// `FOREWORD_SELFTEST_ONLY=a,b`: run only these self-test groups.
     selftest_only: Option<String>,
     /// A window opened with New Window: it starts without a book, not the last one.
     fresh: bool,
@@ -207,7 +207,7 @@ fn launch_options(state: Win) -> LaunchOptions {
     let env = |k: &str| std::env::var(k).ok().filter(|_| first);
     LaunchOptions {
         fresh: !first,
-        workspace: env("TYPST_STUDIO_WORKSPACE"),
+        workspace: env("FOREWORD_WORKSPACE"),
         sample_book: (cfg!(debug_assertions) && sample.is_dir()).then(|| {
             sample
                 .canonicalize()
@@ -215,10 +215,10 @@ fn launch_options(state: Win) -> LaunchOptions {
                 .to_string_lossy()
                 .into_owned()
         }),
-        selftest_out: env("TYPST_STUDIO_SELFTEST"),
-        selftest_agent: env("TYPST_STUDIO_SELFTEST_AGENT").is_some_and(|v| v == "1"),
-        selftest_edits: env("TYPST_STUDIO_SELFTEST_EDITS").is_some_and(|v| v == "1"),
-        selftest_only: env("TYPST_STUDIO_SELFTEST_ONLY"),
+        selftest_out: env("FOREWORD_SELFTEST"),
+        selftest_agent: env("FOREWORD_SELFTEST_AGENT").is_some_and(|v| v == "1"),
+        selftest_edits: env("FOREWORD_SELFTEST_EDITS").is_some_and(|v| v == "1"),
+        selftest_only: env("FOREWORD_SELFTEST_ONLY"),
     }
 }
 
@@ -226,7 +226,7 @@ fn launch_options(state: Win) -> LaunchOptions {
 /// in self-test mode also appended to `<out>.log` so a hung run can be diagnosed.
 #[tauri::command]
 fn ui_log(line: String) {
-    if let Ok(out) = std::env::var("TYPST_STUDIO_SELFTEST") {
+    if let Ok(out) = std::env::var("FOREWORD_SELFTEST") {
         use std::io::Write;
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)
@@ -348,7 +348,7 @@ async fn native_geometry(
 /// Self-test only: write the results and quit.
 #[tauri::command]
 fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResult<()> {
-    let out = std::env::var("TYPST_STUDIO_SELFTEST")
+    let out = std::env::var("FOREWORD_SELFTEST")
         .map_err(|_| CmdError::Invalid("not in self-test mode".into()))?;
     std::fs::write(
         &out,
@@ -363,7 +363,7 @@ fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResul
 /// webview in the same window.
 fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Window> {
     let builder = WindowBuilder::new(app, label)
-        .title("Typst Studio")
+        .title("Foreword")
         .inner_size(1600.0, 1000.0)
         .min_inner_size(960.0, 600.0);
     // As in VS Code: no native title bar, the page draws its own and the
@@ -404,7 +404,7 @@ fn window_new(app: tauri::AppHandle) -> CmdResult<String> {
 }
 
 fn selftest_only() -> CmdResult<()> {
-    match std::env::var_os("TYPST_STUDIO_SELFTEST") {
+    match std::env::var_os("FOREWORD_SELFTEST") {
         Some(_) => Ok(()),
         None => Err(CmdError::Invalid("not in self-test mode".into())),
     }
@@ -464,7 +464,7 @@ fn selftest_close_window(app: tauri::AppHandle, label: String) -> CmdResult<()> 
 /// The menu bar's titles and items (self-test only).
 #[tauri::command]
 fn menu_outline(app: tauri::AppHandle) -> CmdResult<Vec<(String, Vec<String>)>> {
-    if std::env::var_os("TYPST_STUDIO_SELFTEST").is_none() {
+    if std::env::var_os("FOREWORD_SELFTEST").is_none() {
         return Err(CmdError::Invalid("not in self-test mode".into()));
     }
     let menu = app
@@ -544,7 +544,7 @@ pub fn run() {
 
             let window = open_window(app.handle(), "main")?;
             // An occluded window gets no animation frames, which would stall the self-test.
-            if std::env::var_os("TYPST_STUDIO_SELFTEST").is_some() {
+            if std::env::var_os("FOREWORD_SELFTEST").is_some() {
                 let _ = window.set_focus();
             }
             Ok(())
@@ -643,7 +643,7 @@ pub fn run() {
             history::history_file,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Typst Studio")
+        .expect("error while building Foreword")
         .run(|app, event| match event {
             // An update to install at quit goes in first; the app quits once it has.
             RunEvent::ExitRequested { api, .. } => {
