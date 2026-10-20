@@ -2,6 +2,38 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.4.0 · 21 October 2026
+
+**Typst Studio is now Foreword.** The name was taken by other projects, and the app is for writing a book, whatever it's set in. Your copy updates as before and keeps its books, settings and History. A book's settings move to their new names (`.foreword.json`, `.foreword/`) the first time it's opened. In Applications the app keeps its old file name until you rename it or download Foreword again.
+
+### The assistant
+
+- **Ask mode**, after Write: questions and talking things over, answered in the chat, with nothing changed or written anywhere. When you want what you discussed made, **Go ahead** switches to Write and makes it.
+- **Plan answers in the chat.** Every mode is Foreword's own now, as Options always was. Claude Code used to go into its own plan mode, which could write the plan to a file outside the book and leave only a card in the chat. **Write it** still writes what you planned.
+- **A command says what it runs** before you allow it ("lint.py, a Python script in this book"), with the command part by part, what each part is, and what it reaches beyond the book: the internet, files outside it, deleting.
+- **Your "always" rules are yours, and can be undone.** *Always allow* offers rules from narrow to broad (exactly this command, the script with any arguments, any Python script), says what the broad ones would let in, and keeps the one you choose for this task, this book or every book. A command a rule let through says which rule; remove it there, in the permissions menu's **Your rules**, or in Settings. Before, an "always" went into Claude Code's or Codex's own settings, for every project, where Foreword couldn't show it or take it back.
+- **The assistant's own steps in words:** its to-do list, a task handed to a helper, a skill, a tool from an MCP server, never a name like "exitplanmode (*)".
+- **A welcome for each new task:** a greeting, your TODOs, and four things to try, with the style guide's offer in a quiet card below them.
+
+### The preview
+
+- **A long book keeps its place.** Back from another desktop or a sleeping screen, a long book's preview could start again at page 1: macOS had closed it for using too much memory (8 GB for a 739-page book). Now it keeps only the pages near the ones in view drawn (528 MB for that book), and whenever it reloads, it goes back to where you were. To keep every page drawn, use Settings ▸ General ▸ Preview ▸ Pages kept drawn.
+- **The preview follows a diff** as it follows the editor: a click or an arrow key in What changed (History's, Source Control's or a file's) scrolls the pages there, on either side.
+
+### Books that include their chapters in code
+
+- **A chapter included in code**, as `#book-chapter(include "chapters/ch01.typ")` or `include` inside `#{ … }`, is a chapter everywhere now. Contents lists and numbers it, a reflowing EPUB starts a new part at it, and **New Chapter** adds the next one after the last, named like the others (`ch26_…` beside `ch25_…`). A preface or afterword without numbered headings doesn't push the chapter numbers up.
+
+### The window
+
+- **The status bar is VS Code's:** line icons in place of coloured dots, the book's items at the left and the session's at the right. It keeps its full size when you zoom out, clear of the window's rounded corners, and in a narrow window the file's name shortens instead of running into the rest.
+- **The badges on the icons down the side** are at full strength, and 99+ stays inside the bar.
+
+### Fixes
+
+- A newline or a lone `&` in a command line could carry a second command past one you'd allowed. Each command on a line is checked on its own now.
+- The assistant could edit the book's Foreword settings or its `.claude/` settings, and so give itself rules. Those edits always ask now.
+
 ## 0.3.0 · 19 October 2026
 
 ### Finding your way

@@ -16,7 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.3:** search the whole book · Contents, every chapter with its sections and words · History as a timeline · a colour for each book, as Peacock gives a folder · a tour for someone new
+**New in 0.4:** Typst Studio is now Foreword · Ask mode, and plans that stay in the chat · commands that say what they run, with “always” rules you can read and undo · a long book's preview keeps its place · chapters included in code
 
 <br>
 
@@ -52,7 +52,7 @@ Foreword is made for one job: **writing a book**, with an AI assistant at your s
 
 A book lives or dies on details: a figure that lands two pages late, a reference that points nowhere, a citation that didn't resolve. Foreword typesets the book from what you've typed, saved or not, so you catch them the moment they happen, not after a slow build.
 
-It redraws only the pages in view: in a 491-page book, a change shows up in about a tenth of a second. Click anything in the pages to jump to its source. A mistake is underlined where it is, in plain words, and the pages stay up while you fix it.
+It redraws only the pages in view: in a 491-page book, a change shows up in about a tenth of a second. It keeps only the pages near them drawn, so even a 700-page book stays light. Click anything in the pages to jump to its source. A mistake is underlined where it is, in plain words, and the pages stay up while you fix it.
 
 </td>
 <td width="50%" valign="top">
@@ -75,7 +75,7 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 
 AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text, ask about it or ask for a change, and it edits the book itself, then tells you what it did in a sentence or two. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands.
 
-It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Plan** talks a chapter through before anything is written. **Options** gives you three versions of a passage to pick from. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking.
+It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Ask** answers questions in the chat and changes nothing. **Plan** talks a chapter through before anything is written. **Options** gives you three versions of a passage to pick from. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking: before a command runs, it says what the command does, and an “always” is a rule you can read and take back.
 
 </td>
 </tr>
