@@ -22,6 +22,9 @@ export function ContentsPanel() {
   if (!files.length) return <div className="history-empty muted">{names.entry ? 'Reading the chapters…' : 'This book has no main file, so no chapters in order yet.'}</div>;
   const here = active && contents[active] ? headingAt(contents[active].headings, cursorLine) : null;
   const total = files.reduce((n, f) => n + contents[f].words, 0);
+  // The chapters the book numbers, not its title page or preface; every included file if it numbers none.
+  const included = files.filter((f) => f !== names.entry);
+  const chapters = included.filter((f) => chapterNumber(f, names)).length || included.length;
 
   const row = (path: string, h: Heading, label: string, depth: number) => (
     <button
@@ -37,7 +40,7 @@ export function ContentsPanel() {
   return (
     <div className="contents-panel">
       <div className="contents-total muted">
-        {files.length - (names.entry ? 1 : 0)} chapter{files.length - (names.entry ? 1 : 0) === 1 ? '' : 's'} · about {wordsLabel(total)}
+        {chapters} chapter{chapters === 1 ? '' : 's'} · about {wordsLabel(total)}
       </div>
       {files.map((path) => {
         const c = contents[path];

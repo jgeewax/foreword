@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chapterNumber, describePermission, describeTool, fileName, firstHeading, includedFiles, unnumberedHeading, type BookNames } from './tool-labels';
+import { chapterNumber, describePermission, describeTool, fileName, firstHeading, includedFiles, mainIncludes, unnumberedHeading, type BookNames } from './tool-labels';
 
 const names: BookNames = {
   root: '/b',
@@ -16,6 +16,50 @@ describe('the book’s names', () => {
     expect(firstHeading('#heading(level: 2, numbering: none)[Exercises I] <answers-i>')).toBeNull();
     expect(firstHeading('= Remarkable Incident of Dr.~Lanyon, 5\\~6')).toBe('Remarkable Incident of Dr.\u00a0Lanyon, 5~6');
     expect(includedFiles('#include "chapters/a.typ"\n// #include "chapters/old.typ"\n#include "./chapters/b.typ"', 'main.typ')).toEqual(['chapters/a.typ', 'chapters/b.typ']);
+  });
+
+  it('reads includes written in code, in a book in src/', () => {
+    const main = [
+      '#import "template/lib.typ": *',
+      '#set heading(numbering: "1.1.1.1")',
+      '#{',
+      '  set page(numbering: none)',
+      '  include "frontmatter/titlepage.typ"',
+      '}',
+      '#{',
+      '  set heading(numbering: none)',
+      '  show heading.where(level: 1): it => {',
+      '    text(size: 22pt, weight: "bold")[#it.body]',
+      '  }',
+      '  heading(level: 1, numbering: none, outlined: false)[Contents]',
+      '  include "frontmatter/preface.typ"',
+      '}',
+      '#let book-chapter(body) = {',
+      '  page(header: none, footer: none)[]',
+      '  { set page(header: none); pagebreak(weak: true, to: "odd") }',
+      '  body',
+      '}',
+      '#part("Vectors and geometry")',
+      '#book-chapter(include "chapters/ch01_what_is_a_vector.typ")',
+      '#book-chapter(include "chapters/ch02_vector_operations.typ") // the second',
+      '/* #book-chapter(include "chapters/old.typ") */',
+      'A word on why we `include "x.typ"` and "include" things: $include "y"$.',
+      '#[#set heading(numbering: none) #include "backmatter/afterword.typ"]',
+      '#include "backmatter/index.typ"',
+    ].join('\n');
+    expect(mainIncludes(main, 'src/main.typ', 'src')).toEqual([
+      { file: 'src/frontmatter/titlepage.typ', unnumbered: false },
+      { file: 'src/frontmatter/preface.typ', unnumbered: true },
+      { file: 'src/chapters/ch01_what_is_a_vector.typ', unnumbered: false },
+      { file: 'src/chapters/ch02_vector_operations.typ', unnumbered: false },
+      { file: 'src/backmatter/afterword.typ', unnumbered: true },
+      { file: 'src/backmatter/index.typ', unnumbered: false },
+    ]);
+    // Heading numbers turned off in markup last until they're turned on again.
+    expect(mainIncludes('#set heading(numbering: none)\n#include "a.typ"\n#set heading(numbering: "1.")\n#include "b.typ"', 'main.typ')).toEqual([
+      { file: 'a.typ', unnumbered: true },
+      { file: 'b.typ', unnumbered: false },
+    ]);
   });
 
   it('names files the way the author would', () => {

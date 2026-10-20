@@ -31,7 +31,7 @@ import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-too
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
-import { describeTool, firstHeading, includedFiles, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
+import { describeTool, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
@@ -4648,7 +4648,7 @@ export class Studio {
     if (!ws) return;
     const typ = ws.files.filter((f) => f.endsWith('.typ'));
     const titles = only ? { ...this.state.names.titles } : {};
-    const unnumbered = new Set(only ? this.state.names.unnumbered : []);
+    const unnumbered = new Set(only ? this.unnumberedFiles : []);
     const contents = only ? { ...this.state.contents } : {};
     for (const f of only ? only.filter((p) => p.endsWith('.typ')) : typ) {
       const text = await this.currentText(f).catch(() => null);
@@ -4661,9 +4661,17 @@ export class Studio {
       else delete contents[f];
     }
     const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
-    const chapters = main && ws.entry ? includedFiles(main, ws.entry, this.typstRoot()) : [];
-    if (this.state.workspace?.root === ws.root) this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...unnumbered] }, contents });
+    const includes = main && ws.entry ? mainIncludes(main, ws.entry, this.typstRoot()) : [];
+    const chapters = includes.map((x) => x.file);
+    // Unnumbered too: what the main file includes with heading numbers off around it (a preface, an afterword).
+    const front = includes.filter((x) => x.unnumbered).map((x) => x.file);
+    if (this.state.workspace?.root !== ws.root) return;
+    this.unnumberedFiles = unnumbered;
+    this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...new Set([...unnumbered, ...front])] }, contents });
   }
+
+  /** The files whose own text turns heading numbers off before their first heading (refreshNames keeps it). */
+  private unnumberedFiles = new Set<string>();
 
   /** The last PDF exported in this session (Open Exported PDF). */
   lastExport: string | null = null;

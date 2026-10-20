@@ -30,17 +30,116 @@ export function firstHeading(text: string): string | null {
   return null;
 }
 
-/** The files the main file includes, in order (book-relative), skipping commented-out lines. */
-export function includedFiles(main: string, mainPath: string, root = ''): string[] {
-  const out: string[] = [];
-  for (const line of main.split('\n')) {
-    if (/^\s*\/\//.test(line)) continue;
-    for (const m of line.matchAll(/#include\s+"([^"]+)"/g)) {
-      const p = resolveRef(mainPath, m[1], root);
-      if (p && !out.includes(p)) out.push(p);
+/** A file the main file includes, and whether the main file turns heading numbers off around it (front or back matter). */
+export type Include = { file: string; unnumbered: boolean };
+
+// Keywords that start a statement running to the end of the line after a # in markup.
+const STATEMENT = new Set(['let', 'set', 'show', 'include', 'import', 'if', 'for', 'while', 'context', 'return']);
+const IDENT = /[\p{L}_][\p{L}\p{N}_-]*/uy;
+
+/**
+ * The files the main file includes, in order (book-relative): `#include "…"`
+ * in markup and `include "…"` in code, as in `#{ include "…" }` or
+ * `#chapter(include "…")`, but not in comments, strings, raw text or maths.
+ * Follows `set heading(numbering: …)` through the blocks it's scoped to, so
+ * a preface included under `set heading(numbering: none)` is unnumbered.
+ */
+export function mainIncludes(main: string, mainPath: string, root = ''): Include[] {
+  const s = main;
+  const out: Include[] = [];
+  const word = (i: number) => ((IDENT.lastIndex = i), IDENT.exec(s)?.[0] ?? null);
+  const until = (i: number, end: string) => (i = s.indexOf(end, i)) < 0 ? s.length : i;
+
+  // Past a comment, raw text, maths, or (in code) a string at i; i itself if there's none.
+  const skip = (i: number, code: boolean): number => {
+    const [c, d] = [s[i], s[i + 1]];
+    if (c === '/' && d === '*') return until(i + 2, '*/') + 2;
+    // In markup, the // of a link (https://…) isn't a comment.
+    if (c === '/' && d === '/' && (code || s[i - 1] !== ':')) return until(i, '\n');
+    if (c === '`') {
+      let n = 1;
+      while (s[i + n] === '`') n++;
+      return n === 2 ? i + 2 : until(i + n, '`'.repeat(n)) + n;
     }
-  }
+    if (c === '$' || (code && c === '"')) {
+      let j = i + 1;
+      while (j < s.length && s[j] !== c && !(c === '"' && s[j] === '\n')) j += s[j] === '\\' ? 2 : 1;
+      return j + 1;
+    }
+    return i;
+  };
+
+  // Markup up to its closing ']' (or the end): returns the index after it.
+  const markup = (i: number, close: string, none: boolean): number => {
+    while (i < s.length) {
+      const c = s[i];
+      if (c === close) return i + 1;
+      const j = skip(i, false);
+      if (j !== i) i = j;
+      else if (c === '\\') i += 2;
+      else if (c === '[') i = markup(i + 1, ']', none);
+      else if (c === '#') ({ end: i, none } = embedded(i + 1, none));
+      else i++;
+    }
+    return i;
+  };
+
+  // What follows a # in markup: a block, a statement (#set …, #include …), or a call chain (#chapter(…)[…]).
+  const embedded = (i: number, none: boolean): { end: number; none: boolean } => {
+    if (s[i] === '{') return { end: code(i + 1, '}', none).end, none };
+    if (s[i] === '(') return { end: code(i + 1, ')', none).end, none };
+    if (s[i] === '[') return { end: markup(i + 1, ']', none), none };
+    const name = word(i);
+    if (!name) return { end: i, none };
+    if (STATEMENT.has(name)) return code(i, '\n', none);
+    for (i += name.length; ; ) {
+      if (s[i] === '(') i = code(i + 1, ')', none).end;
+      else if (s[i] === '[') i = markup(i + 1, ']', none);
+      else if (s[i] === '.' && word(i + 1)) i += 1 + word(i + 1)!.length;
+      else return { end: i, none };
+    }
+  };
+
+  // Code up to its closing '}' or ')' (or, for a statement in markup, the line's end): returns the index after it, and the numbering then.
+  const code = (i: number, close: string, none: boolean): { end: number; none: boolean } => {
+    while (i < s.length) {
+      const c = s[i];
+      if (c === close) return { end: close === '\n' ? i : i + 1, none };
+      if (close === '\n' && (c === ';' || c === ']' || c === '}' || c === ')')) return { end: c === ';' ? i + 1 : i, none };
+      const j = skip(i, true);
+      if (j !== i) i = j;
+      else if (c === '{') i = code(i + 1, '}', none).end;
+      else if (c === '(') i = code(i + 1, ')', none).end;
+      else if (c === '[') i = markup(i + 1, ']', none);
+      else if (word(i)) {
+        const name = word(i)!;
+        i += name.length;
+        const included = name === 'include' && /^\s+"([^"\n]+)"/.exec(s.slice(i, i + 1024));
+        if (included) {
+          const file = resolveRef(mainPath, included[1], root);
+          if (file && !out.some((x) => x.file === file)) out.push({ file, unnumbered: none });
+          i += included[0].length;
+        }
+        const set = name === 'set' && /^\s+heading\s*\(/.exec(s.slice(i, i + 64));
+        if (set) {
+          const start = i + set[0].length;
+          i = code(start, ')', none).end;
+          const args = s.slice(start, i - 1);
+          if (/\bnumbering\s*:\s*none\b/.test(args)) none = true;
+          else if (/\bnumbering\s*:/.test(args)) none = false;
+        }
+      } else i++;
+    }
+    return { end: i, none };
+  };
+
+  markup(0, '', false);
   return out;
+}
+
+/** The files the main file includes, in order (book-relative). */
+export function includedFiles(main: string, mainPath: string, root = ''): string[] {
+  return mainIncludes(main, mainPath, root).map((x) => x.file);
 }
 
 /** Whether a file turns heading numbers off before its first heading, as a preface or a prologue does. */
