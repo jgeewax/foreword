@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedFormulas, countWords, proseDiff, wordPieces } from './prose-diff';
+import { changedFormulas, changeStart, countWords, proseDiff, wordPieces } from './prose-diff';
 
 describe('word pieces', () => {
   it('marks a changed phrase as one deletion and one insertion', () => {
@@ -53,6 +53,14 @@ describe('prose diff', () => {
   it('reports where a removed paragraph was', () => {
     const d = proseDiff(before, before.replace('Mara stood on the pier.\n', ''));
     expect(d.hunks[0]).toMatchObject({ line: 3, oldLine: 3, pieces: [{ kind: 'del', text: 'Mara stood on the pier.' }] });
+  });
+
+  it('says where a passage’s first change is in the newer text', () => {
+    const at = (after: string) => changeStart(proseDiff(before, after).hunks[0]);
+    expect(at(before.replace('noon', 'dawn'))).toEqual({ line: 4, column: 35 });
+    expect(at(before.replace('Mara', 'Ana'))).toEqual({ line: 3, column: 1 });
+    expect(at(before.replace('Mara stood on the pier.\n', ''))).toEqual({ line: 3, column: 1 });
+    expect(changeStart({ line: 2, pieces: [{ kind: 'same', text: 'ab\ncd ' }, { kind: 'add', text: 'x' }] })).toEqual({ line: 3, column: 4 });
   });
 });
 

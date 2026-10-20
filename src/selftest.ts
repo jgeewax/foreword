@@ -2050,11 +2050,48 @@ async function diffTabChecks() {
   studio.events.emit('toggle-pane', 'explorer');
   await sleep(1500);
   out.narrowAgain = shape();
+  // The preview follows the cursor in the diff, as in the editor. From the book's end each time: an arrow key onto the
+  // changed line on each side, then (below) a click on a word-by-word passage. A click in the diff moves the cursor
+  // the same way (Explicit), but a JS-dispatched one doesn't reach Monaco: a real AppKit click needs the native harness.
+  let jumps = 0;
+  const offJumps = await listen<{ tag?: string }>('preview:report', (e) => void (e.payload?.tag === 'jump' && jumps++));
+  const follows = async (name: string, act: () => unknown) => {
+    await scrollPreview('c.scrollHeight');
+    await sleep(800);
+    const from = await previewState(`${name}-from`);
+    jumps = 0;
+    await act();
+    await sleep(1500);
+    const to = await previewState(`${name}-to`);
+    return { jumps, from: from.visible, to: to.visible, scrolledUp: Number(to.scrollTop) < Number(from.scrollTop) };
+  };
+  const diffs = monaco.editor.getDiffEditors();
+  const [oldSide, newSide] = [diffs[0]?.getOriginalEditor(), diffs[0]?.getModifiedEditor()];
+  out.previewFollows = {
+    diffEditors: diffs.length,
+    newSideKey: await follows('diff-new', () => {
+      newSide?.setPosition({ lineNumber: 2, column: 5 });
+      newSide?.trigger('keyboard', 'cursorDown', null);
+    }),
+    newSideCursor: newSide?.getPosition()?.lineNumber,
+    oldSideKey: await follows('diff-old', () => {
+      oldSide?.setPosition({ lineNumber: 2, column: 5 });
+      oldSide?.trigger('keyboard', 'cursorDown', null);
+    }),
+    oldSideCursor: oldSide?.getPosition()?.lineNumber,
+    snapshot: await snap('difftab-follows', 'preview'),
+  };
   // Words: the passages, with the changed words marked.
   const switchTo = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.changes-mode button')].find((b) => b.textContent === label)?.click();
   switchTo('Words');
   await sleep(300);
-  out.words = { ins: [...document.querySelectorAll('.change-body ins')].map((e) => e.textContent), editors: shape().editors, snapshot: await snap('difftab-words') };
+  out.words = {
+    ins: [...document.querySelectorAll('.change-body ins')].map((e) => e.textContent),
+    editors: shape().editors,
+    snapshot: await snap('difftab-words'),
+    previewFollows: await follows('words-click', () => document.querySelector<HTMLElement>('.changes-tab .change-body')?.click()),
+  };
+  offJumps();
   switchTo('Lines');
   await sleep(300);
   // One file of it, in a tab of its own beside.

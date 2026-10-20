@@ -8,6 +8,7 @@ import { useStore } from '../lib/store';
  * side by side when the pane is wide enough (VS Code's 900px), inline when it
  * isn't, switching as the pane is resized. Unchanged stretches are folded.
  * It's as tall as its content, so a list of files scrolls as one page.
+ * Clicking in it (or moving with the keys) scrolls the preview there.
  */
 export function DiffEditor({ path, before, after }: { path: string; before: string | null; after: string | null }) {
   const host = useRef<HTMLDivElement>(null);
@@ -47,7 +48,14 @@ export function DiffEditor({ path, before, after }: { path: string; before: stri
       if (host.current?.querySelector('.monaco-diff-editor.side-by-side')) sides[0].updateOptions({ wordWrapOverride2: 'inherit' });
       setHeight(Math.max(...sides.map((e) => e.getContentHeight())));
     };
-    const subscriptions = [...sides.map((e) => e.onDidContentSizeChange(fit)), editor.onDidUpdateDiff(fit)];
+    // The preview follows the cursor, on either side, as it does in the editor.
+    const texts = [before ?? '', after ?? ''];
+    const follow = sides.map((e, i) =>
+      e.onDidChangeCursorPosition((c) => {
+        if (c.reason === monaco.editor.CursorChangeReason.Explicit) studio.previewDiffAt(path, texts[i], c.position.lineNumber, c.position.column);
+      }),
+    );
+    const subscriptions = [...sides.map((e) => e.onDidContentSizeChange(fit)), editor.onDidUpdateDiff(fit), ...follow];
     fit();
     return () => {
       subscriptions.forEach((s) => s.dispose());

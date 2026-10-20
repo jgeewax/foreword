@@ -130,6 +130,22 @@ export function proseDiff(before: string | null, after: string | null, context =
   return { hunks, added, removed };
 }
 
+/** Where a passage's first change is in the newer text (1-based line and column; a deletion's is where it was). */
+export function changeStart(hunk: Pick<Hunk, 'line' | 'pieces'>): { line: number; column: number } {
+  let line = hunk.line;
+  let column = 1;
+  for (const p of hunk.pieces) {
+    if (p.kind !== 'same') break;
+    for (const ch of p.text) {
+      if (ch === '\n') {
+        line++;
+        column = 1;
+      } else column += ch.length;
+    }
+  }
+  return { line, column };
+}
+
 /**
  * Formulas (`$…$`) a passage changed, paired old → new in order (either side
  * null when one was only removed or added), so What changed can draw them.

@@ -10,6 +10,7 @@ import { Documents, type MergeQuestion } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
+import { followLine, splitLines } from '../lib/diff';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
 import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
@@ -2779,14 +2780,39 @@ export class Studio {
    *   before the next position is tried.
    */
   async syncPreviewToCursor({ quiet = false } = {}) {
-    const root = this.state.workspace?.root;
     const path = this.state.active;
     const model = this.editor?.getModel();
     const pos = this.editor?.getPosition();
-    if (!root || !path?.endsWith('.typ') || !model || !pos || !this.previewOpened || !this.typst.running) return;
+    if (!path || !model || !pos) return;
     const lineAt = (n: number) => (n >= 0 && n < model.getLineCount() ? model.getLineContent(n + 1) : null);
+    await this.jumpPreview(path, lineAt, pos.lineNumber - 1, pos.column - 1, quiet);
+  }
+
+  /**
+   * From a diff, as from the editor: once the cursor settles on a line of
+   * `text` (one side of a change to `path`; 1-based), the preview shows where
+   * that line is in the book now. Lines changed since (an older version, edits
+   * not saved) are followed onto the text the preview is drawn from; a line
+   * the change took out goes to where it was.
+   */
+  previewDiffAt(path: string, text: string, line: number, column: number) {
+    if (performance.now() < this.suppressSyncUntil || !path.endsWith('.typ')) return;
+    clearTimeout(this.syncTimer);
+    this.syncTimer = window.setTimeout(async () => {
+      const now = await this.textOf(path);
+      if (now === null) return;
+      const lines = splitLines(now);
+      const at = followLine(splitLines(text), lines, line - 1);
+      if (at >= 0) await this.jumpPreview(path, (n) => lines[n] ?? null, at, column - 1);
+    }, 150);
+  }
+
+  /** Scroll the preview to a position (0-based) in a book file whose lines `lineAt` gives (see `syncPreviewToCursor`). */
+  private async jumpPreview(path: string, lineAt: (n: number) => string | null, line: number, character: number, quiet = false) {
+    const root = this.state.workspace?.root;
+    if (!root || !path.endsWith('.typ') || !this.previewOpened || !this.typst.running) return;
     const run = ++this.syncRun;
-    const candidates = jumpCandidates(lineAt, pos.lineNumber - 1, pos.column - 1);
+    const candidates = jumpCandidates(lineAt, line, character);
     if (quiet) {
       if (!candidates.length) return;
       await ipc

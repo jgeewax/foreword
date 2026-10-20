@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diff, mapLines, splitLines, type Run } from './diff';
+import { diff, followLine, mapLines, splitLines, type Run } from './diff';
 
 /** Longest common subsequence length, the slow way. */
 function lcs(a: string[], b: string[]) {
@@ -67,6 +67,21 @@ describe('diff', () => {
     const before = splitLines('a\nb\nc\nd\n');
     const after = splitLines('new\na\nb\nC!\nd');
     expect([...mapLines(before, after)]).toEqual([1, 2, -1, 4]);
+  });
+
+  it('follows any line onto the new text, changed ones to what replaced them', () => {
+    const before = splitLines('a\nb\nc\nd\ne\nf');
+    const after = splitLines('new\na\nB\nC\nC2\nC3\nd\nf');
+    // a, b→B, c→C, d, e (deleted: the line before it, d), f
+    expect([0, 1, 2, 3, 4, 5].map((n) => followLine(before, after, n))).toEqual([1, 2, 3, 6, 6, 7]);
+    // A replacement shorter than what it replaced: the extra lines go to its last line.
+    expect([0, 1, 2, 3].map((n) => followLine(splitLines('x\ny\nz\nw'), splitLines('x\nY\nw'), n))).toEqual([0, 1, 1, 2]);
+    // Changes at either end, and past the last line.
+    expect(followLine(['a', 'b'], ['A', 'b'], 0)).toBe(0);
+    expect(followLine(['a', 'b'], ['a', 'B', 'C'], 1)).toBe(1);
+    expect(followLine(['a', 'b'], ['a'], 1)).toBe(0);
+    expect(followLine(['a'], ['b'], 5)).toBe(0);
+    expect(followLine(['a'], [], 0)).toBe(-1);
   });
 
   it('is quick on a chapter with scattered edits', () => {

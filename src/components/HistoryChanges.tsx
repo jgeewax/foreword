@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import type { ChangedFile } from '../app/history';
-import { changedFormulas, type Hunk } from '../app/prose-diff';
+import { changedFormulas, changeStart, type Hunk } from '../app/prose-diff';
 import { studio } from '../app/studio';
 import { HISTORY_TAB } from '../app/view-tabs';
 import { useStore } from '../lib/store';
@@ -19,8 +19,11 @@ const KIND_TITLE: Record<string, string> = {
 /** Long passages (a whole new file) are cut here until "Show all". */
 const PASSAGE_LIMIT = 1600;
 
-/** One changed passage, word by word; its line opens the file there. */
-export function Passage({ hunk, path, latest }: { hunk: Hunk; path: string; latest: boolean }) {
+/**
+ * One changed passage, word by word; its line opens the file there. Clicking
+ * the passage scrolls the preview to it (`text`: the newer text it's in).
+ */
+export function Passage({ hunk, path, latest, text: newer }: { hunk: Hunk; path: string; latest: boolean; text?: string | null }) {
   const [full, setFull] = useState(false);
   let budget = full ? Infinity : PASSAGE_LIMIT;
   const pieces = hunk.pieces.map((p, i) => {
@@ -30,6 +33,11 @@ export function Passage({ hunk, path, latest }: { hunk: Hunk; path: string; late
     return p.kind === 'add' ? <ins key={i}>{text}</ins> : p.kind === 'del' ? <del key={i}>{text}</del> : <span key={i}>{text}</span>;
   });
   const cut = !full && hunk.pieces.reduce((n, p) => n + p.text.length, 0) > PASSAGE_LIMIT;
+  const preview = (e: MouseEvent) => {
+    if (newer == null || (e.target as HTMLElement).closest('button')) return;
+    const at = changeStart(hunk);
+    studio.previewDiffAt(path, newer, at.line, at.column);
+  };
   return (
     <div className="change-passage">
       <button
@@ -39,7 +47,7 @@ export function Passage({ hunk, path, latest }: { hunk: Hunk; path: string; late
       >
         line {hunk.line}
       </button>
-      <div className="change-text">
+      <div className="change-text" onClick={preview}>
         {hunk.before.map((l, i) => (
           <div key={`b${i}`} className="change-context">
             {l || ' '}
@@ -170,7 +178,7 @@ export function ChangedFileSection({ file, mode, latest, actions }: { file: Chan
       {d && d.hunks.length > 0 && mode === 'lines' && file.before !== undefined ? (
         <DiffEditor path={file.path} before={file.before} after={file.after ?? null} />
       ) : (
-        d?.hunks.map((h, i) => <Passage key={i} hunk={h} path={file.path} latest={latest} />)
+        d?.hunks.map((h, i) => <Passage key={i} hunk={h} path={file.path} latest={latest} text={file.after} />)
       )}
     </section>
   );

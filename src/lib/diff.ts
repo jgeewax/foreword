@@ -111,3 +111,24 @@ export function mapLines(before: readonly string[], after: readonly string[]): I
   for (const r of diff(before, after)) if (r.type === 'equal') for (let i = 0; i < r.n; i++) map[r.a + i] = r.b + i;
   return map;
 }
+
+/**
+ * Where line `n` of `before` (0-based) is in `after`: the same line if it's
+ * unchanged; in a changed passage, the line at the same place in what replaced
+ * it; for a deleted passage, the line before where it was. -1 if `after` is empty.
+ */
+export function followLine(before: readonly string[], after: readonly string[], n: number): number {
+  if (!after.length) return -1;
+  // Lines a.. of `before` became b.. of `after`, up to the next unchanged stretch.
+  const changed = (a: number, b: number, end: number) => (end > b ? Math.min(b + n - a, end - 1) : Math.max(0, b - 1));
+  let a = 0;
+  let b = 0;
+  for (const r of diff(before, after)) {
+    if (r.type !== 'equal') continue;
+    if (n < r.a) return changed(a, b, r.b);
+    if (n < r.a + r.n) return r.b + n - r.a;
+    a = r.a + r.n;
+    b = r.b + r.n;
+  }
+  return changed(a, b, after.length);
+}

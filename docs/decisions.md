@@ -3067,6 +3067,35 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   `menubar` and `palette`; in the app on Calculus Made Easy (7 chapters,
   about 5,850 words).
 
+### The preview follows a diff, as it follows the editor
+
+- **Asked for:** "when im looking at a diff, the preview doesnt jump around
+  to show me how that rendered. can we make diffs tie to the preview the
+  same way the actual chapter file does?"
+- **Now:** in What changed (History's, Source control's, one file's), a
+  click or an arrow key in the diff scrolls the preview there, with the
+  ripple, as the cursor does in the editor. Either side works: a line on
+  the old side goes to where it is now. In Words, a click on a passage
+  goes to its first change.
+- **How:** the preview draws the book as it is now (unsaved edits too), so
+  the diff's line is followed onto that text first (`followLine`, on the
+  line diff). Unchanged lines map exactly; a changed line goes to the line
+  at the same place in what replaced it; a removed passage goes to the line
+  before where it was. That also covers an older version, whose lines may
+  have moved since. Then the editor's own jump runs (`jumpCandidates`,
+  trying nearby positions until one jumps), so a diff jumps exactly as the
+  editor does.
+- **Not done:** preview → diff. A click in the preview still opens the
+  file at that place, as before.
+- Verified: unit tests (`followLine`, `changeStart`); self-test `difftabs`
+  with the preview at the book's end each time: an arrow key onto the
+  changed line on the new side, and on the old side, and a click on the
+  Words passage each jumped once, pages 8–9 to 4–5, showing "A vector, in
+  plain words, in ℝⁿ". A real AppKit click on that line (scratch harness,
+  NSApp.sendEvent) did the same; a JS-dispatched click doesn't reach
+  Monaco. Self-tests `preview` and `typingsync`: the editor's own sync as
+  before (one jump each way, no ripple while typing).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
