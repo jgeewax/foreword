@@ -3971,6 +3971,22 @@ async function slashChecks() {
   out.snapshot = await snap('slash-menu');
   await enter();
   out.mode = studio.state.agent.mode;
+  // Mid-message: the command runs and the message stays (only commands without an argument).
+  await type('rewrite this /opt');
+  out.midNames = [...document.querySelectorAll('.slash-menu .slash-name')].map((e) => e.textContent);
+  out.midSnapshot = await snap('slash-menu-mid');
+  await enter();
+  out.mid = { mode: studio.state.agent.mode, box: box.value };
+  await type('rewrite /pl this');
+  box.focus();
+  box.setSelectionRange(11, 11);
+  box.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft', bubbles: true }));
+  await sleep(200);
+  out.beforeNames = [...document.querySelectorAll('.slash-menu .slash-name')].map((e) => e.textContent);
+  await enter();
+  out.before = { mode: studio.state.agent.mode, box: box.value, caret: box.selectionStart };
+  await type('rewrite this /effort');
+  out.midArg = document.querySelectorAll('.slash-menu button').length;
   const query = (saved.model?.id ?? '').slice(0, 5);
   await type(`/model ${query}`);
   await enter();

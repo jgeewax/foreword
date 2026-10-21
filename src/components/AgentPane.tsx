@@ -13,7 +13,7 @@ import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
-import { parseSlash, slashMatches } from '../app/slash';
+import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
 import type { SourceSelection } from '../editor/selection';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -495,9 +495,18 @@ function Composer() {
   useStore(studio.store, (s) => s.agent.selectionDismissed);
   const liveShown = !!live && studio.isSelectionIncluded() && !attachments.some((a) => a.label === live.attachment.label);
   const [text, setTextState] = useState(() => studio.composerDraft);
-  const setText = (t: string) => {
+  // Where the caret is: the "/…" list is for the word being typed there.
+  const [caret, setCaret] = useState(text.length);
+  const caretAfter = useRef<number | null>(null);
+  const typed = (t: string, at: number) => {
     studio.composerDraft = t;
     setTextState(t);
+    setCaret(at);
+  };
+  // Set from here (not typed): the caret is put where it belongs once the box has the text.
+  const setText = (t: string, at = t.length) => {
+    typed(t, at);
+    caretAfter.current = at;
   };
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -514,17 +523,20 @@ function Composer() {
   const stopped = useStore(studio.store, (s) => s.agent.stopped && !!s.agent.sessionId);
   // An empty box after a stop: Send (and ⏎) resume instead.
   const canResume = stopped && !running && !text.trim();
-  // "/…": the list of commands, until a space (or Esc).
-  const matches = slashMatches(text);
+  // "/…" (at the start, or after a space mid-message): the list of commands, until a space (or Esc).
+  const token = slashToken(text, caret);
+  const matches = slashMatches(text, caret);
   const [highlight, setHighlight] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
   const showSlash = matches.length > 0 && slashDismissed !== text;
-  useEffect(() => setHighlight(0), [text]);
+  useEffect(() => setHighlight(0), [text, caret]);
   const pickSlash = (name: string) => {
     const cmd = matches.find((c) => c.name === name);
-    if (!cmd) return;
+    if (!cmd || !token) return;
     if (cmd.immediate) {
-      setText('');
+      // Picked mid-message, it runs and the rest of the message stays.
+      const rest = withoutSlash(text, token);
+      setText(rest.text, rest.caret);
       void studio.runSlash(`/${cmd.name}`);
     } else setText(`/${cmd.name} `);
     inputRef.current?.focus();
@@ -551,6 +563,10 @@ function Composer() {
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
+    if (caretAfter.current !== null) {
+      el.setSelectionRange(caretAfter.current, caretAfter.current);
+      caretAfter.current = null;
+    }
   }, [text]);
   // The keys live in the buttons' tooltips, not in a line of help under the box.
   const keys = sendHint(sendKey);
@@ -614,7 +630,11 @@ function Composer() {
           value={text}
           rows={2}
           placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            caretAfter.current = null;
+            typed(e.target.value, e.target.selectionStart);
+          }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onKeyDown={(e) => {
             if (showSlash) {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

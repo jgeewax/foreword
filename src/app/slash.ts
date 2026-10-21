@@ -1,5 +1,5 @@
 // Slash commands in the chat's message box: "/plan", "/new", "/model sonnet"…
-// Typing "/" at the start lists them; they act on the app, never reach the model.
+// Typing "/" lists them (mid-message too); they act on the app, never reach the model.
 
 export type SlashCommand = {
   name: string;
@@ -37,14 +37,38 @@ export function parseSlash(text: string): { name: string; arg: string } | null {
   return m ? { name: m[1].toLowerCase(), arg: (m[2] ?? '').trim() } : null;
 }
 
-/** Commands for the list while typing "/…" (the name typed so far, before any space). */
-export function slashMatches(text: string): SlashCommand[] {
-  const m = /^\/([a-z]*)$/i.exec(text);
-  if (!m) return [];
-  const typed = m[1].toLowerCase();
-  const byName = [...SLASH_COMMANDS.filter((c) => c.name.startsWith(typed)), ...SLASH_COMMANDS.filter((c) => !c.name.startsWith(typed) && c.name.includes(typed))];
+/** The "/name" being typed at the caret: where the box starts or after a space, and not in the middle of a word. */
+export type SlashToken = { from: number; to: number; typed: string; alone: boolean };
+
+export function slashToken(text: string, caret = text.length): SlashToken | null {
+  const m = /(?:^|\s)\/([a-z]*)$/i.exec(text.slice(0, caret));
+  if (!m || /^\S/.test(text.slice(caret))) return null;
+  const from = caret - m[1].length - 1;
+  // Alone: nothing else in the box, so a command with an argument can be typed out.
+  return { from, to: caret, typed: m[1].toLowerCase(), alone: !text.slice(0, from).trim() && !text.slice(caret).trim() };
+}
+
+/**
+ * Commands for the list while typing "/…" (the name typed so far, before any space).
+ * In the middle of a message, only the ones that run at once: the message stays.
+ */
+export function slashMatches(text: string, caret = text.length): SlashCommand[] {
+  const token = slashToken(text, caret);
+  if (!token) return [];
+  const { typed } = token;
+  const pool = token.alone ? SLASH_COMMANDS : SLASH_COMMANDS.filter((c) => c.immediate);
+  const byName = [...pool.filter((c) => c.name.startsWith(typed)), ...pool.filter((c) => !c.name.startsWith(typed) && c.name.includes(typed))];
   // Descriptions only when no name fits ("/conversation" finds /new).
-  return byName.length ? byName : SLASH_COMMANDS.filter((c) => c.description.toLowerCase().includes(typed));
+  return byName.length ? byName : pool.filter((c) => c.description.toLowerCase().includes(typed));
+}
+
+/** The message with a picked "/name" taken out, and where the caret goes. */
+export function withoutSlash(text: string, token: SlashToken): { text: string; caret: number } {
+  const before = text.slice(0, token.from);
+  const after = text.slice(token.to);
+  if (!after.trim()) return { text: before.trimEnd(), caret: before.trimEnd().length };
+  // "rewrite /plan this" → "rewrite this".
+  return { text: before + after.replace(/^[ \t]+/, ''), caret: before.length };
 }
 
 export const PERMISSION_WORDS: Record<string, 'ask' | 'edit' | 'readonly'> = {

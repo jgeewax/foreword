@@ -1518,11 +1518,17 @@ section), the page starts at the window's top and the offset is measured.
 
 ### Slash commands
 
-- Typing `/` at the start of the message box lists the commands. It narrows as
-  you type (by name, or by description when no name fits). ↑↓ choose; Tab or
-  ⏎ pick; Esc closes the list.
+- Typing `/` lists the commands: at the start of the message box, or anywhere
+  in a message after a space (not inside a word, so "and/or" and paths stay
+  quiet). It's the word at the caret that counts. The list narrows as you type
+  (by name, or by description when no name fits). ↑↓ choose; Tab or ⏎ pick;
+  Esc closes the list.
 - Commands without an argument run when picked. `/model` and `/permissions`
   wait for theirs.
+- **Mid-message** ("rewrite this /options"), only the commands without an
+  argument are listed. Picking one runs it and takes just the `/word` out, so
+  the message stays in the box, ready to send in the new mode. Commands with
+  an argument need the box to themselves.
 - Commands act on the app and are never sent to the model. An unknown
   `/word` says so instead of going out as a message.
 - **The commands:**
@@ -1531,8 +1537,9 @@ section), the page starts at the window's top and the offset is measured.
   - /model <part of a name> (prefers a recently used match);
   - /permissions ask | edit | readonly;
   - /fix (all open review comments), /export, /pdf, /help.
-- Verified (self-test `slash`): the list, ⏎ picking Plan, /model, /permissions,
-  an unknown command, /help and /new.
+- Verified (self-test `slash`): the list, ⏎ picking Plan, /options at the end
+  of a message and /plan before its last word (the message kept), no /effort
+  mid-message, /model, /permissions, an unknown command, /help and /new.
 
 ### Go to file (⌘P)
 
