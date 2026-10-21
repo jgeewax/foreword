@@ -79,6 +79,8 @@ ${sections.join('\n\n')}
 export const STYLE_DRAFT_MESSAGE = 'Draft my writing style guide from the chapters.';
 /** "Redraft…" when the guide isn't quite right. */
 export const STYLE_REDRAFT_MESSAGE = 'Redraft my writing style guide from the chapters.';
+/** Examples for "Revise…": what to change, in the author's own words. */
+export const STYLE_REVISE_PLACEHOLDER = 'e.g. Less formal. Never use semicolons. Numbers under ten in words.';
 
 /** A part of the guide the author changed after an assistant wrote it: theirs to keep. */
 export type GuideChange = { wrote: string; now: string };
@@ -174,6 +176,34 @@ How to do it:
 4. Write ${STYLE_GUIDE_FILE} with these sections, in this order: ${STYLE_SECTIONS.join('; ')}. Leave out a section the book gives you nothing for. Each rule short, concrete and followable ("Second person, present tense", not "Engaging tone"), true to what the book does now. Under Examples, quote a short passage from the book that shows its voice (a few sentences).
 5. Change nothing else: no chapter, no other file, no settings.
 6. Then, in two or three sentences, tell the author ${opts.redraft ? 'what changed from the old guide' : 'what the guide says their book sounds like'}, and that they can change ${STYLE_GUIDE_FILE} any time. Don't paste the guide into the chat.`;
+}
+
+/** "Revise…": the author's own words go in the chat, so the task reads as what they asked for. */
+export function styleReviseMessage(request: string): string {
+  const text = request.trim();
+  return text.includes('\n') ? `Revise my style guide:\n\n${text}` : `Revise my style guide: ${text}`;
+}
+
+/**
+ * The revision's brief, out of sight like the draft's: change what the author
+ * asks for in the guide and keep the rest as it is, word for word. It stays
+ * with the conversation, so every later message there is another change (and
+ * a draft's conversation gets it once the guide is written, for the same).
+ */
+export function styleReviseBrief(): string {
+  return `# Revising the book's writing style guide
+
+The author wants to change ${STYLE_GUIDE_FILE}, the book's writing style guide (in the book's folder, next to the main file). Each of their messages in this conversation says what should change in it: a rule to add, change or drop, a section to rework, a different voice. ${GUIDE_PURPOSE}
+
+${GUIDE_SETTLED}
+
+How to do it:
+1. Read ${STYLE_GUIDE_FILE} first. Read the chapters only when the request needs them, for example "add a rule for how we write numbers" (see how the book does it now) or "make it sound like chapter 3".
+2. Make the change they ask for, and only that: edit the lines it touches and keep every other line as it is, word for word. Don't reword, reorder or tidy the rest, and don't write the whole file again.
+3. Write as the guide does: each rule short, concrete and followable ("Second person, present tense", not "Engaging tone"). A new rule goes under the section it belongs to (${STYLE_SECTIONS.join('; ')}), and a section that isn't there yet goes in that order. When a new rule goes against one that's there, replace that one rather than keeping both. When they ask to drop or soften a rule, take it out or soften it rather than adding one against it.
+4. Ask only when the request could mean two quite different rules and a wrong guess would mislead every later edit: one question, the way your instructions say to ask, with three answers to pick from (the likeliest first, recommended). Otherwise decide, and say what you decided.
+5. Change nothing else: no chapter, no other file, no settings. If they ask for the chapters to change too (rewrite chapter 2 in the new voice), change the guide only, and say they can ask for that in a new task.
+6. Then, in a sentence or two, say what you changed. Don't paste the guide into the chat.`;
 }
 
 /** "Interview me": the guide from the author's answers, for a book with little written yet, or an author who'd rather say it. */

@@ -144,7 +144,7 @@ History is a timeline of them, coloured by who made each one. Click a version to
 
 Every book gets a short guide to how it's written (voice, tone, the words it uses), and every request to the assistant follows it. Press **Interview me** and answer a few rounds of questions about your book, picking from answers that fit it, and the assistant writes the guide from your answers.
 
-Or start from a template made for your kind of book, or have it drafted from the chapters you've written. It learns from how you rewrite the assistant's text, and **Redraft** keeps the rules you wrote yourself.
+Or start from a template made for your kind of book, or have it drafted from the chapters you've written. It learns from how you rewrite the assistant's text. **Revise** changes just what you say ("less formal", "never use semicolons") and leaves the rest alone, and **Redraft** keeps the rules you wrote yourself.
 
 </td>
 <td width="50%" valign="top">
@@ -177,7 +177,7 @@ Each conversation is its own task, and several can run at once. Choose the model
 - **Code that runs.** Examples in Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell run from the book, with their real output set beneath and checked against what you expect.
 - **Covers and printing.** Design a print cover with the spine worked out from the page count, check the files against the printer's rules, and order through Mixam.
 - **E-books.** Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, or every page exactly as typeset for picture books, papers and books full of math. Foreword picks for you and says what didn't carry over.
-- **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. Start it from a template for your kind of book, let the assistant draft it from your chapters, or answer its questions and have it write the guide from your answers. Redraft it whenever it isn't quite right: it keeps the rules you wrote, and learns from how you've rewritten its text.
+- **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. Start it from a template for your kind of book, let the assistant draft it from your chapters, or answer its questions and have it write the guide from your answers. Revise it by saying what should change, and it changes only that. Or redraft it whenever it isn't quite right: it keeps the rules you wrote, and learns from how you've rewritten its text.
 - **Find anything.** Search every chapter at once and replace across the book (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd>), see the whole book in Contents (each chapter with its sections and how many words), and go to a chapter by its number or name (<kbd>⌘</kbd><kbd>P</kbd>).
 - **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons and status bar wear it. A book that already has a Peacock colour keeps it.
 - **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Foreword? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).

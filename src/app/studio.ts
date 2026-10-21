@@ -65,7 +65,7 @@ import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/a
 import { parseOptions } from '../services/agent/options-mode';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
-import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleInstructions, styleInterviewBrief, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
+import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, STYLE_REVISE_PLACEHOLDER, styleDraftBrief, styleInstructions, styleInterviewBrief, styleReviseBrief, styleReviseMessage, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules, type PermissionRule } from '../services/agent/permissions';
@@ -266,8 +266,8 @@ const VSCODE_SETTINGS = '.vscode/settings.json';
 export type SettingsPage = 'general' | 'editor' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant' | 'book-color';
 export type NewBookTab = 'book' | 'paper' | 'sample';
 
-/** How the style guide is being written: from the chapters, again from them, or from the author's answers. */
-export type StyleDraftKind = 'draft' | 'redraft' | 'interview';
+/** How the style guide is being written: from the chapters, again from them, from the author's answers, or changed as they ask. */
+export type StyleDraftKind = 'draft' | 'redraft' | 'interview' | 'revise';
 
 /** What Export EPUB made: where, which kind and why, and what the reflowing kind left behind. */
 export type EpubResult = { path: string; kind: EpubKind; why: string; lost: string[]; chapters: number };
@@ -1154,7 +1154,7 @@ export class Studio {
 
   private promptResolve: ((value: string | null) => void) | null = null;
 
-  /** Ask for one line of text. Resolves null if cancelled. */
+  /** Ask for a line of text (a few, with `multiline`). Resolves null if cancelled. */
   prompt(request: Omit<PromptRequest, 'value'> & { value?: string }): Promise<string | null> {
     this.promptResolve?.(null);
     this.store.set({ prompt: { value: '', ...request } });
@@ -5469,21 +5469,23 @@ export class Studio {
    * The chat shows the author a short message; the brief goes with it as that
    * conversation's instructions, out of sight.
    */
-  async draftStyleGuide({ kind = 'draft' as StyleDraftKind } = {}) {
+  async draftStyleGuide({ kind = 'draft' as StyleDraftKind, request = '' } = {}) {
     const a = this.state.agent;
     if (!this.agent || a.status !== 'ready' || a.running) return false;
     if (a.sessionId || a.items.length) this.newSession();
     if (this.state.agent.mode !== 'write') await this.setMode('write');
     this.styleDraftBefore = this.styleGuideText;
-    // How the author has rewritten the assistant's text: the guide should ask for that.
-    const revisions = await this.authorRevisions();
+    // How the author has rewritten the assistant's text: the guide should ask for that (a revision changes only what they ask).
+    const revisions = kind === 'revise' ? [] : await this.authorRevisions();
     const brief =
-      kind === 'interview'
-        ? styleInterviewBrief({ revisions, existing: this.state.styleGuide.exists })
-        : styleDraftBrief({ revisions, ...(kind === 'redraft' ? { redraft: { authorChanges: await this.guideAuthorChanges() } } : {}) });
+      kind === 'revise'
+        ? styleReviseBrief()
+        : kind === 'interview'
+          ? styleInterviewBrief({ revisions, existing: this.state.styleGuide.exists })
+          : styleDraftBrief({ revisions, ...(kind === 'redraft' ? { redraft: { authorChanges: await this.guideAuthorChanges() } } : {}) });
     this.pendingBrief = { key: STYLE_DRAFT_KEY, text: brief };
     this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: '', draftKind: kind } }));
-    const sent = await this.send(kind === 'interview' ? STYLE_INTERVIEW_MESSAGE : kind === 'redraft' ? STYLE_REDRAFT_MESSAGE : STYLE_DRAFT_MESSAGE);
+    const sent = await this.send(kind === 'revise' ? styleReviseMessage(request) : kind === 'interview' ? STYLE_INTERVIEW_MESSAGE : kind === 'redraft' ? STYLE_REDRAFT_MESSAGE : STYLE_DRAFT_MESSAGE);
     this.pendingBrief = null;
     this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: sent ? this.state.agent.sessionId : null } }));
     return sent;
@@ -5492,16 +5494,42 @@ export class Studio {
   /** A turn of the draft ended: once the guide is written, it opens in the editor. */
   private async afterStyleDraft(sessionId: string | null) {
     if (!sessionId || sessionId !== this.state.styleGuide.drafting) return;
+    const kind = this.state.styleGuide.draftKind;
     await this.loadStyleGuide();
     const text = this.styleGuideText;
-    if (!text?.trim() || text === this.styleDraftBefore) return;
+    if (!text?.trim() || text === this.styleDraftBefore) {
+      // A revision that changed nothing (the guide said so already): it's over, unless it asked something first.
+      const asking = this.state.agent.sessionId === sessionId && this.state.agent.items.some((it) => it.kind === 'question' && it.state === 'pending');
+      if (kind === 'revise' && !asking) this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: null } }));
+      return;
+    }
     this.store.set((s) => ({ styleGuide: { ...s.styleGuide, drafting: null } }));
+    // What the author says next in this task changes the guide as they ask, rather than writing it all again.
+    if (kind !== 'revise') await this.agent?.setInstructions(sessionId, STYLE_DRAFT_KEY, styleReviseBrief()).catch((e) => console.warn('style guide: the revision brief', e));
     await this.refreshFiles();
     await this.openFile(STYLE_GUIDE_FILE);
     if (this.state.agent.sessionId === sessionId) {
-      const what = this.styleDraftBefore !== null ? `Your new style guide is open in the editor (${STYLE_GUIDE_FILE}); History keeps the one before.` : `Your style guide is open in the editor (${STYLE_GUIDE_FILE}).`;
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${what} Every message follows it from now on; change anything that isn't right.` });
+      const text =
+        kind === 'revise'
+          ? `Your style guide is changed, and open in the editor (${STYLE_GUIDE_FILE}). Say here if anything else should change.`
+          : `${this.styleDraftBefore !== null ? `Your new style guide is open in the editor (${STYLE_GUIDE_FILE}); History keeps the one before.` : `Your style guide is open in the editor (${STYLE_GUIDE_FILE}).`} Every message follows it from now on. Say here what should change, or change it yourself.`;
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text });
     }
+  }
+
+  /** "Revise…": the author says what should change, and the assistant changes that in the guide, in a task of its own, keeping the rest. */
+  async reviseStyleGuide() {
+    if (!this.state.styleGuide.exists) return false;
+    const request = await this.prompt({
+      title: 'Revise the style guide',
+      label: 'What should change?',
+      placeholder: STYLE_REVISE_PLACEHOLDER,
+      okLabel: 'Revise',
+      multiline: true,
+      help: `The assistant changes just that in ${STYLE_GUIDE_FILE}, in a task of its own, and leaves the rest as it is. History keeps this version.`,
+    });
+    if (!request?.trim()) return false;
+    return this.draftStyleGuide({ kind: 'revise', request });
   }
 
   /** "Redraft…": the guide isn't quite right. Asked first: it's written again (History keeps this one). */

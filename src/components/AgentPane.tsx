@@ -740,7 +740,9 @@ function StyleGuideBar({ empty }: { empty: boolean }) {
       <div className="style-bar drafting">
         <ActivityGlyph phase="thinking" />
         <span>
-          {guide.draftKind === 'interview' ? (
+          {guide.draftKind === 'revise' ? (
+            <strong>Revising your style guide.</strong>
+          ) : guide.draftKind === 'interview' ? (
             <>
               <strong>Writing your style guide with you:</strong> answer the questions below.
             </>
@@ -749,7 +751,7 @@ function StyleGuideBar({ empty }: { empty: boolean }) {
               <strong>{guide.draftKind === 'redraft' ? 'Redrafting' : 'Drafting'} your style guide</strong> from the chapters.
             </>
           )}{' '}
-          It opens in the editor when it’s written.
+          {guide.draftKind === 'revise' ? 'It opens in the editor when it’s changed.' : 'It opens in the editor when it’s written.'}
         </span>
       </div>
     );

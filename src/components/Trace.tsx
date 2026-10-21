@@ -929,7 +929,7 @@ export function Transcript() {
 
 // ---- the strip under the header --------------------------------------------------------
 
-/** The style guide, from the strip: open it, or have it written again. */
+/** The style guide, from the strip: open it, have it changed as you say, or have it written again. */
 function StyleGuideMenu() {
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
   const [open, setOpen] = useState(false);
@@ -959,6 +959,15 @@ function StyleGuideMenu() {
         <div className="style-menu-popover" role="menu">
           <button role="menuitem" onClick={pick(() => void studio.openFile('WRITING_STYLE.md'))}>
             Open WRITING_STYLE.md
+          </button>
+          <button
+            role="menuitem"
+            className="style-revise"
+            disabled={!ready}
+            title="Say what should change (a rule to add, change or drop) and the assistant changes just that, keeping the rest. History keeps this one."
+            onClick={pick(() => void studio.reviseStyleGuide())}
+          >
+            Revise…
           </button>
           <button role="menuitem" className="style-interview" disabled={!ready} title="The assistant asks you how the book should read, and writes the guide again from your answers" onClick={pick(() => void studio.interviewStyleGuide())}>
             Interview me…

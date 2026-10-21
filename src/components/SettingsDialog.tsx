@@ -79,6 +79,7 @@ function BookAssistantPage() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const project = useStore(studio.store, (s) => s.project);
   const guide = useStore(studio.store, (s) => s.styleGuide);
+  const assistantIdle = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
   const code = useStore(studio.store, (s) => s.code);
   if (!ws) return null;
   return (
@@ -96,6 +97,18 @@ function BookAssistantPage() {
                 }}
               >
                 Open it
+              </button>{' '}
+              ·{' '}
+              <button
+                className="link"
+                disabled={!assistantIdle}
+                title="Say what should change and the assistant changes just that, keeping the rest"
+                onClick={() => {
+                  studio.closeSettings();
+                  void studio.reviseStyleGuide();
+                }}
+              >
+                Revise…
               </button>
             </>
           ) : (

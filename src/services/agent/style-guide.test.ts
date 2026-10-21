@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STYLE_DRAFT_MESSAGE, STYLE_GUIDE_MAX_CHARS, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, styleInterviewBrief } from './style-guide';
+import { STYLE_DRAFT_MESSAGE, STYLE_GUIDE_MAX_CHARS, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, styleDraftBrief, styleGuideTemplate, styleInstructions, styleInterviewBrief, styleReviseBrief, styleReviseMessage } from './style-guide';
 
 describe('styleInstructions', () => {
   it('wraps the guide and tells the agent to follow it', () => {
@@ -101,6 +101,30 @@ describe('the author’s rewrites of the assistant’s text', () => {
     const p = styleDraftBrief({ revisions: many });
     expect(p.match(/<author-revision /g)).toHaveLength(12);
     expect(p).toMatch(/… \(9 more lines\)/);
+  });
+});
+
+describe('revising the guide', () => {
+  it('shows the author their own words', () => {
+    expect(styleReviseMessage('  Less formal.  ')).toBe('Revise my style guide: Less formal.');
+    expect(styleReviseMessage('Less formal.\nNever use semicolons.')).toBe('Revise my style guide:\n\nLess formal.\nNever use semicolons.');
+  });
+
+  it('changes only what they ask, keeping the rest word for word, and touches nothing else', () => {
+    const p = styleReviseBrief();
+    expect(p).toMatch(/Read WRITING_STYLE.md first/);
+    expect(p).toMatch(/Make the change they ask for, and only that: edit the lines it touches and keep every other line as it is, word for word/);
+    expect(p).toMatch(/don't write the whole file again/);
+    expect(p).toMatch(/replace that one rather than keeping both/);
+    expect(p).toMatch(/Change nothing else: no chapter/);
+    expect(p).toMatch(/say what you changed\. Don't paste the guide into the chat/);
+  });
+
+  it('settles the guide as the draft does, and asks at most one question', () => {
+    const p = styleReviseBrief();
+    expect(p).toMatch(/Don't ask the author anything about the guide itself/);
+    expect(p).toMatch(/one question, the way your instructions say to ask, with three answers to pick from/);
+    expect(p).toMatch(/Each of their messages in this conversation says what should change/);
   });
 });
 

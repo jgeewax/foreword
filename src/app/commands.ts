@@ -175,6 +175,7 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('print-mixam', 'Print with Mixam…', { keywords: ['printer'] }),
         menu('design-cover', 'Design Cover…'),
         menu('style-guide', 'Writing Style Guide'),
+        { id: 'revise-style-guide', title: 'Revise Writing Style Guide…', keywords: ['style guide', 'change', 'edit', 'add a rule', 'modify'], when: () => s().styleGuide.exists && idle(), run: () => studio.reviseStyleGuide() },
         { id: 'redraft-style-guide', title: 'Redraft Writing Style Guide…', keywords: ['style guide', 're-run', 'again'], when: () => s().styleGuide.exists && idle(), run: () => studio.redraftStyleGuide() },
         { id: 'style-guide-templates', title: 'Writing Style Guide Templates…', keywords: ['style guide', 'template'], when: () => !!s().workspace, run: () => studio.openStyleTemplates() },
         { id: 'interview-style-guide', title: 'Write Style Guide by Interview…', keywords: ['style guide', 'questions', 'interview me'], when: () => idle(), run: () => studio.interviewStyleGuide() },

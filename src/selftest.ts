@@ -1018,6 +1018,126 @@ async function styleRedraftChecks() {
 }
 
 /**
+ * Changing the guide as the author says, with Claude Code on Haiku: after a
+ * draft, what they say next in its task changes the guide rather than writing
+ * it again; Revise… (the strip's menu) asks what should change and changes
+ * that, in a task of its own, keeping every other line. Writes the guide:
+ * scratch book only.
+ */
+async function styleReviseChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  // Edits in the book need no asking (Edit freely); anything else asked is refused, and noted.
+  const refused: string[] = [];
+  const run = async () => {
+    for (const t0 = Date.now(); Date.now() - t0 < 300000; ) {
+      const q = studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
+      if (q?.kind === 'question') {
+        const answer: Record<string, string> = {};
+        for (const f of q.fields) if (f.options?.length) answer[f.key] = f.options[0].value;
+        await studio.answerQuestion(q.id, answer);
+      }
+      const p = studio.state.agent.items.find((i) => i.kind === 'permission' && i.state === 'pending');
+      if (p?.kind === 'permission') {
+        refused.push(`${p.action} ${p.resources.join(' ')}`);
+        await studio.replyPermission(p.id, 'reject');
+      }
+      if (studio.state.styleGuide.drafting === null && !studio.state.agent.running) break;
+      await sleep(1000);
+    }
+    await sleep(1500);
+  };
+  const guide = async () => (await ipc.fsRead('WRITING_STYLE.md')).text;
+  /** Lines taken out and put in (as a multiset), so a rewrite shows as many. */
+  const changes = (before: string, after: string) => {
+    const left = before.split('\n');
+    const added: string[] = [];
+    for (const line of after.split('\n')) {
+      const i = left.indexOf(line);
+      if (i >= 0) left.splice(i, 1);
+      else added.push(line);
+    }
+    return { removed: left.filter((l) => l.trim()), added: added.filter((l) => l.trim()) };
+  };
+  const brief = async () => {
+    const id = studio.state.agent.sessionId;
+    return id ? ((await studio.agent!.getInstructions(id)).find((e) => e.key === 'style-draft')?.value as string | undefined) ?? '' : '';
+  };
+  const turn = () => {
+    const items = studio.state.agent.items;
+    return {
+      userMessages: items.filter((i) => i.kind === 'user').map((i) => (i as { text: string }).text),
+      reply: (items.filter((i) => i.kind === 'assistant').at(-1) as { text?: string } | undefined)?.text?.slice(0, 400),
+      notices: items.filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text),
+      active: studio.state.active,
+      drafting: studio.state.styleGuide.drafting,
+    };
+  };
+  try {
+    studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+    const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+    if (haiku) await studio.selectModel(haiku);
+    await waitFor(() => studio.state.history.status === 'ready', 30000, 'history');
+
+    // A draft; then, in its task, a change. (A book with a guide already goes straight to Revise….)
+    let followed = await guide().catch(() => null);
+    if (followed === null) {
+      await studio.draftStyleGuide();
+      await run();
+      const drafted = await guide();
+      out.drafted = { ...turn(), briefNow: (await brief()).split('\n')[0] };
+      await studio.send('Never use semicolons.');
+      await run();
+      followed = await guide();
+      out.followUp = { ...turn(), changes: changes(drafted, followed) };
+    }
+
+    // Revise…, from the strip's menu, in a task of its own.
+    document.querySelector<HTMLButtonElement>('.style-menu-trigger')?.click();
+    await sleep(200);
+    out.menu = [...document.querySelectorAll('.style-menu-popover button')].map((b) => b.textContent);
+    out.snapshotMenu = await snap('style-revise-menu');
+    document.querySelector<HTMLButtonElement>('.style-revise')?.click();
+    const box = await waitFor(() => document.querySelector<HTMLTextAreaElement>('.modal.prompt textarea'), 3000, 'the revise dialog');
+    const request = 'Write numbers under ten as words.\nAnd use the Oxford comma.';
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, request);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(200);
+    out.dialog = {
+      title: document.querySelector('.modal.prompt h1')?.textContent,
+      label: document.querySelector('.modal.prompt .field span')?.textContent,
+      placeholder: box.placeholder,
+      help: document.querySelector('.modal.prompt .settings-help')?.textContent,
+    };
+    out.snapshotDialog = await snap('style-revise-dialog');
+    // Return sends; Shift-Return would be a new line.
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await sleep(2500);
+    out.whileRevising = { bar: document.querySelector('.style-bar')?.textContent, dialogGone: !document.querySelector('.modal.prompt'), firstLine: (await brief()).split('\n')[0] };
+    out.snapshotWhile = await snap('style-revise-working');
+    await run();
+    const revised = await guide();
+    out.revised = { ...turn(), changes: changes(followed, revised), marks: studio.aiEditsFor('WRITING_STYLE.md').length, menuBack: !!document.querySelector('.style-menu-trigger') };
+    out.refused = refused;
+    studio.editor?.render(true);
+    await sleep(300);
+    out.snapshot = await snap('style-revise');
+  } finally {
+    still.remove();
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * What the chat shows while the assistant works, for each phase, posed without
  * a model: who's at work ("Claude is thinking…"), words that change with the
  * wait, a tip once the turn runs long, and each phase's moving picture. A
@@ -7644,6 +7764,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
     if (only?.includes('epub')) result.epub = await epubChecks(outDir);
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
+    if (only?.includes('stylerevise')) result.stylerevise = await styleReviseChecks();
     if (only?.includes('stylerevisions')) result.stylerevisions = await styleRevisionsChecks();
     if (only?.includes('styleinterview')) result.styleinterview = await styleInterviewChecks();
     if (only?.includes('styletemplates')) result.styletemplates = await styleTemplatesChecks();

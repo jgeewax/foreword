@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { studio } from '../app/studio';
 import { useStore } from '../lib/store';
 
-/** One-line text question (New Chapter, New File, Rename…). */
+/** A text question: one line (New Chapter, New File, Rename…) or a few (Revise the style guide). */
 export function PromptDialog() {
   const request = useStore(studio.store, (s) => s.prompt);
   const [value, setValue] = useState('');
@@ -39,7 +39,8 @@ export function PromptDialog() {
                 placeholder={request.placeholder}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && value.trim()) {
+                  // Return sends, as in the chat; Shift-Return is a new line.
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && value.trim()) {
                     e.preventDefault();
                     studio.answerPrompt(value);
                   }
