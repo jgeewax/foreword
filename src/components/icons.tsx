@@ -126,6 +126,21 @@ const PATHS: Record<string, ReactNode> = {
   ),
   chevronRight: <path d="M9.5 6l6 6-6 6" />,
   chevronDown: <path d="M6 9.5l6 6 6-6" />,
+  // Contents' Collapse All and Expand All (codicons' shapes): a box on a box, a minus or a plus.
+  collapseAll: (
+    <>
+      <path d="M8.5 4.5h9a2 2 0 0 1 2 2v9" />
+      <rect x="4.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M7.5 14h5" />
+    </>
+  ),
+  expandAll: (
+    <>
+      <path d="M8.5 4.5h9a2 2 0 0 1 2 2v9" />
+      <rect x="4.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M7.5 14h5M10 11.5v5" />
+    </>
+  ),
   shield: <path d="M12 3.2l7 2.8v5.2c0 4.3-2.9 7.7-7 9.6-4.1-1.9-7-5.3-7-9.6V6z" />,
   arrowUp: <path d="M12 19V5.5M6 11.5l6-6 6 6" />,
   stop: <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />,

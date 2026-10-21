@@ -4892,6 +4892,17 @@ async function contentsChecks() {
   await sleep(500);
   out.clicked = { title: section?.textContent, active: studio.state.active, line: studio.state.cursor?.line, lit: document.querySelector('.contents-row.here')?.textContent };
   out.snapshot = await snap('contents');
+  // The title bar's toggle: Collapse All leaves just the chapters (the one the cursor is in lit), Expand All brings every section back.
+  const toggle = () => document.querySelector<HTMLButtonElement>('.explorer .pane-header .pane-action');
+  const fold = async () => {
+    const label = toggle()?.getAttribute('aria-label');
+    toggle()?.click();
+    await sleep(200);
+    return { clicked: label, now: toggle()?.getAttribute('aria-label'), rows: rows().length, sections: rows().filter((r) => r.classList.contains('depth-1')).length, lit: document.querySelector('.contents-row.here')?.textContent };
+  };
+  out.collapsed = await fold();
+  out.collapsedSnapshot = await snap('contents-collapsed');
+  out.expanded = await fold();
   studio.showSidebar(sidebar);
   return out;
 }

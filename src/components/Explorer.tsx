@@ -11,7 +11,7 @@ import { ReviewPanel } from './ReviewPanel';
 import { SourceControlPanel } from './SourceControlPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { SearchPanel } from './SearchPanel';
-import { ContentsPanel } from './ContentsPanel';
+import { ContentsActions, ContentsPanel } from './ContentsPanel';
 import { Icon, type IconName } from './icons';
 
 function FileTree() {
@@ -335,6 +335,7 @@ function ViewHeader({ view }: { view: View }) {
           <RefreshButton />
         </>
       )}
+      {view === 'contents' && <ContentsActions />}
       {view === 'git' && <SourceControlActions />}
     </header>
   );
