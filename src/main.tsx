@@ -4,6 +4,7 @@ import { App } from './App';
 import { studio } from './app/studio';
 import { typstReady } from './editor/monaco';
 import { installSelectAll } from './editor/select-all';
+import { installUndoRedo } from './editor/undo-redo';
 import { installDefaultContextMenu } from './lib/context-menu';
 import { ipc } from './lib/ipc';
 import { runSelftest } from './selftest';
@@ -18,6 +19,7 @@ window.addEventListener('unhandledrejection', (e) => {
 const boot = (step: string) => void ipc.uiLog(`[boot +${Math.round(performance.now())}ms] ${step}`);
 installDefaultContextMenu();
 installSelectAll();
+installUndoRedo();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

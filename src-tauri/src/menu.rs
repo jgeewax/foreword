@@ -3,10 +3,11 @@
 //! assistant (Assistant). The app's own items forward their id to the page
 //! (`COMMANDS`), which acts on it in `studio.menuCommand`.
 //!
-//! Shortcuts the page also handles (⌘O, ⌘P, ⌘S, ⌘B, ⌘I…) are shown here too:
-//! when the page takes a key press it calls preventDefault, which stops the
-//! menu's key equivalent, so a press isn't applied twice. When the preview has
-//! focus the page doesn't see the press, and the menu acts.
+//! Shortcuts the page also handles (⌘O, ⌘P, ⌘S, ⌘B, ⌘I…) are shown here too.
+//! A ⌘ key that's on an item goes to the menu, not the page (the page is a
+//! child web view, and wry gives those keys to the menu bar first), so the
+//! item acts, with the page or the preview focused, and a press isn't applied
+//! twice. Keys on no item (the ⌘K chords) reach the page.
 
 use tauri::{
     AppHandle, Runtime,
@@ -139,13 +140,13 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "Edit",
         true,
         &[
-            &PredefinedMenuItem::undo(handle, None)?,
-            &PredefinedMenuItem::redo(handle, None)?,
+            // Not the stock items: in the page they're the page's (see `edit_action`).
+            &item("undo", "Undo", Some("CmdOrCtrl+Z"))?,
+            &item("redo", "Redo", Some("CmdOrCtrl+Shift+Z"))?,
             &sep()?,
             &PredefinedMenuItem::cut(handle, None)?,
             &PredefinedMenuItem::copy(handle, None)?,
             &PredefinedMenuItem::paste(handle, None)?,
-            // Not the stock item: in the page it's the page's (see `select_all`).
             &item("select-all", "Select All", Some("CmdOrCtrl+A"))?,
             &sep()?,
             &item("find", "Find…", Some("CmdOrCtrl+F"))?,
@@ -263,35 +264,39 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     )
 }
 
-/// Edit → Select All, and ⌘A when nothing took the key. While the window's page
-/// has the keyboard, the page selects (event `select-all`): AppKit's
-/// `selectAll:` would select the focused field, and the editor's is Monaco's
-/// hidden one, not the text. Anywhere else (the preview, a dialog's text
-/// field) it's AppKit's, as the stock item was.
-pub fn select_all(app: &AppHandle, front: Option<String>) {
+/// Edit → Undo, Redo and Select All (`id`), and their keys: the menu bar sees
+/// ⌘Z, ⇧⌘Z and ⌘A before the page does (wry gives a child web view's ⌘ keys
+/// to the menu first). While the window's page has the keyboard, the page acts
+/// (an event named `id`): AppKit's `undo:`, `redo:` and `selectAll:` act on
+/// the focused field, and the editor's is Monaco's hidden one, not the text.
+/// Anywhere else (the preview, a dialog's text field) it's AppKit's, as the
+/// stock items were.
+pub fn edit_action(app: &AppHandle, front: Option<String>, id: &str) {
     #[cfg(target_os = "macos")]
     {
-        use objc2::{MainThreadMarker, rc::Retained, sel};
+        use objc2::{MainThreadMarker, rc::Retained, runtime::Sel, sel};
         use objc2_app_kit::NSApplication;
         use tauri::{Emitter, EventTarget, Manager};
 
-        fn native() {
+        fn native(action: Sel) {
             if let Some(mtm) = MainThreadMarker::new() {
-                // SAFETY: selectAll: is a standard action; a nil target sends it to the first responder.
+                // SAFETY: standard actions; a nil target sends it to the first responder.
                 unsafe {
-                    NSApplication::sharedApplication(mtm).sendAction_to_from(
-                        sel!(selectAll:),
-                        None,
-                        None,
-                    )
+                    NSApplication::sharedApplication(mtm).sendAction_to_from(action, None, None)
                 };
             }
         }
+        let action = match id {
+            "undo" => sel!(undo:),
+            "redo" => sel!(redo:),
+            _ => sel!(selectAll:),
+        };
         let Some(page) = front.and_then(|label| app.get_webview(&label)) else {
-            return native();
+            return native(action);
         };
         let app = app.clone();
         let label = page.label().to_string();
+        let event = id.to_string();
         let _ = page.with_webview(move |platform| {
             let Some(mtm) = MainThreadMarker::new() else {
                 return;
@@ -302,15 +307,15 @@ pub fn select_all(app: &AppHandle, front: Option<String>) {
             if responder.is_some_and(|r| Retained::as_ptr(&r).cast() == platform.inner()) {
                 // Not from here: emitting runs script in this web view, which this call holds.
                 tauri::async_runtime::spawn(async move {
-                    let _ = app.emit_to(EventTarget::webview(&label), "select-all", ());
+                    let _ = app.emit_to(EventTarget::webview(&label), &event, ());
                 });
             } else {
-                native();
+                native(action);
             }
         });
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, front);
+    let _ = (app, front, id);
 }
 
 /// The menu bar as text, for the self-test: each menu's title and items.

@@ -1,5 +1,5 @@
 // Edit → Select All (and ⌘A when nothing took the key) while the page has the
-// keyboard: the menu sends it here (menu.rs, `select_all`) instead of letting
+// keyboard: the menu sends it here (menu.rs, `edit_action`) instead of letting
 // WebKit select. WebKit's selects the focused field, and the editor's field is
 // Monaco's hidden stand-in, not the text; with no field focused, it selects
 // the whole page, line numbers, labels and all.

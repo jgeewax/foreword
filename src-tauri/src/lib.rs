@@ -497,7 +497,7 @@ pub fn run() {
                         let _ = w.close();
                     }
                 }
-                "select-all" => menu::select_all(app, front),
+                id @ ("undo" | "redo" | "select-all") => menu::edit_action(app, front, id),
                 id if menu::COMMANDS.contains(&id) => {
                     if let Some(label) = front {
                         let _ = app.emit_to(EventTarget::webview(&label), "menu", id);

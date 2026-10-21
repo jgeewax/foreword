@@ -9,6 +9,7 @@ import { available, commandLabel, paletteCommands, rankCommands } from './app/co
 import { studio, type ChatItem } from './app/studio';
 import { monaco } from './editor/monaco';
 import { selectAll } from './editor/select-all';
+import { undoRedo } from './editor/undo-redo';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { menuRecorder, type MenuEntry } from './lib/context-menu';
@@ -5689,6 +5690,80 @@ async function selectAllChecks() {
   return out;
 }
 
+/**
+ * Edit → Undo and Redo (⌘Z, ⇧⌘Z) while the page has the keyboard (the menu sends
+ * them to the page: menu.rs `edit_action`): in the editor, its own history a step
+ * at a time; in a text field, the field's. The chapter's text is put back, unsaved.
+ */
+async function undoChecks() {
+  const out: Record<string, any> = {};
+  out.editMenu = (await ipc.menuOutline()).find(([title]) => title === 'Edit')?.[1];
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const line = model.getLinesContent().findIndex((l) => /^[A-Za-z]/.test(l)) + 1;
+  const before = model.getLineContent(line);
+  const tail = () => model.getLineContent(line).slice(before.length);
+  editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+  editor.focus();
+  for (const ch of ' hello world') editor.trigger('keyboard', 'type', { text: ch });
+  out.typed = tail();
+  // A step at a time, as Monaco groups typing (a word each), and back again.
+  const steps: string[] = [];
+  for (const which of ['undo', 'undo', 'redo', 'redo'] as const) {
+    undoRedo(which);
+    await sleep(50);
+    steps.push(tail());
+  }
+  out.steps = steps;
+  undoRedo('undo');
+  undoRedo('undo');
+  // ⌘Z and ⇧⌘Z as key presses (when the menu doesn't take them): the editor's own keys, applied once.
+  const press = (target: Element, shiftKey: boolean) => {
+    const e = new KeyboardEvent('keydown', { key: shiftKey ? 'Z' : 'z', code: 'KeyZ', keyCode: 90, metaKey: true, shiftKey, bubbles: true, cancelable: true } as KeyboardEventInit);
+    target.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+  const area = document.activeElement!;
+  const redoKey = press(area, true);
+  const afterRedoKey = tail();
+  const undoKey = press(area, false);
+  out.keys = { redoTaken: redoKey, afterRedo: afterRedoKey, undoTaken: undoKey, afterUndo: tail() };
+  out.restored = model.getValue() === original;
+
+  // A text field (the message box): WebKit's own undo, and redo.
+  const box = document.querySelector<HTMLTextAreaElement>('.composer textarea');
+  if (box) {
+    box.focus();
+    document.execCommand('insertText', false, 'hello there');
+    await sleep(50);
+    const typed = box.value;
+    undoRedo('undo');
+    await sleep(50);
+    const undone = box.value;
+    undoRedo('redo');
+    await sleep(50);
+    const redone = box.value;
+    press(box, false);
+    await sleep(50);
+    const undoneByKey = box.value;
+    press(box, true);
+    await sleep(50);
+    out.field = { typed, undone, redone, undoneByKey, redoneByKey: box.value, editorUntouched: model.getValue() === original };
+    document.execCommand('selectAll');
+    document.execCommand('delete');
+    box.blur();
+  }
+  out.ok =
+    !!out.editMenu?.includes('undo=Undo') && !!out.editMenu?.includes('redo=Redo') &&
+    out.typed === ' hello world' && out.steps.join('|') === ' hello|| hello| hello world' && out.restored &&
+    out.keys.redoTaken && out.keys.afterRedo === ' hello' && out.keys.undoTaken && out.keys.afterUndo === '' &&
+    (!box ||
+      (out.field.typed === 'hello there' && out.field.undone === '' && out.field.redone === 'hello there' &&
+        out.field.undoneByKey === '' && out.field.redoneByKey === 'hello there' && out.field.editorUntouched));
+  return out;
+}
+
 /** Tab shortcuts (VS Code's), pressed as real key events outside the editor. The open tabs are put back after. */
 async function tabChecks() {
   const out: Record<string, unknown> = {};
@@ -7779,6 +7854,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('export')) result.export = await exportChecks();
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('selectall')) result.selectall = await selectAllChecks();
+    if (want('undo')) result.undo = await undoChecks();
     if (want('breadcrumbs')) result.breadcrumbs = await breadcrumbChecks();
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();

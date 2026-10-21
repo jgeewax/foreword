@@ -759,9 +759,11 @@ section), the page starts at the window's top and the offset is measured.
   Without a book open, items that need one do nothing (a static menu bar
   can't grey them out).
 - **Shortcuts the page also handles** (⌘O, ⌘P, ⌘S, ⌘B, ⌘I, ⌘F in the
-  editor) are on the items too, so they're discoverable. The page calls
-  preventDefault on a press, which stops the menu's key equivalent, so a
-  press isn't applied twice. With the preview focused, the menu acts.
+  editor) are on the items too, so they're discoverable. A ⌘ key that's on
+  an item goes to the menu, not the page: the page is a child web view, and
+  wry gives those keys to the menu bar first. So the item acts, with the
+  page or the preview focused, and a press isn't applied twice. Keys on no
+  item (the ⌘K chords) reach the page.
 - **Select All** (⌘A) is the app's item, not the stock one. In the page,
   AppKit's `selectAll:` selects the focused field, and the editor's is
   Monaco's hidden one: Edit → Select All in the editor selected nothing you
@@ -779,6 +781,20 @@ section), the page starts at the window's top and the offset is measured.
 - Verified (self-test `selectall`; once also with real key presses, clicks and
   the menu item, sent as AppKit events): each case above, the preview's own
   Select All, and the layout with a whole chapter selected.
+- **Undo and Redo** (⌘Z, ⇧⌘Z) are the app's items too, for the same reason.
+  The stock ones sent AppKit's `undo:` to the page, and WebKit undid the
+  typing in the focused field: in the editor, Monaco's hidden one. Monaco
+  took that for an edit, so ⌘Z took out a run of recent typing at once and
+  then did nothing, and ⇧⌘Z did nothing; the editor's own history was never
+  used. While the page has the keyboard the items go to the page (`undo`,
+  `redo`, `editor/undo-redo.ts`): the editor's history, a step at a time,
+  when an editor has the keyboard, else the focused field's (WebKit's). A
+  press the menu doesn't take reaches the page as a key and does the same.
+  Anywhere else (the preview, a dialog) it's AppKit's.
+- Verified (self-test `undo`; once also with real key presses and the menu
+  items, sent as AppKit events): ⌘Z a word at a time and no further, ⇧⌘Z,
+  Edit → Undo and Redo, in the editor; the message box's and the find
+  field's own undo, the chapter untouched.
 - Verified (self-test `menubar`):
   - Every app item has a handler and every handler an item; the menu bar is
     read back from the running app (`menu_outline`, self-test only).
