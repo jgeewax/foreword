@@ -62,6 +62,7 @@ export type StudioHost = {
 
 /** The app preferences the assistant may change, what each does, and the values it takes. */
 const PREFERENCES: Record<string, { about: string; values: string; schema: Record<string, unknown> }> = {
+  theme: { about: 'Light or dark, for the whole window: as macOS is set (system), or always light or dark.', values: 'system, light, dark', schema: { type: 'string', enum: ['system', 'light', 'dark'] } },
   editorFontSize: { about: 'The editor’s text size, in px.', values: `${EDITOR_FONT_SIZES.min} to ${EDITOR_FONT_SIZES.max}`, schema: { type: 'number', minimum: EDITOR_FONT_SIZES.min, maximum: EDITOR_FONT_SIZES.max } },
   wordWrap: {
     about: 'Where long lines wrap in the editor: at its edge (window), at wordWrapColumn (column), or not at all (off).',

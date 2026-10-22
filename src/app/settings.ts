@@ -29,11 +29,16 @@ export type PreviewPages = 'nearby' | 'all';
 /** What the preview typesets: the whole book, or only the chapter being edited. */
 export type PreviewScope = 'book' | 'chapter';
 
+/** Light or dark: as macOS is set (System Settings ▸ Appearance), or always one of them. */
+export type Theme = 'system' | 'light' | 'dark';
+
 /** The programs Foreword runs itself; Settings ▸ Tools can choose each one. */
 export type ToolName = 'tinymist' | 'opencode' | 'git';
 export const TOOL_NAMES: ToolName[] = ['tinymist', 'opencode', 'git'];
 
 export type AppSettings = {
+  /** Light or dark, for the whole window (the Rust side reads it at launch too). */
+  theme: Theme;
   /** Which key sends a chat message. */
   sendKey: SendKey;
   /** What the assistant may do (see permissions.ts). */
@@ -87,6 +92,7 @@ export type AppSettings = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  theme: 'system',
   sendKey: 'enter',
   permissions: DEFAULT_PERMISSIONS,
   markAiEdits: true,
@@ -167,6 +173,7 @@ const isColor = (c: unknown): c is string => typeof c === 'string' && /^#[0-9a-f
 
 export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   const out: Partial<AppSettings> = {};
+  if (raw.theme === 'system' || raw.theme === 'light' || raw.theme === 'dark') out.theme = raw.theme;
   if (raw.sendKey === 'enter' || raw.sendKey === 'mod-enter') out.sendKey = raw.sendKey;
   const permissions = sanitizePermissions(raw.permissions);
   if (permissions) out.permissions = permissions;

@@ -189,6 +189,21 @@ function GeneralPage() {
   const zoom = useStore(studio.store, (s) => s.zoom);
   return (
     <>
+      <Section title="Appearance">
+        <div className="settings-field">
+          <div className="settings-label">Theme</div>
+          <Choice
+            label="Theme"
+            value={settings.theme}
+            onChange={(v) => studio.updateSettings({ theme: v })}
+            options={[
+              { value: 'system', label: 'As the Mac is', detail: 'Light or dark as macOS is set (System Settings ▸ Appearance), changing when it does, at sunset with Auto.' },
+              { value: 'light', label: 'Light', detail: 'Always light, whatever macOS is set to.' },
+              { value: 'dark', label: 'Dark', detail: 'Always dark, whatever macOS is set to.' },
+            ]}
+          />
+        </div>
+      </Section>
       <Section title="Chat">
         <div className="settings-field">
           <div className="settings-label">Send a message with</div>

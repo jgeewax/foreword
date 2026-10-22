@@ -287,6 +287,15 @@ export function paletteCommands(studio: Studio): Command[] {
         { id: 'settings-assistant', title: 'Assistant Settings', keywords: ['claude', 'codex', 'gemini', 'antigravity', 'opencode', 'sign in', 'preferences'], anywhere: true, run: () => studio.openSettings('assistant') },
         { id: 'settings-tools', title: 'Tools (Tinymist, Git)', keywords: ['preferences'], anywhere: true, run: () => studio.openSettings('tools') },
         { id: 'settings-file', title: 'Open the Settings File', keywords: ['json', 'config'], anywhere: true, run: () => studio.openConfigFile() },
+        // As VS Code's Preferences: Color Theme, without a list: the two others than the one in use.
+        ...(['light', 'dark', 'system'] as const).map((theme) => ({
+          id: `theme-${theme}`,
+          title: theme === 'system' ? 'Light or Dark as the Mac Is' : `Use the ${theme === 'light' ? 'Light' : 'Dark'} Theme`,
+          keywords: ['theme', 'color theme', 'colour', 'appearance', 'light mode', 'dark mode', theme],
+          anywhere: true,
+          when: () => s().settings.theme !== theme,
+          run: () => studio.updateSettings({ theme }),
+        })),
         {
           id: 'toggle-format-on-save',
           title: `Turn Format on Save ${s().settings.formatOnSave ? 'Off' : 'On'}`,

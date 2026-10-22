@@ -547,6 +547,10 @@ pub fn run() {
                 handle.exit(0);
             });
 
+            // Light or dark as chosen in Settings, from the first frame (no flash of the other).
+            if let Some(theme) = config::theme() {
+                app.handle().set_theme(Some(theme));
+            }
             let window = open_window(app.handle(), "main")?;
             // An occluded window gets no animation frames, which would stall the self-test.
             if std::env::var_os("FOREWORD_SELFTEST").is_some() {

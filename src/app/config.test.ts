@@ -33,7 +33,7 @@ describe('the settings file', () => {
   });
 
   it('keeps every setting through a write and a read, as at the next launch', () => {
-    const settings = { ...DEFAULT_SETTINGS, checkForUpdates: false, skippedUpdate: '0.2.0', wordWrap: 'off' as const, rulers: [80], previewPages: 'all' as const, previewScope: 'chapter' as const };
+    const settings = { ...DEFAULT_SETTINGS, theme: 'light' as const, checkForUpdates: false, skippedUpdate: '0.2.0', wordWrap: 'off' as const, rulers: [80], previewPages: 'all' as const, previewScope: 'chapter' as const };
     expect(parseConfig(serializeConfig({}, settings, 1)).settings).toEqual(settings);
   });
 

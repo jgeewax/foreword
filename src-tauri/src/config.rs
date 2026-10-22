@@ -118,9 +118,36 @@ pub async fn config_open() -> CmdResult<()> {
     Ok(())
 }
 
+/// Light or dark, if the settings file chooses one (`theme`); None follows macOS.
+/// Read at launch, so the first window opens in it; the page sets it after.
+pub fn theme() -> Option<tauri::Theme> {
+    theme_in(&read_at(&config_file()).ok()??)
+}
+
+fn theme_in(settings: &str) -> Option<tauri::Theme> {
+    let value: serde_json::Value = serde_json::from_str(settings).ok()?;
+    match value.get("theme")?.as_str()? {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_theme() {
+        assert_eq!(
+            theme_in(r#"{ "theme": "light" }"#),
+            Some(tauri::Theme::Light)
+        );
+        assert_eq!(theme_in(r#"{ "theme": "dark" }"#), Some(tauri::Theme::Dark));
+        assert_eq!(theme_in(r#"{ "theme": "system" }"#), None);
+        assert_eq!(theme_in(r#"{ "sendKey": "enter" }"#), None);
+        assert_eq!(theme_in("{ not json"), None);
+    }
 
     #[test]
     fn writes_json_objects_only_and_whole() {

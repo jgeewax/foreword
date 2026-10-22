@@ -8,6 +8,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-close",
     "core:window:allow-set-fullscreen",
+    "core:app:allow-set-app-theme",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",

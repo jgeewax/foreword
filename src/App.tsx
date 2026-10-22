@@ -1,3 +1,4 @@
+import { setTheme as setAppTheme } from '@tauri-apps/api/app';
 import { useCallback, useEffect, useState } from 'react';
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { bookPalette, effectiveBookColor } from './app/book-color';
@@ -18,6 +19,7 @@ import { PromptDialog } from './components/PromptDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { UpdateDialog } from './components/UpdateDialog';
 import { AboutDialog } from './components/AboutDialog';
+import { ipc } from './lib/ipc';
 import { useStore } from './lib/store';
 import { chordCommand, editorChordAction, isChordStart, tabKeyCommand } from './lib/tab-keys';
 import { zoomActionForKey } from './lib/zoom';
@@ -290,6 +292,12 @@ export function App() {
     document.documentElement.style.setProperty('--ai-edit', aiEditColor);
     document.documentElement.style.setProperty('--ai-read', aiReadColor);
   }, [aiEditColor, aiReadColor]);
+  // Light or dark (Settings ▸ General): macOS's appearance for the app, which
+  // the page's prefers-color-scheme, the editor's colours and the preview follow.
+  const theme = useStore(studio.store, (s) => s.settings.theme);
+  useEffect(() => {
+    setAppTheme(theme === 'system' ? null : theme).catch((e) => void ipc.uiLog(`couldn't set the theme: ${e}`));
+  }, [theme]);
   return (
     <>
       {workspace ? <Workbench key={workspace} /> : <Welcome />}

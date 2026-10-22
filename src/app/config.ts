@@ -44,6 +44,7 @@ const RETIRED = [
 /** The file's text: the settings (and zoom) over what was there, in a stable order, 2-space JSON. */
 export function serializeConfig(raw: Record<string, unknown>, settings: AppSettings, zoom: number): string {
   const ours = {
+    theme: settings.theme,
     sendKey: settings.sendKey,
     markAiEdits: settings.markAiEdits,
     markAiReads: settings.markAiReads,
