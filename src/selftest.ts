@@ -2960,7 +2960,7 @@ async function taskChecks() {
     taskCheck: last?.taskCheck,
     checkShown: !!document.querySelector('.task-check'),
     contextTokens: studio.state.agent.contextTokens,
-    meter: document.querySelector('.agent-pane .pane-header .context-meter')?.textContent,
+    meter: document.querySelector('.agent-pane .task-bar .context-meter')?.textContent,
     headingNow: (await ipc.fsRead(file)).text.split('\n')[0],
     instructionKeys: sessionId ? (await studio.agent!.getInstructions(sessionId)).map((e) => e.key) : [],
   };
@@ -3475,18 +3475,18 @@ async function questionChecks() {
     summary: document.querySelector('.question-record')?.textContent,
   };
   out.snapshotAnswered = await snap('question-answered');
-  // No "Is this task done?" was asked: the header's Done button finishes it anyway.
+  // No "Is this task done?" was asked: Done, on the message box, finishes it anyway.
   const answeredSession = studio.state.agent.sessionId;
-  const doneButton = [...document.querySelectorAll<HTMLButtonElement>('.agent-pane .header-button')].find((b) => b.textContent?.includes('Done'));
-  out.doneButton = !!doneButton;
+  const doneButton = document.querySelector<HTMLButtonElement>('.agent-pane .task-bar-button.done');
+  out.doneButton = !!doneButton && !doneButton.disabled;
   doneButton?.click();
   await sleep(1500);
   out.afterDone = {
     newConversation: studio.state.agent.sessionId === null,
     marked: studio.state.agent.tasks.find((t) => t.sessionId === answeredSession)?.status,
     toast: studio.state.toast?.text,
-    // The new conversation is blank, so the header has no New task button: it already is one.
-    newTaskButtonHidden: !document.querySelector('.agent-pane .header-button.new-task'),
+    // The new conversation is blank, so there's no task bar: it already is a new task, with nothing to finish.
+    taskBarHidden: !document.querySelector('.agent-pane .task-bar'),
   };
 
   // Dismissed: the model is told, and the turn ends.
@@ -6105,11 +6105,12 @@ async function agentSettingsChecks() {
   const header = document.querySelector<HTMLElement>('.agent-pane .pane-header')!;
   const gear = header.querySelector<HTMLButtonElement>('.agent-settings');
   const button = gear && { label: gear.getAttribute('aria-label'), title: gear.title, last: gear === header.lastElementChild };
-  // With a conversation going (New task shows), at the pane's narrowest.
+  // With a conversation going (the task bar shows on the message box), at the pane's narrowest.
   const items = studio.state.agent.items;
   studio.store.set((s) => ({ agent: { ...s.agent, items: [...items, { id: 'selftest-gear', kind: 'user', text: 'Hello', attachments: [] } as ChatItem] } }));
   await sleep(200);
-  const fits = header.scrollWidth <= header.clientWidth && !!header.querySelector('.new-task');
+  const bar = document.querySelector<HTMLElement>('.agent-pane .task-bar');
+  const fits = header.scrollWidth <= header.clientWidth && !!bar && bar.scrollWidth <= bar.clientWidth && !!bar.querySelector('.new-task');
   const headerShot = await snap('agent-settings-header');
   studio.store.set((s) => ({ agent: { ...s.agent, items } }));
   gear?.click();
@@ -6125,8 +6126,101 @@ async function agentSettingsChecks() {
   };
   studio.closeSettings();
   await sleep(200);
-  const ok = !!gear && fits && opened.open && opened.page === 'Assistant' && opened.cards === 4 && !opened.modelPicker;
+  const ok = !!gear && fits && opened.open && opened.page === 'Assistant' && opened.cards === 5 && !opened.modelPicker;
   return { ok, button, fits, headerShot, opened };
+}
+
+/**
+ * Done and New task on the message box, not the header: no bar on a blank conversation;
+ * Done greyed before a reply, while it works and once done; New task blue with a hint once
+ * the conversation is long, the hint dropping out of a narrow pane; ⌘T and ⇧⌘D in the palette.
+ * The states are set in the store and put back after.
+ */
+async function taskBarChecks() {
+  const saved = studio.state.agent;
+  const set = (agent: Partial<typeof saved>) => studio.store.set((s) => ({ agent: { ...s.agent, ...agent } }));
+  const composer = document.querySelector<HTMLElement>('.agent-pane .composer');
+  const inside = (el: Element | null | undefined, box: Element | null | undefined) => {
+    if (!el || !box) return null;
+    const r = el.getBoundingClientRect();
+    const c = box.getBoundingClientRect();
+    return r.top >= c.top - 0.5 && r.bottom <= c.bottom + 0.5 && r.left >= c.left - 0.5 && r.right <= c.right + 0.5;
+  };
+  const read = async (name: string) => {
+    await sleep(200);
+    const bar = document.querySelector<HTMLElement>('.agent-pane .task-bar');
+    const done = bar?.querySelector<HTMLButtonElement>('.task-bar-button.done');
+    const fresh = bar?.querySelector<HTMLButtonElement>('.task-bar-button.new-task');
+    return {
+      shown: !!bar,
+      onComposer: !!bar?.closest('.composer'),
+      done: done ? { enabled: !done.disabled, title: done.title } : null,
+      newTask: fresh ? { hot: fresh.classList.contains('hot'), title: fresh.title } : null,
+      meter: bar?.querySelector('.context-meter')?.textContent ?? null,
+      hintShown: inside(bar?.querySelector('.task-bar-hint'), bar?.querySelector('.task-bar-end')),
+      fits: bar ? bar.scrollWidth <= bar.clientWidth : null,
+      header: [...document.querySelectorAll('.agent-pane .pane-header button')].map((b) => b.textContent?.trim() || b.getAttribute('aria-label')),
+      snapshot: await snap(`taskbar-${name}`),
+    };
+  };
+  const out: Record<string, unknown> = {};
+  const session = 'selftest-taskbar';
+  const user = { id: 'selftest-taskbar-user', kind: 'user', text: 'Cut the repeated “suddenly”s in chapter 2.', attachments: [] } as unknown as ChatItem;
+  const reply = { id: 'selftest-taskbar-reply', kind: 'assistant', text: 'I cut two of the three.', done: true } as unknown as ChatItem;
+  const model = { providerID: 'selftest', id: 'taskbar' };
+  try {
+    set({ sessionId: null, items: [], running: false, contextTokens: null });
+    out.blank = await read('blank');
+    set({ sessionId: session, items: [user], tasks: saved.tasks.filter((t) => t.sessionId !== session) });
+    out.beforeReply = await read('before-reply');
+    set({ running: true });
+    out.working = await read('working');
+    set({
+      running: false,
+      items: [user, reply],
+      contextTokens: 38000,
+      model,
+      models: [...saved.models, { ...model, name: 'Self-test', providerName: 'Self-test', supportsTools: true, contextWindow: 200000 }],
+    });
+    out.replied = await read('replied');
+    set({ contextTokens: 150000 });
+    out.long = await read('long');
+    if (composer) composer.style.width = '260px';
+    out.narrow = await read('long-narrow');
+    if (composer) composer.style.width = '';
+    set({ tasks: [{ sessionId: session, title: 'Self-test', status: 'done', updated: Date.now(), tokens: null }, ...saved.tasks] });
+    out.alreadyDone = await read('already-done');
+    set({ tasks: saved.tasks.filter((t) => t.sessionId !== session) });
+    await sleep(100);
+    document.querySelector<HTMLButtonElement>('.agent-pane .task-bar-button.new-task')?.click();
+    out.afterNewTask = { sessionId: studio.state.agent.sessionId, ...(await read('after-new-task')) };
+  } finally {
+    if (composer) composer.style.width = '';
+    studio.store.set(() => ({ agent: saved }));
+  }
+  const commands = available(paletteCommands(studio));
+  out.keys = { newTask: commands.find((c) => c.id === 'new-task')?.keys, taskDone: paletteCommands(studio).find((c) => c.id === 'task-done')?.keys };
+  type Read = Awaited<ReturnType<typeof read>>;
+  const r = out as Record<'blank' | 'beforeReply' | 'working' | 'replied' | 'long' | 'narrow' | 'alreadyDone' | 'afterNewTask', Read>;
+  const ok =
+    !r.blank.shown &&
+    r.beforeReply.onComposer &&
+    r.beforeReply.done?.enabled === false &&
+    r.working.done?.enabled === false &&
+    r.replied.done?.enabled === true &&
+    r.replied.newTask?.hot === false &&
+    r.replied.hintShown === null &&
+    !r.replied.header.some((h) => h === 'Done' || h === 'New task') &&
+    r.long.newTask?.hot === true &&
+    r.long.hintShown === true &&
+    r.narrow.hintShown === false &&
+    r.narrow.fits === true &&
+    !!r.narrow.meter &&
+    r.alreadyDone.done?.enabled === false &&
+    !r.afterNewTask.shown &&
+    (out.keys as { newTask?: string; taskDone?: string }).newTask === '⌘T' &&
+    (out.keys as { newTask?: string; taskDone?: string }).taskDone === '⇧⌘D';
+  return { ok, ...out };
 }
 
 /**
@@ -7946,6 +8040,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('shot')) result.shot = await shotChecks();
     if (want('previewclose')) result.previewclose = await previewCloseChecks();
     if (want('agentsettings')) result.agentsettings = await agentSettingsChecks();
+    if (want('taskbar')) result.taskbar = await taskBarChecks();
     if (want('assistantmenu')) result.assistantmenu = await assistantMenuChecks();
     if (want('settingcontrols')) result.settingcontrols = await settingControlsChecks();
     if (want('defaults')) result.defaults = await explicitDefaultsChecks();

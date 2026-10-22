@@ -1653,20 +1653,36 @@ section), the page starts at the window's top and the offset is measured.
   deepseek-v4-pro); Resume carried on and finished, with no new user
   message.
 
-### Starting and finishing tasks from the header
+### Starting and finishing tasks from the message box
 
-- The assistant's header has a labelled **New task** button (never smaller
-  than at 100%) where the small ＋ was. It looks like Done, not blue, and it's
-  hidden on a blank conversation, which already is a new task.
-- **Done** shows whenever the conversation has a reply and isn't running. It
-  doesn't wait for the assistant's "Is this task done?" check, which only comes
-  when the reply ends with the marker; a question answered in passing never
-  had one. It marks the task done, saves a named version, and starts a new
-  task. Its message offers "Open it again".
+- **Done and New task sit on top of the message box**, with the context meter
+  at the right. They were in the header, by ⚙: white on the header's
+  near-white (about 1.07:1), at the far end of the pane from the reply you'd
+  just read and the box you type in, and Done came and went, so there was no
+  spot to learn. The header has the task menu and ⚙ only now.
+- **The bar stays put.** It's hidden only on a blank conversation, which
+  already is a new task with nothing to finish. Done is green, and greyed
+  (with a tooltip saying why) before the first reply, while a turn runs, and
+  on a task that's done already. New task works while a turn runs: that one
+  carries on in the background.
+- **Done** doesn't wait for the assistant's "Is this task done?" check, which
+  only comes when the reply ends with the marker; a question answered in
+  passing never had one. It marks the task done, saves a named version, and
+  starts a new task. Its message offers "Open it again". The check's card
+  stays under its reply: it comes at the moment it's useful.
+- **A long conversation turns New task blue**, with "Long chats get slower"
+  beside the meter, from the meter's warn level (55% of the model's context
+  window). In a narrow pane the hint drops out (it wraps onto a hidden line)
+  and the meter stays.
+- **Keys:** ⌘T for New Task and ⇧⌘D for Task Done, in the Assistant menu and
+  the palette. Monaco binds ⌃T and ⌘D, not these.
+- Options weighed (mockup canvas): the header made visible, a row under the
+  latest reply (scrolls away), and buttons in the empty message box (gone as
+  soon as you type). The bar won for staying in one place, near where you look.
 - **The task menu is for switching.** On a blank conversation the header used
   to say "New task" three times: the menu's label, the blue button, and the
   menu's first action. The menu no longer repeats New task, Mark done or the
-  context meter, which the header has. Compact is at its foot, and a blank
+  context meter, which the bar has. Compact is at its foot, and a blank
   conversation's label is greyed out.
 - Titles fall back to the first message until OpenCode names the conversation.
 - Verified with a real model (self-test `questions`): after an answered

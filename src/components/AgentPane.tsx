@@ -11,7 +11,7 @@ import { Markdown, MarkdownLine } from './Markdown';
 import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
 import { PermissionsMenu } from './Permissions';
-import { ContextMeter, TaskMenu } from './TaskMenu';
+import { ContextMeter, TaskMenu, useContextUse } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
 import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
 import type { SourceSelection } from '../editor/selection';
@@ -485,6 +485,49 @@ function ContextCard({ selection, live, fromPreview, onKeep, onRemove }: { selec
   );
 }
 
+/**
+ * The task's buttons, on the message box, where you look after a reply: Done, New task,
+ * and how full the conversation is. They stay put (Done greys out while it works), and
+ * New task turns blue once the conversation is long enough to slow the assistant down.
+ */
+function TaskBar() {
+  const blank = useStore(studio.store, (s) => !s.agent.sessionId && !s.agent.items.length);
+  const running = useStore(studio.store, (s) => s.agent.running);
+  const replied = useStore(studio.store, (s) => s.agent.items.some((i) => i.kind === 'assistant'));
+  const done = useStore(studio.store, (s) => s.agent.tasks.find((t) => t.sessionId === s.agent.sessionId)?.status === 'done');
+  const long = useContextUse().tone !== '';
+  // A blank conversation already is a new task, with nothing to finish.
+  if (blank) return null;
+  const doneTitle = done
+    ? 'This task is done already'
+    : running
+      ? 'Done, once this turn ends'
+      : !replied
+        ? 'Done, once the assistant has replied'
+        : "This task is done: it's saved as a named version in History, and a new task starts (⇧⌘D)";
+  return (
+    <div className="task-bar">
+      <button className="task-bar-button done" disabled={done || running || !replied} title={doneTitle} onClick={() => void studio.finishTask()}>
+        <Icon name="check" size={14} />
+        Done
+      </button>
+      <button
+        className={`task-bar-button new-task${long ? ' hot' : ''}`}
+        title={running ? 'Start a new task: this one carries on in the background (⌘T)' : 'Start a new task: this one stays in your list (⌘T)'}
+        onClick={() => studio.newSession()}
+      >
+        <Icon name="plus" size={14} />
+        New task
+      </button>
+      {/* From the right: the meter, then the hint, which drops out when the pane is too narrow for it. */}
+      <div className="task-bar-end">
+        <ContextMeter />
+        {long && <span className="task-bar-hint">Long chats get slower</span>}
+      </div>
+    </div>
+  );
+}
+
 function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
   const running = useStore(studio.store, (s) => s.agent.running);
@@ -574,6 +617,7 @@ function Composer() {
 
   return (
     <div className="composer">
+      <TaskBar />
       <QueuedMessages />
       <CarryOutActions />
       {(attachments.length > 0 || liveShown) && (
@@ -953,24 +997,6 @@ export function AgentPane() {
           <TaskMenu />
           {agent.running && <span className="busy-bar" aria-hidden />}
           <span className="spacer" />
-          <ContextMeter />
-          {agent.sessionId && !agent.running && agent.items.some((i) => i.kind === 'assistant') && agent.tasks.find((t) => t.sessionId === agent.sessionId)?.status !== 'done' && (
-            <button className="header-button" title="This task is done: it's saved as a named version in History, and a new task starts" onClick={() => void studio.finishTask()}>
-              <Icon name="check" size={14} />
-              Done
-            </button>
-          )}
-          {/* A blank conversation already is a new task: nothing to start. */}
-          {(agent.sessionId || agent.items.length > 0) && (
-            <button
-              className="header-button new-task"
-              title={agent.running ? 'Start a new task (this one carries on in the background)' : 'Start a new task (a new conversation)'}
-              onClick={() => studio.newSession()}
-            >
-              <Icon name="plus" size={14} />
-              New task
-            </button>
-          )}
           <button
             className="icon pane-action agent-settings"
             aria-label="Assistant settings"

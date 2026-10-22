@@ -215,8 +215,8 @@ export function paletteCommands(studio: Studio): Command[] {
     [
       'Assistant',
       [
-        menu('new-task', 'New Task', { keywords: ['new conversation', 'chat'] }),
-        menu('task-done', 'Task Done', { when: () => !!s().agent.sessionId && !s().agent.running }),
+        menu('new-task', 'New Task', { keys: '⌘T', keywords: ['new conversation', 'chat'] }),
+        menu('task-done', 'Task Done', { keys: '⇧⌘D', when: () => !!s().agent.sessionId && !s().agent.running }),
         menu('ask-selection', 'Ask About Selection', { keys: '⌘I', when: file }),
         { id: 'explain-selection', title: 'Explain the Selection', when: () => selection() && idle(), run: () => studio.explainSelection() },
         { id: 'options-for-selection', title: 'Three Versions of the Selection…', keywords: ['options', 'rewrite'], when: () => selection() && agentReady(), run: () => studio.optionsForSelection() },

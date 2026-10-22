@@ -1451,10 +1451,20 @@ button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px col
 .review-file-name:hover { background: var(--bg-3); }
 .review-file-name .muted { font-weight: 400; }
 
-/* The assistant pane's header buttons: labelled and easy to hit. */
-.header-button { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--bg); }
-.header-button .icon-svg { width: 14px; height: 14px; }
 .agent-pane .pane-header { min-height: 30px; height: auto; }
+
+/* The task's buttons on the message box: Done in green, New task (blue once the chat is long), the meter at the right. */
+.task-bar { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 8px; }
+.task-bar-button { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 26px; padding: 0 11px 0 8px; border-radius: 7px; font-size: 12px; font-weight: 650; background: var(--bg); }
+.task-bar-button .icon-svg { stroke-width: 2.2; }
+.task-bar-button.done { color: var(--good); background: color-mix(in srgb, var(--good) 12%, var(--bg)); border-color: color-mix(in srgb, var(--good) 42%, transparent); }
+.task-bar-button.done:hover:not(:disabled) { border-color: var(--good); }
+.task-bar-button.hot { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg)); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.task-bar-button.hot:hover:not(:disabled) { border-color: var(--accent); }
+/* One line laid from the right: what doesn't fit (the hint) wraps onto a hidden second line. */
+.task-bar-end { flex: 1; min-width: 0; display: flex; flex-direction: row-reverse; flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 8px; height: 26px; overflow: hidden; }
+.task-bar-end > * { height: 26px; }
+.task-bar-hint { font-size: 11px; line-height: 26px; color: var(--warn); white-space: nowrap; }
 
 /* Slash commands: the list above the message box. */
 .composer { position: relative; }

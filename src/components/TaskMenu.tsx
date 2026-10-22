@@ -14,13 +14,19 @@ const ago = (ms: number) => {
 
 const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
 
-/** How full the conversation is, against the model's context window. */
-export function ContextMeter() {
+/** How full the conversation is, against the model's context window: '' while there's room, then warn and bad. */
+export function useContextUse() {
   const tokens = useStore(studio.store, (s) => s.agent.contextTokens);
   const window_ = useStore(studio.store, (s) => s.agent.models.find((m) => m.providerID === s.agent.model?.providerID && m.id === s.agent.model?.id)?.contextWindow ?? null);
-  if (!tokens) return null;
-  const share = window_ ? Math.min(1, tokens / window_) : null;
+  const share = tokens && window_ ? Math.min(1, tokens / window_) : null;
   const tone = share == null ? '' : share > 0.8 ? 'bad' : share > 0.55 ? 'warn' : '';
+  return { tokens, window: window_, share, tone };
+}
+
+/** How full the conversation is, against the model's context window. */
+export function ContextMeter() {
+  const { tokens, window: window_, share, tone } = useContextUse();
+  if (!tokens) return null;
   return (
     <span className={`context-meter ${tone}`} title={`This conversation uses about ${k(tokens)} tokens${window_ ? ` of the model's ${k(window_)}` : ''}. Long conversations get slower and less focused: start a new task or compact it.`}>
       {share != null && (
@@ -155,7 +161,7 @@ export function TaskMenu() {
         <span className="model-trigger-chevron">▾</span>
       </button>
       {open && (
-        // For switching: New task, Done and the context meter are in the header already.
+        // For switching: New task, Done and the context meter are on the message box already.
         <div className="task-popover" role="menu">
           {inProgress.length > 0 && <div className="task-section">In progress</div>}
           {inProgress.map(row)}
