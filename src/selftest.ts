@@ -4991,6 +4991,29 @@ async function contentsChecks() {
   out.collapsed = await fold();
   out.collapsedSnapshot = await snap('contents-collapsed');
   out.expanded = await fold();
+  // Opened again (too short to show it all), it scrolls to the place the cursor is under: the last chapter's last section.
+  const short = document.createElement('style');
+  short.textContent = '.contents-panel{max-height:90px!important}';
+  document.head.append(short);
+  const last = studio.state.names.chapters.at(-1)!;
+  await studio.openAt(last, studio.state.contents[last].headings.at(-1)!.line);
+  const seen = async () => {
+    await sleep(400);
+    const list = document.querySelector('.contents-panel')!.getBoundingClientRect();
+    const lit = document.querySelector('.contents-row.here')?.getBoundingClientRect();
+    return { lit: document.querySelector('.contents-row.here')?.textContent, inView: !!lit && lit.top >= list.top && lit.bottom <= list.bottom };
+  };
+  studio.showSidebar('files');
+  await sleep(200);
+  studio.revealSidebar('contents');
+  out.revealed = await seen();
+  // A hidden sidebar keeps the list: showing it again scrolls there too.
+  document.querySelector('.contents-panel')!.scrollTop = 0;
+  studio.events.emit('toggle-pane', 'explorer');
+  await sleep(300);
+  studio.events.emit('toggle-pane', 'explorer');
+  out.revealedAgain = await seen();
+  short.remove();
   studio.showSidebar(sidebar);
   return out;
 }

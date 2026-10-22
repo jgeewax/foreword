@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { headingAt, wordsLabel, type FileContents } from '../app/contents';
 import { studio } from '../app/studio';
 import { chapterNumber } from '../app/tool-labels';
@@ -20,6 +21,17 @@ function useBook() {
 /** What a fold hides: the main file's second-level headings, or a chapter's sections under its title. */
 function sections(c: FileContents, main: boolean): Heading[] {
   return main ? c.headings.filter((h) => h.level === 2) : c.headings.slice(1).filter((h) => h.level <= 2);
+}
+
+/** Scrolls the list so its lit row is in the middle, once per opening, and only while it shows. */
+function reveal(list: HTMLElement | null, done: { current: boolean }) {
+  if (!list || done.current || !list.clientWidth || !list.clientHeight) return;
+  done.current = true;
+  const lit = list.querySelector<HTMLElement>('.contents-row.here');
+  if (!lit) return;
+  const box = list.getBoundingClientRect();
+  const row = lit.getBoundingClientRect();
+  list.scrollTop += row.top - box.top - (box.height - row.height) / 2;
 }
 
 /** The Contents title bar's action: fold every chapter to just its title, or open them all again. */
@@ -52,6 +64,27 @@ export function ContentsPanel() {
   const active = useStore(studio.store, (s) => s.active);
   const cursorLine = useStore(studio.store, (s) => s.cursor?.line ?? 1);
   const folded = useStore(folds, (s) => s.folded);
+  // Opened (the view picked, or the sidebar shown again), the list scrolls to
+  // the place the cursor is under, once the cursor's chapter is in it.
+  const panel = useRef<HTMLDivElement>(null);
+  const revealed = useRef(false);
+  const ready = useRef(false);
+  ready.current = files.length > 0 && (!active || !(active === names.entry || names.chapters.includes(active)) || !!contents[active]);
+  useLayoutEffect(() => {
+    if (ready.current) reveal(panel.current, revealed);
+  });
+  const listed = files.length > 0;
+  useEffect(() => {
+    const el = panel.current;
+    if (!el) return;
+    // A collapsed sidebar keeps the list mounted: showing it again is opening it.
+    const watch = new ResizeObserver(() => {
+      if (!el.clientWidth || !el.clientHeight) revealed.current = false;
+      else if (ready.current) reveal(el, revealed);
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [listed]);
   if (!files.length) return <div className="history-empty muted">{names.entry ? 'Reading the chapters…' : 'This book has no main file, so no chapters in order yet.'}</div>;
   const here = active && contents[active] ? headingAt(contents[active].headings, cursorLine) : null;
   const total = files.reduce((n, f) => n + contents[f].words, 0);
@@ -71,7 +104,7 @@ export function ContentsPanel() {
   );
 
   return (
-    <div className="contents-panel">
+    <div className="contents-panel" ref={panel}>
       <div className="contents-total muted">
         {chapters} chapter{chapters === 1 ? '' : 's'} · about {wordsLabel(total)}
       </div>
