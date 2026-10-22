@@ -198,6 +198,17 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .separator::after { content: ''; position: absolute; inset: 0 -3px; }
 .separator[data-separator='hover'], .separator[data-separator='active'] { background: var(--accent); }
 .separator.separator-h { width: auto; height: 1px; }
+/*
+ * The dividers between the panes, as VS Code's: a 4 px band of the title
+ * bar's colour (the book's, when it has one) running down between them, its
+ * edges the panes' borders, lit while you point at it or drag it. Beside a
+ * hidden pane there's none to see (two would stand side by side when the
+ * preview is hidden), but it's still there to drag the pane back out.
+ */
+.workbench > .panes > .separator { width: 4px; background: var(--bg-2); box-shadow: inset 1px 0 var(--border), inset -1px 0 var(--border); }
+.workbench > .panes > .separator::after { content: none; }
+.workbench > .panes > .separator:is([data-separator='hover'], [data-separator='active']) { background: var(--accent); box-shadow: none; }
+.workbench > .panes > .separator.beside-hidden { width: 0; box-shadow: none; }
 .separator.separator-h::after { inset: -3px 0; }
 
 .pane { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg); }
@@ -235,9 +246,10 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .view-tip-note { margin-top: 4px; font-size: 11.5px; color: var(--fg); }
 /*
  * The book's colour (Settings ▸ This book ▸ Colour, or VS Code's Peacock):
- * the title bar and status bar in it, the activity bar 10% lighter, text and
- * icons light or dark to read on it, badges a third of the way round the
- * colour wheel. Shades from app/book-color.ts.
+ * the title bar, status bar and dividers between the panes in it, the
+ * activity bar 10% lighter (and a divider you point at, as Peacock's sash),
+ * text and icons light or dark to read on it, badges a third of the way round
+ * the colour wheel. Shades from app/book-color.ts.
  */
 [data-book-color] .titlebar { background: var(--book); color: var(--book-fg); border-bottom-color: transparent; }
 [data-book-color] .titlebar .chrome-icon { color: var(--book-fg); opacity: 0.8; }
@@ -252,6 +264,8 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 [data-book-color] .activity-bar .chrome-icon:is(:hover:not(:disabled), .on) .icon-svg { opacity: 1; }
 [data-book-color] .activity-bar .chrome-icon.on::before { background: var(--book-bar-fg); }
 [data-book-color] .activity-badge { background: var(--book-badge); color: var(--book-badge-fg); box-shadow: 0 0 0 2px var(--book-bar); }
+[data-book-color] .workbench > .panes > .separator { background: var(--book); box-shadow: none; }
+[data-book-color] .workbench > .panes > .separator:is([data-separator='hover'], [data-separator='active']) { background: var(--book-bar); }
 /* On the book's colour everything is in its text colour, as with Peacock; what's wrong stands out as VS Code's error items do. */
 [data-book-color] .statusbar { background: var(--book); color: var(--book-fg); border-top-color: transparent; }
 [data-book-color] .statusbar :is(.status-file, .indicator, .indicator .icon-svg) { color: inherit; }

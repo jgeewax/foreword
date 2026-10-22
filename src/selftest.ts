@@ -5,6 +5,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 // Scripted end-to-end check run inside the real app (WKWebView, Tinymist,
 // OpenCode) when FOREWORD_SELFTEST=<out.json> is set. Never saves files;
 // agent edit requests are rejected.
+import { bookPalette } from './app/book-color';
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
 import { studio, type ChatItem } from './app/studio';
 import { chapterNumber } from './app/tool-labels';
@@ -5167,6 +5168,85 @@ async function sidebarWidthChecks() {
   return out;
 }
 
+/**
+ * The dividers between the panes, as VS Code's: 4 px bands of the title bar's
+ * colour, the book's when it has one. A press 5 px into the editor beside one
+ * moves it and never reaches the editor's scrollbar (it jumped the text); 12 px
+ * in, the scrollbar has it. Beside a hidden pane there's no band.
+ */
+async function dividerChecks() {
+  const out: Record<string, unknown> = {};
+  const layoutKey = 'react-resizable-panels:studio-panes';
+  const savedLayout = localStorage.getItem(layoutKey);
+  const dividers = () => [...document.querySelectorAll<HTMLElement>('.workbench > .panes > .separator')];
+  const look = () => ({
+    titlebar: getComputedStyle(document.querySelector('.titlebar')!).backgroundColor,
+    dividers: dividers().map((d) => ({ width: d.getBoundingClientRect().width, hidden: d.classList.contains('beside-hidden'), background: getComputedStyle(d).backgroundColor })),
+  });
+  const matches = (l: ReturnType<typeof look>) => l.dividers.every((d) => d.hidden || (d.width === 4 && d.background === l.titlebar));
+  out.plain = look();
+  // In a book's colour, set on the page as useBookColor does (the book's file isn't written).
+  const root = document.documentElement;
+  const own = root.dataset.bookColor;
+  const palette = bookPalette('#7f52ff');
+  if (!own) {
+    for (const [name, value] of Object.entries(palette)) root.style.setProperty(name, value);
+    root.dataset.bookColor = '#7f52ff';
+  }
+  out.book = look();
+  if (!own) {
+    for (const name of Object.keys(palette)) root.style.removeProperty(name);
+    delete root.dataset.bookColor;
+  }
+  const ed = studio.editor;
+  const divider = dividers()[1];
+  const bar = document.querySelector<HTMLElement>('.monaco-editor .scrollbar.vertical');
+  if (!ed || !bar || divider.classList.contains('beside-hidden')) return { ...out, ok: false, error: 'no editor beside a preview' };
+  // A press on the editor's scrollbar `dx` from the divider, dragged `by` px across.
+  const press = async (dx: number, by: number) => {
+    ed.setScrollTop(0);
+    await sleep(150);
+    const r = divider.getBoundingClientRect();
+    const [x, y] = [r.left + dx, r.top + r.height * 0.6];
+    let saw = false;
+    const note = () => (saw = true);
+    bar.addEventListener('pointerdown', note);
+    const ev = (type: string, at: number, buttons: number) => new PointerEvent(type, { bubbles: true, cancelable: true, clientX: at, clientY: y, pointerId: 1, pointerType: 'mouse', button: 0, buttons, isPrimary: true });
+    bar.dispatchEvent(ev('pointermove', x, 0));
+    bar.dispatchEvent(ev('pointerdown', x, 1));
+    for (let i = 1; i <= 4; i++) {
+      document.dispatchEvent(ev('pointermove', x + (by * i) / 4, by ? 1 : 0));
+      await sleep(16);
+    }
+    document.dispatchEvent(ev('pointerup', x + by, 0));
+    bar.removeEventListener('pointerdown', note);
+    await sleep(300);
+    return { dx, scrollbarSaw: saw, moved: Math.round(divider.getBoundingClientRect().left - r.left), scrolledTo: Math.round(ed.getScrollTop()) };
+  };
+  out.canScroll = ed.getScrollHeight() > ed.getLayoutInfo().height;
+  out.beside = await press(-5, 40);
+  out.back = await press(2, -40);
+  out.away = await press(-12, 0);
+  ed.setScrollTop(0);
+  // The preview hidden: no band where it was, one between the editor and the assistant.
+  studio.events.emit('toggle-pane', 'preview');
+  await sleep(400);
+  out.previewHidden = look();
+  studio.events.emit('toggle-pane', 'preview');
+  await sleep(400);
+  if (savedLayout) localStorage.setItem(layoutKey, savedLayout);
+  type P = Awaited<ReturnType<typeof press>>;
+  const [beside, back, away] = [out.beside, out.back, out.away] as P[];
+  const hidden = (out.previewHidden as ReturnType<typeof look>).dividers;
+  out.ok =
+    matches(out.plain as ReturnType<typeof look>) && matches(out.book as ReturnType<typeof look>) &&
+    (out.book as ReturnType<typeof look>).titlebar !== (out.plain as ReturnType<typeof look>).titlebar &&
+    beside.moved === 40 && !beside.scrollbarSaw && beside.scrolledTo === 0 && back.moved === -40 &&
+    away.moved === 0 && away.scrollbarSaw &&
+    hidden[1].hidden && hidden[1].width === 0 && (hidden[2].hidden || hidden[2].width === 4);
+  return out;
+}
+
 /** Reading part of a file: the read tool, never a question; an explicit `sed -n` runs without one too (real model, Ask first). */
 async function readToolsChecks() {
   const out: Record<string, unknown> = {};
@@ -8327,6 +8407,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('tools')) result.tools = await toolPathChecks();
     for (const kind of ['claude', 'gemini', 'codex'] as const) if (launch.selftestAgent && want(`acp-${kind}`)) result[`acp-${kind}`] = await acpChecks(kind);
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
+    if (want('dividers')) result.dividers = await dividerChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
     if (want('reloadwindow')) result.reloadwindow = await reloadWindowChecks();

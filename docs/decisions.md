@@ -3007,7 +3007,22 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
     opens and when that file changes; the Colour page says so.
     `"color": "none"` turns that off too.
 - Not copied from Peacock: its dimmer colours for a window that isn't in
-  front, and colouring the editor's tabs or borders.
+  front, and colouring the editor's tabs.
+- **Later, the dividers too:** "it's really hard to grab the line [between
+  text and preview]; make those dividers match the header colour, look at
+  VS Code". As in VS Code (which the author's screenshot showed with
+  Peacock), a divider is a 4 px band of the title bar's colour running down
+  between the panes: the book's colour, lit in the activity bar's shade
+  while you point at it or drag it (Peacock's sash); with no colour, the
+  title bar's grey with the panes' hairline borders as its edges.
+  - It takes a press 6 px either side of the band (it was a 1 px line with
+    4.5 px either side). Over the preview, that side is the preview's own
+    webview, which has the mouse, so the band is the part that counts there.
+  - A press the divider takes no longer reaches the editor's scrollbar,
+    which sits against it: a drag there moved the divider and scrolled the
+    text at once.
+  - Beside a hidden pane the band is gone (with the preview hidden there
+    would be two side by side), but the edge still drags the pane back.
 - Verified: unit tests (Peacock's shades for both of the author's colours,
   reading `peacock.color`, which colour wins); in the app with ff7-book's
   `.vscode/settings.json`: the bars in `#00ad9f`/`#00e0ce`, a swatch saved

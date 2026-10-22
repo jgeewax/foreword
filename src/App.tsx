@@ -29,9 +29,10 @@ const notifyLayout = () => {
 };
 
 /**
- * The book's colour on the window's title, activity and status bars, as VS
- * Code's Peacock: its shades as CSS variables, and `data-book-color` on the
- * page, which styles.css colours the bars by. Gone with the book.
+ * The book's colour on the window's title, activity and status bars and the
+ * dividers between its panes, as VS Code's Peacock: its shades as CSS
+ * variables, and `data-book-color` on the page, which styles.css colours them
+ * by. Gone with the book.
  */
 function useBookColor() {
   const color = useStore(studio.store, (s) => effectiveBookColor(s.project.settings.color, s.peacockColor));
@@ -72,6 +73,19 @@ function Workbench() {
     else p.collapse();
     readVisible();
   };
+
+  // A press the dividers take goes no further. The panel library takes it on
+  // the document (preventDefault, while capturing) but lets it on, and the
+  // editor's scrollbar, against its divider, scrolled the text as the pane
+  // resized.
+  useEffect(() => {
+    const root = document.documentElement;
+    const taken = (e: PointerEvent) => {
+      if (e.defaultPrevented) e.stopPropagation();
+    };
+    root.addEventListener('pointerdown', taken, true);
+    return () => root.removeEventListener('pointerdown', taken, true);
+  }, []);
 
   useEffect(
     () =>
@@ -136,6 +150,9 @@ function Workbench() {
         <Group
           className="panes"
           orientation="horizontal"
+          // A divider takes a press 6 px either side of its 4 px band (the library's
+          // default was 10 px in all). Over the preview, its own webview has the mouse.
+          resizeTargetMinimumSize={{ coarse: 20, fine: 16 }}
           defaultLayout={defaultLayout}
           onLayoutChange={notifyLayout}
           onLayoutChanged={(layout, meta) => {
@@ -147,15 +164,15 @@ function Workbench() {
           <Panel id="explorer" panelRef={explorer} defaultSize="17%" minSize="180px" collapsible>
             <Explorer />
           </Panel>
-          <Separator className="separator" />
+          <Separator className={`separator${visible.explorer ? '' : ' beside-hidden'}`} />
           <Panel id="editor" defaultSize="32%" minSize="320px">
             <EditorPane />
           </Panel>
-          <Separator className="separator" />
+          <Separator className={`separator${visible.preview ? '' : ' beside-hidden'}`} />
           <Panel id="preview" panelRef={preview} defaultSize="28%" minSize="200px" collapsible>
             <PreviewPane />
           </Panel>
-          <Separator className="separator" />
+          <Separator className={`separator${visible.agent ? '' : ' beside-hidden'}`} />
           <Panel id="agent" panelRef={agent} defaultSize="25%" minSize="260px" collapsible>
             <AgentPane />
           </Panel>

@@ -1,9 +1,10 @@
 // A book's own colour on its window's title bar, activity bar and status bar,
 // as VS Code's Peacock does, so a glance tells one book's window from
 // another's. The shades are Peacock's: the colour on the title and status
-// bars, 10% lighter on the activity bar, badges a third of the way round the
-// colour wheel from that (as light as stands out), and text light or dark by
-// how bright each is.
+// bars (and the dividers between the panes), 10% lighter on the activity bar
+// (and a divider you point at, as Peacock's sash), badges a third of the way
+// round the colour wheel from that (as light as stands out), and text light
+// or dark by how bright each is.
 
 /** Swatches to pick from: mid-tones that read in light and dark windows. */
 export const BOOK_COLORS: { name: string; color: string }[] = [
