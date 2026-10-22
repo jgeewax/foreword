@@ -20,7 +20,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 <br>
 
-<img src="docs/images/calculus.webp" alt="Foreword with Calculus Made Easy open: a chapter's Typst source with a passage selected, the typeset page with its equations, and Claude Code explaining why (dx)² can be dropped." width="100%">
+<img src="docs/images/calculus.webp" alt="Foreword with Calculus Made Easy open: a chapter's Typst source with a passage selected, the typeset page with its equations, and Claude Code explaining why (dx)² can be dropped, with Done and New task above the message box." width="100%">
 
 <sub><i>Calculus Made Easy, one of the sample books: a passage selected in the source, its page in the preview, and Claude Code explaining the step.</i></sub>
 
@@ -65,7 +65,7 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 <tr>
 <td width="50%" valign="top">
 
-<img src="docs/images/jekyll-edit.webp" alt="Claude Code's account of an edit to Jekyll and Hyde: the request, the chapter it read, the two edits it made, what it cut, and Is this task done?">
+<img src="docs/images/jekyll-edit.webp" alt="Claude Code's account of an edit to Jekyll and Hyde: the request, the chapter it read, its three edits with the words each changed, what it cut, and Is this task done?">
 <sub><i>Claude Code tightening the first paragraph of Jekyll and Hyde, and saying what it cut.</i></sub>
 
 </td>
@@ -123,7 +123,7 @@ Comments sit beside the text, never in it.
 <tr>
 <td width="50%" valign="top">
 
-<img src="docs/images/jekyll-changes.webp" alt="What changed in the assistant's version of chapter one, word by word: the words it cut struck through in red, the words it put in their place in green, and buttons to undo the changes or restore the file.">
+<img src="docs/images/jekyll-changes.webp" alt="What changed in the assistant's version of chapter one, word by word: the words it cut struck through in red, the words it put in their place in green, with Undo these changes, and Open, Side by side and Restore for the file.">
 <sub><i>What the assistant changed in chapter one, word by word, with Undo these changes.</i></sub>
 
 </td>
@@ -149,8 +149,8 @@ Or start from a template made for your kind of book, or have it drafted from the
 </td>
 <td width="50%" valign="top">
 
-<img src="docs/images/interview.webp" alt="The assistant's questions for Jekyll and Hyde's style guide, in a panel: four of them, the first asking how new sentences should join up, with three answers to pick from, the first recommended, and one of your own.">
-<sub><i>Claude Code writing a style guide for Jekyll and Hyde with you: how should new sentences join up?</i></sub>
+<img src="docs/images/interview.webp" alt="The assistant's questions for Jekyll and Hyde's style guide, in a panel: three of them, the first asking how closely new text should imitate Stevenson's own syntax, with three answers to pick from, the first recommended, and one of your own.">
+<sub><i>Claude Code writing a style guide for Jekyll and Hyde with you: how closely should new text imitate Stevenson?</i></sub>
 
 </td>
 </tr>
