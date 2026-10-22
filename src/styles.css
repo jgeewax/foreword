@@ -1008,12 +1008,12 @@ button.link.quiet { color: var(--muted); }
 .effort-meter span.on { background: var(--accent); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
-/* Each mode's colour: its button under the message box, and the assistant's offer of it (Trace.tsx). */
-:is(.mode-way, .mode-choice-record) { --mode: var(--accent); }
-:is(.mode-trigger, .mode-way, .mode-choice-record).mode-ask { --mode: #1f8fa5; }
-:is(.mode-trigger, .mode-way, .mode-choice-record).mode-discuss { --mode: var(--milestone); }
-:is(.mode-trigger, .mode-way, .mode-choice-record).mode-options { --mode: var(--good); }
-:is(.mode-trigger, .mode-way, .mode-choice-record).mode-figures { --mode: #a35bd6; }
+/* Each mode's colour: its button under the message box, the assistant's offer of it, and your pick of it (Trace.tsx). */
+:is(.mode-way, .mode-choice-record, .user-action) { --mode: var(--accent); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-ask { --mode: #1f8fa5; }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-discuss { --mode: var(--milestone); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-options { --mode: var(--good); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-figures { --mode: #a35bd6; }
 .mode-icon { width: 14px; text-align: center; }
 .mode-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding-top: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .mode-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; border: none; border-radius: 0; background: transparent; padding: 6px 10px; white-space: normal; height: auto; }
@@ -1676,6 +1676,19 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .turn-fold { margin-left: auto; width: 20px; height: 20px; padding: 0; border: none; border-radius: 5px; background: transparent; color: var(--muted); opacity: 0; transition: opacity 0.12s; }
 .msg.user:hover .turn-fold, .turn-fold:focus-visible { opacity: 1; }
 .turn .msg.user .chips { margin: 7px 0 0; }
+/* Asked with a button (Write it, Fix This Error…): the request as a step, not the brief sent for it. */
+.user-action { --tone: var(--muted); display: flex; gap: 9px; min-width: 0; margin-top: 5px; }
+.user-action.tone-look { --tone: var(--look); }
+.user-action.tone-change { --tone: var(--change); }
+.user-action.tone-done { --tone: var(--ok); }
+.user-action.by-mode { --tone: var(--mode); }
+.user-action .trace-node .mode-glyph { width: auto; font-size: 11px; line-height: 1; }
+.user-action-body { flex: 1; min-width: 0; }
+.user-action-words { min-height: 22px; line-height: 22px; font-size: 13px; }
+.user-action-note { color: var(--muted); font-size: 12px; }
+.user-action-rows { list-style: none; display: flex; flex-direction: column; gap: 4px; margin: 2px 0 1px; padding: 0; }
+.user-action-rows li { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; padding-left: 8px; border-left: 2px solid color-mix(in srgb, var(--tone) 45%, transparent); font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; color: color-mix(in srgb, var(--fg) 88%, var(--muted)); }
+.user-action-q { color: var(--muted); }
 .place-chip { gap: 5px; padding: 2px 8px 2px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 11px; color: var(--fg); }
 .place-chip .file-icon { transform: scale(0.85); }
 .chip-where { color: var(--muted); }

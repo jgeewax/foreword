@@ -6,7 +6,7 @@ import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
-import { Icon, type IconName } from './icons';
+import { Icon } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
 import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
@@ -14,6 +14,7 @@ import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu, useContextUse } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
 import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
+import { actionLine, STARTERS, stockAction } from '../app/stock-prompts';
 import type { SourceSelection } from '../editor/selection';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -767,29 +768,36 @@ function QueuedMessages() {
   if (!queued.length) return null;
   return (
     <div className="queued" aria-label="Queued messages">
-      {queued.map((q) => (
-        <div key={q.id} className={`queued-item ${q.delivery}`}>
-          <span className="queued-state">{q.sending ? 'Sending…' : q.delivery === 'steer' ? 'Next step' : 'Queued'}</span>
-          <span className="queued-text" title={q.text}>
-            {q.text}
-          </span>
-          {!q.sending && q.delivery === 'queue' && (
-            <button className="small" title="The assistant reads it at its next step, without waiting for the end" onClick={() => void studio.steerQueued(q.id)}>
-              Send now
-            </button>
-          )}
-          {!q.sending && (
-            <>
-              <button className="small" title="Take it back to change it" onClick={() => void studio.unqueue(q.id, { edit: true })}>
-                Edit
+      {queued.map((q) => {
+        // A button's request shows as what it asks for, and there's nothing of the author's to edit.
+        const action = stockAction(q.text);
+        const words = action ? actionLine(action) : q.text;
+        return (
+          <div key={q.id} className={`queued-item ${q.delivery}`}>
+            <span className="queued-state">{q.sending ? 'Sending…' : q.delivery === 'steer' ? 'Next step' : 'Queued'}</span>
+            <span className="queued-text" title={words}>
+              {words}
+            </span>
+            {!q.sending && q.delivery === 'queue' && (
+              <button className="small" title="The assistant reads it at its next step, without waiting for the end" onClick={() => void studio.steerQueued(q.id)}>
+                Send now
               </button>
-              <button className="icon" aria-label="Don't send" title="Don't send" onClick={() => void studio.unqueue(q.id)}>
-                ✕
-              </button>
-            </>
-          )}
-        </div>
-      ))}
+            )}
+            {!q.sending && (
+              <>
+                {!action && (
+                  <button className="small" title="Take it back to change it" onClick={() => void studio.unqueue(q.id, { edit: true })}>
+                    Edit
+                  </button>
+                )}
+                <button className="icon" aria-label="Don't send" title="Don't send" onClick={() => void studio.unqueue(q.id)}>
+                  ✕
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -887,14 +895,6 @@ function StyleGuideSetup({ card }: { card?: boolean }) {
   );
 }
 
-/** Things to try, each in the colour of what it does: look (blue), check (green), write (purple), Typst (its teal). */
-const SUGGESTIONS: { icon: IconName; tone: string; label: string; prompt: string }[] = [
-  { icon: 'book', tone: 'look', label: 'Explain how this book fits together', prompt: 'Explain how the files of this book fit together.' },
-  { icon: 'passed', tone: 'check', label: 'Proofread the open chapter', prompt: "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet." },
-  { icon: 'edit', tone: 'change', label: 'Outline my next chapter', prompt: 'Suggest an outline for my next chapter.' },
-  { icon: 'help', tone: 'typst', label: 'How do I add a footnote?', prompt: 'How do I add a footnote?' },
-];
-
 /** One of these under the starter, a different one each new task. */
 const TIPS: ReactNode[] = [
   <>
@@ -961,8 +961,8 @@ function Starter() {
       )}
       <div className="starter-group">
         <div className="starter-label">Try asking</div>
-        {SUGGESTIONS.map((s) => (
-          <button key={s.label} className={`suggestion tone-${s.tone}`} disabled={!ready} title={`Ask: “${s.prompt}”`} onClick={() => void studio.send(s.prompt)}>
+        {STARTERS.map((s) => (
+          <button key={s.label} className={`suggestion tone-${s.tone}`} disabled={!ready} title="Ask the assistant" onClick={() => void studio.send(s.prompt)}>
             <span className="suggestion-icon">
               <Icon name={s.icon} size={13} />
             </span>

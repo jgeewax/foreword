@@ -6,6 +6,7 @@ import type { Documents } from '../editor/documents';
 import { errorMessage, ipc } from '../lib/ipc';
 import { cellStatus, describeProblem, duplicateNames, HELPER_FILE, OUTPUTS_FILE, parseCells, parseOutputs, serializeOutputs, type CodeCell, type Outputs } from './cells';
 import helperSource from './code.typ?raw';
+import { failingExamplesPrompt } from '../app/stock-prompts';
 
 export type CodeState = {
   cells: CodeCell[];
@@ -182,7 +183,7 @@ export class CodeRunner {
     const lines = broken.map((c) => `- ${describeProblem(c, this.state.outputs[c.name])} (${c.path}:${c.line})`);
     this.host.notice(`${broken.length} code example${broken.length > 1 ? 's' : ''} failed:\n${lines.join('\n')}`, 'error', {
       label: 'Ask the assistant to fix them',
-      prompt: `These code examples fail when Foreword runs them:\n${lines.join('\n')}\n\nFix each one so it runs and prints what the book says it does. Change the example code (or its expect: value, if the expectation itself is wrong). Don't run the code yourself: Foreword re-runs it after your changes.`,
+      prompt: failingExamplesPrompt(lines),
     });
   }
 }

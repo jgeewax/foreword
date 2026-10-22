@@ -78,6 +78,7 @@ import { commandPermissionRules, ruleKey, rulesUsed, type CommandRule, type Rule
 import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
+import { EXPLAIN_PROMPT, fixErrorPrompt, mergePrompt, messageLine, stockTitle } from './stock-prompts';
 import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
@@ -1559,7 +1560,7 @@ export class Studio {
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    await this.send(`Typst reports an error here: “${problem.d.message}”. Explain in a sentence or two, in plain words, what's wrong, then fix it.`);
+    await this.send(fixErrorPrompt(problem.d.message));
   }
 
   /** The Typst error under a position in the active file (1-based), if any. */
@@ -1592,7 +1593,7 @@ export class Studio {
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    await this.send("Explain this passage in plain words, including what any Typst markup in it does. Don't change anything.");
+    await this.send(EXPLAIN_PROMPT);
   }
 
   async closeTabs(paths: string[]) {
@@ -2985,11 +2986,7 @@ export class Studio {
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    const theirs = q.theirs.trim() ? q.theirs.trim().split('\n').map((l) => `> ${l}`).join('\n') : '> (nothing: that version doesn’t have this passage)';
-    const yours = q.by === ASSISTANT_NAMES[this.state.settings.assistant] ? ' (yours)' : '';
-    const sent = await this.send(
-      `This passage of ${path} was changed two ways at once. Mine is the selection; the other version${yours} is:\n\n${theirs}\n\nCombine them into one passage in the file, in place of mine, keeping what each changed. Where they can't both stand, keep mine and tell me what you left out.`,
-    );
+    const sent = await this.send(mergePrompt(path, q.theirs, q.by === ASSISTANT_NAMES[this.state.settings.assistant]));
     if (sent) this.docs?.dismissQuestion(path, id);
   }
 
@@ -3753,7 +3750,7 @@ export class Studio {
       const sessions = await this.agent.listSessions(60);
       const records = new Map(this.taskRecords().map((r) => [r.sessionId, r.status]));
       this.setAgent({
-        tasks: sessions.map((s) => ({ sessionId: s.id, title: s.title || 'Untitled task', status: records.get(s.id) ?? 'open', updated: s.updated, tokens: s.tokens })),
+        tasks: sessions.map((s) => ({ sessionId: s.id, title: s.title ? stockTitle(s.title) : 'Untitled task', status: records.get(s.id) ?? 'open', updated: s.updated, tokens: s.tokens })),
       });
     } catch (e) {
       console.warn('tasks: list failed', e);
@@ -4006,7 +4003,7 @@ export class Studio {
     if (state.sessionId && state.tasks.find((t) => t.sessionId === state.sessionId)?.status === 'done') this.reopenTask(state.sessionId);
     // Everything up to now is its own version, so the agent's changes can be undone separately.
     await this.history.beforeAgent();
-    this.turnMessage = text;
+    this.turnMessage = messageLine(text);
     this.turnErrors.clear();
     // What the author changed in the assistant's text since its last turn goes with the message.
     const edits = state.sessionId ? await this.authorEditsSince(state.sessionId) : [];
@@ -4156,7 +4153,7 @@ export class Studio {
       if (this.deliveredEarly.size > 50) this.deliveredEarly.delete(this.deliveredEarly.values().next().value!);
       return;
     }
-    this.turnMessage = q.text;
+    this.turnMessage = messageLine(q.text);
     this.setAgent((a) => ({
       queued: a.queued.filter((m) => m.id !== inboxId),
       items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, at: Date.now(), by: this.turnBy() }],
@@ -4562,7 +4559,7 @@ export class Studio {
         this.setActivity({ phase: 'retrying', retryAt: e.at, attempt: e.attempt, reason: e.message });
         break;
       case 'session-renamed':
-        this.setAgent({ title: e.title });
+        this.setAgent({ title: stockTitle(e.title) });
         break;
       case 'text-delta': {
         const id = `${e.messageId}:${e.ordinal}`;

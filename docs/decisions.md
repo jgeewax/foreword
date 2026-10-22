@@ -3408,6 +3408,40 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   book compile with no errors through `typst compile`. `previewpages` still
   passes. Unit tests: chapter-preview.test.ts, the settings, the stub (Rust).
 
+### What a button asked for, not the words sent for it
+
+- **Asked for:** "for our stock prompts, id rather not show the specific
+  wording or prompt and instead show the action the user requested. it can
+  be offputting to see how the sausage is made under the hood."
+- **A step in your message:** a message a button writes (Write it, Go ahead,
+  Fix This Error, Explain This, a TODO, Fix with assistant, Resolve with …,
+  a pick of the two ways on, answers to a reply's questions, the style
+  guide's Draft, Redraft, Interview me and Revise, failing code examples, Ask
+  it to edit instead, the starters) still goes to the assistant whole. The
+  chat shows the request as a step, with a step's dot and colour: the
+  button's words, a few after them, and what it's about a line each (the
+  error, the TODO, each comment, each answer). The selection still shows as
+  its chip. The same words name the turn's History version ("Agent: Write
+  it"), an earlier turn folded to a line, a queued message (with no Edit:
+  there's nothing of the author's in it), and a task that Codex or Claude
+  Code names after its first message.
+- **Read back from the text, not kept beside it:** the chat item keeps the
+  message as sent, and `stockAction` (src/app/stock-prompts.ts) reads which
+  one it is, so a conversation opened again later (its messages come back
+  from the assistant) shows the same. Fixed messages match whole and the
+  others by their whole shape, so a message of the author's that only starts
+  like one stays theirs. stock-prompts.test.ts reads back what each builder
+  writes: rewording one without its reader fails there. Task names are
+  looser, since Claude Code's fallback is the first message on one line, cut
+  at 256 characters: a known opening is enough.
+- **Not folded out:** a tool step folds out its exact command, but this
+  doesn't fold out the brief. Copy Message copies the action's words.
+- Verified: unit tests; a scratch instance (its own worktree and port) with a
+  posed conversation of each kind, light and dark, and a queued one; a real
+  Explain This through OpenCode (the assistant got the whole brief, the card
+  said "Explain this passage · in plain words" with its chip); the same
+  conversation opened again from the assistant's record.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

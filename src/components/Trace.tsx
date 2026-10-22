@@ -9,6 +9,7 @@ import { activityWords, clockTime, stepTimes, thinkingSoFar, thoughtHeading, wai
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Activity, type ChatItem, type QuestionItem, type TurnBy } from '../app/studio';
 import { withoutAddressed } from '../app/review';
+import { actionText, messageLine, stockAction, type StockAction } from '../app/stock-prompts';
 import { withoutMarker } from '../app/tasks';
 import { describePermission, describeTool } from '../app/tool-labels';
 import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnsOf, turnTime, turnWords, verbAndRest, type Edit, type Tone, type ToolItem, type Turn } from '../app/trace';
@@ -794,10 +795,41 @@ function ActivityCard({ activity, name, now }: { activity: Activity; name: strin
 
 // ---- turns -----------------------------------------------------------------------------
 
-/** Your message: when you sent it, what you said, and what went with it. */
-function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>; onFold?: () => void }) {
+/**
+ * What you asked for with a button (Write it, Fix This Error…), as a step on
+ * the line: the request and what it's about, not the brief Foreword wrote for it.
+ */
+function ActionStep({ action: a }: { action: StockAction }) {
   return (
-    <div className="msg user" onContextMenu={itemMenu(item.text, 'Message')}>
+    <div className={`user-action tone-${a.tone}${a.mode ? ` by-mode mode-${a.mode}` : ''}`}>
+      <span className="trace-node" aria-hidden>
+        {a.mode ? <span className="mode-glyph">{modeConfig(a.mode).icon}</span> : <Icon name={a.icon} size={12} />}
+      </span>
+      <div className="user-action-body">
+        <div className="user-action-words">
+          <span className="step-verb">{a.verb}</span>
+          {a.note && <span className="user-action-note"> · {a.note}</span>}
+        </div>
+        {a.rows && a.rows.length > 0 && (
+          <ul className="user-action-rows">
+            {a.rows.map((r, i) => (
+              <li key={i} title={r.label ? `${r.label} ${r.text}` : r.text}>
+                {r.label && <span className="user-action-q">{r.label} </span>}
+                {r.text}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Your message: when you sent it, what you said (or asked for with a button), and what went with it. */
+function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>; onFold?: () => void }) {
+  const action = useMemo(() => stockAction(item.text), [item.text]);
+  return (
+    <div className={`msg user${action ? ' by-button' : ''}`} onContextMenu={itemMenu(action ? actionText(action) : item.text, 'Message')}>
       <div className="turn-who">
         You{item.at ? ` · ${clock(item.at)}` : ''}
         {onFold && (
@@ -806,7 +838,7 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
           </button>
         )}
       </div>
-      <div className="msg-text">{item.text}</div>
+      {action ? <ActionStep action={action} /> : <div className="msg-text">{item.text}</div>}
       {item.attachments.length > 0 && (
         <div className="chips">
           {item.attachments.map((a) => {
@@ -880,7 +912,7 @@ function FoldedTurn({ turn, onOpen }: { turn: Turn; onOpen: () => void }) {
       <Icon name="chevronRight" size={13} />
       <span className="turn-folded-body">
         <span className="turn-who">You{user.at ? ` · ${clock(user.at)}` : ''}</span>
-        <span className="turn-folded-text">{user.text}</span>
+        <span className="turn-folded-text">{messageLine(user.text)}</span>
         {words && (
           <span className="turn-folded-sum">
             <span className={`turn-dot tone-${tone}`} aria-hidden />

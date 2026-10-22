@@ -10,6 +10,7 @@ import { describeCommand } from '../app/command-words';
 import type { BookNames } from '../app/tool-labels';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type ChatItem } from '../app/studio';
+import { EDIT_INSTEAD_PROMPT } from '../app/stock-prompts';
 import { useStore } from '../lib/store';
 import { coversMore, ruleCommand, type CommandRule, type RuleScope } from '../services/agent/command-rules';
 import { PERMISSION_ITEMS, type AgentPermissions } from '../services/agent/permissions';
@@ -270,7 +271,7 @@ export function CommandPermission({ item }: { item: PermissionItem }) {
             disabled={sending}
             title="Turn this down, and ask it to change the book with its editing tool, so you see each change"
             onClick={() =>
-              void studio.replyPermission(item.id, 'reject').then(() => studio.send('Please make that change by editing the file instead of running code, so I can see each change.', { delivery: 'steer' }))
+              void studio.replyPermission(item.id, 'reject').then(() => studio.send(EDIT_INSTEAD_PROMPT, { delivery: 'steer' }))
             }
           >
             Ask it to edit instead
