@@ -377,8 +377,13 @@ fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Wind
     let size = window
         .inner_size()?
         .to_logical::<f64>(window.scale_factor()?);
+    // A click on a window behind another (or in the app you came from) does
+    // what it clicks on too, not just bring the window forward: otherwise an
+    // "Always allow" or a Send needs a second click.
     window.add_child(
-        WebviewBuilder::new(label, WebviewUrl::default()).auto_resize(),
+        WebviewBuilder::new(label, WebviewUrl::default())
+            .auto_resize()
+            .accept_first_mouse(true),
         LogicalPosition::new(0.0, 0.0),
         size,
     )?;

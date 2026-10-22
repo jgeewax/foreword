@@ -398,6 +398,8 @@ pub async fn preview_open(
         .initialization_script(CONTEXT_MENU_SCRIPT)
         .initialization_script(SELECTION_SCRIPT)
         .focused(false)
+        // As the app's own webview: the first click jumps, too.
+        .accept_first_mouse(true)
         .on_navigation(is_local_preview);
     window.add_child(
         builder,
