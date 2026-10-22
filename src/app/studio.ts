@@ -700,6 +700,8 @@ export class Studio {
   private viewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>();
   private diagnostics = new Map<string, LspDiagnostic[]>();
   private previewBounds: Bounds | null = null;
+  /** The last click in the preview: its height there (the preview's px) and when, for the jump it makes. */
+  private previewClick: { y: number; at: number } | null = null;
   private previewVisible = true;
   private previewOpened = false;
   private pendingDisk = new Set<string>();
@@ -789,6 +791,7 @@ export class Studio {
       if (e.payload?.tag === 'loaded') this.configurePreview({ place: true });
       if (e.payload?.tag === 'place') this.rememberPreviewPlace(e.payload);
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
+      if (e.payload?.tag === 'click') this.previewClick = { y: e.payload.y ?? 0, at: performance.now() };
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
       if (e.payload?.tag === 'selection') void this.previewSelection(e.payload as { text: string; end?: boolean });
     });
@@ -2893,12 +2896,13 @@ export class Studio {
     if (!editor || this.state.active !== path) return;
     const range = new monaco.Range(jump.start[0] + 1, jump.start[1] + 1, jump.end[0] + 1, jump.end[1] + 1);
     editor.setSelection(range);
-    // Near the top of the editor (15% down), so what follows the clicked text is in view.
-    const top = editor.getTopForLineNumber(range.startLineNumber);
-    const bottom = editor.getTopForLineNumber(range.endLineNumber) + editor.getOption(monaco.editor.EditorOption.lineHeight);
-    const to = jumpScrollTop(top, bottom, editor.getScrollTop(), editor.getLayoutInfo().height);
-    if (to !== null) editor.setScrollTop(to);
-    rippleAt(editor, range.getStartPosition());
+    // Level with the click in the preview, so the eye stays where it was; 10% down without one.
+    const click = this.previewClick && performance.now() - this.previewClick.at < 3000 ? this.previewClick : null;
+    const body = document.querySelector('.preview-body')?.getBoundingClientRect();
+    const clickAt = click && body ? body.top + click.y / this.zoomFactor - editor.getDomNode()!.getBoundingClientRect().top : null;
+    const start = range.getStartPosition();
+    editor.setScrollTop(jumpScrollTop(editor.getTopForPosition(start.lineNumber, start.column), editor.getOption(monaco.editor.EditorOption.lineHeight), editor.getLayoutInfo().height, clickAt));
+    rippleAt(editor, start);
     // The click gave the preview webview keyboard focus; hand it back to the editor.
     await ipc.focusMain().catch(() => {});
     editor.focus();

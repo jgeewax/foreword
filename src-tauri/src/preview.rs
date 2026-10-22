@@ -97,6 +97,11 @@ const JUMP_SCRIPT: &str = r#"
     (document.head || document.documentElement).appendChild(style);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
+  // Where a click lands, before Tinymist's own handler sends it to the
+  // source: the app puts the source it jumps to level with it in the editor.
+  window.addEventListener('click', (e) => {
+    try { window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'click', y: e.clientY } }); } catch (_) {}
+  }, true);
 })();
 "#;
 

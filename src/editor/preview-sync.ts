@@ -87,17 +87,18 @@ export function jumpCandidates(lineAt: (n: number) => string | null, line: numbe
   });
 }
 
-/** Preview → source: where the clicked text lands, as a share of the editor's height from the top. */
-export const JUMP_AT = 0.15;
+/** Preview → source without a click to go by: the text this share of the editor's height from the top. */
+export const JUMP_AT = 0.1;
 
 /**
- * Where to scroll the editor (its scrollTop) to show the text a preview click
- * found, given where that text is (px from the document's top, `top` to
- * `bottom`) and the view (`scrollTop`, `height`): its first line about 15% down,
- * so what follows is in view (centred, half the screen is what came before).
- * Null when it's in view already, short of the last 15% (no needless jump).
+ * Where to scroll the editor (its scrollTop) for the text a preview click
+ * found (`top`, px from the document's top, a `lineHeight` tall) in a view
+ * `height` tall: its line level with the click (`clickAt`, px from the
+ * editor's top), so the eye stays where it was, even when the text was in
+ * view already; without a click, 10% down, so what follows is in view.
+ * Within the view, and never above the start.
  */
-export function jumpScrollTop(top: number, bottom: number, scrollTop: number, height: number, at = JUMP_AT): number | null {
-  if (top >= scrollTop && bottom <= scrollTop + height * (1 - at)) return null;
-  return Math.max(0, Math.round(top - height * at));
+export function jumpScrollTop(top: number, lineHeight: number, height: number, clickAt: number | null): number {
+  const at = clickAt == null ? height * JUMP_AT : Math.min(Math.max(clickAt - lineHeight / 2, 0), height - lineHeight);
+  return Math.max(0, Math.round(top - at));
 }

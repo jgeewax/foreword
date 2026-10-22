@@ -54,21 +54,24 @@ describe('jumpCandidates (best first)', () => {
   });
 });
 
-describe('jumpScrollTop: preview → source puts the text near the top', () => {
-  it('scrolls text below the view to 15% down, not to the middle', () => {
-    // A 1000 px editor at the top; the text is at 3000–3018 px.
-    expect(jumpScrollTop(3000, 3018, 0, 1000)).toBe(2850);
+describe('jumpScrollTop: preview → source puts the text where you clicked', () => {
+  // A 1000 px editor; the text's line is 18 px tall.
+  it('puts the line level with the click, the middle of the line on it', () => {
+    expect(jumpScrollTop(3000, 18, 1000, 409)).toBe(2600);
   });
-  it('and text above the view too', () => {
-    expect(jumpScrollTop(200, 218, 2000, 1000)).toBe(50);
+  it('even when the text was in view already', () => {
+    // At 1400 px with the view at 1000: it was 400 px down; clicked at 709, it goes there.
+    expect(jumpScrollTop(1400, 18, 1000, 709)).toBe(700);
+  });
+  it('keeps the line in the view when the click was beside it (above or below the editor)', () => {
+    expect(jumpScrollTop(3000, 18, 1000, -40)).toBe(3000);
+    expect(jumpScrollTop(3000, 18, 1000, 1200)).toBe(2018);
+  });
+  it('without a click, 10% down', () => {
+    expect(jumpScrollTop(3000, 18, 1000, null)).toBe(2900);
   });
   it('never above the start', () => {
-    expect(jumpScrollTop(40, 58, 2000, 1000)).toBe(0);
-  });
-  it('leaves text that’s in view alone, unless it’s down in the last 15%', () => {
-    expect(jumpScrollTop(1400, 1418, 1000, 1000)).toBeNull();
-    expect(jumpScrollTop(1900, 1918, 1000, 1000)).toBe(1750);
-    // Starting above the view (cut off at the top): scrolled.
-    expect(jumpScrollTop(990, 1100, 1000, 1000)).toBe(840);
+    expect(jumpScrollTop(40, 18, 1000, 500)).toBe(0);
+    expect(jumpScrollTop(40, 18, 1000, null)).toBe(0);
   });
 });

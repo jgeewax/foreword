@@ -5442,10 +5442,11 @@ async function epubChecks(outDir: string) {
 }
 
 /**
- * Preview → source puts the clicked text about 15% down the editor, not in
- * the middle; text already in view stays where it is. Through the jump
- * handler (to lines off screen and on screen), then with a real click in the
- * preview, part way through the book. Best on the stress book (long chapters).
+ * Preview → source puts the clicked text level with the click in the preview,
+ * even when it was in view already; without a click, 10% down the editor.
+ * Through the jump handler (to lines off screen and on screen), then with a
+ * real click in the preview, part way through the book. Best on the stress
+ * book (long chapters).
  */
 async function previewJumpChecks() {
   const out: Record<string, unknown> = {};
@@ -5470,7 +5471,7 @@ async function previewJumpChecks() {
   await jump(chapter, below);
   await sleep(500);
   out.offScreen = where();
-  // A line a third of the way down the view: in view, so it stays there.
+  // A line a third of the way down the view: in view, but it goes to 10% down all the same.
   const e = editor();
   const visible = e.getVisibleRanges()[0];
   const mid = Math.round(visible.startLineNumber + (visible.endLineNumber - visible.startLineNumber) / 3);
@@ -5503,6 +5504,13 @@ async function previewJumpChecks() {
   await sleep(2000);
   editor().render(true);
   out.click = where();
+  // Level with the click: the middle of the clicked text's line where the click was, in the window.
+  const click = (studio as unknown as { previewClick: { y: number } | null }).previewClick;
+  const body = document.querySelector('.preview-body')!.getBoundingClientRect();
+  const sel = editor().getSelection()!.getStartPosition();
+  const lineHeight = editor().getOption(monaco.editor.EditorOption.lineHeight);
+  const lineMiddle = editor().getDomNode()!.getBoundingClientRect().top + editor().getTopForPosition(sel.lineNumber, sel.column) - editor().getScrollTop() + lineHeight / 2;
+  out.level = click ? { clickedAt: Math.round(body.top + click.y / studio.zoomFactor), lineAt: Math.round(lineMiddle), within: Math.abs(body.top + click.y / studio.zoomFactor - lineMiddle) <= lineHeight } : 'no click reported';
   watch.disconnect();
   const start = editor().getScrolledVisiblePosition(editor().getSelection()!.getStartPosition())!;
   out.ripple = { rings: rings.length, onSelection: rings.length === 1 && Math.abs(rings[0].left - start.left) < 2 && Math.abs(rings[0].top - (start.top + start.height / 2)) < 2, size: rings[0]?.size };
