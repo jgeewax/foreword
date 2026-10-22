@@ -42,12 +42,25 @@ describe('commandAnatomy', () => {
     ]);
   });
 
-  it('offers no rule for code written on the spot', () => {
+  it('offers any code given the same way for code written on the spot, never this exact code', () => {
     const code = commandAnatomy(`python3 -c 'from pathlib import Path\np = Path("a.typ")\nprint(p.read_text())'`);
-    expect([code.inline, code.name, code.what, code.choices]).toEqual([true, '3 lines of Python', ' it just wrote', []]);
+    expect([code.inline, code.lang, code.name, code.what]).toEqual([true, 'Python', '3 lines of Python', ' it just wrote']);
     expect(code.parts.map((p) => p.kind)).toEqual(['interpreter', 'code']);
+    expect(code.choices.map((c) => [c.pattern, c.title, !!c.risk, !!c.danger, !!c.suggested])).toEqual([
+      ['python3 -c *', 'Any Python code it writes', true, false, true],
+      ['python3 *', 'Any Python script or code', true, false, false],
+    ]);
+    expect(commandAnatomy(`uv run python -c "\nimport numpy as np\nprint(np.eye(2) > 0)"`).choices.map((c) => [c.pattern, c.title, !!c.suggested])).toEqual([
+      ['uv run python -c *', 'Any Python code it writes, through uv', true],
+      ['uv run python *', 'Any Python script or code, through uv', false],
+      ['uv run *', 'Anything through uv', false],
+    ]);
+    expect(patterns(`uv run --with numpy python -c "print(1)" extra`)).toEqual(['uv run --with numpy python -c *', 'uv run --with numpy python *', 'uv run --with numpy *']);
+    expect(patterns('node -e "console.log(1)"')).toEqual(['node -e *', 'node *']);
+    // A here-document's lines are left out of the rules, so only the interpreter's rule covers them.
     const heredoc = commandAnatomy("python3 <<'EOF'\nprint(1)\nprint(2)\nEOF");
-    expect([heredoc.inline, heredoc.name, heredoc.choices]).toEqual([true, '2 lines of Python', []]);
+    expect([heredoc.inline, heredoc.name, heredoc.choices.map((c) => c.pattern)]).toEqual([true, '2 lines of Python', ['python3 *']]);
+    expect(commandAnatomy("cat > notes.txt <<'EOF'\nhi\nEOF").choices).toEqual([]);
   });
 
   it('opens a command a shell was given whole', () => {
@@ -108,5 +121,10 @@ describe('commandFacts', () => {
     expect(facts('rm -rf build && git push')).toEqual(['Deletes files', 'Uses the internet']);
     expect(facts('ls /b/chapters 2>/dev/null')).toEqual([]);
     expect(facts('uv run python src/scripts/lint.py 17')).toEqual([]);
+  });
+
+  it('reads a < or > in quoted code as code, not as writing a file', () => {
+    expect(facts(`uv run python -c "\nimport numpy as np\nif np.eye(2)[0,0] > 0: print('ok')\nprint(1 < 2)"`)).toEqual([]);
+    expect(facts(`python3 -c "print(1 > 0)" > out.txt`)).toEqual(['Writes out.txt']);
   });
 });

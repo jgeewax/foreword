@@ -15,10 +15,11 @@ import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { RulePattern } from './CommandPermission';
 import { Icon } from './icons';
 
-/** A rule in words: "lint.py, with any arguments", "figures.py, exactly as written". */
+/** A rule in words: "lint.py, with any arguments", "figures.py, exactly as written", "Python code it writes". */
 export function ruleTitle(r: { pattern: string; effect: RuleEffect }): string {
   const a = commandAnatomy(ruleCommand(r.pattern));
-  const what = coversMore(r.pattern) ? `${a.name}, with any arguments` : a.name === a.command ? a.name : `${a.name}, exactly as written`;
+  const code = a.inline && a.lang && coversMore(r.pattern) ? (a.lang === 'shell' ? 'Shell commands it writes' : `${a.lang} code it writes`) : null;
+  const what = code ?? (coversMore(r.pattern) ? `${a.name}, with any arguments` : a.name === a.command ? a.name : `${a.name}, exactly as written`);
   return r.effect === 'deny' ? `Never ${what}` : what;
 }
 
@@ -134,7 +135,7 @@ export function CommandRules({ scopes, add = [], builtIn = false, own = false }:
         </section>
       )}
       {own && <AssistantOwnRules />}
-      <p className="rule-footnote">A rule covers one command at a time: never a chain of commands as a whole, code it writes on the spot, or what’s inside $(…).</p>
+      <p className="rule-footnote">A rule covers one command at a time: never a chain of commands as a whole, or what’s inside $(…).</p>
     </div>
   );
 }

@@ -208,7 +208,7 @@ export type ChatItem =
       local?: boolean;
       /** For "always": what the app kept (command-rules.ts). */
       remembered?: Remembered;
-      /** Answered by a rule the author made while it waited. */
+      /** Answered by a rule the author made, or a setting they changed, while it waited. */
       byRule?: boolean;
     }
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
@@ -4220,7 +4220,6 @@ export class Studio {
           { label: 'Undo', run: () => void this.forgetRemembered(requestId) },
           { label: 'Rules', run: () => this.openSettings('permissions') },
         ]);
-        this.answerCovered();
       }
     } catch (e) {
       this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'pending' } : it));
@@ -5043,6 +5042,8 @@ export class Studio {
     try {
       await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(sessionId));
       if (notice) this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: describePermissions(permissions) });
+      // A rule made in Settings, or a kind of action now allowed, answers what's waiting for it.
+      this.answerCovered();
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change permissions for this conversation: ${errorMessage(e)}` });
     }

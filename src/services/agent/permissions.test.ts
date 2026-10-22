@@ -201,6 +201,9 @@ describe('redirections that write nothing', () => {
     expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, false, python3))).toBe(true);
     expect(onlyLooks('shell', ['python3 x.py 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, python3))).toBe(false);
     expect(onlyLooks('shell', ['ls 2>/dev/null'], sessionRules(PRESETS.edit.permissions, true, python3))).toBe(true);
+    // A > in quotes is what it searches for.
+    expect(onlyLooks('shell', ['rg -n "a->b" chapters'], edit)).toBe(true);
+    expect(onlyLooks('shell', ['rg -n "a->b" chapters > hits.txt'], edit)).toBe(false);
   });
 
   it('count sed printing line ranges as looking, and no other sed', () => {

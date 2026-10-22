@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { commandPermissionRules, rulesFrom, rulesUsed, ruleCovers, sanitizeRules, type CommandRule } from './command-rules';
 import { decide } from './acp-events';
 import { PRESETS, sessionRules } from './permissions';
-import { splitCommands, tokens } from './shell-words';
+import { hideQuotedArrows, splitCommands, tokens } from './shell-words';
 
 const lint: CommandRule = { pattern: 'uv run python src/scripts/lint.py *', effect: 'allow', scope: 'book' };
 const figures: CommandRule = { pattern: 'python3 scripts/figures.py --all', effect: 'allow', scope: 'all' };
@@ -65,6 +65,24 @@ describe('the rules in a conversation', () => {
     expect(shell('uv run python src/scripts/lint.py 17 2>&1 | tail')).toBe('allow');
   });
 
+  it('let code written on the spot run, with < and > in it, but not writing into a file', () => {
+    const code = sessionRules(PRESETS.ask.permissions, false, commandPermissionRules([lint, { pattern: 'uv run python -c *', effect: 'allow', scope: 'book' }]));
+    const run = (line: string) => decide('shell', [line], code);
+    const numpy = `uv run python -c "\nimport numpy as np\nP=np.array([[1,1],[-1j,1j]]);Pi=np.linalg.inv(P)\nprint(np.round(Pi,3)); print(abs(P[0,0]) > 0, 1 < 2)"`;
+    expect(run(numpy)).toBe('allow');
+    expect(run(`uv run python src/scripts/lint.py 17 2>&1 | rg -n "10[0-3][0-9]" | head -20; ${numpy}`)).toBe('allow');
+    expect(run(`uv run python -c 'print(f(a)>(b))'`)).toBe('allow');
+    for (const line of [
+      `uv run python -c "print(1)" > ~/.zshrc`,
+      `uv run python -c "print(1)"; rm -rf ~`,
+      `uv run python -c "print($(rm -rf ~))"`,
+      `uv run python -c "print(1)" <(rm -rf ~)`,
+      `uv run python src/scripts/x.py`,
+    ]) {
+      expect(run(line), line).toBe('ask');
+    }
+  });
+
   it('keep a "never" over an "always", in every mode', () => {
     expect(shell('git push origin main')).toBe('deny');
     expect(shell('git status && git push')).toBe('deny');
@@ -85,6 +103,14 @@ describe('splitCommands', () => {
     expect(splitCommands('a 2>&1 | b')).toEqual(['a 2>&1', 'b']);
     expect(splitCommands('a &> log && b')).toEqual(['a &> log', 'b']);
     expect(splitCommands("echo 'a & b'")).toEqual(["echo 'a & b'"]);
+  });
+});
+
+describe('hideQuotedArrows', () => {
+  it('hides < and > in quotes only', () => {
+    expect(hideQuotedArrows(`python3 -c "a > b" > out.txt`)).toBe(`python3 -c "a › b" > out.txt`);
+    expect(hideQuotedArrows(`echo 'x<y' "say \\"a>b\\"" 2>&1`)).toBe(`echo 'x‹y' "say \\"a›b\\"" 2>&1`);
+    expect(hideQuotedArrows(`echo \\"a > b`)).toBe(`echo \\"a > b`);
   });
 });
 

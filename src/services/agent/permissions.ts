@@ -10,7 +10,7 @@
 // "cat"; `$(…)` and backticks are checked on their own too). Redirections
 // and flags stay in the command ("echo hi > f.txt"). Verified live, 2.0.20.
 
-import { splitCommands } from './shell-words';
+import { hideQuotedArrows, hidesCommands, splitCommands } from './shell-words';
 import { STUDIO_LOOK_TOOLS, STUDIO_TOOL_ACTION, STUDIO_TOOL_NAMES, STUDIO_TOOLS } from './studio-tool';
 
 export type Level = 'allow' | 'ask' | 'deny';
@@ -243,13 +243,13 @@ const SED_PRINT = /^sed -n +(['"]?)\d+(,(\d+|\$))?p(;\d+(,(\d+|\$))?p)*\1( +[\w.
  *   without them;
  * - `sed -n` printing line ranges of files.
  * Anything that could hide a command (`$(…)`, backticks) or still redirects
- * keeps asking.
+ * keeps asking; a < or > in quotes doesn't redirect (`rg "a>b"`).
  */
 export function onlyLooks(action: string, resources: readonly string[], rules: readonly PermissionRule[]): boolean {
   if (action !== 'shell' || !resources.length) return false;
   return resources.every((r) => {
-    if (/\$\(|`/.test(r)) return false;
-    const parts = splitCommands(r).map(withoutHarmlessRedirects);
+    if (hidesCommands(r)) return false;
+    const parts = splitCommands(r).map((p) => withoutHarmlessRedirects(hideQuotedArrows(p)));
     return parts.length > 0 && parts.every((bare) => !/[<>]/.test(bare) && (SED_PRINT.test(bare) || ruleEffect('shell', bare, rules) === 'allow'));
   });
 }

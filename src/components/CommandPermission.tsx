@@ -119,7 +119,7 @@ function CommandParts({ anatomy, cover }: { anatomy: Anatomy; cover?: string }) 
                     </>
                   )}
                 </code>
-                <span className="cmd-label">{state === ' any' ? 'anything' : p.label}</span>
+                <span className="cmd-label">{state === ' any' ? (p.kind === 'code' ? 'any code' : 'anything') : p.label}</span>
               </span>
             );
           })}
@@ -198,7 +198,7 @@ export function CommandPermission({ item }: { item: PermissionItem }) {
   const mentionsBook = anatomies.some((a) => a.inline && /\.(typ|md|bib|ya?ml|toml|csv|txt)\b/.test(a.command));
   const sending = item.state === 'sending';
   const cover = (k: number) => (open ? chosen[k]?.pattern : undefined);
-  const alwaysName = withChoices.length === 1 ? withChoices[0].name : 'these';
+  const alwaysName = withChoices.length !== 1 ? 'these' : withChoices[0].inline ? codeWords(withChoices[0]) : withChoices[0].name;
 
   const confirm = () => {
     try {
@@ -265,7 +265,7 @@ export function CommandPermission({ item }: { item: PermissionItem }) {
             <Icon name="chevronDown" size={11} />
           </button>
         )}
-        {inlineOnly && mentionsBook && (
+        {mentionsBook && (
           <button
             disabled={sending}
             title="Turn this down, and ask it to change the book with its editing tool, so you see each change"
@@ -325,6 +325,9 @@ function rowWords(command: string, names: BookNames): string {
   const words = cd ? `go into ${cd[1].replace(/\/?$/, '/')}` : describeCommand(command, names).ask;
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+
+/** Code written on the spot, for "Always allow …": "Python code", "shell commands". */
+const codeWords = (a: Anatomy) => (a.lang === 'shell' ? 'shell commands' : a.lang ? `${a.lang} code` : 'code like this');
 
 /** A choice in a sentence: "lint.py, with any arguments", "this exact command", "any Python script, through uv". */
 function phrase(c: RuleChoice): string {
@@ -388,7 +391,7 @@ function CommandRecord({ item, runs, anatomy, assistant, book, latest }: { item:
       <div className="permission-title">
         {item.byRule ? (
           <>
-            Your rule let {assistant} run {runs}.
+            Your {item.resources.some((r) => studio.rulesThatAllowed(r).length) ? 'rule' : 'settings'} let {assistant} run {runs}.
           </>
         ) : (
           <>

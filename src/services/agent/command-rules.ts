@@ -18,7 +18,7 @@
 // ~/.codex/rules) that the app couldn't show or take back.
 
 import { ruleMatches, type Level, type PermissionRule } from './permissions';
-import { splitCommands } from './shell-words';
+import { hidesCommands, splitCommands } from './shell-words';
 
 export type RuleScope = 'task' | 'book' | 'all';
 export type RuleEffect = 'allow' | 'deny';
@@ -91,7 +91,7 @@ export function ruleCovers(pattern: string, command: string): boolean {
  * when a part is hidden from rules (`$(…)`, backticks).
  */
 export function rulesUsed(line: string, rules: readonly CommandRule[]): CommandRule[] {
-  if (/\$\(|`|<\(|>\(/.test(line)) return [];
+  if (hidesCommands(line)) return [];
   const used: CommandRule[] = [];
   for (const part of splitCommands(line)) {
     const deny = rules.filter((r) => r.effect === 'deny' && ruleCovers(r.pattern, part)).at(-1);

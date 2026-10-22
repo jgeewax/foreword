@@ -53,6 +53,35 @@ export function splitCommands(line: string, { pipes = true } = {}): string[] {
   return out.map((s) => s.trim()).filter(Boolean);
 }
 
+/**
+ * The line with every < and > inside quotes turned into ‹ and ›: in
+ * `python3 -c "print(a > b)"` they're code, not redirections, so rules that
+ * look for redirections (`*>*`) mustn't see them. Give it one command (from
+ * splitCommands): a here-document's body could leave a quote open.
+ */
+export function hideQuotedArrows(command: string): string {
+  let out = '';
+  let quote: string | null = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (c === '\\' && quote !== "'") {
+      out += c + (command[i + 1] ?? '');
+      i++;
+      continue;
+    }
+    if (quote && c === quote) quote = null;
+    else if (!quote && (c === "'" || c === '"')) quote = c;
+    out += quote && c === '<' ? '‹' : quote && c === '>' ? '›' : c;
+  }
+  return out;
+}
+
+/**
+ * Whether a line could run a command the rules never see: `$(…)` or backticks
+ * (anywhere: in double quotes they still run), or `<(…)`, `>(…)` outside quotes.
+ */
+export const hidesCommands = (line: string) => /\$\(|`/.test(line) || splitCommands(line).some((c) => /<\(|>\(/.test(hideQuotedArrows(c)));
+
 /** Words, with quotes removed ("grep -n 'two words' f" → grep, -n, two words, f). */
 export function words(command: string): string[] {
   return tokens(command).map((t) => t.value);

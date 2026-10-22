@@ -3,9 +3,10 @@
 // "argument"), and the rules it could become, narrowest first: exactly this
 // command, the script with any arguments, any Python, anything through uv.
 // So "uv run python src/scripts/lint.py 17" reads as running lint.py, not as
-// running "uv".
+// running "uv". Code written on the spot ("uv run python -c '…'") is new every
+// time, so its narrowest rule is any code given that way: "uv run python -c *".
 
-import { tokens, type Token } from '../services/agent/shell-words';
+import { hideQuotedArrows, splitCommands, tokens, type Token } from '../services/agent/shell-words';
 
 export type PartKind = 'env' | 'wrapper' | 'program' | 'interpreter' | 'script' | 'module' | 'code' | 'subcommand' | 'args';
 
@@ -25,8 +26,10 @@ export type Anatomy = {
   name: string;
   /** The rest of the title: ", a Python script in this book". */
   what: string;
-  /** Code written on the spot (`python3 -c`, a here-document): no rule could cover the next one. */
+  /** Code written on the spot (`python3 -c`, a here-document): no rule names it exactly, as the next is new. */
   inline: boolean;
+  /** The language it runs, when the program runs code ("Python", "shell"). */
+  lang?: string;
   choices: RuleChoice[];
 };
 
@@ -222,18 +225,35 @@ export function commandAnatomy(command: string, root?: string): Anatomy {
   }
   if (heredoc) parts.push({ kind: 'code', text: typed.slice(heredoc.index), label: 'code it just wrote', end: typed.length });
 
-  return { command: typed, parts, name, what, inline, choices: inline ? [] : ruleChoices(typed, parts, wrappers, language?.lang) };
+  return { command: typed, parts, name, what, inline, lang: language?.lang, choices: ruleChoices(typed, parts, wrappers, inline, language?.lang) };
 }
 
 /** The rules a command could become, narrowest first; the one to suggest is marked. */
-function ruleChoices(command: string, parts: Part[], wrappers: Wrapper[], lang?: string): RuleChoice[] {
+function ruleChoices(command: string, parts: Part[], wrappers: Wrapper[], inline: boolean, lang?: string): RuleChoice[] {
+  // A here-document fed to cat, tee…: what it writes is the point, and writing asks anyway.
+  if (inline && !lang) return [];
   const out: RuleChoice[] = [];
   // A "*" or "?" in a rule matches anything, so a command that has one can't be named exactly.
   const add = (c: RuleChoice) => !/[*?]/.test(c.pattern.replace(/ \*$/, '')) && !out.some((o) => o.pattern === c.pattern) && out.push(c);
-  add({ pattern: command, title: 'Exactly this command' });
+  if (!inline) add({ pattern: command, title: 'Exactly this command' });
   const at = (p: Part) => `${command.slice(0, p.end)} *`;
+  const through = wrappers.find((w) => !w.label);
+  const via = through ? `, through ${through.tool}` : '';
   for (const p of [...parts].reverse()) {
     switch (p.kind) {
+      case 'code': {
+        // `-c '…'`: any code given that way ("uv run python -c *"). A here-document's is
+        // left out of the rules altogether (splitCommands), so only the broader rules cover it.
+        if (p.text.startsWith('<<')) break;
+        const flag = tokens(p.text)[0]?.raw ?? '';
+        add({
+          pattern: `${command.slice(0, p.end - p.text.length)}${flag} *`,
+          title: lang === 'shell' ? `Any shell commands it writes${via}` : `Any ${lang} code it writes${via}`,
+          risk: lang === 'shell' ? 'Runs any commands, so it’s the same as allowing everything.' : `Runs any ${lang} code, so it can change any file.`,
+          danger: lang === 'shell',
+        });
+        break;
+      }
       case 'script':
       case 'module':
         add({ pattern: at(p), title: `${p.kind === 'module' ? `The module ${p.text.replace(/^-m\s+/, '')}` : p.text}, with any arguments` });
@@ -251,11 +271,10 @@ function ruleChoices(command: string, parts: Part[], wrappers: Wrapper[], lang?:
         break;
       }
       case 'interpreter': {
-        const through = wrappers.find((w) => !w.label);
         const name = lang === 'shell' ? 'shell script' : `${lang} script`;
         add({
           pattern: at(p),
-          title: `Any ${name}${through ? `, through ${through.tool}` : ''}`,
+          title: `Any ${name}${inline ? ' or code' : ''}${via}`,
           risk: lang === 'shell' ? 'Runs any commands, so it’s the same as allowing everything.' : `Runs any ${lang} code, so it can change any file.`,
           danger: lang === 'shell',
         });
@@ -314,8 +333,7 @@ export function commandFacts(line: string, root?: string): Fact[] {
     const url = /^https?:\/\/([^/\s'"]+)/.exec(t.value);
     if (url) add({ kind: 'internet', text: `Uses the internet: ${url[1]}` });
   }
-  const parts = line.split(/\s*(?:&&|\|\||;|\||\n)\s*/).filter(Boolean);
-  for (const part of parts) {
+  for (const part of splitCommands(line)) {
     const a = commandAnatomy(part, root);
     const prog = a.parts.find((p) => p.kind === 'program' || p.kind === 'interpreter');
     const name = prog ? base(prog.text.split(/\s/)[0]) : '';
@@ -324,7 +342,7 @@ export function commandFacts(line: string, root?: string): Fact[] {
       if (!facts.some((f) => f.kind === 'internet')) add({ kind: 'internet', text: 'Uses the internet' });
     }
     if (/^(rm|rmdir|trash|unlink|shred|srm)$/.test(name)) add({ kind: 'deletes', text: 'Deletes files' });
-    const redirect = /(?:^|[^\d&])>>?\s*(['"]?)([^\s'"&|;]+)\1/.exec(a.command.replace(/\d?>&\d|&?>>?\s*\/dev\/null/g, ''));
+    const redirect = /(?:^|[^\d&])>>?\s*(['"]?)([^\s'"&|;]+)\1/.exec(hideQuotedArrows(a.command).replace(/\d?>&\d|&?>>?\s*\/dev\/null/g, ''));
     if (redirect) {
       const path = redirect[2];
       add(outside(path) ? { kind: 'outside', text: `Writes outside the book: ${path}` } : { kind: 'writes', text: `Writes ${path}` });
