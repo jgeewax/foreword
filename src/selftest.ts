@@ -4617,6 +4617,9 @@ async function gitChecks() {
   await sleep(400);
   out.badge = document.querySelector('.activity-bar button[aria-label^="Source control"] .activity-badge')?.textContent;
   out.rows = [...document.querySelectorAll('.git-file')].map((e) => e.textContent);
+  // The names have the row: the hover buttons take no room until the row is pointed at.
+  out.namesWhole = [...document.querySelectorAll<HTMLElement>('.git-file .git-name')].map((n) => n.scrollWidth <= n.clientWidth);
+  out.hiddenButtons = [...document.querySelectorAll('.git-file .scm-hover')].every((b) => b.getBoundingClientRect().width === 0);
   out.snapshotPanel = await snap('git-panel');
   await studio.git.showWorking();
   await waitFor(() => !!g().view?.files, 10000, 'diff');
@@ -4645,11 +4648,14 @@ async function gitChecks() {
   (out.box as Record<string, unknown>).threeLines = height();
   await type('');
   (out.box as Record<string, unknown>).emptyAgain = height();
-  // Hover buttons: each icon centred in its button.
+  // Hover buttons: each icon centred in its button (shown as if hovered: they take no room till then).
+  const hovered = document.head.appendChild(document.createElement('style'));
+  hovered.textContent = 'button.icon.scm-hover { display: inline-grid !important; }';
   const stageButton = action(file, false, 'Stage Changes');
   const b = stageButton?.getBoundingClientRect();
   const icon = stageButton?.querySelector('svg')?.getBoundingClientRect();
   out.hoverIcon = b && icon && { button: [b.width, b.height], offsetX: icon.left + icon.width / 2 - (b.left + b.width / 2), offsetY: icon.top + icon.height / 2 - (b.top + b.height / 2) };
+  hovered.remove();
   // + stages a file (Staged Changes, above Changes); − takes it back out.
   stageButton?.click();
   await waitFor(() => g().repo?.staged.length === 1, 10000, 'staged').catch(() => {});
@@ -4663,7 +4669,7 @@ async function gitChecks() {
   out.snapshotStaged = await snap('git-staged');
   // The hover buttons, shown as if every row were hovered (a snapshot can't hover).
   const showAll = document.head.appendChild(document.createElement('style'));
-  showAll.textContent = '.scm-hover { visibility: visible !important; }';
+  showAll.textContent = 'button.icon.scm-hover { display: inline-grid !important; }';
   out.snapshotActions = await snap('git-actions');
   showAll.remove();
   await studio.git.showWorking(file, true);

@@ -267,9 +267,10 @@ function FileGroup({ files, staged }: { files: GitFile[]; staged: boolean }) {
               ])}
             >
               <FileIcon path={f.path} />
-              <span className="git-name">{name}</span>
-              <span className="git-folder">{folder}</span>
-              <span className="spacer" />
+              <span className="git-label">
+                <span className="git-name">{name}</span>
+                {folder && <span className="git-folder">{folder}</span>}
+              </span>
               {f.status !== 'D' && <RowAction icon="goToFile" label="Open File" onClick={() => void studio.openFile(f.path)} />}
               <RowAction icon={staged ? 'minus' : 'plus'} label={moveLabel} onClick={() => move([f.path])} />
               <span className="git-status">{STATUS[f.status].letter}</span>
