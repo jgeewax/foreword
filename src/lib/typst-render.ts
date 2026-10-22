@@ -60,3 +60,18 @@ export function svgHeightPt(svg: string): number | null {
   const m = /<svg[^>]*\sheight="([\d.]+)pt"/.exec(svg);
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * A passage set on its own at `widthPt` (so it wraps): references to the
+ * book's labels, which aren't there, show as the label in grey instead of
+ * stopping it, as in the chapter preview.
+ */
+export function passageSource(text: string, widthPt: number): string {
+  return `#set page(width: ${widthPt}pt)\n#show ref: it => text(fill: luma(150), str(it.target))\n${text}`;
+}
+
+/** Why a snippet wasn't set, in a few words: Typst's first error ("unknown variable: sidenote"). */
+export function renderReason(error: string | null): string {
+  const first = /error:\s*(.+)/.exec(error ?? '')?.[1]?.trim();
+  return first ?? (error?.split('\n')[0].trim() || 'it couldn’t be set');
+}

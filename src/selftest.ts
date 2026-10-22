@@ -1322,6 +1322,20 @@ async function optionsDoneChecks() {
     await sleep(400);
   };
   const check = () => [...document.querySelectorAll('.options-reply')].at(-1)?.querySelector('.task-check')?.textContent ?? null;
+  // Preview: each option set as it would print (an image as wide as its card at most); Text puts the Typst back.
+  const view = localStorage.getItem('studio.optionsView');
+  const tab = (name: string) => [...document.querySelectorAll<HTMLButtonElement>('.options-view [role="tab"]')].find((b) => b.textContent === name);
+  tab('Preview')?.click();
+  await waitFor(() => document.querySelectorAll('.option-preview img').length === 3, 20000, 'the options set').catch(() => {});
+  out.preview = {
+    set: [...document.querySelectorAll<HTMLImageElement>('.option-preview img')].map((img) => img.getBoundingClientRect().width <= img.closest('.option-preview')!.getBoundingClientRect().width),
+    selected: tab('Preview')?.getAttribute('aria-selected'),
+  };
+  tab('Text')?.click();
+  await sleep(100);
+  out.preview = { ...(out.preview as object), backToText: document.querySelectorAll('.option-card pre.option-text').length };
+  if (view == null) localStorage.removeItem('studio.optionsView');
+  else localStorage.setItem('studio.optionsView', view);
   out.beforePick = check();
   await use(1);
   out.picked = { check: check(), inEditor: model.getLineContent(line), dirty: !!studio.state.dirty[file] };

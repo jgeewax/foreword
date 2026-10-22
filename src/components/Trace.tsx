@@ -22,6 +22,7 @@ import { AssistantMark } from './AssistantSettings';
 import { CommandPermission, RuleChip, scopeWords } from './CommandPermission';
 import { FileIcon, Icon, type IconName } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
+import { TypstPassage } from './TypstSnippet';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -520,9 +521,25 @@ function StepItem({ item, editOpen }: { item: ChatItem; editOpen: boolean }) {
 type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
 
 /** Options-mode reply: one card per option; picking one replaces the passage in the editor. */
+/** The options as written (Typst), or as they'd print; the last choice is the next reply's. */
+type OptionsView = 'text' | 'preview';
+const OPTIONS_VIEWS: { id: OptionsView; label: string; title: string }[] = [
+  { id: 'text', label: 'Text', title: 'The options as written, in Typst: what goes into the chapter' },
+  { id: 'preview', label: 'Preview', title: 'The options as they’d print, each set on its own' },
+];
+const OPTIONS_VIEW_KEY = 'studio.optionsView';
+function lastOptionsView(): OptionsView {
+  try {
+    return localStorage.getItem(OPTIONS_VIEW_KEY) === 'preview' ? 'preview' : 'text';
+  } catch {
+    return 'text';
+  }
+}
+
 function OptionsReply({ item }: { item: AssistantItem }) {
   const parsed = useMemo(() => parseOptions(item.text), [item.text]);
   const { target, applied } = item.options!;
+  const [view, setView] = useState<OptionsView>(lastOptionsView);
   if (!parsed.options.some((o) => o.text != null)) {
     return (
       <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
@@ -531,6 +548,14 @@ function OptionsReply({ item }: { item: AssistantItem }) {
     );
   }
   const where = target && `${target.path.split('/').pop()}:${target.start.line}`;
+  const pick = (v: OptionsView) => {
+    setView(v);
+    try {
+      localStorage.setItem(OPTIONS_VIEW_KEY, v);
+    } catch {
+      // Remembering it is a nicety.
+    }
+  };
   return (
     <div className="msg assistant options-reply">
       {parsed.intro && (
@@ -538,14 +563,46 @@ function OptionsReply({ item }: { item: AssistantItem }) {
           <Markdown text={parsed.intro} />
         </div>
       )}
-      <div className="options-target">{target ? `Pick one to ${target.text ? 'replace' : 'insert at'} ${where}` : 'Nothing was selected: copy the one you want.'}</div>
+      <div className="options-bar">
+        <div className="options-target">
+          {target ? (
+            <>
+              Pick one to {target.text ? 'replace' : 'insert at'} <span className="options-where">{where}</span>
+            </>
+          ) : (
+            'Nothing was selected: copy the one you want.'
+          )}
+        </div>
+        <div className="segmented options-view" role="tablist" aria-label="Show the options as">
+          {OPTIONS_VIEWS.map((v) => (
+            <button key={v.id} role="tab" aria-selected={view === v.id} className={view === v.id ? 'active' : ''} title={v.title} onClick={() => pick(v.id)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {parsed.options.map((o, i) => (
         <div key={i} className={`option-card${applied === i ? ' applied' : ''}`}>
           <div className="option-head">
             <span className="option-n">Option {o.n}</span>
             {o.label && <span className="option-label">{o.label}</span>}
           </div>
-          {o.text != null && <pre className={`option-text${o.complete ? '' : ' streaming'}`}>{o.text}</pre>}
+          {o.text != null &&
+            (view === 'preview' && o.complete ? (
+              <div className="option-preview">
+                <TypstPassage
+                  source={o.text}
+                  failed={(reason) => (
+                    <>
+                      <div className="option-preview-note">Can’t set this one apart from the book ({reason}). As written:</div>
+                      <pre className="option-text">{o.text}</pre>
+                    </>
+                  )}
+                />
+              </div>
+            ) : (
+              <pre className={`option-text${o.complete ? '' : ' streaming'}`}>{o.text}</pre>
+            ))}
           {o.note && (
             <div className="option-note md">
               <Markdown text={o.note} />
