@@ -16,7 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.4:** Typst Studio is now Foreword · Ask mode, and plans that stay in the chat · commands that say what they run, with “always” rules you can read and undo · a long book's preview keeps its place · chapters included in code
+**New in 0.5:** Discuss mode, which weighs a direction with you and argues back · the assistant offers the mode that suits what you asked · a preview of just the chapter you're in, for a long book's speed · Done and New task on the message box · <kbd>⌘</kbd><kbd>Z</kbd> a step at a time, and typing `*` over a word wraps it
 
 <br>
 
@@ -52,7 +52,7 @@ Foreword is made for one job: **writing a book**, with an AI assistant at your s
 
 A book lives or dies on details: a figure that lands two pages late, a reference that points nowhere, a citation that didn't resolve. Foreword typesets the book from what you've typed, saved or not, so you catch them the moment they happen, not after a slow build.
 
-It redraws only the pages in view: in a 491-page book, a change shows up in about a tenth of a second. It keeps only the pages near them drawn, so even a 700-page book stays light. Click anything in the pages to jump to its source. A mistake is underlined where it is, in plain words, and the pages stay up while you fix it.
+It redraws only the pages in view: in a 491-page book, a change shows up in about a tenth of a second. It keeps only the pages near them drawn, so even a 700-page book stays light, and it can show just the chapter you're in, so a keystroke there is on the page in under a tenth of a second too. Click anything in the pages to jump to its source. A mistake is underlined where it is, in plain words, and the pages stay up while you fix it.
 
 </td>
 <td width="50%" valign="top">
@@ -181,7 +181,7 @@ Each conversation is its own task, and several can run at once. Choose the model
 - **Find anything.** Search every chapter at once and replace across the book (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd>), see the whole book in Contents (each chapter with its sections and how many words), and go to a chapter by its number or name (<kbd>⌘</kbd><kbd>P</kbd>).
 - **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons and status bar wear it. A book that already has a Peacock colour keeps it.
 - **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Foreword? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).
-- **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code, formatting on save, wrapping at a column with rulers, and a window for each book.
+- **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code (type `_` or `*` over a word to wrap it), formatting on save, wrapping at a column with rulers, and a window for each book.
 
 ## Download
 

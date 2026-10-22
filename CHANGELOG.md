@@ -2,6 +2,36 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.5.0 · 22 October 2026
+
+### The assistant
+
+- **Discuss mode, in place of Plan.** Plan answered every message with an outline, even a question that wasn't settled yet, like "should this be two volumes?". Discuss weighs it with you: two or three real directions, what each costs, and which it would pick. It argues against a weaker idea, points to the book's own lines, and keeps its turns short. **Write it** first says what you agreed, then writes it. `/plan` still works, as Discuss.
+- **The assistant offers another mode** when one would suit what you asked, such as a question of direction asked in Write. Under its reply, *How should it go on?* offers two ways, each saying what it would do: *Talk it through* in Discuss, or carry on as you are. A pick switches the mode and goes on.
+- **Done and New task sit on top of the message box**, beside the reply you've just read and the box you type in, with the context meter at the right. They stay put, and Done is greyed until there's something to finish. When a chat grows long, New task turns blue: long chats get slower. ⌘T starts a new task and ⇧⌘D marks this one done.
+- **Slash commands anywhere in a message:** type / after a space ("rewrite this /options") and pick one. It runs, and the rest of your message stays in the box, ready to send in the new mode.
+- **Revise the style guide** (Style guide ▸ Revise…, the palette, or Settings ▸ This book): say what should change ("less formal", "never use semicolons"), and the assistant changes just that in `WRITING_STYLE.md`, keeping every other line word for word. What you say after a draft, redraft or interview changes the guide the same way, rather than writing it all again.
+
+### The preview
+
+- **Show only the chapter you're in**, for a long book's speed: **Chapter** in the Book | Chapter | Cover switch above the preview, or Settings ▸ General ▸ Preview ▸ Shows. In a 743-page book, a keystroke took about half a second to show, and up to 5 seconds when it moved text onto another page; with the chapter alone it shows in under a tenth of a second. The book's own setup still applies, the chapter keeps its number, and a reference to another chapter shows in grey instead of stopping the preview. Open another chapter and the preview goes there.
+- **A click in the preview rings the spot in the editor**, as a click in the editor rings it in the pages.
+
+### The editor
+
+- **⌘Z undoes your typing a step at a time again**, and ⇧⌘Z redoes it. Before, ⌘Z took out a run of recent typing all at once, then did nothing more.
+- **Typing `_` `*` `$` `(` over a selection wraps it**, as in VS Code: `_word_`, `*word*`, `$word$`, `(word)`, and the same for `[` `{` `"` and backticks. The word stays selected.
+- **Emphasis and strong text are italic and bold** in the editor, as in VS Code: `_word_` and `*word*` look like what they'll print.
+
+### Contents
+
+- **Collapse all and Expand all**, as in VS Code's Outline: fold every chapter down to its title to see just the chapters. A folded chapter is lit while you're anywhere in it, and what's folded stays folded while another view shows.
+
+### Fixes
+
+- Switching what the preview shows could fail with "tinymist exited during initialize".
+- The text dialog's multi-line form sends on Return, as the chat does.
+
 ## 0.4.0 · 21 October 2026
 
 **Typst Studio is now Foreword.** The name was taken by other projects, and the app is for writing a book, whatever it's set in. Your copy updates as before and keeps its books, settings and History. A book's settings move to their new names (`.foreword.json`, `.foreword/`) the first time it's opened. In Applications the app keeps its old file name until you rename it or download Foreword again.
