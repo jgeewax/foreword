@@ -767,7 +767,7 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .epub-done p { margin: 0 0 8px; line-height: 1.45; }
 .epub-lost { margin: 0 0 8px; padding-left: 20px; line-height: 1.5; }
 .modal.style-templates { width: min(940px, calc(100% - 32px)); height: min(640px, calc(100% - 48px)); display: flex; flex-direction: column; }
-.style-templates-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 12px; padding-top: 12px; overflow: hidden; }
+.style-templates-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 12px; padding-top: 12px; overflow: hidden; }
 .style-template-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 2px; }
 .style-template-preview { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .style-template-preview .kind-switch { align-self: flex-start; margin-left: 0; }
