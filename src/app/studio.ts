@@ -10,6 +10,7 @@ import { Documents, type MergeQuestion } from '../editor/documents';
 import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
+import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
@@ -2897,6 +2898,7 @@ export class Studio {
     const bottom = editor.getTopForLineNumber(range.endLineNumber) + editor.getOption(monaco.editor.EditorOption.lineHeight);
     const to = jumpScrollTop(top, bottom, editor.getScrollTop(), editor.getLayoutInfo().height);
     if (to !== null) editor.setScrollTop(to);
+    rippleAt(editor, range.getStartPosition());
     // The click gave the preview webview keyboard focus; hand it back to the editor.
     await ipc.focusMain().catch(() => {});
     editor.focus();

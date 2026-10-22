@@ -5427,6 +5427,14 @@ async function previewJumpChecks() {
   await sleep(300);
   await ipc.previewEval(`(() => { const c = document.getElementById('typst-container-main'); if (c) c.scrollTop = c.scrollHeight * 0.55; })()`);
   await sleep(1500);
+  // The ring the click draws where it landed in the editor (ripple.ts), held half grown for the snapshot.
+  const rings: { left: number; top: number; size: string }[] = [];
+  const watch = new MutationObserver((ms) => {
+    for (const m of ms) for (const n of m.addedNodes) if (n instanceof HTMLElement && n.classList.contains('jump-ripple')) rings.push({ left: parseFloat(n.style.left), top: parseFloat(n.style.top), size: n.style.getPropertyValue('--ripple') });
+  });
+  watch.observe(editor().getContainerDomNode(), { childList: true, subtree: true }); // the view's own node is replaced with the file
+  const hold = document.head.appendChild(document.createElement('style'));
+  hold.textContent = '.jump-ripple { animation-play-state: paused !important; animation-delay: -0.2s !important; }';
   await ipc.previewEval(`(() => {
     const texts = [...document.querySelectorAll('.typst-text')].filter((t) => { const r = t.getBoundingClientRect(); return r.top > innerHeight * 0.55 && r.bottom < innerHeight * 0.9 && r.width > 20; });
     const t = texts[Math.floor(texts.length / 2)];
@@ -5437,7 +5445,11 @@ async function previewJumpChecks() {
   await sleep(2000);
   editor().render(true);
   out.click = where();
+  watch.disconnect();
+  const start = editor().getScrolledVisiblePosition(editor().getSelection()!.getStartPosition())!;
+  out.ripple = { rings: rings.length, onSelection: rings.length === 1 && Math.abs(rings[0].left - start.left) < 2 && Math.abs(rings[0].top - (start.top + start.height / 2)) < 2, size: rings[0]?.size };
   out.snapshot = await snap('preview-jump');
+  hold.remove();
   return out;
 }
 

@@ -714,6 +714,12 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .monaco-editor .ai-edit-removal { width: 0 !important; height: 0 !important; margin-left: 1px; border-left: 5px solid var(--ai-edit); border-top: 4px solid transparent; border-bottom: 4px solid transparent; margin-top: -4px; }
 .monaco-editor .ai-edit-bg { background: color-mix(in srgb, var(--ai-edit) 7%, transparent); }
 .monaco-editor .ai-read-line { background: color-mix(in srgb, var(--ai-read) 55%, transparent); width: 2px !important; margin-left: 7px; }
+/* Where a click in the preview landed: Tinymist's jump ring, as the preview draws it (ripple.ts). */
+.monaco-editor .jump-ripple {
+  position: absolute; z-index: 10; width: 0; height: 0; border: 2px solid #66bab7; border-radius: 50%;
+  pointer-events: none; animation: jump-ripple 0.4s linear;
+}
+@keyframes jump-ripple { to { width: var(--ripple); height: var(--ripple); margin: calc(var(--ripple) / -2); opacity: 0.01; } }
 .history-filter { display: flex; align-items: center; gap: 6px; margin: 0 8px 6px; padding: 3px 4px 3px 8px; border-radius: 6px; background: var(--bg-3); font-size: 12px; }
 .history-filter span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* What changed, in its tab: a bar with what it is and what can be done, then each file as a diff (or word by word). */
