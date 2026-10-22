@@ -1,23 +1,33 @@
 // Typst snippets rendered to SVG for showing outside the book (chat replies,
-// review comments). Requests in the same moment go to the app in one call;
-// results are kept, so a reply re-rendering doesn't compile again.
+// review comments), with the book's own definitions when there's a book.
+// Requests in the same moment go to the app in one call; results are kept,
+// so a reply re-rendering doesn't compile again.
 import { ipc } from './ipc';
 
 export type RenderedSnippet = { pages: string[]; error: string | null };
 
+/**
+ * The book a snippet is set in (app/snippet-book.ts): its Typst root, relative
+ * to the folder opened ('' for the folder itself), and its imports, put in
+ * front of the snippet so `$#vect("v")$` is set with the book's own `vect`.
+ */
+export type SnippetBook = { root: string; prelude: string };
+
 const cache = new Map<string, Promise<RenderedSnippet>>();
 const MAX_CACHED = 400;
-let queue: { source: string; fill: string; sizePt: number; resolve: (r: RenderedSnippet) => void }[] = [];
+let queue: { source: string; fill: string; sizePt: number; book: SnippetBook | null; resolve: (r: RenderedSnippet) => void }[] = [];
 let timer: ReturnType<typeof setTimeout> | undefined;
+
+const bookKey = (book: SnippetBook | null) => (book ? `${book.root}|${book.prelude}` : '');
 
 function flush() {
   timer = undefined;
   const jobs = queue;
   queue = [];
-  // One call per colour and size, at most 40 snippets each.
+  // One call per colour, size and book, at most 40 snippets each.
   const groups = new Map<string, typeof jobs>();
   for (const j of jobs) {
-    const key = `${j.fill}|${j.sizePt}`;
+    const key = `${j.fill}|${j.sizePt}|${bookKey(j.book)}`;
     groups.set(key, [...(groups.get(key) ?? []), j]);
   }
   for (const group of groups.values()) {
@@ -28,6 +38,7 @@ function flush() {
           chunk.map((j) => j.source),
           chunk[0].fill,
           chunk[0].sizePt,
+          chunk[0].book,
         )
         .then((results) => chunk.forEach((j, k) => j.resolve(results[k] ?? { pages: [], error: 'not rendered' })))
         .catch((e) => chunk.forEach((j) => j.resolve({ pages: [], error: String(e?.message ?? e) })));
@@ -35,13 +46,13 @@ function flush() {
   }
 }
 
-/** A snippet's SVG pages in `fill` (#rrggbb) at `sizePt`; never rejects. */
-export function renderTypst(source: string, fill: string, sizePt = 11): Promise<RenderedSnippet> {
-  const key = `${fill}|${sizePt}|${source}`;
+/** A snippet's SVG pages in `fill` (#rrggbb) at `sizePt`, set in `book` if there is one; never rejects. */
+export function renderTypst(source: string, fill: string, sizePt = 11, book: SnippetBook | null = null): Promise<RenderedSnippet> {
+  const key = `${fill}|${sizePt}|${bookKey(book)}|${source}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const p = new Promise<RenderedSnippet>((resolve) => {
-    queue.push({ source, fill, sizePt, resolve });
+    queue.push({ source, fill, sizePt, book, resolve });
     timer ??= setTimeout(flush, 15);
   });
   if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!);
@@ -58,6 +69,12 @@ export function mathSource(span: string): string {
 /** An SVG's height in points (Typst writes `height="17.952pt"`). */
 export function svgHeightPt(svg: string): number | null {
   const m = /<svg[^>]*\sheight="([\d.]+)pt"/.exec(svg);
+  return m ? Number(m[1]) : null;
+}
+
+/** An SVG's width in points (Typst writes `width="107.52pt"`). */
+export function svgWidthPt(svg: string): number | null {
+  const m = /<svg[^>]*\swidth="([\d.]+)pt"/.exec(svg);
   return m ? Number(m[1]) : null;
 }
 

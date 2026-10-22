@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { passageSource, renderReason, renderTypst, svgHeightPt, type RenderedSnippet } from '../lib/typst-render';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { studio } from '../app/studio';
+import { useStore } from '../lib/store';
+import { passageSource, renderReason, renderTypst, svgHeightPt, svgWidthPt, type RenderedSnippet } from '../lib/typst-render';
 
 /** Size the snippet is set in; shown in em, so it scales with the text around it. */
 const SIZE_PT = 11;
@@ -28,27 +30,36 @@ function useInk(): string {
 
 const svgUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
+/** The book's imports, which snippets are set with, so `$#vect("v")$` uses the book's own `vect` (null: no book, or it imports nothing). */
+const useBook = () => useStore(studio.store, (s) => s.snippetBook);
+
+/** An SVG's size, `scale` em per SIZE_PT: by its width, so a box too narrow for it shrinks it whole instead of squeezing it. */
+function sized(svg: string, scale: number): CSSProperties {
+  const w = svgWidthPt(svg);
+  return w != null ? { width: `${(w / SIZE_PT) * scale}em` } : { height: `${((svgHeightPt(svg) ?? SIZE_PT) / SIZE_PT) * scale}em` };
+}
+
 /**
- * A Typst snippet drawn as it would print: inline (a formula in a sentence)
- * or as a block. As an image (a data: URL), so nothing in it can run. Until
- * it's ready, or if it doesn't compile, `fallback` shows instead.
+ * A Typst snippet drawn as it would print, with the book's definitions:
+ * inline (a formula in a sentence) or as a block. As an image (a data: URL),
+ * so nothing in it can run. Until it's ready, or if it doesn't compile,
+ * `fallback` shows instead.
  */
 export function TypstSnippet({ source, inline, fallback = null, caption }: { source: string; inline: boolean; fallback?: ReactNode; caption?: string }) {
   const ink = useInk();
+  const book = useBook();
   const [result, setResult] = useState<RenderedSnippet | null>(null);
   useEffect(() => {
     let live = true;
-    setResult(null);
-    void renderTypst(source, ink, SIZE_PT).then((r) => live && setResult(r));
+    // What's shown stays until the new one is ready (the book's imports arriving, a theme change).
+    void renderTypst(source, ink, SIZE_PT, book).then((r) => live && setResult(r));
     return () => {
       live = false;
     };
-  }, [source, ink]);
+  }, [source, ink, book]);
   const pages = (result?.pages ?? []).filter((svg) => (svgHeightPt(svg) ?? 0) > 6); // more than the margins
   if (!pages.length) return <>{fallback}</>;
-  const imgs = pages.map((svg, i) => (
-    <img key={i} className={inline ? 'typst-inline' : 'typst-page'} src={svgUrl(svg)} alt={source} title={inline ? source : undefined} style={{ height: `${((svgHeightPt(svg) ?? SIZE_PT) / SIZE_PT) * SCALE}em` }} />
-  ));
+  const imgs = pages.map((svg, i) => <img key={i} className={inline ? 'typst-inline' : 'typst-page'} src={svgUrl(svg)} alt={source} title={inline ? source : undefined} style={sized(svg, SCALE)} />);
   if (inline) return <>{imgs}</>;
   return (
     <div className="typst-block">
@@ -64,20 +75,39 @@ const PASSAGE_SCALE = 1.05;
 const ptPerPx = (fontPx: number) => SIZE_PT / (PASSAGE_SCALE * fontPx);
 
 /**
- * A passage for the book (an option to pick) as it would print: set as wide
- * as the box it's in, about the size of the text around it, so it wraps like a
- * paragraph. `failed` shows when it can't be set on its own (it uses
- * something only the book defines), with Typst's reason.
+ * A passage (an option to pick, a Typst block in the chat) as it would print,
+ * with the book's definitions: set as wide as the box it's in, about the size
+ * of the text around it, so it wraps like a paragraph. `failed` shows when it
+ * can't be set (it uses something only one chapter defines), with Typst's
+ * reason; `waiting` until it's set. `caption` heads what it makes, and
+ * `className` is the box's (padding included: the passage fits inside it).
  */
-export function TypstPassage({ source, failed }: { source: string; failed: (reason: string) => ReactNode }) {
+export function TypstPassage({
+  source,
+  failed,
+  waiting = <span className="typst-passage-wait">Setting it…</span>,
+  caption,
+  className,
+}: {
+  source: string;
+  failed: (reason: string) => ReactNode;
+  waiting?: ReactNode;
+  caption?: string;
+  className?: string;
+}) {
   const ink = useInk();
+  const book = useBook();
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    // In steps, rounded down, so it fits and a small resize doesn't set it again.
-    const measure = () => el.clientWidth && setWidth(Math.max(120, Math.floor((el.clientWidth * ptPerPx(parseFloat(getComputedStyle(el).fontSize))) / 20) * 20));
+    const measure = () => {
+      const style = getComputedStyle(el);
+      const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      // In steps, rounded down, so it fits and a small resize doesn't set it again.
+      if (inner > 0) setWidth(Math.max(120, Math.floor((inner * ptPerPx(parseFloat(style.fontSize))) / 20) * 20));
+    };
     measure();
     const watch = new ResizeObserver(measure);
     watch.observe(el);
@@ -87,18 +117,23 @@ export function TypstPassage({ source, failed }: { source: string; failed: (reas
   useEffect(() => {
     if (!width) return;
     let live = true;
-    void renderTypst(passageSource(source, width), ink, SIZE_PT).then((r) => live && setResult(r));
+    void renderTypst(passageSource(source, width), ink, SIZE_PT, book).then((r) => live && setResult(r));
     return () => {
       live = false;
     };
-  }, [source, ink, width]);
+  }, [source, ink, width, book]);
   const pages = (result?.pages ?? []).filter((svg) => (svgHeightPt(svg) ?? 0) > 6);
   return (
-    <div ref={box} className="typst-passage">
+    <div ref={box} className={className ? `typst-passage ${className}` : 'typst-passage'}>
       {!result ? (
-        <span className="typst-passage-wait">Setting it…</span>
+        waiting
       ) : pages.length ? (
-        pages.map((svg, i) => <img key={i} className="typst-page" src={svgUrl(svg)} alt={source} style={{ height: `${((svgHeightPt(svg) ?? SIZE_PT) / SIZE_PT) * PASSAGE_SCALE}em` }} />)
+        <>
+          {caption && <div className="typst-caption">{caption}</div>}
+          {pages.map((svg, i) => (
+            <img key={i} className="typst-page" src={svgUrl(svg)} alt={source} style={sized(svg, PASSAGE_SCALE)} />
+          ))}
+        </>
       ) : (
         failed(renderReason(result.error))
       )}

@@ -1,7 +1,7 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react';
 import { parseMarkdown, type Block, type Inline } from '../lib/markdown';
 import { mathSource } from '../lib/typst-render';
-import { TypstSnippet } from './TypstSnippet';
+import { TypstPassage, TypstSnippet } from './TypstSnippet';
 
 function inlines(nodes: Inline[]): ReactNode {
   return nodes.map((n, k) => {
@@ -41,16 +41,25 @@ function block(b: Block, k: number): ReactNode {
     case 'quote':
       return <blockquote key={k}>{inlines(b.c)}</blockquote>;
     case 'code':
-      // Typst blocks keep their source (it may be markup to copy) and show what it makes.
+      // Typst blocks keep their source (it may be markup to copy) and show what it makes, wrapped as the pane is wide, once it's all there.
       if (/^(typst|typ)$/i.test(b.lang ?? '')) {
         return (
           <div key={k} className="md-typst">
             <pre className="md-code" data-lang={b.lang}>{b.v}</pre>
-            <TypstSnippet source={b.v} inline={false} caption="Renders as" />
+            {!b.open && <TypstPassage source={b.v} caption="Renders as" className="typst-block" waiting={null} failed={() => null} />}
           </div>
         );
       }
       return <pre key={k} className="md-code" data-lang={b.lang || undefined}>{b.v}</pre>;
+    case 'math': {
+      // An equation on lines of its own, set as the book sets it; as written until it's all there, or if it can't be set.
+      const written = <pre className="md-code" data-lang="typst">{b.v}</pre>;
+      return (
+        <div key={k} className="md-equation">
+          {b.open ? written : <TypstSnippet source={b.v} inline fallback={written} />}
+        </div>
+      );
+    }
     case 'table':
       // Wide tables scroll sideways in their own box.
       return (

@@ -2,6 +2,8 @@
 // in markup and `include "…"` in code, as in `#{ include "…" }` or
 // `#chapter(include "…")`, but not in comments, strings, raw text or maths.
 // Pure; the book's chapter order, New Chapter and the EPUB export use it.
+// Also what it imports at the top level (scanImports), for setting snippets
+// with the book's own definitions.
 
 /**
  * An `include "…"` in the text: its path as written, where it is (`start` at
@@ -15,10 +17,28 @@ export type IncludeAt = { spec: string; start: number; end: number; code: boolea
 const STATEMENT = new Set(['let', 'set', 'show', 'include', 'import', 'if', 'for', 'while', 'context', 'return']);
 const IDENT = /[\p{L}_][\p{L}\p{N}_-]*/uy;
 
+/**
+ * A `#import "…"` at the top level of a file (not inside a block or a
+ * function): its path as written and the rest of the statement as written
+ * (`: *`, `: a, b`, ` as m`), comments and line breaks included.
+ */
+export type ImportAt = { spec: string; rest: string };
+
 /** The includes in a Typst file, in order. Follows `set heading(numbering: …)` through the blocks it's scoped to. */
 export function scanIncludes(text: string): IncludeAt[] {
+  return scanUses(text).includes;
+}
+
+/** The top-level imports in a Typst file, in order. */
+export function scanImports(text: string): ImportAt[] {
+  return scanUses(text).imports;
+}
+
+/** A Typst file's includes and top-level imports, in one pass. */
+export function scanUses(text: string): { includes: IncludeAt[]; imports: ImportAt[] } {
   const s = text;
   const out: IncludeAt[] = [];
+  const imports: ImportAt[] = [];
   const word = (i: number) => ((IDENT.lastIndex = i), IDENT.exec(s)?.[0] ?? null);
   const until = (i: number, end: string) => ((i = s.indexOf(end, i)) < 0 ? s.length : i);
 
@@ -41,8 +61,8 @@ export function scanIncludes(text: string): IncludeAt[] {
     return i;
   };
 
-  // Markup up to its closing ']' (or the end): returns the index after it.
-  const markup = (i: number, close: string, none: boolean): number => {
+  // Markup up to its closing ']' (or the end): returns the index after it. `top`: the file's own markup, not a block's.
+  const markup = (i: number, close: string, none: boolean, top = false): number => {
     while (i < s.length) {
       const c = s[i];
       if (c === close) return i + 1;
@@ -50,20 +70,25 @@ export function scanIncludes(text: string): IncludeAt[] {
       if (j !== i) i = j;
       else if (c === '\\') i += 2;
       else if (c === '[') i = markup(i + 1, ']', none);
-      else if (c === '#') ({ end: i, none } = embedded(i + 1, none));
+      else if (c === '#') ({ end: i, none } = embedded(i + 1, none, top));
       else i++;
     }
     return i;
   };
 
   // What follows a # in markup: a block, a statement (#set …, #include …), or a call chain (#chapter(…)[…]).
-  const embedded = (i: number, none: boolean): { end: number; none: boolean } => {
+  const embedded = (i: number, none: boolean, top = false): { end: number; none: boolean } => {
     if (s[i] === '{') return { end: code(i + 1, '}', none).end, none };
     if (s[i] === '(') return { end: code(i + 1, ')', none).end, none };
     if (s[i] === '[') return { end: markup(i + 1, ']', none), none };
     const name = word(i);
     if (!name) return { end: i, none };
-    if (STATEMENT.has(name)) return code(i, '\n', none, i);
+    if (STATEMENT.has(name)) {
+      const statement = code(i, '\n', none, i);
+      const imported = top && name === 'import' && /^import\s+"([^"\n]+)"([\s\S]*?);?\s*$/.exec(s.slice(i, statement.end));
+      if (imported) imports.push({ spec: imported[1], rest: imported[2] });
+      return statement;
+    }
     for (i += name.length; ; ) {
       if (s[i] === '(') i = code(i + 1, ')', none).end;
       else if (s[i] === '[') i = markup(i + 1, ']', none);
@@ -104,6 +129,6 @@ export function scanIncludes(text: string): IncludeAt[] {
     return { end: i, none };
   };
 
-  markup(0, '', false);
-  return out;
+  markup(0, '', false, true);
+  return { includes: out, imports };
 }

@@ -17,6 +17,7 @@ import { captureSelection, selectionLabel, type SourceSelection } from '../edito
 import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
+import type { SnippetBook } from '../lib/typst-render';
 import {
   absoluteFontPaths,
   outputPathPattern,
@@ -36,6 +37,7 @@ import { parseConfig, serializeConfig } from './config';
 import { chapterNumber, describeTool, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
 import { chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
 import { scanIncludes } from './includes';
+import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
@@ -412,6 +414,8 @@ export type StudioState = {
   epubOpen: boolean;
   /** The book's names for its files (chapters, headings): how the chat describes tool calls. */
   names: BookNames;
+  /** The book's imports, which the chat's formulas and Typst blocks are set with (null: none, or no book). */
+  snippetBook: SnippetBook | null;
   /** ⌘P: go to a file by name; ⇧⌘P: run a command. What it was opened for (false: closed). */
   quickOpen: false | 'files' | 'commands';
   /** The settings file: where it is, and why it can't be used (if so). */
@@ -513,6 +517,7 @@ const initialState: StudioState = {
   print: { open: false, status: 'idle', checks: [], files: {} },
   aiMarks: 0,
   names: NO_NAMES,
+  snippetBook: null,
   configFile: null,
   assistantDownload: null,
   quickOpen: false,
@@ -2511,7 +2516,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.composerDraft = '';
     this.code.reset();
-    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', previewChapter: null, bookPages: null, compile: { status: 'idle' } });
+    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
     await this.history.stop();
     this.git.reset();
     this.unsubscribeAgent?.();
@@ -5186,7 +5191,8 @@ export class Studio {
 
   /**
    * The book's names for its files: headings of the .typ files and the order the
-   * main file includes them. With `only`, just those files are re-read.
+   * main file includes them. With `only`, just those files are re-read. Also
+   * the imports the chat's snippets are set with.
    */
   private async refreshNames(only?: string[]) {
     const ws = this.state.workspace;
@@ -5195,6 +5201,7 @@ export class Studio {
     const titles = only ? { ...this.state.names.titles } : {};
     const unnumbered = new Set(only ? this.unnumberedFiles : []);
     const contents = only ? { ...this.state.contents } : {};
+    const uses = new Map(only ? this.fileUses : []);
     for (const f of only ? only.filter((p) => p.endsWith('.typ')) : typ) {
       const text = await this.currentText(f).catch(() => null);
       const heading = text == null ? null : firstHeading(text);
@@ -5204,19 +5211,29 @@ export class Studio {
       else unnumbered.delete(f);
       if (text != null) contents[f] = fileContents(text);
       else delete contents[f];
+      if (text != null) uses.set(f, fileUses(text));
+      else uses.delete(f);
     }
     const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
-    const includes = main && ws.entry ? mainIncludes(main, ws.entry, this.typstRoot()) : [];
+    const root = this.typstRoot();
+    const includes = main && ws.entry ? mainIncludes(main, ws.entry, root) : [];
     const chapters = includes.map((x) => x.file);
     // Unnumbered too: what the main file includes with heading numbers off around it (a preface, an afterword).
     const front = includes.filter((x) => x.unnumbered).map((x) => x.file);
+    const prelude = ws.entry ? snippetPrelude(ws.entry, (p) => uses.get(p), root) : '';
+    const was = this.state.snippetBook;
+    const snippetBook = prelude ? (was?.root === root && was.prelude === prelude ? was : { root, prelude }) : null;
     if (this.state.workspace?.root !== ws.root) return;
     this.unnumberedFiles = unnumbered;
-    this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...new Set([...unnumbered, ...front])] }, contents });
+    this.fileUses = uses;
+    this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...new Set([...unnumbered, ...front])] }, contents, snippetBook });
   }
 
   /** The files whose own text turns heading numbers off before their first heading (refreshNames keeps it). */
   private unnumberedFiles = new Set<string>();
+
+  /** What each .typ file imports and includes (refreshNames keeps it), for the snippets' imports. */
+  private fileUses = new Map<string, FileUses>();
 
   /** The last PDF exported in this session (Open Exported PDF). */
   lastExport: string | null = null;

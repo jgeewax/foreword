@@ -1536,12 +1536,18 @@ button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px col
 .monaco-editor .ctag-line.ctag-question { background: light-dark(rgba(130, 80, 223, 0.05), rgba(210, 168, 255, 0.05)); }
 
 
-/* Typst drawn outside the book (chat, comments): formulas inline, blocks with what they make. */
-img.typst-inline { display: inline-block; vertical-align: middle; margin: 0 0.05em; max-width: 100%; }
+/* Typst drawn outside the book (chat, comments): formulas inline, equations, blocks with what they make. Sized by width: too wide, they shrink whole. */
+img.typst-inline { display: inline-block; vertical-align: middle; margin: 0 0.05em; max-width: 100%; height: auto; }
+.md .md-typst, .md .md-equation { margin: 0 0 7px; }
 .md .md-typst pre.md-code { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .typst-block { padding: 6px 8px 8px; border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; background: var(--bg); overflow-x: auto; }
+/* A block that makes nothing to see (a #set rule) or can't be set: just its source. The box keeps its width, for setting it to. */
+.typst-block.typst-passage:not(:has(img)) { height: 0; padding-top: 0; padding-bottom: 0; border-bottom: none; visibility: hidden; }
+.md .md-typst:not(:has(img)) pre.md-code { border-radius: 5px; }
+.md-equation { text-align: center; }
+.md-equation pre.md-code { text-align: left; margin: 0; }
 .typst-caption { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 4px; }
-img.typst-page { display: block; max-width: 100%; }
+img.typst-page { display: block; max-width: 100%; height: auto; }
 .comment-text.md p { margin: 0 0 4px; }
 .comment-text.md p:last-child { margin-bottom: 0; }
 

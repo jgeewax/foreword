@@ -12,8 +12,30 @@ describe('parseMarkdown blocks', () => {
     expect((blocks[6] as any).c.map((x: any) => x.t)).toEqual(['text', 'br', 'text']);
   });
 
-  it('keeps an unterminated code fence (streaming) as code', () => {
-    expect(parseMarkdown('```\nhalf done')).toEqual([{ t: 'code', lang: '', v: 'half done' }]);
+  it('keeps an unterminated code fence (streaming) as code, open', () => {
+    expect(parseMarkdown('```\nhalf done')).toEqual([{ t: 'code', lang: '', v: 'half done', open: true }]);
+  });
+
+  it('takes a Typst equation on lines of its own as one block', () => {
+    const md = ['so the inverse is one step away:', '', '$', '  P^(-1) & = 1/(2i) mat(i, -1; i, 1) \\', '         & = mat(1/2, i/2; 1/2, -i/2)', '$', '', 'Next.'].join('\n');
+    expect(parseMarkdown(md)).toEqual([
+      { t: 'para', c: [{ t: 'text', v: 'so the inverse is one step away:' }] },
+      { t: 'math', v: '$\n  P^(-1) & = 1/(2i) mat(i, -1; i, 1) \\\n         & = mat(1/2, i/2; 1/2, -i/2)\n$' },
+      { t: 'para', c: [{ t: 'text', v: 'Next.' }] },
+    ]);
+    // Opened on the formula's first line and closed on its last; right after a sentence, by a `$` of its own.
+    expect(parseMarkdown('Gives:\n\n$ A &= B \\\n  &= C $').map((b) => b.t)).toEqual(['para', 'math']);
+    expect(parseMarkdown('Gives:\n$\n  A &= B\n$\nso.').map((b) => b.t)).toEqual(['para', 'math', 'para']);
+    // A whole one on its line.
+    expect(parseMarkdown('$ underbrace((1)(-i)(1/2), "first") + overline(z) $')).toEqual([{ t: 'math', v: '$ underbrace((1)(-i)(1/2), "first") + overline(z) $' }]);
+    // Still being written.
+    expect(parseMarkdown('$\n  x &= 1 \\')).toEqual([{ t: 'math', v: '$\n  x &= 1 \\', open: true }]);
+  });
+
+  it('leaves formulas in a sentence, and dollars, in their paragraph', () => {
+    for (const md of ['$x$ is the unknown', '$ x $, which we found', '$5 a copy, or $4 for ten', 'Costs $5\n$ 4 for ten', '$x$ and $y$']) {
+      expect(parseMarkdown(md).map((b) => b.t)).toEqual(['para']);
+    }
   });
 
   it('tables: a header, its rule (with alignment) and rows, after a paragraph too', () => {

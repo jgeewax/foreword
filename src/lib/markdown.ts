@@ -1,8 +1,10 @@
 // Minimal Markdown for chat replies → a small AST rendered as React elements
 // (never HTML strings, so model output can't inject markup). Covers what
 // replies actually use. `$math$` is kept verbatim so Typst/LaTeX math isn't
-// mangled by `_`/`*` emphasis rules. Unfinished syntax (while streaming)
-// degrades to plain text.
+// mangled by `_`/`*` emphasis rules, and a Typst equation on lines of its own
+// (`$ … $`, as in the book) is a block. Unfinished syntax (while streaming)
+// degrades to plain text; a code block or equation still being written is
+// `open`.
 
 export type Inline =
   | { t: 'text'; v: string }
@@ -18,11 +20,25 @@ export type Block =
   | { t: 'para'; c: Inline[] }
   | { t: 'list'; ordered: boolean; start: number; items: Inline[][] }
   | { t: 'quote'; c: Inline[] }
-  | { t: 'code'; lang: string; v: string }
+  | { t: 'code'; lang: string; v: string; open?: true }
+  | { t: 'math'; v: string; open?: true }
   | { t: 'table'; align: ('left' | 'center' | 'right' | null)[]; head: Inline[][]; rows: Inline[][][] }
   | { t: 'hr' };
 
 const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s+(.*)$/;
+/** The `$`s in a line that aren't escaped. */
+const dollars = (line: string) => line.match(/(?<!\\)\$/g)?.length ?? 0;
+/**
+ * An equation starts here: a display equation's `$` (with the space Typst
+ * sets it apart by, so "$5 a copy" isn't one) that the line leaves open
+ * (`$`, `$ x &= 1 \`), or a whole one (`$ x = 1 $`). In a paragraph
+ * (`within`), only a `$` alone or a whole one ends it.
+ */
+const equationAt = (line: string, within = false) => {
+  const t = line.trim();
+  const whole = dollars(t) === 2 && /^\$\s[\s\S]*\s\$$/.test(t);
+  return t === '$' || whole || (!within && /^\$\s/.test(t) && dollars(t) % 2 === 1);
+};
 /** A table's second line: | --- | :--: | ---: | */
 const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 
@@ -61,8 +77,20 @@ export function parseMarkdown(src: string): Block[] {
       const body: string[] = [];
       i++;
       while (i < lines.length && !lines[i].trim().startsWith(fence[1])) body.push(lines[i++]);
-      i++; // closing fence (or end of a still-streaming reply)
-      blocks.push({ t: 'code', lang: fence[2], v: body.join('\n') });
+      const open = i >= lines.length; // no closing fence: the reply is still streaming
+      i++;
+      blocks.push({ t: 'code', lang: fence[2], v: body.join('\n'), ...(open ? { open: true as const } : {}) });
+      continue;
+    }
+    if (equationAt(line)) {
+      const body = [line];
+      let open = dollars(line) % 2 === 1;
+      i++;
+      while (open && i < lines.length) {
+        body.push(lines[i]);
+        if (dollars(lines[i++]) % 2 === 1) open = false;
+      }
+      blocks.push({ t: 'math', v: body.join('\n').trim(), ...(open ? { open: true as const } : {}) });
       continue;
     }
     if (!line.trim()) {
@@ -116,7 +144,7 @@ export function parseMarkdown(src: string): Block[] {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*(```|~~~)|\s*>)/.test(lines[i]) && !LIST_ITEM.exec(lines[i]) && !(para.length && tableAt(lines, i))) para.push(lines[i++]);
+    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*(```|~~~)|\s*>)/.test(lines[i]) && !LIST_ITEM.exec(lines[i]) && !(para.length && (tableAt(lines, i) || equationAt(lines[i], true)))) para.push(lines[i++]);
     blocks.push({ t: 'para', c: joinLines(para) });
   }
   return blocks;

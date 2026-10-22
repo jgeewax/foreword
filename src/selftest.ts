@@ -5265,6 +5265,58 @@ async function mathChatChecks() {
   return out;
 }
 
+/**
+ * A reply in the book's own notation is drawn with the book's definitions:
+ * formulas in sentences, an equation on lines of its own, and a Typst block
+ * of prose set as wide as the pane. For a book whose chapter imports
+ * `#vect`/`#mmat` (the scratch book has notation.typ, imported by
+ * ch2-eigenvalues.typ); the reply is put in the chat, no model needed.
+ */
+async function bookMathChecks() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.snippetBook, 15000, 'the book’s imports').catch(() => {});
+  out.prelude = studio.state.snippetBook;
+  const reply = [
+    'That’s $#mmat("R")_90^2 = mat(-1, 0; 0, -1)$, and $#vect("v")_1$ stays where it was.',
+    '',
+    '$',
+    '  #mmat("R")_90^3 & = #mmat("P") #mmat("D")^3 #mmat("P")^(-1) \\',
+    '                  & = mat(0, 1; -1, 0)',
+    '$',
+    '',
+    'Take the top-left entry:',
+    '',
+    '$ underbrace((1)(-i)(1/2), #vect("v")_1", " lambda_1) + underbrace((1)(i)(1/2), #vect("v")_2", " lambda_2) $',
+    '',
+    '```typst',
+    'Three quarter turns are where we have to be more careful, since $#mmat("D")^3$ isn’t a multiple of $#mmat("I")$ and all three matrices in the shortcut are full of $i$’s, as @ch-eigen says.',
+    '',
+    '#trythis[Multiply out $#mmat("P") #mmat("D")^3 #mmat("P")^(-1)$ by hand.]',
+    '```',
+  ].join('\n');
+  const was = studio.state.agent;
+  studio.store.set((s) => ({ agent: { ...s.agent, sessionId: 'selftest-bookmath', running: false, items: [{ kind: 'user', id: 'u1', text: 'Show me', attachments: [] }, { kind: 'assistant', id: 'a1', text: reply, done: true }] } }));
+  const msg = () => document.querySelector('.transcript .msg.assistant');
+  await waitFor(() => msg()?.querySelectorAll('p img.typst-inline').length === 2 && msg()?.querySelectorAll('.md-equation img').length === 2 && msg()?.querySelector('.md-typst .typst-block img'), 30000, 'drawn').catch(() => {});
+  await sleep(300);
+  const m = msg();
+  // Drawn at its own proportions (shrunk whole if the pane is narrow, never squeezed), inside its box.
+  const fits = (img: HTMLImageElement) => {
+    const r = img.getBoundingClientRect();
+    const box = img.parentElement!.getBoundingClientRect();
+    return { w: Math.round(r.width), h: Math.round(r.height), inBox: r.width <= box.width + 0.5, proportions: Math.abs(r.width / r.height - img.naturalWidth / img.naturalHeight) < 0.05 };
+  };
+  out.inline = [...(m?.querySelectorAll<HTMLImageElement>('p img.typst-inline') ?? [])].map(fits);
+  out.unrendered = [...(m?.querySelectorAll('code.md-math') ?? [])].map((e) => e.textContent);
+  out.equation = [...(m?.querySelectorAll<HTMLImageElement>('.md-equation img') ?? [])].map(fits);
+  out.equationAsWritten = m?.querySelectorAll('.md-equation pre').length;
+  const block = m?.querySelector<HTMLImageElement>('.md-typst .typst-block img');
+  out.block = block && { ...fits(block), caption: m?.querySelector('.md-typst .typst-caption')?.textContent, lines: Math.round(block.getBoundingClientRect().height / parseFloat(getComputedStyle(block).fontSize)) };
+  out.snapshot = await snap('book-math');
+  studio.store.set({ agent: was });
+  return out;
+}
+
 /** The author's edit to a sentence the assistant wrote goes with the next message (real model; the chapter is put back). */
 async function authorEditsChecks() {
   const out: Record<string, unknown> = {};
@@ -8257,6 +8309,7 @@ export async function runSelftest(launch: LaunchOptions) {
       still.remove();
     }
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
+    if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`effort-${kind}`)) result[`effort-${kind}`] = await effortChecks(kind);

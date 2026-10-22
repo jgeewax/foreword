@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mathSource, passageSource, renderReason, svgHeightPt } from './typst-render';
+import { mathSource, passageSource, renderReason, svgHeightPt, svgWidthPt } from './typst-render';
 
 describe('rendering Typst snippets', () => {
   it('turns Markdown math spans into Typst', () => {
@@ -8,9 +8,11 @@ describe('rendering Typst snippets', () => {
     expect(mathSource('$$ a + b $$')).toBe('$ a + b $');
   });
 
-  it('reads an SVG’s height in points', () => {
+  it('reads an SVG’s size in points', () => {
     expect(svgHeightPt('<svg viewBox="0 0 107.52 17.952" width="107.52pt" height="17.952pt" xmlns="x">')).toBe(17.952);
+    expect(svgWidthPt('<svg viewBox="0 0 107.52 17.952" width="107.52pt" height="17.952pt" xmlns="x">')).toBe(107.52);
     expect(svgHeightPt('<svg>')).toBeNull();
+    expect(svgWidthPt('<svg>')).toBeNull();
   });
 });
 
