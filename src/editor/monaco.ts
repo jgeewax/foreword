@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import JsonWorker from 'monaco-editor/language/json/json.worker?worker';
 import { registerTypst } from './typst-language';
+import { themeWithEmphasis } from './typst-tokens';
 import { editorLineHeight, type AppSettings } from '../app/settings';
 
 self.MonacoEnvironment = {
@@ -14,8 +15,6 @@ self.MonacoEnvironment = {
 const light: monaco.editor.ITokenThemeRule[] = [
   { token: 'comment', foreground: '6e7781', fontStyle: 'italic' },
   { token: 'markup.heading', foreground: '0550ae', fontStyle: 'bold' },
-  { token: 'markup.bold', fontStyle: 'bold' },
-  { token: 'markup.italic', fontStyle: 'italic' },
   { token: 'markup.raw', foreground: '953800' },
   { token: 'markup.math', foreground: '116329' },
   { token: 'markup.underline.link', foreground: '0969da', fontStyle: 'underline' },
@@ -37,8 +36,6 @@ const light: monaco.editor.ITokenThemeRule[] = [
 const dark: monaco.editor.ITokenThemeRule[] = [
   { token: 'comment', foreground: '8b949e', fontStyle: 'italic' },
   { token: 'markup.heading', foreground: '79c0ff', fontStyle: 'bold' },
-  { token: 'markup.bold', fontStyle: 'bold' },
-  { token: 'markup.italic', fontStyle: 'italic' },
   { token: 'markup.raw', foreground: 'ffa657' },
   { token: 'markup.math', foreground: '7ee787' },
   { token: 'markup.underline.link', foreground: '58a6ff', fontStyle: 'underline' },
@@ -60,11 +57,12 @@ const dark: monaco.editor.ITokenThemeRule[] = [
 
 export const THEME_PREFIXES = [...new Set(light.map((r) => r.token))];
 
-monaco.editor.defineTheme('studio-light', { base: 'vs', inherit: true, rules: light, colors: {} });
+// *Strong* and _emph_ are on the end of a token's name, so every rule comes in those too.
+monaco.editor.defineTheme('studio-light', { base: 'vs', inherit: true, rules: themeWithEmphasis(light), colors: {} });
 monaco.editor.defineTheme('studio-dark', {
   base: 'vs-dark',
   inherit: true,
-  rules: dark,
+  rules: themeWithEmphasis(dark),
   colors: { 'editor.background': '#1b1d21', 'editorGutter.background': '#1b1d21' },
 });
 
