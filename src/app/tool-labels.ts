@@ -250,6 +250,7 @@ const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
   rulers: (v) => (Array.isArray(v) && v.length ? `rulers at ${v.join(', ')}` : 'no rulers'),
   formatOnSave: (v) => `format on save ${v ? 'on' : 'off'}`,
   previewPages: (v) => (v === 'all' ? 'the preview drawing every page' : 'the preview drawing nearby pages'),
+  previewScope: (v) => (v === 'chapter' ? 'the preview showing one chapter' : 'the preview showing the whole book'),
   sendKey: (v) => (v === 'mod-enter' ? '⌘⏎ sends' : '⏎ sends'),
   markAiEdits: (v) => `marks for its changes ${v ? 'on' : 'off'}`,
   markAiReads: (v) => `marks for what it read ${v ? 'on' : 'off'}`,

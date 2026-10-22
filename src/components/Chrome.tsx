@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Stat } from '../app/studio';
+import { numberedTitle } from '../app/tool-labels';
 import { Icon, type IconName } from './icons';
 import type { ToolInfo } from '../lib/ipc';
 import { baseName, dirName, tildePath } from '../lib/paths';
@@ -109,11 +110,15 @@ export function StatusBar() {
   const canAsk = agent === 'ready' && !running;
   const todos = useStore(studio.store, (s) => s.todos.length);
   const previewTarget = useStore(studio.store, (s) => s.previewTarget);
+  // A chapter typeset alone: its pages and words aren't the book's.
+  const chapter = useStore(studio.store, (s) => (s.previewTarget === 'book' && s.previewChapter ? (numberedTitle(s.previewChapter, s.names) ?? 'One chapter') : null));
 
   const compileTone: Tone = compile.status === 'ok' ? 'ok' : compile.status === 'compiling' ? 'busy' : compile.status === 'error' ? 'bad' : 'off';
   const compileLabel =
     compile.status === 'ok' && previewTarget === 'cover'
       ? 'Cover'
+      : compile.status === 'ok' && chapter
+        ? `${chapter} alone`
       : compile.status === 'ok'
       ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}${compile.words != null ? ` · ${compile.words.toLocaleString()} words` : ''}`
       : compile.status === 'compiling'
@@ -159,7 +164,14 @@ export function StatusBar() {
             title="Typst warnings (hover the yellow squiggles in the editor)"
           />
         )}
-        {compileLabel && <Indicator tone={compileTone} icon="book" label={compileLabel} title="Typesetting status of the whole book" />}
+        {compileLabel && (
+          <Indicator
+            tone={compileTone}
+            icon="book"
+            label={compileLabel}
+            title={chapter ? 'Typesetting only this chapter, for a quicker preview (Settings ▸ General ▸ Preview)' : 'Typesetting status of the whole book'}
+          />
+        )}
         {todos > 0 && <Indicator icon="checklist" label={`${todos} to do`} title="TODOs left in the book" onClick={() => studio.showSidebar('todos')} />}
       </div>
       <div className="statusbar-side">

@@ -33,6 +33,7 @@
     "allow-fs-read",
     "allow-fs-hash",
     "allow-fs-write",
+    "allow-preview-chapter-file",
     "allow-project-create",
     "allow-sample-create",
     "allow-project-create-from-package",

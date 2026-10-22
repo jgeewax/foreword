@@ -3233,6 +3233,60 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - **Not done:** the Tinymist process itself held 12.7 GB after 15 hours on
   that book (it isn't killed; worth a look).
 
+### The preview of one chapter
+
+- **Asked for:** "live rendering has gotten slower after we did the memory
+  optimization… how can we keep the latency fast?", then "in my linalg book
+  we did this with preview.typ. lets build this and then make it a setting
+  that we can easily switch".
+- **Found:** not the memory change. On a copy of that book (743 pages), a
+  keystroke reached the preview's paint in 553 ms with nearby pages, 555 ms
+  with every page, and 553 ms without PAGES_SCRIPT. The renderer took about
+  55 ms of it (its SVG patch 17 ms, never waiting on a canvas pass); the rest
+  was Tinymist typesetting the whole book before the change reached the
+  preview, and 1–5 s when an edit moved text onto another page. It didn't grow
+  over a 14-minute typing soak, and `compileStatus` off (word counts) made no
+  difference. The same keystrokes with only one chapter typeset: 62 ms.
+- **Now:** Settings ▸ General ▸ Preview ▸ Shows (`previewScope`): **The whole
+  book** (the default) or **The chapter you're in**. The preview's header
+  switches it too (Book | Chapter | Cover), as do the palette (Show Only This
+  Chapter, Show the Whole Book) and the preview's menu. The chapter follows the
+  editor: opening another chapter's file (or a file one includes) shows that
+  one, without restarting Tinymist. The status bar says "13. Determinants
+  alone"; the cover's spine keeps the book's page count.
+- **How:** `chapterPreviewText` (chapter-preview.ts) is the main file with
+  every include but the chapter's taken out, so the book's own setup, show
+  rules and counters stay as they are; the author's preview.typ instead copied
+  the setup, which goes stale. In each taken-out include's place go the steps
+  it gave the heading counter (numbered top-level headings outside comments,
+  raw text and maths: an equation's lines start with "="), so the chapter keeps
+  its number and its figures theirs. A line that only wraps a taken-out include
+  (`#book-chapter(include "…")`) goes whole, with its blank pages. An include
+  with a bibliography stays. Around the chapter, references and links to labels
+  only in the taken-out files show in grey (the heading's words, else the
+  label) instead of stopping the preview. The text is the main file line for
+  line, so Tinymist's errors in it are reported against the main file, a click
+  on its own content opens the main file there, and the main file's cursor
+  finds its place in it.
+- Tinymist gets the text as an open document (`entryText`, and `didChange` to
+  switch chapters): `src/.foreword-chapter.typ`, beside the main file so its
+  paths read the same. On disk it's a stub (`preview_chapter_file`): with no
+  file there, Tinymist typeset it again every ~55 ms. The file list and History
+  leave it out, and so does git, through the info/exclude of the repository the
+  book is in (never committed).
+- **Also fixed:** restarting Tinymist (Restart Preview, Book ↔ Cover, now Book
+  ↔ Chapter) could fail with "tinymist exited during initialize". The old
+  process's `$closed` came on its own channel after the new one's initialize
+  was sent, and failed it. TypstService now hears only the Tinymist it started
+  last; a stop or restart fails what was asked of the old one.
+- Measured: self-test `chapterpreview` on a copy of that book (in a git
+  repository): the whole book 743 pages; chapter 13 alone 45 pages, no errors,
+  keystroke → preview p50 68 ms (max 76); chapter 14 followed in 0.6 s on the
+  same preview; the whole book again 743 pages; `git status` clean. On
+  counting-words: 26 pages, chapter 3 alone 9, 39 ms. Every sample and that
+  book compile with no errors through `typst compile`. `previewpages` still
+  passes. Unit tests: chapter-preview.test.ts, the settings, the stub (Rust).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

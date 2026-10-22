@@ -26,13 +26,15 @@ import {
   validateProjectSettings,
   type ProjectSettings,
 } from './project-settings';
-import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type ToolName } from './settings';
+import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type PreviewScope, type ToolName } from './settings';
 import { handleMcp, STUDIO_TOOLS, type ModelChoice, type StudioHost } from './studio-tools';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
-import { describeTool, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
+import { chapterNumber, describeTool, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
+import { chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
+import { scanIncludes } from './includes';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { History, initialHistory, type HistoryState } from './history';
@@ -395,6 +397,11 @@ export type StudioState = {
   review: { comments: ReviewComment[]; draft: { path: string; start: number; end: number } | null; busy: string[] };
   /** What the preview shows: the book, or its cover (cover/preview.typ, with guides). */
   previewTarget: 'book' | 'cover';
+  /**
+   * The chapter the preview shows, when it shows only one (previewScope
+   * "chapter": chapter-preview.ts); null when it shows the whole book.
+   */
+  previewChapter: string | null;
   /** The book's page count, last seen while previewing the book (for the cover's spine). */
   bookPages: number | null;
   coverDialogOpen: boolean;
@@ -497,6 +504,7 @@ const initialState: StudioState = {
   todos: [],
   review: { comments: [], draft: null, busy: [] },
   previewTarget: 'book',
+  previewChapter: null,
   bookPages: null,
   coverDialogOpen: false,
   styleTemplatesOpen: false,
@@ -527,10 +535,12 @@ const AI_EDIT_VERSIONS = 12;
 
 export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
-/** Per book: where the preview was, in the book and in its cover. */
+/** Per book: where the preview was, in the book, its cover, and each chapter shown alone ("chapter:<path>"). */
 const previewPlaceKey = (root: string) => `studio.previewPlace:${root}`;
 /** A place in the preview: the page at its top (from 0), and how far down that page (0 to 1). */
 type PreviewPlace = { page: number; offset: number };
+/** Per book: the chapter the preview last showed alone. */
+const previewChapterKey = (root: string) => `studio.previewChapter:${root}`;
 let seq = 0;
 const uid = (p: string) => `${p}${++seq}`;
 
@@ -741,6 +751,13 @@ export class Studio {
       window.clearInterval(this.autoSaveTimer);
       if (autoSave > 0) this.autoSaveTimer = window.setInterval(() => void this.autoSave(), autoSave * 60_000);
     });
+    // A preview of one chapter follows the editor into another chapter.
+    let active: string | null = null;
+    this.store.subscribe(() => {
+      if (this.state.active === active) return;
+      active = this.state.active;
+      this.scheduleChapterPreview(0);
+    });
     this.typst.on('diagnostics', (uri, list) => this.onDiagnostics(uri, list));
     this.typst.on('compile', (s) => {
       const status = s.status === 'compiling' ? 'compiling' : s.status === 'compileSuccess' ? 'ok' : 'error';
@@ -750,7 +767,7 @@ export class Studio {
           pages: s.pageCount || st.compile.pages,
           words: s.wordsCount?.words ?? st.compile.words,
         },
-        ...(st.previewTarget === 'book' && s.pageCount ? { bookPages: s.pageCount } : {}),
+        ...(st.previewTarget === 'book' && !st.previewChapter && s.pageCount ? { bookPages: s.pageCount } : {}),
       }));
     });
     this.typst.on('scrollSource', (jump) => {
@@ -974,11 +991,15 @@ export class Studio {
             this.store.set((s) => ({ contents: { ...s.contents, [p]: fileContents(doc.model.getValue()) } }));
           }, 400);
         }
+        // A chapter shown alone is the main file with the others left out: it follows the main file's changes.
+        if (p === this.state.workspace?.entry) this.scheduleChapterPreview();
       },
       onDirtyChange: (p, dirty) => {
         this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } }));
         // Saved: headings (and, for the main file, the chapter order) may have changed.
         if (!dirty && p.endsWith('.typ')) void this.refreshNames([p]);
+        // Its headings and labels count for a chapter shown alone (its number, references to it).
+        if (!dirty && p.endsWith('.typ')) this.scheduleChapterPreview();
       },
       onConflict: (p, message) =>
         this.store.set((s) => {
@@ -1683,7 +1704,12 @@ export class Studio {
             { label: 'Update Cover from Book', action: () => void this.updateCoverFromBook() },
             { label: 'Export Cover', action: () => void this.exportCover(), enabled: !this.state.exporting },
           ]
-        : [{ label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting }]),
+        : [
+            { label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
+            this.chapterPreview
+              ? { label: 'Show the Whole Book', action: () => void this.showInPreview('book') }
+              : { label: 'Show Only This Chapter', action: () => void this.showInPreview('chapter'), enabled: this.state.names.chapters.length > 1 },
+          ]),
       'separator',
       { label: 'Restart Preview', action: () => void this.restartTypst() },
     ]);
@@ -2481,7 +2507,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.composerDraft = '';
     this.code.reset();
-    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', bookPages: null, compile: { status: 'idle' } });
+    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', previewChapter: null, bookPages: null, compile: { status: 'idle' } });
     await this.history.stop();
     this.git.reset();
     this.unsubscribeAgent?.();
@@ -2816,6 +2842,7 @@ export class Studio {
   private async jumpPreview(path: string, lineAt: (n: number) => string | null, line: number, character: number, quiet = false) {
     const root = this.state.workspace?.root;
     if (!root || !path.endsWith('.typ') || !this.previewOpened || !this.typst.running) return;
+    path = this.asShown(path);
     const run = ++this.syncRun;
     const candidates = jumpCandidates(lineAt, line, character);
     if (quiet) {
@@ -2857,7 +2884,7 @@ export class Studio {
   private async revealSource(jump: SourceJump) {
     const root = this.state.workspace?.root;
     if (!root || !jump.start || !jump.end || !jump.filepath.startsWith(root + '/')) return;
-    const path = jump.filepath.slice(root.length + 1);
+    const path = this.asWritten(jump.filepath.slice(root.length + 1))!;
     this.suppressSyncUntil = performance.now() + 600;
     clearTimeout(this.syncTimer);
     await this.openFile(path);
@@ -2995,7 +3022,7 @@ export class Studio {
 
   private onDiagnostics(uri: string, list: LspDiagnostic[]) {
     const root = this.state.workspace?.root;
-    const path = root ? uriToRelative(uri, root) : null;
+    const path = root ? this.asWritten(uriToRelative(uri, root)) : null;
     if (!path) return;
     if (list.length) this.diagnostics.set(path, list);
     else this.diagnostics.delete(path);
@@ -3023,7 +3050,17 @@ export class Studio {
     this.store.set({ preview: { status: 'starting' } });
     // The cover is its own document: preview it instead of the book on request.
     if (this.state.previewTarget === 'cover' && !ws.files.includes(COVER_PREVIEW)) this.store.set({ previewTarget: 'book' });
-    const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : ws.entry;
+    // Or one chapter of the book alone (Settings ▸ General ▸ Preview), when the book has chapters to leave out.
+    const chapter =
+      this.state.previewTarget === 'book' && this.state.settings.previewScope === 'chapter'
+        ? await this.chapterPreviewFile()
+            .then(async (c) => c && (await ipc.previewChapterFile(c.path), c))
+            .catch(() => null)
+        : null;
+    this.chapterText = chapter?.text ?? '';
+    this.store.set({ previewChapter: chapter?.chapter ?? null });
+    if (chapter) writeJson(previewChapterKey(ws.root), chapter.chapter);
+    const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : (chapter?.path ?? ws.entry);
     try {
       const project = this.state.project.settings;
       const { previewUrl } = await this.typst.start(ws.root, entry, {
@@ -3031,6 +3068,7 @@ export class Studio {
         fontPaths: absoluteFontPaths(project, ws.root),
         // The book's root; the cover's files live outside it, in .foreword/.
         rootPath: this.state.previewTarget === 'cover' ? ws.root : `${ws.root}/${this.typstRoot()}`.replace(/\/$/, ''),
+        entryText: chapter?.text,
       });
       this.docs?.syncLsp();
       this.store.set({ preview: { status: 'starting', url: previewUrl } });
@@ -3091,24 +3129,145 @@ export class Studio {
     void ipc.previewEval(`window.__studioPreview && window.__studioPreview.configure(${JSON.stringify(options)})`).catch(() => {});
   }
 
-  /** Where the preview was in what it shows now (the book or its cover), if it's been shown. */
+  /** What the preview shows now, for remembering where it was: the book, the cover, or one chapter. */
+  private placeKey(): string {
+    const { previewTarget, previewChapter } = this.state;
+    return previewTarget === 'book' && previewChapter ? `chapter:${previewChapter}` : previewTarget;
+  }
+
+  /** Where the preview was in what it shows now (the book, its cover, a chapter), if it's been shown. */
   private previewPlace(): PreviewPlace | null {
     const root = this.state.workspace?.root;
-    return (root && readJson<Partial<Record<'book' | 'cover', PreviewPlace>>>(previewPlaceKey(root))?.[this.state.previewTarget]) || null;
+    return (root && readJson<Record<string, PreviewPlace>>(previewPlaceKey(root))?.[this.placeKey()]) || null;
   }
 
   private rememberPreviewPlace({ page, offset }: { page?: number; offset?: number }) {
     const root = this.state.workspace?.root;
     if (!root || !Number.isInteger(page) || page! < 0 || typeof offset !== 'number' || !(offset >= 0 && offset <= 1)) return;
-    const saved = readJson<Partial<Record<'book' | 'cover', PreviewPlace>>>(previewPlaceKey(root)) ?? {};
-    writeJson(previewPlaceKey(root), { ...saved, [this.state.previewTarget]: { page, offset } });
+    const saved = readJson<Record<string, PreviewPlace>>(previewPlaceKey(root)) ?? {};
+    writeJson(previewPlaceKey(root), { ...saved, [this.placeKey()]: { page, offset } });
   }
 
   async restartTypst() {
     await this.typst.stop().catch(() => {});
     await ipc.previewClose().catch(() => {});
     this.previewOpened = false;
+    // The next Tinymist reports its own problems; another file (the cover, a chapter alone) may have none of these.
+    for (const path of this.diagnostics.keys()) this.docs?.setDiagnostics(path, []);
+    this.diagnostics.clear();
+    this.store.set({ problems: { errors: 0, warnings: 0 } });
     await this.startTypst();
+  }
+
+  // ---- the chapter preview ------------------------------------------------------------
+
+  /** Whether the preview shows one chapter alone (see chapter-preview.ts), rather than the whole book or the cover. */
+  get chapterPreview(): boolean {
+    return this.state.previewTarget === 'book' && !!this.state.previewChapter;
+  }
+
+  /** What the preview shows: the whole book, the chapter being edited, or the cover. */
+  async showInPreview(what: PreviewScope | 'cover') {
+    if (what === 'cover') return this.setPreviewTarget('cover');
+    const fromCover = this.state.previewTarget === 'cover';
+    if (!fromCover && this.state.settings.previewScope === what) return;
+    if (fromCover) this.store.set({ previewTarget: 'book' });
+    // A change of the setting restarts the preview (updateSettings); from the cover, the same setting needs one too.
+    if (this.state.settings.previewScope !== what) this.updateSettings({ previewScope: what });
+    else await this.restartTypst();
+  }
+
+  /** The main file and the files it includes (however deep), as they are now, open buffers included. */
+  private async bookTexts(): Promise<{ main: string; chapters: string[]; read: (path: string) => string | null } | null> {
+    const entry = this.state.workspace?.entry;
+    const main = entry ? await this.currentText(entry) : null;
+    if (!entry || main == null) return null;
+    const root = this.typstRoot();
+    const texts = new Map<string, string | null>([[entry, main]]);
+    const load = async (path: string): Promise<void> => {
+      if (texts.has(path)) return;
+      texts.set(path, null);
+      const text = await this.currentText(path);
+      texts.set(path, text);
+      if (text) await Promise.all(scanIncludes(text).flatMap(({ spec }) => resolveRef(path, spec, root) ?? []).map(load));
+    };
+    const chapters = mainIncludes(main, entry, root).map((x) => x.file);
+    await Promise.all(chapters.map(load));
+    return { main, chapters, read: (path) => texts.get(path) ?? null };
+  }
+
+  /**
+   * The preview's main file for showing one chapter: the chapter the editor is
+   * in, else the one shown now, else the one shown last, else the first. Null
+   * if the main file includes fewer than two files: there's nothing to leave out.
+   */
+  private async chapterPreviewFile(): Promise<{ path: string; text: string; chapter: string } | null> {
+    const ws = this.state.workspace;
+    const book = await this.bookTexts();
+    if (!ws?.entry || !book || book.chapters.length < 2) return null;
+    const root = this.typstRoot();
+    const active = this.state.active ? chapterOf(this.state.active, book.chapters, book.read, root) : null;
+    const first = book.chapters.find((c) => chapterNumber(c, this.state.names) != null) ?? book.chapters[0];
+    const chapter = [active, this.state.previewChapter, readJson<string>(previewChapterKey(ws.root)), first].find((c): c is string => !!c && book.chapters.includes(c))!;
+    return { path: chapterPreviewPath(ws.entry), chapter, text: chapterPreviewText(book.main, ws.entry, chapter, book.read, root) };
+  }
+
+  /**
+   * The chapter preview's file is the main file line for line (chapterPreviewText):
+   * Tinymist's errors and jumps in it are the main file's (`asWritten`), and a
+   * place in the main file is found in it (`asShown`).
+   */
+  private asWritten<T extends string | null>(path: T): T {
+    const entry = this.state.workspace?.entry;
+    return (entry && path === chapterPreviewPath(entry) ? entry : path) as T;
+  }
+
+  private asShown(path: string): string {
+    const entry = this.state.workspace?.entry;
+    return entry && path === entry && this.chapterPreview ? chapterPreviewPath(entry) : path;
+  }
+
+  /** The text Tinymist has for the chapter preview's main file. */
+  private chapterText = '';
+  private chapterTimer: number | undefined;
+  private chapterRun: Promise<void> = Promise.resolve();
+
+  /**
+   * Bring the chapter preview up to date: into the chapter the editor moved to,
+   * or after the main file changed, or a file was saved (a chapter's headings
+   * and labels count for the others). Tinymist typesets the new text without
+   * restarting.
+   */
+  private scheduleChapterPreview(delay = 400) {
+    if (!this.chapterPreview) return;
+    clearTimeout(this.chapterTimer);
+    this.chapterTimer = window.setTimeout(() => (this.chapterRun = this.chapterRun.then(() => this.refreshChapterPreview())), delay);
+  }
+
+  private async refreshChapterPreview() {
+    if (!this.chapterPreview || !this.typst.running) return;
+    const next = await this.chapterPreviewFile().catch(() => null);
+    if (!next || !this.chapterPreview) return;
+    if (next.text !== this.chapterText && this.typst.setEntryText(next.text)) this.chapterText = next.text;
+    if (next.chapter === this.state.previewChapter) return;
+    this.store.set({ previewChapter: next.chapter });
+    writeJson(previewChapterKey(this.state.workspace!.root), next.chapter);
+    // Into the new chapter once it's typeset, where the editor is.
+    await this.nextCompile(10_000);
+    void this.syncPreviewToCursor();
+  }
+
+  /** Resolves when Tinymist next finishes typesetting (or fails to), or after `timeoutMs`. */
+  private nextCompile(timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        off();
+        clearTimeout(timer);
+        resolve();
+      };
+      const off = this.typst.on('compile', (s) => void (s.status !== 'compiling' && done()));
+      const timer = window.setTimeout(done, timeoutMs);
+    });
   }
 
   private publishPerf() {
@@ -4521,6 +4680,8 @@ export class Studio {
     this.store.set({ settings });
     if (write) this.scheduleConfigWrite();
     if (settings.previewPages !== before.previewPages) this.configurePreview();
+    // The whole book or one chapter: another main file for Tinymist.
+    if (settings.previewScope !== before.previewScope && this.state.workspace && this.state.previewTarget === 'book') void this.restartTypst();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
     else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
     if (settings.assistant !== before.assistant && this.state.workspace) {

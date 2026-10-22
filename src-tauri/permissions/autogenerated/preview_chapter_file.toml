@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-chapter-file"
+description = "Enables the preview_chapter_file command without any pre-configured scope."
+commands.allow = ["preview_chapter_file"]
+
+[[permission]]
+identifier = "deny-preview-chapter-file"
+description = "Denies the preview_chapter_file command without any pre-configured scope."
+commands.deny = ["preview_chapter_file"]

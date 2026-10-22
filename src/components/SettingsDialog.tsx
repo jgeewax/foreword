@@ -222,6 +222,23 @@ function GeneralPage() {
       </Section>
       <Section title="Preview">
         <div className="settings-field">
+          <div className="settings-label">Shows</div>
+          <Choice
+            label="Shows"
+            value={settings.previewScope}
+            onChange={(v) => studio.updateSettings({ previewScope: v })}
+            options={[
+              { value: 'book', label: 'The whole book', detail: 'Every chapter, as it prints. In a long book each change typesets all of it, so the preview takes longer to follow your typing.' },
+              {
+                value: 'chapter',
+                label: 'The chapter you’re in',
+                detail: 'Only that chapter, typeset with the rest of the book left out: the preview follows your typing quickly, however long the book. Page numbers, and references to other chapters (in grey), are right only in the whole book.',
+              },
+            ]}
+          />
+          <p className="settings-help">The Book and Chapter buttons above the preview switch it too.</p>
+        </div>
+        <div className="settings-field">
           <div className="settings-label">Pages kept drawn</div>
           <Choice
             label="Pages kept drawn"

@@ -23,6 +23,7 @@ fn main() {
             "fs_read",
             "fs_hash",
             "fs_write",
+            "preview_chapter_file",
             "project_create",
             "sample_create",
             "project_create_from_package",

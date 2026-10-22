@@ -27,8 +27,11 @@ function lookupConfig(config: Config, section?: string): unknown {
     .reduce<any>((o, k) => (o == null ? null : (o[k] ?? null)), config);
 }
 
-/** Per-project options that Tinymist reads at start-up. */
-export type TypstOptions = { outputPath?: string; fontPaths?: string[]; rootPath?: string };
+/**
+ * Per-project options that Tinymist reads at start-up. With `entryText`, the
+ * main file's text comes from the app (the chapter preview's), not from disk.
+ */
+export type TypstOptions = { outputPath?: string; fontPaths?: string[]; rootPath?: string; entryText?: string };
 
 export type CompileStatus = {
   status: 'compiling' | 'compileSuccess' | 'compileError';
@@ -58,6 +61,11 @@ export class TypstService extends Emitter<Events> {
   bin = '';
   private config: Config = CONFIG;
   private entryAbs = '';
+  /** Where the Tinymist running now sends its messages (null: none, or stopped on purpose). */
+  private channel: Channel<any> | null = null;
+  /** The main file's document, when its text comes from the app, and that text's version. */
+  private entryUri: string | null = null;
+  private entryVersion = 0;
 
   async start(root: string, entry: string, options: TypstOptions = {}): Promise<{ previewUrl: string }> {
     // Export location and fonts are read at initialization (verified: outputPath is
@@ -69,8 +77,11 @@ export class TypstService extends Emitter<Events> {
       // Where paths starting with "/" begin (Tinymist otherwise uses the folder opened).
       ...(options.rootPath ? { rootPath: options.rootPath } : {}),
     };
-    const channel = new Channel<any>();
-    channel.onmessage = (msg) => this.dispatch(msg);
+    this.abandon('restarted');
+    // Only this Tinymist's messages: the one it replaces says "$closed" as it dies,
+    // which can come after this one's initialize was sent, and would fail it.
+    const channel = (this.channel = new Channel<any>());
+    channel.onmessage = (msg) => void (channel === this.channel && this.dispatch(msg));
     this.bin = (await ipc.typstStart(channel)).bin;
     this.running = true;
 
@@ -90,6 +101,11 @@ export class TypstService extends Emitter<Events> {
     this.notify('initialized', {});
 
     const entryAbs = (this.entryAbs = `${root}/${entry}`);
+    this.entryUri = null;
+    if (options.entryText != null) {
+      this.entryUri = relativeToUri(entry, root);
+      this.didOpen(this.entryUri, options.entryText, (this.entryVersion = 1));
+    }
     await this.executeCommand('tinymist.pinMain', [entryAbs]);
     const preview = await this.executeCommand('tinymist.doStartPreview', [
       ['--task-id', PREVIEW_TASK, '--data-plane-host', '127.0.0.1:0', entryAbs],
@@ -100,14 +116,30 @@ export class TypstService extends Emitter<Events> {
 
   async stop() {
     this.running = false;
+    this.abandon('stopped');
     await ipc.typstStop();
+  }
+
+  /** Stop listening to the Tinymist running now: what it was asked fails, and its exit isn't reported. */
+  private abandon(how: string) {
+    this.channel = null;
+    for (const p of this.pending.values()) p.reject(new Error(`tinymist ${how} during ${p.method}`));
+    this.pending.clear();
+  }
+
+  /** New text for a main file whose text comes from the app (`entryText` at start); false if it doesn't. */
+  setEntryText(text: string): boolean {
+    if (!this.running || !this.entryUri) return false;
+    this.didChange(this.entryUri, ++this.entryVersion, [{ text }]);
+    return true;
   }
 
   didOpen(uri: string, text: string, version: number) {
     this.notify('textDocument/didOpen', { textDocument: { uri, languageId: 'typst', version, text } });
   }
 
-  didChange(uri: string, version: number, contentChanges: LspContentChange[]) {
+  /** Edits to a document, or (without a range) its whole new text. */
+  didChange(uri: string, version: number, contentChanges: (LspContentChange | { text: string })[]) {
     this.notify('textDocument/didChange', { textDocument: { uri, version }, contentChanges });
   }
 

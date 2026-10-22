@@ -7,6 +7,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 // agent edit requests are rejected.
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
 import { studio, type ChatItem } from './app/studio';
+import { chapterNumber } from './app/tool-labels';
 import { monaco } from './editor/monaco';
 import { selectAll } from './editor/select-all';
 import { undoRedo } from './editor/undo-redo';
@@ -207,6 +208,76 @@ async function previewPagesChecks() {
   } finally {
     offPlaces();
     studio.updateSettings({ previewPages: before }, { write: false });
+  }
+  return out;
+}
+
+/**
+ * The preview of one chapter (previewScope "chapter", chapter-preview.ts): on
+ * a book whose main file includes its chapters. Typing in a chapter, the
+ * preview typesets only it; opening another chapter, the preview follows; back
+ * to the whole book, every page again. Types and undoes, never saves.
+ */
+async function chapterPreviewChecks() {
+  const out: Record<string, unknown> = {};
+  const before = studio.state.settings.previewScope;
+  const ready = (what: string) =>
+    waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
+  const snapshot = () => ({ pages: studio.state.compile.pages, chapter: studio.state.previewChapter, errors: studio.state.problems.errors, status: studio.state.compile.status });
+  try {
+    if (before !== 'book') {
+      await studio.showInPreview('book');
+      await sleep(1000);
+    }
+    await ready('the whole book');
+    out.book = snapshot();
+    const chapters = studio.state.names.chapters.filter((c) => chapterNumber(c, studio.state.names) != null);
+    out.chapters = chapters.length;
+    const [first, second] = [chapters[Math.floor(chapters.length / 2)], chapters[Math.floor(chapters.length / 2) + 1]];
+    await studio.openFile(first);
+    await sleep(500);
+
+    // One chapter: the one being edited, typeset alone.
+    log('chapter preview: on');
+    await studio.showInPreview('chapter');
+    await sleep(1000);
+    await ready('one chapter');
+    await waitFor(() => studio.state.previewChapter, 10000, 'the chapter shown');
+    out.chapter = { ...snapshot(), wanted: first };
+    out.snapshotChapter = await ipc.previewSnapshot('chapter-alone').catch(errorMessage);
+
+    // Typing in it: keystroke to preview, as in the typing group.
+    const editor = studio.editor!;
+    const model = editor.getModel()!;
+    const line = model.getLinesContent().findIndex((l) => /^[A-Z][a-z]/.test(l) && l.length > 60) + 1;
+    editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+    editor.focus();
+    await sleep(1500);
+    studio.perf.editToPreview.clear();
+    for (let i = 0; i < 8; i++) {
+      editor.trigger('selftest', 'type', { text: 'x' });
+      await sleep(1500);
+    }
+    out.typing = summary(studio.perf.editToPreview);
+    for (let i = 0; i < 50 && model.canUndo(); i++) await model.undo();
+
+    // Another chapter opened: the preview follows it, without restarting.
+    log('chapter preview: follows');
+    const url = studio.state.preview.url;
+    await studio.openFile(second);
+    await waitFor(() => studio.state.previewChapter === second, 15000, 'the next chapter shown');
+    await sleep(500);
+    await ready('the next chapter');
+    out.followed = { ...snapshot(), wanted: second, samePreview: studio.state.preview.url === url };
+
+    // Back to the whole book.
+    log('chapter preview: off');
+    await studio.showInPreview('book');
+    await sleep(1000);
+    await ready('the whole book again');
+    out.bookAgain = snapshot();
+  } finally {
+    if (studio.state.settings.previewScope !== before) await studio.showInPreview(before);
   }
   return out;
 }
@@ -7865,6 +7936,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('historyrows')) result.historyrows = await historyRowsChecks();
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
+    if (only?.includes('chapterpreview')) result.chapterpreview = await chapterPreviewChecks();
     if (only?.includes('epub')) result.epub = await epubChecks(outDir);
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('stylerevise')) result.stylerevise = await styleReviseChecks();

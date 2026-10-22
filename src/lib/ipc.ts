@@ -175,6 +175,8 @@ export const ipc = {
   revealInFinder: (path: string) => invoke<void>('reveal_in_finder', { path }),
   fsWrite: (path: string, text: string, expectedHash: string | null) =>
     invoke<string>('fs_write', { path, text, expectedHash }),
+  /** The chapter preview's file on disk (a stub; Tinymist gets its text from the app), kept out of git. */
+  previewChapterFile: (path: string) => invoke<void>('preview_chapter_file', { path }),
 
   typstStart: (onMessage: Channel<any>) => invoke<{ bin: string; pid: number | null }>('typst_start', { onMessage }),
   typstSend: (message: string) => invoke<void>('typst_send', { message }),

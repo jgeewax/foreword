@@ -24,7 +24,11 @@ const KIND_TRAILER: &str = "Studio-Kind";
 const FILES_PLACEHOLDER: &str = "{files}";
 
 /// Always excluded from snapshots (on top of the book's own .gitignore files).
-const BASE_EXCLUDES: &[&str] = &[".DS_Store", "*.foreword.tmp"];
+const BASE_EXCLUDES: &[&str] = &[
+    ".DS_Store",
+    "*.foreword.tmp",
+    crate::workspace::CHAPTER_PREVIEW,
+];
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]

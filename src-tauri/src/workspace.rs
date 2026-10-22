@@ -75,6 +75,56 @@ fn is_internal(rel: &str) -> bool {
         || rel.starts_with("node_modules/")
         || rel.ends_with(".DS_Store")
         || rel.ends_with(".foreword.tmp")
+        || rel.rsplit('/').next() == Some(CHAPTER_PREVIEW)
+}
+
+/// The chapter preview's file, beside the book's main file (CHAPTER_PREVIEW_NAME
+/// in src/app/chapter-preview.ts).
+pub const CHAPTER_PREVIEW: &str = ".foreword-chapter.typ";
+const CHAPTER_PREVIEW_STUB: &str = "// Foreword's chapter preview. Foreword gives Tinymist its text while the\n// preview shows one chapter; this file only has to be here. Safe to delete.\n";
+
+/// Make the chapter preview's file at `rel` (a stub, if it isn't there), and
+/// keep it out of git: in the info/exclude of the repository the book is in,
+/// which is the author's own and never committed.
+fn ensure_chapter_preview(root: &Path, rel: &str) -> CmdResult<()> {
+    let file = resolve(root, rel)?;
+    if file.file_name().and_then(|n| n.to_str()) != Some(CHAPTER_PREVIEW) {
+        return Err(CmdError::Invalid(format!(
+            "not the chapter preview's file: {rel:?}"
+        )));
+    }
+    if !file.exists() {
+        fs::write(&file, CHAPTER_PREVIEW_STUB)?;
+    }
+    let Some(git) = root
+        .ancestors()
+        .map(|d| d.join(".git"))
+        .find(|g| g.is_dir())
+    else {
+        return Ok(());
+    };
+    let exclude = git.join("info").join("exclude");
+    let text = fs::read_to_string(&exclude).unwrap_or_default();
+    if !text.lines().any(|l| l.trim() == CHAPTER_PREVIEW) {
+        fs::create_dir_all(git.join("info"))?;
+        let sep = if text.is_empty() || text.ends_with('\n') {
+            ""
+        } else {
+            "\n"
+        };
+        fs::write(
+            &exclude,
+            format!("{text}{sep}# Foreword's chapter preview\n{CHAPTER_PREVIEW}\n"),
+        )?;
+    }
+    Ok(())
+}
+
+/// The chapter preview's file (see `ensure_chapter_preview`), before Tinymist
+/// is given it as the preview's main file.
+#[tauri::command]
+pub async fn preview_chapter_file(state: Win, path: String) -> CmdResult<()> {
+    ensure_chapter_preview(&state.root()?, &path)
 }
 
 /// Files under `root`, honouring .gitignore, sorted by path.
@@ -712,6 +762,36 @@ mod tests {
         );
         assert!(copy_sample(&samples, "../tale", &parent, "X").is_err());
         assert!(copy_sample(&samples, "nope", &parent, "X").is_err());
+    }
+
+    #[test]
+    fn the_chapter_preview_file_is_made_once_and_kept_out_of_git_and_the_list() {
+        let root = temp_root();
+        fs::create_dir_all(root.join(".git/info")).unwrap();
+        fs::write(root.join(".git/info/exclude"), "# git's own\n*.log").unwrap();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/main.typ"), "x").unwrap();
+        ensure_chapter_preview(&root, "src/.foreword-chapter.typ").unwrap();
+        assert!(
+            fs::read_to_string(root.join("src/.foreword-chapter.typ"))
+                .unwrap()
+                .starts_with("// Foreword's chapter preview")
+        );
+        // Not written over, and the exclude line added once.
+        fs::write(root.join("src/.foreword-chapter.typ"), "kept").unwrap();
+        ensure_chapter_preview(&root, "src/.foreword-chapter.typ").unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("src/.foreword-chapter.typ")).unwrap(),
+            "kept"
+        );
+        assert_eq!(
+            fs::read_to_string(root.join(".git/info/exclude")).unwrap(),
+            "# git's own\n*.log\n# Foreword's chapter preview\n.foreword-chapter.typ\n"
+        );
+        assert_eq!(list_files(&root), vec!["src/main.typ".to_string()]);
+        // Only that file, inside the book.
+        assert!(ensure_chapter_preview(&root, "src/main.typ").is_err());
+        assert!(ensure_chapter_preview(&root, "../.foreword-chapter.typ").is_err());
     }
 
     #[test]

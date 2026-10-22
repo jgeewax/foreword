@@ -570,6 +570,7 @@ pub fn run() {
             workspace::fs_read,
             workspace::fs_hash,
             workspace::fs_write,
+            workspace::preview_chapter_file,
             workspace::project_create,
             workspace::sample_create,
             packages::project_create_from_package,

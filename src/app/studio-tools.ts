@@ -76,6 +76,12 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
     values: 'nearby, all',
     schema: { type: 'string', enum: ['nearby', 'all'] },
   },
+  previewScope: {
+    about:
+      'What the preview typesets: the whole book (book), or only the chapter being edited (chapter; quick to follow typing in a long book, but page numbers and references to other chapters are right only in the whole book). Same as the Book and Chapter buttons above the preview.',
+    values: 'book, chapter',
+    schema: { type: 'string', enum: ['book', 'chapter'] },
+  },
   autoSaveMinutes: {
     about: 'Save files with unsaved changes every this many minutes; 0 turns auto save off.',
     values: `0 to ${AUTO_SAVE_MINUTES.max}`,
