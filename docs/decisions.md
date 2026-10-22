@@ -3206,6 +3206,55 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   outlined in the chat (its question tool asked placement, proof, exercises),
   with no plan file and no ExitPlanMode; Write it wrote the section.
 
+### Discuss in place of Plan
+
+- **Asked for:** "plan mode feels ... wrong. im wondering if we should
+  rethink it as "discuss" mode. where we can debate ideas or directions we
+  want to take things."
+- **Why Plan felt wrong:** its instructions made every reply the same
+  document (a summary, a numbered outline, open questions, "which part
+  should I expand?"), so "should this be two volumes?" got an outline of
+  something not yet decided. It assumed the direction was settled, nothing
+  told it to disagree, so it planned whatever it was asked, and Ask's
+  "questions and discussion" covered half its ground.
+- **Discuss** (`discuss-mode.ts`) has Plan's place in the menu and ⇧Tab,
+  and its plumbing: read-only, its own instruction entry, Write it after a
+  reply. It has a view (two or three real directions, what each costs,
+  which it would pick), pushes back on a weaker idea with the strongest case
+  against it, grounds that in the book's lines, and keeps turns short: no
+  outline unless asked, one or two questions in prose, the question tool
+  only for a pick among options it laid out. It says what's settled in a
+  line as it goes. Asked for a plan, it gives Plan's short form, then
+  expands the part picked.
+- **Write it** ("Settled?") first says in a few lines what was agreed, then
+  writes it; if nothing was settled, it says so instead of guessing, as Go
+  ahead does. A discussion can end in a change, a decision, or nothing, so
+  the restatement is the author's check on what it took away.
+- **Ask stays,** for what's in the book: "Questions about the book" now, and
+  its instructions say the author wants an answer. An assistant told to
+  argue is the wrong one for "where did I first mention Sam?".
+- **Old names:** `/plan` is an alias of `/discuss` (it lists and runs
+  Discuss), and `set_mode` takes `plan` (`modeNamed`). The mode isn't saved
+  with a conversation (it starts at Write), so nothing stored says `plan`.
+  `plan-mode.ts` keeps only Claude Code's own plan mode, which older
+  conversations still show.
+- **Not built yet:** a "where we landed" card (agreed / open / ruled out,
+  from a fenced block the agent updates), if discussions turn out to go in
+  circles without it.
+- Verified: tsc and unit tests (modes, `modeNamed`, the slash alias,
+  `set_mode`). In-app self-test `discuss` (and `claude-modes`), edits
+  allowed, scratch book. Claude Code's Haiku: asked whether chapter 2 needs
+  a trace section, it said yes, where, and why, then "the strongest case
+  against it" (334 words, no numbered lines or headings); told to cut the
+  worked example, "Not agreed. I'd keep the worked example", from the
+  exercises and diagonalization that use it and the preface's promise
+  (`main.typ:37`); pushed to write, it was refused and pointed to Write it;
+  Write it began "We agreed to add a short trace section … with the worked
+  example kept", wrote it and an exercise, and named what was still open.
+  OpenCode's free Flint 40B agreed to the cut ("Yes, I agree — and I'd go
+  further"), and its first turn ran past the self-test's 3 minutes: a weak
+  model, not the instructions, on one run each.
+
 ### The preview keeps nearby pages drawn, and its place
 
 - **Asked for:** "when i navigate away for a while, screen goes to sleep, etc.

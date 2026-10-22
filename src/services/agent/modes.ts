@@ -1,17 +1,27 @@
-// Agent modes for a conversation: Write (edits the book), Ask (questions and
-// discussion), Plan (outline first), Options (three alternatives to choose
-// from) and Figures (diagrams, charts, illustrations as code). Each mode is the
-// app's own: the agent stays in its usual mode (never Claude Code's or Codex's
-// plan mode, which write their answer to a file and ask to leave), the app's
-// rules block changes when it's read-only, and an instruction entry shapes the reply.
+// Agent modes for a conversation: Write (edits the book), Ask (questions about
+// the book), Discuss (think a direction through, before writing), Options
+// (three alternatives to choose from) and Figures (diagrams, charts,
+// illustrations as code). Each mode is the app's own: the agent stays in its
+// usual mode (never Claude Code's or Codex's plan mode, which write their
+// answer to a file and ask to leave), the app's rules block changes when it's
+// read-only, and an instruction entry shapes the reply.
 import { ASK_INSTRUCTIONS, GO_AHEAD_PROMPT } from './ask-mode';
+import { DISCUSS_INSTRUCTIONS, WRITE_FROM_DISCUSSION_PROMPT } from './discuss-mode';
 import { FIGURES_INSTRUCTIONS } from './figures-mode';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
-import { PLAN_INSTRUCTIONS, WRITE_FROM_PLAN_PROMPT } from './plan-mode';
 
-export type AgentMode = 'write' | 'ask' | 'plan' | 'options' | 'figures';
+export type AgentMode = 'write' | 'ask' | 'discuss' | 'options' | 'figures';
 
-export const AGENT_MODES: AgentMode[] = ['write', 'ask', 'plan', 'options', 'figures'];
+export const AGENT_MODES: AgentMode[] = ['write', 'ask', 'discuss', 'options', 'figures'];
+
+/** Old names still understood: Discuss was Plan until 2026-10-22. */
+const MODE_ALIASES: Record<string, AgentMode> = { plan: 'discuss' };
+
+/** The mode a word names ("Discuss", "plan"), or null. */
+export function modeNamed(word: string): AgentMode | null {
+  const w = word.trim().toLowerCase();
+  return AGENT_MODES.includes(w as AgentMode) ? (w as AgentMode) : (MODE_ALIASES[w] ?? null);
+}
 
 export const MODE_INSTRUCTIONS_KEY = 'mode';
 
@@ -42,21 +52,21 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         instructions: ASK_INSTRUCTIONS,
         label: 'Ask',
         icon: '?',
-        description: 'Questions and discussion, answered in the chat. Can’t change files.',
+        description: 'Questions about the book, answered in the chat. Can’t change files.',
         placeholder: 'Ask about the book, a passage, a TODO…',
-        notice: 'Ask mode: the agent answers and discusses in the chat, and can’t change files.',
+        notice: 'Ask mode: the agent answers in the chat, and can’t change files.',
         carryOut: { question: 'Want it changed?', label: 'Go ahead', prompt: GO_AHEAD_PROMPT },
       };
-    case 'plan':
+    case 'discuss':
       return {
         readOnly: true,
-        instructions: PLAN_INSTRUCTIONS,
-        label: 'Plan',
-        icon: '☰',
-        description: 'Talk it through and outline before writing. Can’t change files.',
-        placeholder: 'What should we plan? A chapter, a section, an argument…',
-        notice: 'Plan mode: the agent discusses and outlines, and can’t change files.',
-        carryOut: { question: 'Happy with the plan?', label: 'Write it', prompt: WRITE_FROM_PLAN_PROMPT },
+        instructions: DISCUSS_INSTRUCTIONS,
+        label: 'Discuss',
+        icon: '⇄',
+        description: 'Think ideas and directions through: it says what it would do, and argues back. Can’t change files.',
+        placeholder: 'What should we think through? A direction, a chapter’s shape, a character…',
+        notice: 'Discuss mode: the agent weighs ideas with you and argues back, and can’t change files.',
+        carryOut: { question: 'Settled?', label: 'Write it', prompt: WRITE_FROM_DISCUSSION_PROMPT },
       };
     case 'options':
       return {

@@ -1,4 +1,4 @@
-// Slash commands in the chat's message box: "/plan", "/new", "/model sonnet"…
+// Slash commands in the chat's message box: "/discuss", "/new", "/model sonnet"…
 // Typing "/" lists them (mid-message too); they act on the app, never reach the model.
 
 export type SlashCommand = {
@@ -8,12 +8,14 @@ export type SlashCommand = {
   description: string;
   /** Runs as soon as it's picked (no argument to type). */
   immediate: boolean;
+  /** Old names it still answers to ("/plan" for /discuss). */
+  aliases?: string[];
 };
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'write', description: 'Write mode: the assistant writes and edits the book', immediate: true },
-  { name: 'ask', description: 'Ask mode: questions and discussion, answered in the chat, no changes', immediate: true },
-  { name: 'plan', description: 'Plan mode: talk it through and outline first, no changes', immediate: true },
+  { name: 'ask', description: 'Ask mode: questions about the book, answered in the chat, no changes', immediate: true },
+  { name: 'discuss', description: 'Discuss mode: think a direction through before writing, no changes', immediate: true, aliases: ['plan'] },
   { name: 'options', description: 'Options mode: three versions of a passage to pick from', immediate: true },
   { name: 'figures', description: 'Figures mode: diagrams and plots in Typst (CeTZ, fletcher, lilaq)', immediate: true },
   { name: 'new', description: 'Start a new task (a new conversation)', immediate: true },
@@ -31,10 +33,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'help', description: 'What these commands do', immediate: true },
 ];
 
-/** "/model son" → { name: "model", arg: "son" }; null if it isn't a command line. */
+const names = (c: SlashCommand) => [c.name, ...(c.aliases ?? [])];
+
+/** "/model son" → { name: "model", arg: "son" }; an old name gives the command's ("/plan" → "discuss"); null if it isn't a command line. */
 export function parseSlash(text: string): { name: string; arg: string } | null {
   const m = /^\/([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text.trim());
-  return m ? { name: m[1].toLowerCase(), arg: (m[2] ?? '').trim() } : null;
+  if (!m) return null;
+  const name = m[1].toLowerCase();
+  return { name: SLASH_COMMANDS.find((c) => c.aliases?.includes(name))?.name ?? name, arg: (m[2] ?? '').trim() };
 }
 
 /** The "/name" being typed at the caret: where the box starts or after a space, and not in the middle of a word. */
@@ -57,7 +63,8 @@ export function slashMatches(text: string, caret = text.length): SlashCommand[] 
   if (!token) return [];
   const { typed } = token;
   const pool = token.alone ? SLASH_COMMANDS : SLASH_COMMANDS.filter((c) => c.immediate);
-  const byName = [...pool.filter((c) => c.name.startsWith(typed)), ...pool.filter((c) => !c.name.startsWith(typed) && c.name.includes(typed))];
+  const starts = (c: SlashCommand) => names(c).some((n) => n.startsWith(typed));
+  const byName = [...pool.filter(starts), ...pool.filter((c) => !starts(c) && names(c).some((n) => n.includes(typed)))];
   // Descriptions only when no name fits ("/conversation" finds /new).
   return byName.length ? byName : pool.filter((c) => c.description.toLowerCase().includes(typed));
 }
@@ -67,7 +74,7 @@ export function withoutSlash(text: string, token: SlashToken): { text: string; c
   const before = text.slice(0, token.from);
   const after = text.slice(token.to);
   if (!after.trim()) return { text: before.trimEnd(), caret: before.trimEnd().length };
-  // "rewrite /plan this" → "rewrite this".
+  // "rewrite /discuss this" → "rewrite this".
   return { text: before + after.replace(/^[ \t]+/, ''), caret: before.length };
 }
 

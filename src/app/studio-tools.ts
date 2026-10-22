@@ -8,7 +8,7 @@
 // Changes to the assistant itself (which one, model, effort, mode) wait until
 // its reply ends, so they never pull the rug from under the turn that asked.
 import type { AgentMode } from '../services/agent/modes';
-import { AGENT_MODES, modeConfig } from '../services/agent/modes';
+import { AGENT_MODES, modeConfig, modeNamed } from '../services/agent/modes';
 import { effortFor } from '../services/agent/models';
 import { matchesQuery } from '../services/agent/model-search';
 import type { EffortOption, ModelInfo, ModelRef } from '../services/agent/types';
@@ -323,8 +323,8 @@ export const TOOLS: Tool[] = [
     inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...AGENT_MODES] } }, required: ['mode'], additionalProperties: false },
     run: async (input, host) => {
       mayChange(host);
-      const mode = words(input.mode).toLowerCase() as AgentMode;
-      if (!AGENT_MODES.includes(mode)) throw new ToolError(`No mode is called “${mode}”: ${AGENT_MODES.join(', ')}.`);
+      const mode = modeNamed(words(input.mode));
+      if (!mode) throw new ToolError(`No mode is called “${words(input.mode)}”: ${AGENT_MODES.join(', ')}.`);
       if (mode === host.state().mode) return `The chat is in ${modeConfig(mode).label} mode already.`;
       await approved(host, 'set_mode', `${modeConfig(mode).label} mode`);
       host.whenIdle(() => host.setMode(mode));

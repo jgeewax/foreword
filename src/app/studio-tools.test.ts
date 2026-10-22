@@ -130,10 +130,13 @@ describe('Foreword’s tools, as an MCP server', () => {
     const t = host();
     expect((await call(t.h, 'switch_assistant', { assistant: 'claude', model: 'default' })).text).toMatch(/When your reply ends, Foreword switches to Claude Code \(model “default”\)\. This conversation stays with OpenCode/);
     expect((await call(t.h, 'set_model', { model: 'sonnet', effort: 'high' })).text).toMatch(/switches the model to “sonnet” and sets the effort to “high”/);
-    expect((await call(t.h, 'set_mode', { mode: 'plan' })).text).toBe('When your reply ends, the chat switches to Plan mode.');
+    expect((await call(t.h, 'set_mode', { mode: 'discuss' })).text).toBe('When your reply ends, the chat switches to Discuss mode.');
     expect(t.did).toEqual([]);
     for (const run of t.idle) await run();
-    expect(t.did).toEqual(['assistant claude {"model":"default"}', 'model {"model":"sonnet","effort":"high"}', 'mode plan']);
+    expect(t.did).toEqual(['assistant claude {"model":"default"}', 'model {"model":"sonnet","effort":"high"}', 'mode discuss']);
+    // Plan, Discuss's old name, is Discuss.
+    expect((await call(t.h, 'set_mode', { mode: 'Plan' })).text).toBe('When your reply ends, the chat switches to Discuss mode.');
+    expect((await call(t.h, 'set_mode', { mode: 'draft' })).text).toBe('No mode is called “draft”: write, ask, discuss, options, figures.');
   });
 
   it('with the settings permission at Never, looks but changes nothing, and says why', async () => {
@@ -143,7 +146,7 @@ describe('Foreword’s tools, as an MCP server', () => {
       ['change_settings', { editorFontSize: 14 }],
       ['set_model', { effort: 'low' }],
       ['switch_assistant', { assistant: 'claude' }],
-      ['set_mode', { mode: 'plan' }],
+      ['set_mode', { mode: 'discuss' }],
     ] as const) {
       const r = await call(t.h, name, args);
       expect(r.error, name).toBe(true);
@@ -161,8 +164,8 @@ describe('Foreword’s tools, as an MCP server', () => {
     expect(yes.asked).toEqual(['change_settings: text size 15 px, rulers at 100']);
     expect(yes.settings().editorFontSize).toBe(15);
     await call(yes.h, 'switch_assistant', { assistant: 'claude', model: 'default' });
-    await call(yes.h, 'set_mode', { mode: 'plan' });
-    expect(yes.asked.slice(1)).toEqual(['switch_assistant: Claude Code (model “default”)', 'set_mode: Plan mode']);
+    await call(yes.h, 'set_mode', { mode: 'discuss' });
+    expect(yes.asked.slice(1)).toEqual(['switch_assistant: Claude Code (model “default”)', 'set_mode: Discuss mode']);
     expect(yes.idle).toHaveLength(2);
     // Looking never asks.
     await call(yes.h, 'get_settings');
@@ -172,7 +175,7 @@ describe('Foreword’s tools, as an MCP server', () => {
     const refused = await call(no.h, 'change_settings', { editorFontSize: 15 });
     expect(refused).toEqual({ text: 'The author didn’t allow it. Nothing was changed.', error: true });
     expect(no.settings().editorFontSize).toBe(12);
-    expect((await call(no.h, 'set_mode', { mode: 'plan' })).error).toBe(true);
+    expect((await call(no.h, 'set_mode', { mode: 'discuss' })).error).toBe(true);
     expect(no.idle).toEqual([]);
 
     const away = host('ask', 'unanswered');
@@ -236,7 +239,7 @@ describe('the tools as the assistants name them', () => {
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.ask.permissions))).toBe('ask');
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.edit.permissions))).toBe('allow');
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.readonly.permissions, true))).toBe('allow');
-    // Plan mode is read-only for the book, not for settings the author asked to change.
+    // Discuss mode is read-only for the book, not for settings the author asked to change.
     expect(decide(ask.action, ask.resources, sessionRules(PRESETS.edit.permissions, true))).toBe('allow');
     const look = permissionAsk({ toolCallId: 'l', title: 'mcp__foreword__get_settings', _meta: { claudeCode: { toolName: 'mcp__foreword__get_settings' } } }, '/book');
     expect(decide(look.action, look.resources, sessionRules(PRESETS.readonly.permissions, true))).toBe('allow');

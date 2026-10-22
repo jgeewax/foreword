@@ -423,7 +423,7 @@ function ModeMenu() {
   );
 }
 
-/** Shown in Ask and Plan once the agent has replied: switch to Write and make what was agreed. */
+/** Shown in Ask and Discuss once the agent has replied: switch to Write and make what was agreed. */
 function CarryOutActions() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const replied = useStore(studio.store, (s) => !s.agent.running && s.agent.items.some((i) => i.kind === 'assistant'));
@@ -898,7 +898,7 @@ const TIPS: ReactNode[] = [
   </>,
   <>
     <kbd>⇧</kbd>
-    <kbd>Tab</kbd> switches to <strong>Plan</strong>: it talks it through before it writes.
+    <kbd>Tab</kbd> switches mode. <strong>Discuss</strong> thinks a direction through with you before anything is written.
   </>,
   <>
     <strong>Options</strong> writes three versions of a passage for you to pick from.

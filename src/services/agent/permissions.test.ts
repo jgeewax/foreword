@@ -145,7 +145,7 @@ describe('fine-grained', () => {
     expect(effect('external_directory', '/Users/x/Documents/other', rules)).toBe('deny');
   });
 
-  it('Plan and Options stay read-only whatever the settings', () => {
+  it('Ask, Discuss and Options stay read-only whatever the settings', () => {
     const rules = sessionRules({ ...PRESETS.edit.permissions, shell: 'allow' }, true);
     expect(effect('edit', 'chapters/ch1.typ', rules)).toBe('deny');
     expect(effect('shell', 'mv a b', rules)).toBe('deny');

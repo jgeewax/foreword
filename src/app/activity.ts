@@ -88,7 +88,7 @@ export const WAITING_TIPS = [
   'A message you send now waits for this turn; ⌥⏎ hands it over at the next step.',
   'Select a passage and press ⌘I to ask about just that.',
   'Options mode gives you three versions of a passage to pick from.',
-  'Plan mode talks it through before anything changes.',
+  'Discuss mode weighs an idea with you, and argues back, before anything is written.',
   'Ask mode answers questions in the chat, and changes nothing.',
   'Finished? Done keeps a named version in History and starts a new task.',
   'Every change it makes is marked in the editor’s gutter, and can be undone from History.',

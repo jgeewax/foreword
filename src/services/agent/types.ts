@@ -122,7 +122,7 @@ export interface AgentAdapter {
   /** Think with this effort from the next message on. */
   switchEffort(sessionId: string, model: ModelRef, effort: string): Promise<void>;
   /**
-   * What the agent may do (`readOnly` forces no changes: Ask, Plan and Options; `rules`: the
+   * What the agent may do (`readOnly` forces no changes: Ask, Discuss and Options; `rules`: the
    * author's own, from command-rules.ts); applies to a running session. It also
    * keeps the agent in its usual mode, never its own plan mode (see modes.ts).
    */

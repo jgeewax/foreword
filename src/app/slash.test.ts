@@ -3,7 +3,9 @@ import { parseSlash, slashMatches, slashToken, withoutSlash } from './slash';
 
 describe('slash commands', () => {
   it('reads a command and its argument', () => {
-    expect(parseSlash('/plan')).toEqual({ name: 'plan', arg: '' });
+    expect(parseSlash('/discuss')).toEqual({ name: 'discuss', arg: '' });
+    // An old name gives the command's.
+    expect(parseSlash('/Plan')).toEqual({ name: 'discuss', arg: '' });
     expect(parseSlash('  /Model  claude sonnet ')).toEqual({ name: 'model', arg: 'claude sonnet' });
     expect(parseSlash('plan this chapter')).toBeNull();
     expect(parseSlash('/ path/to/x')).toBeNull();
@@ -11,7 +13,10 @@ describe('slash commands', () => {
 
   it('lists matches while the name is typed, then stops', () => {
     expect(slashMatches('/').length).toBeGreaterThan(10);
-    expect(slashMatches('/p').map((c) => c.name).slice(0, 3)).toEqual(['plan', 'permissions', 'pdf']);
+    expect(slashMatches('/d').map((c) => c.name).slice(0, 2)).toEqual(['discuss', 'done']);
+    // Old names find their command.
+    expect(slashMatches('/p').map((c) => c.name).slice(0, 3)).toEqual(['discuss', 'permissions', 'pdf']);
+    expect(slashMatches('/plan').map((c) => c.name)).toEqual(['discuss']);
     expect(slashMatches('/mod').map((c) => c.name)).toEqual(['model']);
     expect(slashMatches('/model son')).toEqual([]);
     expect(slashMatches('hello')).toEqual([]);
@@ -21,13 +26,13 @@ describe('slash commands', () => {
 
   it('lists them mid-message too, at the caret, but only the ones that run at once', () => {
     expect(slashMatches('rewrite this /opt').map((c) => c.name)).toEqual(['options']);
-    expect(slashMatches('rewrite this\n/pl').map((c) => c.name)).toEqual(['plan']);
+    expect(slashMatches('rewrite this\n/dis').map((c) => c.name)).toEqual(['discuss']);
     // Arguments need the box to themselves.
     expect(slashMatches('rewrite this /effort')).toEqual([]);
     expect(slashMatches('rewrite this /p').map((c) => c.name)).not.toContain('permissions');
     // Before the rest of the message, with the caret after the name.
-    const text = 'rewrite /pl this';
-    expect(slashMatches(text, 'rewrite /pl'.length).map((c) => c.name)).toEqual(['plan']);
+    const text = 'rewrite /dis this';
+    expect(slashMatches(text, 'rewrite /dis'.length).map((c) => c.name)).toEqual(['discuss']);
     expect(slashMatches(text)).toEqual([]);
     // Not inside a word: "and/or", paths, URLs.
     expect(slashMatches('this and/o')).toEqual([]);

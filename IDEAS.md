@@ -154,7 +154,7 @@ Ideas that came up while working through TODO.md. Not commitments, just things w
 ## Menus
 
 - Grey out menu-bar items that can't act (no book open, nothing to fix, assistant not running) by updating them from the page.
-- Assistant → Mode (Write, Plan, Options, Figures) as checkable items, in step with the composer's mode menu.
+- Assistant → Mode (Write, Ask, Discuss, Options, Figures) as checkable items, in step with the composer's mode menu.
 - Help → Keyboard Shortcuts: one page listing every shortcut, chords (⌘K …) included, generated from the menus and key handlers.
 
 ## Long books

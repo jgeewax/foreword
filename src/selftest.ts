@@ -2050,7 +2050,7 @@ async function aiReadChecks(withAgent: boolean) {
 
   if (withAgent) {
     await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-    await studio.setMode('plan');
+    await studio.setMode('discuss');
     studio.newSession();
     const reply = await askAgent(`Read ${file} and tell me, in one sentence, what the chapter's heading is. Don't change anything.`);
     await studio.setMode('write');
@@ -3344,7 +3344,7 @@ async function thinkingChecks() {
     const key = a ? `${a.phase}${a.label ? `: ${a.label}` : ''}` : 'none';
     if (phases[phases.length - 1] !== key) phases.push(key);
   });
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   studio.newSession();
   const shots: string[] = [];
   const done = askAgent('Think briefly, then read main.typ and the first chapter it includes, and tell me in two sentences what the book is about.');
@@ -3399,7 +3399,7 @@ async function thinkingChecks() {
 /** Messages during a turn (real model): queued for after it, sent now into it, and taken back. */
 async function queueChecks() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   studio.newSession();
   const users = () => studio.state.agent.items.filter((i) => i.kind === 'user').map((i) => (i.kind === 'user' ? i.text : ''));
   const busy = () => waitFor(() => studio.state.agent.running && studio.state.agent.activity && studio.state.agent.activity.phase !== 'sending', 30000, 'busy');
@@ -3446,7 +3446,7 @@ async function queueChecks() {
 /** The assistant's questions (real model): answered by clicking an option, then dismissed. */
 async function questionChecks() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   studio.newSession();
   const question = () => studio.state.agent.items.find((i) => i.kind === 'question' && i.state === 'pending');
   const ask = 'Use your question tool now, before anything else, to ask me one multiple-choice question: should the next chapter be about eigenvalues or determinants? Then answer in one sentence based on my choice.';
@@ -3858,7 +3858,7 @@ async function safeCommandChecks() {
 /** Several tasks at once (real model): one carries on in the background while another runs; status, notice, switching back mid-reply. */
 async function multitaskChecks() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   const a = () => studio.state.agent;
   const out: Record<string, unknown> = {};
   const longTask = 'Read every chapter file in chapters/ one by one, then summarize each in two sentences. Do not change anything.';
@@ -3910,7 +3910,7 @@ async function multitaskChecks() {
 /** Stop, change the model, resume (real model): the turn carries on, with no made-up message from the author. */
 async function resumeChecks() {
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   studio.newSession();
   const a = () => studio.state.agent;
   const out: Record<string, unknown> = {};
@@ -3955,7 +3955,7 @@ async function eventProbe() {
     const type = raw?.type ?? (raw?.$connection ? '$connection' : '?');
     if (!seen.has(type)) seen.set(type, JSON.stringify(raw?.data ?? raw).slice(0, 400));
   };
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   studio.newSession();
   const reply = await askAgent('Think it through briefly, then read main.typ and tell me its first heading in one sentence.');
   await studio.setMode('write');
@@ -6813,57 +6813,73 @@ function turnTools(from: number) {
 }
 
 /**
- * Plan mode (TODO #9), with auto-edit ON to prove plan mode still blocks
- * edits. The app's own: the plan is in the chat, with no plan file and no
- * asking to leave plan mode (Claude Code's own did both). Scratch book only.
+ * Discuss mode (once Plan, TODO #9), with auto-edit ON to prove it still
+ * blocks edits. A view and short turns, not an outline; pushback on a weak
+ * idea; nothing written anywhere (no plan file, no asking to leave a plan
+ * mode, as Claude Code's own did); Write it says what was agreed and writes
+ * it. Scratch book only.
  */
-async function planModeChecks() {
+async function discussModeChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
   const savedPolicy = studio.state.settings.permissions;
   await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
   studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'allow' } });
   studio.newSession();
-  await studio.setMode('plan');
+  await studio.setMode('discuss');
   const hashBefore = await ipc.fsHash(file);
   const waited: string[] = [];
+  const shape = (reply: string) => ({
+    words: reply.split(/\s+/).filter(Boolean).length,
+    numberedLines: (reply.match(/^\s*\d+[.)]\s/gm) ?? []).length,
+    headings: (reply.match(/^#+\s/gm) ?? []).length,
+    reply: reply.slice(0, 1200),
+  });
 
-  const plan = await settleTurn('Plan a short new section for chapter 2 about the trace of a matrix and how it relates to the eigenvalues.', waited);
+  // An open question: a view, in a short turn, not an outline.
+  const view = await settleTurn('I’m wondering whether chapter 2 needs a short section on the trace of a matrix and how it relates to the eigenvalues. Is it worth it, and where would it go?', waited);
   const sid = studio.state.agent.sessionId!;
-  out.plan = {
+  out.view = {
     model: studio.state.agent.model,
     instructionKeys: (await studio.agent!.getInstructions(sid)).map((e) => e.key),
-    numberedOutline: /^\s*(\d+[.)]|#+\s*\d)/m.test(plan),
-    endsWithQuestion: /\?\s*(\*\*)?\s*$/.test(plan.trim()) || /\?[^?]{0,200}$/.test(plan.trim()),
-    replyStart: plan.slice(0, 500),
+    ...shape(view),
     ...turnTools(0),
     waited: waited.splice(0),
     fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
   };
   await sleep(300);
-  out.carryOutButton = document.querySelector('.carry-out-actions button')?.textContent ?? null;
+  out.carryOut = { question: document.querySelector('.carry-out-actions .muted')?.textContent ?? null, button: document.querySelector('.carry-out-actions button')?.textContent ?? null };
   try {
-    out.snapshot = await ipc.previewSnapshot('plan-mode', 'main');
+    out.snapshot = await ipc.previewSnapshot('discuss-mode', 'main');
   } catch (e) {
     out.snapshot = errorMessage(e);
   }
 
-  // Asked to write while still planning: nothing changes.
-  const from = studio.state.agent.items.length;
-  const pushy = await settleTurn(`Go ahead and add that section to ${file} right now.`, waited);
-  out.writeWhilePlanning = { ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, reply: pushy.slice(0, 300) };
+  // A weak idea: it should argue back, not go along.
+  let from = studio.state.agent.items.length;
+  const weak = await settleTurn('Actually, I’d rather cut the worked example from chapter 2 and keep only the definitions. Readers can work it out themselves. Agreed?', waited);
+  out.pushback = { ...shape(weak), ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore };
 
-  // "Write it": back to write mode, and the plan gets written.
+  // Asked to write while discussing: nothing changes.
+  from = studio.state.agent.items.length;
+  const pushy = await settleTurn(`Go ahead and add the trace section to ${file} right now.`, waited);
+  out.writeWhileDiscussing = { ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, reply: pushy.slice(0, 400) };
+
+  // "Write it": back to Write mode; what was agreed first, then it's written.
+  from = studio.state.agent.items.length;
   await studio.carryOut();
   await sleep(1000);
-  await waitFor(() => !studio.state.agent.running, 180000, 'write from plan').catch(() => {});
+  await waitFor(() => !studio.state.agent.running, 180000, 'write from discussion').catch(() => {});
   await sleep(1500);
   const after = (await ipc.fsRead(file)).text;
+  const wrote = (studio.state.agent.items.slice(from).filter((i) => i.kind === 'assistant') as { text?: string }[]).map((i) => i.text ?? '').join('\n\n');
   out.writeIt = {
     mode: studio.state.agent.mode,
     fileChanged: (await ipc.fsHash(file)) !== hashBefore,
     mentionsTrace: /trace/i.test(after),
+    keptExample: /== A worked example/.test(after),
     addedLines: after.split('\n').length,
+    reply: wrote.slice(0, 800),
   };
   studio.updateSettings({ permissions: savedPolicy });
   return out;
@@ -8227,18 +8243,18 @@ export async function runSelftest(launch: LaunchOptions) {
         log('options mode');
         result.options = await optionsChecks();
       }
-      if (want('plan')) {
-        log('plan mode');
-        result.planMode = await planModeChecks();
+      if (want('discuss')) {
+        log('discuss mode');
+        result.discussMode = await discussModeChecks();
       }
       if (want('ask')) {
         log('ask mode');
         result.askMode = await askModeChecks();
       }
-      // Ask and Plan with Claude Code, whose own plan mode they once used.
+      // Ask and Discuss with Claude Code, whose own plan mode Plan (now Discuss) once used.
       if (want('claude-modes')) {
-        log('ask and plan modes, Claude Code');
-        result.claudeModes = await withClaude(async () => ({ ask: await askModeChecks(), plan: await planModeChecks() }));
+        log('ask and discuss modes, Claude Code');
+        result.claudeModes = await withClaude(async () => ({ ask: await askModeChecks(), discuss: await discussModeChecks() }));
       }
       if (want('edits')) {
         log('edit policy');

@@ -330,7 +330,7 @@ export type StudioState = {
     selection: { attachment: Attachment; from: 'editor' | 'preview' } | null;
     /** A selection the author dismissed for now (key: label + text; until it changes). */
     selectionDismissed: string | null;
-    /** Write (default), Plan (discuss and outline) or Options (three versions to pick from). */
+    /** Write (default), Ask, Discuss (think it through first), Options (three versions to pick from) or Figures. */
     mode: AgentMode;
     /** This book's conversations (tasks), newest first. */
     tasks: TaskSummary[];
@@ -3531,7 +3531,7 @@ export class Studio {
     }
   }
 
-  /** Switch between Write, Ask, Plan, Options and Figures (applies to the current conversation). */
+  /** Switch between Write, Ask, Discuss, Options and Figures (applies to the current conversation). */
   async setMode(mode: AgentMode) {
     const previous = this.state.agent.mode;
     if (mode === previous) return;
@@ -3550,7 +3550,7 @@ export class Studio {
     }
   }
 
-  /** "Write it" (Plan) and "Go ahead" (Ask): back to Write mode, to make what was agreed. */
+  /** "Write it" (Discuss) and "Go ahead" (Ask): back to Write mode, to make what was agreed. */
   async carryOut() {
     const carry = modeConfig(this.state.agent.mode).carryOut;
     if (!carry) return;
@@ -4293,7 +4293,7 @@ export class Studio {
   }
 
   /**
-   * A slash command typed in the message box ("/plan", "/model sonnet"). True if the
+   * A slash command typed in the message box ("/discuss", "/model sonnet"). True if the
    * text was a command (run, or explained), so it isn't sent to the assistant.
    */
   async runSlash(text: string): Promise<boolean> {
@@ -4303,7 +4303,7 @@ export class Studio {
     switch (cmd.name) {
       case 'write':
       case 'ask':
-      case 'plan':
+      case 'discuss':
       case 'options':
       case 'figures':
         await this.setMode(cmd.name);
