@@ -44,7 +44,8 @@ export function chapterOf(path: string, chapters: string[], read: ReadText, root
   return chapters.find((c) => includeTree(c, read, root).includes(path)) ?? null;
 }
 
-const LABEL = /<([\p{L}_][\p{L}\p{N}_:.-]*)>/gu;
+// A label put on something; one written as an argument (`#ref(<x>, form: "page")`, `link(<x>)`) refers to it instead.
+const LABEL = /(?<![(,:]\s*)<([\p{L}_][\p{L}\p{N}_:.-]*)>/gu;
 const HEADING_LABEL = /^\s*=+\s+(.+?)\s*<([\p{L}_][\p{L}\p{N}_:.-]*)>\s*$/gmu;
 
 /**

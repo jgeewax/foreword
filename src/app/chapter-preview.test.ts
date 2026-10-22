@@ -4,7 +4,7 @@ import { chapterOf, chapterPreviewPath, chapterPreviewText, includeTree, numbere
 const files: Record<string, string> = {
   'src/front/preface.typ': '#heading(numbering: none)[Preface]\nSee @ch:one.\n',
   'src/chapters/one.typ': '= One <ch:one>\n== First steps <sec:steps>\nText.\n#figure(rect(), caption: [A box]) <fig:box>\n',
-  'src/chapters/two.typ': '= Two <ch:two>\nAs in @sec:steps and @fig:box.\n#include "two-exercises.typ"\n',
+  'src/chapters/two.typ': '= Two <ch:two>\nAs in @sec:steps and @fig:box, and #ref(<ch:one>, form: "page") or #link(<fig:box>)[the box].\n#include "two-exercises.typ"\n',
   'src/chapters/two-exercises.typ': '== Exercises <sec:two-ex>\n',
   'src/chapters/three.typ': '= Three\n```\n= not a heading <not-a-label>\n```\n// = nor this\n= Three, again\n',
   'src/back/refs.typ': '#bibliography("refs.bib")\n',
