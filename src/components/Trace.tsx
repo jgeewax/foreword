@@ -15,6 +15,7 @@ import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges,
 import { wordPieces, type Piece } from '../app/prose-diff';
 import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
+import { modeConfig, withoutModeOffer, type AgentMode } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { answerText, questionText, splitQuestions } from '../services/agent/questions';
 import { AssistantMark } from './AssistantSettings';
@@ -486,7 +487,7 @@ function StepItem({ item, editOpen }: { item: ChatItem; editOpen: boolean }) {
       );
     }
     case 'assistant': {
-      const text = withoutAddressed(withoutMarker(splitQuestions(item.text).text));
+      const text = withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(item.text).text)));
       if (!text.trim()) return null;
       return (
         <Step tone="said" menu={itemMenu(item.text, 'Message')}>
@@ -610,8 +611,8 @@ function Byline({ by }: { by: TurnBy | undefined }) {
 
 /** The reply that ends a turn, under its byline. */
 function Reply({ item, by }: { item: AssistantItem; by: TurnBy | undefined }) {
-  const text = withoutAddressed(withoutMarker(splitQuestions(item.text).text));
-  if (!item.options && !text.trim() && item.taskCheck !== 'ask') return null;
+  const text = withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(item.text).text)));
+  if (!item.options && !text.trim() && item.taskCheck !== 'ask' && !item.modeSuggestion) return null;
   return (
     <div className="reply" onContextMenu={itemMenu(item.text, 'Message')}>
       <Byline by={by} />
@@ -623,7 +624,58 @@ function Reply({ item, by }: { item: AssistantItem; by: TurnBy | undefined }) {
         </div>
       )}
       {!item.options && item.taskCheck === 'ask' && <TaskCheck id={item.id} />}
+      {item.modeSuggestion && <ModeChoice item={item} />}
     </div>
+  );
+}
+
+/**
+ * The assistant's offer of another mode: two ways on, each saying what it
+ * would do, in that mode or staying in this one. Picking one sends it as your
+ * next message; once you've written something else instead, it's a record.
+ */
+function ModeChoice({ item }: { item: AssistantItem }) {
+  const s = item.modeSuggestion!;
+  const running = useStore(studio.store, (st) => st.agent.running);
+  const passed = useStore(studio.store, (st) => st.agent.items.slice(st.agent.items.findIndex((i) => i.id === item.id) + 1).some((i) => i.kind === 'user'));
+  if (s.state !== 'pending' || passed) {
+    const went = s.state === 'switched' ? s.mode : s.state === 'stayed' ? s.from : null;
+    const c = modeConfig(went ?? s.mode);
+    return (
+      <div className={`mode-choice-record mode-${went ?? s.mode}`}>
+        <span className="mode-glyph" aria-hidden="true">
+          {c.icon}
+        </span>
+        {s.state === 'switched' ? `Went on in ${c.label}` : s.state === 'stayed' ? `Stayed in ${c.label}` : `Offered ${c.label}`}
+      </div>
+    );
+  }
+  return (
+    <div className="mode-choice" role="group" aria-label="How should it go on?">
+      <span className="mode-choice-title">How should it go on?</span>
+      <div className="mode-ways">
+        <ModeWay mode={s.mode} text={s.there} primary disabled={running} onPick={() => void studio.takeModeSuggestion(item.id, true)} />
+        <ModeWay mode={s.from} text={s.here} disabled={running} onPick={() => void studio.takeModeSuggestion(item.id, false)} />
+      </div>
+    </div>
+  );
+}
+
+function ModeWay({ mode, text, primary, disabled, onPick }: { mode: AgentMode; text: string; primary?: boolean; disabled: boolean; onPick: () => void }) {
+  const c = modeConfig(mode);
+  return (
+    <button className={`mode-way mode-${mode}${primary ? ' primary-way' : ''}`} disabled={disabled} title={c.description} onClick={onPick}>
+      <span className="mode-way-name">
+        <span className="mode-glyph" aria-hidden="true">
+          {c.icon}
+        </span>
+        {c.label}
+      </span>
+      <span className="mode-way-text" title={text}>
+        {text}
+      </span>
+      <span className="mode-way-go">{c.go}</span>
+    </button>
   );
 }
 
@@ -729,7 +781,7 @@ function TurnFooter({ turn, last }: { turn: Turn; last: boolean }) {
   const time = user.at && user.ended ? turnTime(user.ended - user.at) : null;
   const outcome = failed ? 'failed' : stopped ? 'stopped' : 'done';
   const words = outcome === 'done' ? (time ? `Done in ${time}` : 'Done') : outcome === 'stopped' ? `Stopped${time ? ` after ${time}` : ''}` : 'Didn’t finish';
-  const reply = turn.reply && withoutMarker(splitQuestions(turn.reply.text).text).trim();
+  const reply = turn.reply && withoutModeOffer(withoutMarker(splitQuestions(turn.reply.text).text)).trim();
   return (
     <div className={`turn-foot ${outcome}`}>
       <span className="turn-outcome">

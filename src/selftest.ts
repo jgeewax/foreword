@@ -6789,6 +6789,11 @@ async function layoutChecks() {
  */
 async function settleTurn(text: string, waited: string[]): Promise<string> {
   await studio.send(text);
+  return settle(waited);
+}
+
+/** The running turn, ended whatever it waits on (see settleTurn). The last reply. */
+async function settle(waited: string[]): Promise<string> {
   await sleep(1000);
   for (const t0 = Date.now(); studio.state.agent.running && Date.now() - t0 < 180000; await sleep(500)) {
     const card = studio.state.agent.items.find((i) => (i.kind === 'permission' || i.kind === 'question') && i.state === 'pending');
@@ -6881,6 +6886,78 @@ async function discussModeChecks() {
     addedLines: after.split('\n').length,
     reply: wrote.slice(0, 800),
   };
+  studio.updateSettings({ permissions: savedPolicy });
+  return out;
+}
+
+/**
+ * The assistant offers another mode (a ```mode block), as two ways on under
+ * its reply: for a question of direction in Write, Discuss; for a plain edit,
+ * nothing. Picking a way switches and sends it; after Stay it isn't offered
+ * again in that task. Edits are asked about and refused, so the book never
+ * changes. Scratch book only.
+ */
+async function modeSuggestChecks() {
+  const out: Record<string, unknown> = {};
+  const savedPolicy = studio.state.settings.permissions;
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.model, 60000, 'agent');
+  studio.updateSettings({ permissions: { ...studio.state.settings.permissions, edit: 'ask' } });
+  const files = ['main.typ', 'chapters/ch1-vectors.typ', 'chapters/ch2-eigenvalues.typ'];
+  const hashes = async () => (await Promise.all(files.map((f) => ipc.fsHash(f)))).join(' ');
+  const before = await hashes();
+  const waited: string[] = [];
+  const offer = () => {
+    const reply = studio.state.agent.items.findLast((i) => i.kind === 'assistant');
+    return reply?.kind === 'assistant' ? (reply.modeSuggestion ?? null) : null;
+  };
+  const card = () => ({
+    title: document.querySelector('.mode-choice-title')?.textContent ?? null,
+    ways: [...document.querySelectorAll('.mode-way')].map((b) => b.textContent),
+    record: document.querySelector('.mode-choice-record:last-of-type')?.textContent ?? null,
+    carryOut: !!document.querySelector('.carry-out-actions'),
+  });
+  const lastUser = () => (studio.state.agent.items.findLast((i) => i.kind === 'user') as { text?: string } | undefined)?.text ?? null;
+  const pick = async (primary: boolean) => {
+    document.querySelector<HTMLButtonElement>(primary ? '.mode-way.primary-way' : '.mode-way:not(.primary-way)')?.click();
+    await waitFor(() => studio.state.agent.running, 20000, 'turn after the pick').catch(() => {});
+    return settle(waited);
+  };
+
+  // A question of direction in Write: Discuss offered, nothing written.
+  await studio.setMode('write');
+  studio.newSession();
+  let from = 0;
+  const reply = await settleTurn('Should the eigenvalues chapter come before the vectors chapter? I keep going back and forth on the order.', waited);
+  await sleep(400);
+  out.direction = { model: studio.state.agent.model, reply: reply.slice(0, 600), offer: offer(), card: card(), ...turnTools(from), waited: waited.splice(0) };
+  out.snapshot = await snap('mode-suggestion');
+
+  // Its way: Discuss, with the pick sent as the author's message.
+  from = studio.state.agent.items.length;
+  const discussed = await pick(true);
+  await sleep(400);
+  out.wentOn = { mode: studio.state.agent.mode, sent: lastUser(), states: studio.state.agent.items.flatMap((i) => (i.kind === 'assistant' && i.modeSuggestion ? [i.modeSuggestion.state] : [])), record: card().record, reply: discussed.slice(0, 600), ...turnTools(from), waited: waited.splice(0) };
+  out.snapshotAfter = await snap('mode-suggestion-after');
+
+  // A plain edit in Write: no offer.
+  await studio.setMode('write');
+  studio.newSession();
+  const edit = await settleTurn('Add one sentence at the end of chapter 1 saying what chapter 2 is about.', waited);
+  out.plainEdit = { offer: offer(), reply: edit.slice(0, 300), ...turnTools(0), waited: waited.splice(0) };
+
+  // Stay: the way in Write is sent, and Discuss isn't offered again in this task.
+  studio.newSession();
+  await settleTurn('Is it worth adding a chapter on determinants before the eigenvalues chapter, or is that too much?', waited);
+  await sleep(400);
+  const second = offer();
+  from = studio.state.agent.items.length;
+  const stayed = second ? await pick(false) : '';
+  out.stay = { offer: second, mode: studio.state.agent.mode, sent: lastUser(), reply: stayed.slice(0, 400), ...turnTools(from), waited: waited.splice(0) };
+  from = studio.state.agent.items.length;
+  const again = await settleTurn('And should the chapter on vectors be split in two?', waited);
+  out.again = { offer: offer(), reply: again.slice(0, 400), ...turnTools(from), waited: waited.splice(0) };
+
+  out.bookUnchanged = (await hashes()) === before;
   studio.updateSettings({ permissions: savedPolicy });
   return out;
 }
@@ -8242,6 +8319,10 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('options')) {
         log('options mode');
         result.options = await optionsChecks();
+      }
+      if (want('modesuggest')) {
+        log('mode suggestions, Claude Code');
+        result.modeSuggest = await withClaude(modeSuggestChecks);
       }
       if (want('discuss')) {
         log('discuss mode');

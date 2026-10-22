@@ -986,10 +986,12 @@ button.link.quiet { color: var(--muted); }
 .effort-meter span.on { background: var(--accent); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
-.mode-trigger.mode-ask { --mode: #1f8fa5; }
-.mode-trigger.mode-discuss { --mode: var(--milestone); }
-.mode-trigger.mode-options { --mode: var(--good); }
-.mode-trigger.mode-figures { --mode: #a35bd6; }
+/* Each mode's colour: its button under the message box, and the assistant's offer of it (Trace.tsx). */
+:is(.mode-way, .mode-choice-record) { --mode: var(--accent); }
+:is(.mode-trigger, .mode-way, .mode-choice-record).mode-ask { --mode: #1f8fa5; }
+:is(.mode-trigger, .mode-way, .mode-choice-record).mode-discuss { --mode: var(--milestone); }
+:is(.mode-trigger, .mode-way, .mode-choice-record).mode-options { --mode: var(--good); }
+:is(.mode-trigger, .mode-way, .mode-choice-record).mode-figures { --mode: #a35bd6; }
 .mode-icon { width: 14px; text-align: center; }
 .mode-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding-top: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .mode-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; border: none; border-radius: 0; background: transparent; padding: 6px 10px; white-space: normal; height: auto; }
@@ -1721,6 +1723,21 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .task-check-question { font-weight: 650; }
 .task-check-hint { font-size: 11.5px; color: var(--muted); }
 .task-check .primary { background: var(--ok); border-color: var(--ok); color: var(--bg); font-weight: 650; }
+
+/* The assistant's offer of another mode: two ways on, each saying what it would do, in its mode's colour; the offered one filled. */
+.mode-choice { display: flex; flex-direction: column; gap: 7px; margin-top: 3px; }
+.mode-choice-title { font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.mode-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.mode-way { display: flex; flex-direction: column; align-items: stretch; gap: 6px; height: auto; padding: 10px 11px 11px; text-align: left; white-space: normal; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-2); color: var(--fg); }
+.mode-way:hover:not(:disabled) { border-color: color-mix(in srgb, var(--mode) 70%, transparent); }
+.mode-way.primary-way { border-color: color-mix(in srgb, var(--mode) 50%, transparent); background: color-mix(in srgb, var(--mode) 8%, transparent); }
+.mode-way-name { display: flex; align-items: center; gap: 6px; font-weight: 650; color: var(--mode); }
+.mode-way-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; font-size: 12px; line-height: 1.45; color: color-mix(in srgb, var(--fg) 88%, var(--muted)); }
+.mode-way-go { align-self: flex-start; display: inline-flex; align-items: center; height: 24px; margin-top: 2px; padding: 0 10px; border: 1px solid var(--mode); border-radius: 6px; color: var(--mode); font-size: 11.5px; font-weight: 600; }
+.mode-way.primary-way .mode-way-go { background: var(--mode); color: var(--bg); font-weight: 650; }
+.mode-glyph { width: 14px; text-align: center; font-weight: 700; }
+.mode-choice-record { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+.mode-choice-record .mode-glyph { color: var(--mode); }
 
 /* How the turn ended. */
 .turn-foot { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-top: -2px; font-size: 11.5px; color: var(--muted); }

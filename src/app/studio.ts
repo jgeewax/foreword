@@ -64,7 +64,7 @@ import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
-import { MODE_INSTRUCTIONS_KEY, modeConfig, type AgentMode } from '../services/agent/modes';
+import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
@@ -151,7 +151,7 @@ export type ChatItem =
       /** The History version of what the turn changed (null: it changed nothing). */
       version?: string | null;
     }
-  | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed' }
+  | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed'; modeSuggestion?: ModeSuggestion }
   /**
    * The assistant asks (choices, several choices, yes or no, or its own words)
    * and waits: the question panel takes the composer's place until it's
@@ -3550,6 +3550,34 @@ export class Studio {
     }
   }
 
+  /**
+   * A reply's offer of another mode (its ```mode block), as its two ways on:
+   * never the mode the chat is in, nor one the author stayed out of when it was
+   * offered earlier in this task.
+   */
+  private modeSuggestionIn(text: string): { modeSuggestion: ModeSuggestion } | Record<string, never> {
+    const offer = modeOffer(text);
+    const { mode, items } = this.state.agent;
+    const declined = items.some((it) => it.kind === 'assistant' && it.modeSuggestion?.state === 'stayed' && it.modeSuggestion.mode === offer?.mode);
+    return offer && offer.mode !== mode && !declined ? { modeSuggestion: { ...offer, from: mode, state: 'pending' } } : {};
+  }
+
+  /**
+   * One of the two ways on that the assistant offered: `go` to its mode, or
+   * staying in the one it was in. Sent as the author's next message, in the
+   * assistant's own words, so it knows which it was.
+   */
+  async takeModeSuggestion(itemId: string, go: boolean) {
+    const item = this.state.agent.items.find((it) => it.id === itemId);
+    const s = item?.kind === 'assistant' ? item.modeSuggestion : undefined;
+    if (!s || s.state !== 'pending' || this.state.agent.running) return;
+    const mode = go ? s.mode : s.from;
+    await this.setMode(mode);
+    if (this.state.agent.mode !== mode) return;
+    this.updateItem(itemId, (it) => (it.kind === 'assistant' && it.modeSuggestion ? { ...it, modeSuggestion: { ...it.modeSuggestion, state: go ? 'switched' : 'stayed' } } : it));
+    await this.send(modeChoiceMessage(s, go));
+  }
+
   /** "Write it" (Discuss) and "Go ahead" (Ask): back to Write mode, to make what was agreed. */
   async carryOut() {
     const carry = modeConfig(this.state.agent.mode).carryOut;
@@ -4544,10 +4572,11 @@ export class Studio {
       case 'text-ended': {
         const id = `${e.messageId}:${e.ordinal}`;
         const taskCheck = asksTaskDone(e.text) ? ({ taskCheck: 'ask' } as const) : {};
+        const offer = this.modeSuggestionIn(e.text);
         this.setAgent((a) =>
           a.items.some((it) => it.id === id)
-            ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true, ...taskCheck } : it)) }
-            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState(), ...taskCheck }] },
+            ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true, ...taskCheck, ...offer } : it)) }
+            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState(), ...taskCheck, ...offer }] },
         );
         this.addReplyQuestions(id, e.text);
         break;

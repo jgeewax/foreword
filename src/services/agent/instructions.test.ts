@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildInstructions } from './instructions';
+import { buildInstructions, MODES_SECTION } from './instructions';
+import { modeOffer } from './modes';
 
 const ctx = {
   projectName: 'Linear Algebra Notes',
@@ -53,7 +54,17 @@ describe('buildInstructions', () => {
     const many = Array.from({ length: 100 }, (_, i) => `chapters/ch${i}.typ`);
     const long = buildInstructions({ ...ctx, typFiles: many });
     expect(long).toContain('and 60 more');
-    expect(long.length).toBeLessThan(6000);
+    // A hundred files add a line, not a page.
+    expect(long.length - buildInstructions(ctx).length).toBeLessThan(1000);
+  });
+
+  it('says when to offer another mode, in a block the chat shows as two choices', () => {
+    expect(text).toContain(MODES_SECTION);
+    expect(MODES_SECTION).toMatch(/open question of direction .* suits Discuss/);
+    expect(MODES_SECTION).toMatch(/before asking them to decide/);
+    // Its example is an offer the chat reads.
+    const example = /```mode\n[\s\S]*?\n```/.exec(MODES_SECTION)![0];
+    expect(modeOffer(example)).toEqual({ mode: 'discuss', there: 'Weigh Sam against Ada as the narrator with you. Nothing changes.', here: "Go with Sam, and rewrite chapter 1's first scene in his voice." });
   });
 
   it('handles a project without an entry point or chapters', () => {

@@ -3255,6 +3255,47 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   further"), and its first turn ran past the self-test's 3 minutes: a weak
   model, not the instructions, on one run each.
 
+### The assistant offers another mode, as two ways on
+
+- **Asked for:** "can the ai model suggest we switch modes and we show the
+  user a clean UI?" Of five mockups (a card under the reply, a strip in the
+  message box with ⇧Tab, a popover on the mode button, two ways on, switching
+  itself with Back to Write): "B is best for engineers. but for nontechnical
+  folks writing, i think D is the best."
+- **Two ways on** (D): under the reply, "How should it go on?" and two
+  choices, each saying what the assistant would do: in the offered mode
+  (filled, in that mode's colour) or staying in this one. Each has its
+  mode's verb (Talk it through, Write it, Just answer, Show three versions,
+  Draw it: `go` in each mode's config). A pick switches the mode and sends
+  "Go on in Discuss mode, as you offered: “…”" (or "Stay in Write mode…")
+  as the author's message, so the assistant knows which. Writing something
+  else instead leaves it as a record; a pick leaves "Went on in Discuss".
+  Settled?/Write it waits while the choice is up.
+- **Offered in a block, not a tool:** the reply ends with a ```mode block
+  (mode, there, here) that the chat reads (`modeOffer`) and never shows. A
+  `suggest_mode` tool came first, and Haiku never used it: Claude Code loads
+  Foreword's MCP tools lazily (a tool search first) when there are many, and
+  "Asking the author" told it to ask about "a direction" with its question
+  tool, which it did ("Which chapter order do you want?"). A block works for
+  every assistant, as Gemini's ```questions blocks do.
+- **When** (instructions, "Another mode for this?"): in Write, an open
+  question of direction suits Discuss (offered before asking the author to
+  decide), "a few versions" Options, a diagram or chart Figures; in Ask, a
+  question that turns into what to do suits Discuss. Say why in a sentence,
+  start on neither way. Once a reply at most, and never a mode the author
+  stayed out of in this task: the chat drops such an offer too, and one for
+  the mode it's in.
+- Verified: unit tests (the block read loosely, hidden while it's written,
+  the instructions' example is one the chat reads). In-app self-test
+  `modesuggest`, Claude Code's Haiku, edits asked about and refused, scratch
+  book: "Should the eigenvalues chapter come before the vectors chapter?"
+  in Write gave a view and the two ways ("Weigh the two orders with you…" /
+  "Keep vectors first, and tighten chapter 2's opening…"), nothing written;
+  Talk it through switched to Discuss and it argued for keeping the order,
+  from the lines. A plain edit got no offer. Another offer, then Stay: it
+  carried on in Write, and the next direction question was answered with no
+  offer. The book never changed.
+
 ### The preview keeps nearby pages drawn, and its place
 
 - **Asked for:** "when i navigate away for a while, screen goes to sleep, etc.

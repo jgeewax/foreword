@@ -427,8 +427,13 @@ function ModeMenu() {
 function CarryOutActions() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const replied = useStore(studio.store, (s) => !s.agent.running && s.agent.items.some((i) => i.kind === 'assistant'));
+  // The assistant offered another mode for this: its two ways on are the choice.
+  const offered = useStore(studio.store, (s) => {
+    const last = s.agent.items.findLast((i) => i.kind === 'assistant' || i.kind === 'user');
+    return last?.kind === 'assistant' && last.modeSuggestion?.state === 'pending';
+  });
   const carry = modeConfig(mode).carryOut;
-  if (!carry || !replied) return null;
+  if (!carry || !replied || offered) return null;
   return (
     <div className="carry-out-actions">
       <span className="muted">{carry.question}</span>

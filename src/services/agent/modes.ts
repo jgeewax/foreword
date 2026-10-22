@@ -39,7 +39,55 @@ export type ModeConfig = {
   notice: string;
   /** After a reply: the button that switches to Write and sends `prompt`, to make what was agreed. */
   carryOut: { question: string; label: string; prompt: string } | null;
+  /** Going on in this mode, on the button of the assistant's offer of it (modeOffer). */
+  go: string;
 };
+
+/**
+ * The assistant's offer of another mode for the author's last message (a
+ * ```mode block ending its reply): what it would do there, and what it would
+ * do staying here. The author picks one under the reply.
+ */
+export type ModeSuggestion = { mode: AgentMode; from: AgentMode; there: string; here: string; state: 'pending' | 'switched' | 'stayed' };
+
+/** Where a reply's offer starts: a ```mode fence on a line of its own. */
+const OFFER_OPEN = /(^|\n)[ \t]*```+[ \t]*mode[ \t]*\n/i;
+const OFFER_CLOSE = /(^|\n)[ \t]*```+[ \t]*(?=\n|$)/;
+
+/** One way on, in the assistant's words (its card shows a few lines; the author's pick sends them all): never an essay. */
+const sentence = (t: string) => {
+  const s = t.trim().replace(/\s+/g, ' ');
+  return s.length > 600 ? `${s.slice(0, 599).trimEnd()}…` : s;
+};
+
+/** A reply's offer of another mode: its ```mode block's mode, there and here; null without a whole one. */
+export function modeOffer(text: string): Pick<ModeSuggestion, 'mode' | 'there' | 'here'> | null {
+  const open = OFFER_OPEN.exec(text);
+  if (!open) return null;
+  const rest = text.slice(open.index + open[0].length);
+  const close = OFFER_CLOSE.exec(rest);
+  if (!close) return null;
+  const body = rest.slice(0, close.index);
+  const field = (key: string) => sentence(new RegExp(`^[ \\t*-]*${key}[ \\t*]*:(.*)$`, 'im').exec(body)?.[1]?.replace(/^[\s"“]+|[\s"”]+$/g, '') ?? '');
+  const mode = modeNamed(field('mode'));
+  const [there, here] = [field('there'), field('here')];
+  return mode && there && here ? { mode, there, here } : null;
+}
+
+/** The reply as the chat shows it: without its offer block, or the start of one still being written. */
+export function withoutModeOffer(text: string): string {
+  const open = OFFER_OPEN.exec(text);
+  if (!open) return text;
+  const rest = text.slice(open.index + open[0].length);
+  const close = OFFER_CLOSE.exec(rest);
+  const after = close ? rest.slice(close.index + close[0].length) : '';
+  return [text.slice(0, open.index + open[1].length).trimEnd(), after.trim()].filter(Boolean).join('\n\n');
+}
+
+/** The author's pick of an offer's two ways on, sent as their next message: the way in the assistant's own words. */
+export function modeChoiceMessage(s: Pick<ModeSuggestion, 'mode' | 'from' | 'there' | 'here'>, go: boolean): string {
+  return `${go ? 'Go on' : 'Stay'} in ${modeConfig(go ? s.mode : s.from).label} mode, as you offered: “${go ? s.there : s.here}”`;
+}
 
 /** The next mode in the menu (⇧Tab in the composer cycles through them). */
 export const nextMode = (mode: AgentMode): AgentMode => AGENT_MODES[(AGENT_MODES.indexOf(mode) + 1) % AGENT_MODES.length];
@@ -56,6 +104,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         placeholder: 'Ask about the book, a passage, a TODO…',
         notice: 'Ask mode: the agent answers in the chat, and can’t change files.',
         carryOut: { question: 'Want it changed?', label: 'Go ahead', prompt: GO_AHEAD_PROMPT },
+        go: 'Just answer',
       };
     case 'discuss':
       return {
@@ -67,6 +116,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         placeholder: 'What should we think through? A direction, a chapter’s shape, a character…',
         notice: 'Discuss mode: the agent weighs ideas with you and argues back, and can’t change files.',
         carryOut: { question: 'Settled?', label: 'Write it', prompt: WRITE_FROM_DISCUSSION_PROMPT },
+        go: 'Talk it through',
       };
     case 'options':
       return {
@@ -78,6 +128,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         placeholder: 'Select text, then say what to change (e.g. “make it punchier”)…',
         notice: 'Options mode: select text and ask for a change; you’ll get three versions to choose from.',
         carryOut: null,
+        go: 'Show three versions',
       };
     case 'figures':
       return {
@@ -89,6 +140,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         placeholder: 'Describe a figure: a flowchart of…, a chart of data/sales.csv, a diagram of…',
         notice: 'Figures mode: diagrams, charts, illustrations and tables, drawn as code you can see in the preview.',
         carryOut: null,
+        go: 'Draw it',
       };
     case 'write':
       return {
@@ -100,6 +152,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         placeholder: 'Ask about the selection, or request an edit…',
         notice: 'Write mode: the agent writes and edits the book.',
         carryOut: null,
+        go: 'Write it',
       };
   }
 }
