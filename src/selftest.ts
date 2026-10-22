@@ -5761,6 +5761,31 @@ async function selectAllChecks() {
   return out;
 }
 
+/** A character typed over a selected word wraps it (_word_, *word*, $word$, (word)); with nothing selected it's typed as before. */
+async function wrapChecks() {
+  const out: Record<string, any> = {};
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const line = model.getLinesContent().findIndex((l) => /^[A-Za-z]+ /.test(l)) + 1;
+  const word = /^[A-Za-z]+/.exec(model.getLineContent(line))![0];
+  editor.focus();
+  for (const ch of ['_', '*', '$', '(', '[', '{', '"', '`']) {
+    editor.setSelection(new monaco.Range(line, 1, line, word.length + 1));
+    editor.trigger('keyboard', 'type', { text: ch });
+    const sel = editor.getSelection()!;
+    out[ch] = { text: model.getLineContent(line).slice(0, word.length + 2), stillSelected: model.getValueInRange(sel) === word };
+    editor.trigger('selftest', 'undo', null);
+  }
+  editor.setPosition({ lineNumber: line, column: 1 });
+  editor.trigger('keyboard', 'type', { text: '_' });
+  out.noSelection = model.getLineContent(line).slice(0, word.length + 1);
+  editor.trigger('selftest', 'undo', null);
+  out.word = word;
+  out.restored = model.getValue() === original;
+  return out;
+}
+
 /**
  * Edit → Undo and Redo (⌘Z, ⇧⌘Z) while the page has the keyboard (the menu sends
  * them to the page: menu.rs `edit_action`): in the editor, its own history a step
@@ -7926,6 +7951,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('tabs')) result.tabs = await tabChecks();
     if (want('selectall')) result.selectall = await selectAllChecks();
     if (want('undo')) result.undo = await undoChecks();
+    if (want('wrap')) result.wrap = await wrapChecks();
     if (want('breadcrumbs')) result.breadcrumbs = await breadcrumbChecks();
     if (want('slash')) result.slash = await slashChecks();
     if (want('quickopen')) result.quickopen = await quickOpenChecks();

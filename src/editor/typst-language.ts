@@ -6,6 +6,7 @@ import onigWasmUrl from 'vscode-oniguruma/release/onig.wasm?url';
 import { INITIAL, Registry, parseRawGrammar, type IGrammar, type StateStack } from 'vscode-textmate';
 import grammarSource from './grammars/typst.tmLanguage.json?raw';
 import languageConfiguration from './grammars/typst-language-configuration.json';
+import { fromVsCode } from './language-configuration';
 
 class TokenizerState implements monaco.languages.IState {
   constructor(readonly stack: StateStack) {}
@@ -28,7 +29,7 @@ export function pickScope(scopes: readonly string[], themePrefixes: readonly str
 
 export async function registerTypst(themePrefixes: readonly string[]) {
   monaco.languages.register({ id: 'typst', extensions: ['.typ'], aliases: ['Typst'] });
-  monaco.languages.setLanguageConfiguration('typst', languageConfiguration as unknown as monaco.languages.LanguageConfiguration);
+  monaco.languages.setLanguageConfiguration('typst', fromVsCode(languageConfiguration) as unknown as monaco.languages.LanguageConfiguration);
 
   await loadWASM(await (await fetch(onigWasmUrl)).arrayBuffer());
   const registry = new Registry({
