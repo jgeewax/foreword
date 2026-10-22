@@ -6,7 +6,7 @@
 // card offers the other version. Nothing the author typed or saved is dropped.
 import { errorMessage, ipc, isCmdError } from '../lib/ipc';
 import type { TypstService } from '../services/typst';
-import { blankLinesAroundHeadings, headingRanges } from './format';
+import { blankLinesAroundHeadings, headingRanges, singleBlankLines } from './format';
 import { applyLspEdits, relativeToUri, toLspChanges, toMarker, type LspDiagnostic } from './lsp-convert';
 import { merge3, reconcile, type Question } from './merge';
 import { languageFor, monaco } from './monaco';
@@ -142,7 +142,7 @@ export class Documents {
 
   /**
    * Format a Typst buffer with Tinymist's typstyle, then blank lines around
-   * headings (format.ts), as one undoable step. The edits are cut down to
+   * headings and one blank line at most in a row (format.ts), as one undoable step. The edits are cut down to
    * what changed, so the cursor stays put. Nothing happens if the text changes
    * while the formatter works.
    */
@@ -170,9 +170,10 @@ export class Documents {
     // lines inside equations or raw blocks that start with `=`).
     const formatted = model.getVersionId();
     const symbols = await ask(this.typst.documentSymbols(doc.uri));
-    if (Array.isArray(symbols) && !model.isDisposed() && model.getVersionId() === formatted) {
+    if (!model.isDisposed() && model.getVersionId() === formatted) {
       const text = model.getValue();
-      changed = this.replaceText(model, text, blankLinesAroundHeadings(text, headingRanges(symbols))) || changed;
+      const spaced = Array.isArray(symbols) ? blankLinesAroundHeadings(text, headingRanges(symbols)) : text;
+      changed = this.replaceText(model, text, singleBlankLines(spaced)) || changed;
     }
     if (!model.isDisposed()) model.pushStackElement();
     return changed ? 'formatted' : 'unchanged';

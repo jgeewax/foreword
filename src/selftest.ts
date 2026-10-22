@@ -4347,7 +4347,8 @@ async function commentTagChecks() {
 /**
  * Format on save and Format Document (typstyle, through Tinymist): an equation
  * and a #let are saved formatted, with blank lines around headings (not around
- * an equation line starting with `=`), the rest of the chapter untouched
+ * an equation line starting with `=`), one blank line at most in a row (raw
+ * text kept as written) and none at the end, the rest of the chapter untouched
  * and the cursor kept; ⌘Z undoes the formatting; with the setting off a save leaves the
  * text alone; a syntax error is saved as written. Edits a chapter: scratch book
  * only; puts it back. The setting is changed in memory only (the author's app
@@ -4392,6 +4393,18 @@ async function formatChecks() {
       '  = y',
       '$',
       '',
+      '',
+      '',
+      'Two blank lines too many above this; raw text keeps its own.',
+      '```',
+      'raw',
+      '',
+      '',
+      'kept',
+      '```',
+      '',
+      '',
+      '',
     ];
     editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(end), text: messy.join('\n') }]);
     const typed = model.getValue();
@@ -4426,6 +4439,14 @@ async function formatChecks() {
       '  x',
       '  = y',
       '$',
+      '',
+      'Two blank lines too many above this; raw text keeps its own.',
+      '```',
+      'raw',
+      '',
+      '',
+      'kept',
+      '```',
       '',
     ].join('\n');
     out.formatOnSave = {

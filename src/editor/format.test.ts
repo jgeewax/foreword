@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blankLinesAroundHeadings, headingRanges } from './format';
+import { blankLinesAroundHeadings, headingRanges, singleBlankLines } from './format';
 import type { LspSymbol } from './lsp-convert';
 
 const at = (line: number, character: number) => ({ line, character });
@@ -83,5 +83,42 @@ describe('blankLinesAroundHeadings', () => {
   it('changes nothing without headings', () => {
     const text = 'Just text.\n';
     expect(blankLinesAroundHeadings(text, [])).toBe(text);
+  });
+});
+
+describe('singleBlankLines', () => {
+  const fix = (lines: string[]) => singleBlankLines(lines.join('\n')).split('\n');
+
+  it('leaves one blank line where there were several, blank or just spaces', () => {
+    expect(fix(['First.', '', '', '', 'Second.', '  ', '\t', 'Third.', '', 'Fourth.'])).toEqual(['First.', '', 'Second.', '  ', 'Third.', '', 'Fourth.']);
+  });
+
+  it('takes the blank lines off the start and the end, keeping the last line break', () => {
+    expect(singleBlankLines('\n\n= Title\n\nText.\n\n\n\n')).toBe('= Title\n\nText.\n');
+    expect(singleBlankLines('Text.')).toBe('Text.');
+    expect(singleBlankLines('\n\n')).toBe('');
+  });
+
+  it('keeps raw text and block comments as written', () => {
+    const raw = ['Text.', '', '', '```py', 'def a():', '    pass', '', '', 'def b():', '    pass', '```', '', '', 'More.'];
+    expect(fix(raw)).toEqual(['Text.', '', '```py', 'def a():', '    pass', '', '', 'def b():', '    pass', '```', '', 'More.']);
+    expect(fix(['`inline', '', '', 'raw`', '', '', 'Text.'])).toEqual(['`inline', '', '', 'raw`', '', 'Text.']);
+    expect(fix(['/* a', '', '', '/* nested */', '', '', 'b */', '', '', 'Text.'])).toEqual(['/* a', '', '', '/* nested */', '', '', 'b */', '', 'Text.']);
+  });
+
+  it('is not fooled by backticks that start nothing', () => {
+    expect(fix(['An escaped \\` and an empty `` here.', '', '', 'Text.'])).toEqual(['An escaped \\` and an empty `` here.', '', 'Text.']);
+    expect(fix(['// a ``` in a comment', '', '', 'Text.'])).toEqual(['// a ``` in a comment', '', 'Text.']);
+    // A link's // isn't a comment: the raw text after it is still raw text.
+    expect(fix(['See https://example.com `raw', '', '', 'text`', '', '', 'More.'])).toEqual(['See https://example.com `raw', '', '', 'text`', '', 'More.']);
+  });
+
+  it('keeps \\r\\n line endings', () => {
+    expect(singleBlankLines('A.\r\n\r\n\r\n\r\nB.\r\n')).toBe('A.\r\n\r\nB.\r\n');
+  });
+
+  it('changes nothing that is already tidy', () => {
+    const text = '= Title\n\nText.\n\n#let f(x) = {\n  x\n\n  x\n}\n';
+    expect(singleBlankLines(text)).toBe(text);
   });
 });

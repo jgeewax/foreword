@@ -1,4 +1,5 @@
-// Formatting rules of our own, applied after typstyle (which leaves these alone).
+// Formatting rules of our own, applied after typstyle (which leaves these alone):
+// blank lines around headings, and no more than one blank line in a row.
 import type { LspRange, LspSymbol } from './lsp-convert';
 
 /** LSP SymbolKind.Namespace: what Tinymist reports headings as. */
@@ -54,4 +55,75 @@ export function blankLinesAroundHeadings(text: string, headings: readonly LspRan
   if (!after.size) return text;
   // The new line ends the way the line before it does (\r\n files stay \r\n).
   return lines.flatMap((l, i) => (after.has(i) ? [l, l.endsWith('\r') ? '\r' : ''] : [l])).join('\n');
+}
+
+/**
+ * Where a line break is part of raw text or a block comment, which are kept as
+ * written: `[from, to)` spans, by index. Escaped backticks and backticks in
+ * `//` comments don't start raw text.
+ */
+function keptSpans(s: string): [number, number][] {
+  const spans: [number, number][] = [];
+  for (let i = 0; i < s.length; ) {
+    const [c, d] = [s[i], s[i + 1]];
+    if (c === '\\') i += 2;
+    // In markup, the // of a link (https://…) isn't a comment.
+    else if (c === '/' && d === '/' && s[i - 1] !== ':') i = s.indexOf('\n', i) < 0 ? s.length : s.indexOf('\n', i);
+    else if (c === '/' && d === '*') {
+      // Block comments nest.
+      let depth = 0;
+      let j = i;
+      do {
+        if (s.startsWith('/*', j)) (depth++, (j += 2));
+        else if (s.startsWith('*/', j)) (depth--, (j += 2));
+        else j++;
+      } while (depth > 0 && j < s.length);
+      spans.push([i, j]);
+      i = j;
+    } else if (c === '`') {
+      let n = 1;
+      while (s[i + n] === '`') n++;
+      if (n === 2) {
+        i += 2;
+        continue;
+      }
+      const close = s.indexOf('`'.repeat(n), i + n);
+      const end = close < 0 ? s.length : close + n;
+      spans.push([i, end]);
+      i = end;
+    } else i++;
+  }
+  return spans;
+}
+
+/**
+ * One blank line at most between things, as typstyle keeps code but not
+ * markup (Typst renders any number of blank lines as one paragraph break),
+ * and none at the start or end of the file. Raw text and block comments are
+ * kept as written.
+ */
+export function singleBlankLines(text: string): string {
+  const lines = text.split('\n');
+  const endsWithBreak = lines.length > 1 && lines[lines.length - 1] === '';
+  if (endsWithBreak) lines.pop();
+  const spans = keptSpans(text);
+  // Whether line i starts inside raw text or a comment (the break before it is part of one).
+  let at = 0;
+  let k = 0;
+  const kept = lines.map((l) => {
+    const breakBefore = at - 1;
+    at += l.length + 1;
+    while (k < spans.length && spans[k][1] <= breakBefore) k++;
+    return breakBefore >= 0 && k < spans.length && spans[k][0] <= breakBefore;
+  });
+  const blankAt = (i: number) => !kept[i] && blank(lines[i]);
+  let last = lines.length - 1;
+  while (last >= 0 && blankAt(last)) last--;
+  const out: string[] = [];
+  for (let i = 0; i <= last; i++) {
+    if (blankAt(i) && (out.length === 0 || blankAt(i - 1))) continue;
+    out.push(lines[i]);
+  }
+  const joined = out.join('\n');
+  return endsWithBreak && out.length ? `${joined}\n` : joined;
 }
