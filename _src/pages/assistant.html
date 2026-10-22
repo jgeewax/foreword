@@ -1,0 +1,104 @@
+<!--
+title: The assistant
+heading: The assistant
+lede: It works on the book’s files directly. It reads the chapters it needs, makes its edits, and tells you what it did, one sentence per step, in the book’s terms: “Read ‘Story of the Door’ (chapter 1)”, not <code>sed -n '1,30p' chapters/01.typ</code>. Every line it changes stays marked in your text, and every turn is saved in History.
+description: How Foreword's writing assistant works: tasks with one goal each, every step as a sentence in the book's terms, marked lines, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.
+image: images/f/assistant-trace.webp
+-->
+<figure class="lead">
+  <img src="../images/f/assistant-trace.webp" width="2560" height="1600" alt="Calculus Made Easy's first chapter in the editor, lines 5 and 25 marked in violet where the assistant rewrote them and lines 1 to 28 marked in blue where it read, beside its account: Read “To deliver you from the Preliminary Terrors” (chapter 1), lines 1–28, then two edits, each with the words it struck out and the words it put in.">
+  <figcaption>One turn on Calculus Made Easy: “Modernise the two most old-fashioned sentences.” On the right, what it read and each edit, word by word. On the left, the two lines it changed, marked in violet, and the lines it read, in blue.</figcaption>
+</figure>
+
+<h2>One task, one goal</h2>
+<p>Each conversation is a <em>task</em>. At the start the assistant restates the goal in a sentence, and when it thinks the goal is met it ends its reply by asking: <strong>Is this task done?</strong> <span class="ui">Yes, it’s done</span> saves your open files, keeps a named version in History (“Task done: …”), and starts a fresh task. The old one stays in the task menu at the top of the pane, under Done, and opens again if you send it another message.</p>
+<p>It’s built this way because one long conversation gets worse as it grows: slower, and less focused on what you asked last. Short tasks with a clear end keep each conversation about one thing. <span class="ui">Done</span> and <span class="ui">New task</span> sit on top of the message box, where you’ve just been reading and typing, and they don’t move. <kbd>⌘</kbd><kbd>T</kbd> starts a new task and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>D</kbd> marks this one done. You don’t have to wait to be asked.</p>
+<p>Several tasks can run at once. <span class="ui">New task</span> while the assistant is working doesn’t stop it: the old task carries on in the background, and a notice tells you when it’s finished or needs you. The task menu shows what each one is doing right now (“Reading ‘The Carew Murder Case’ (chapter 4)”).</p>
+<figure class="small">
+  <img src="../images/f/assistant-tasks.webp" width="1288" height="800" alt="The task menu open at the top of the assistant pane: in progress, a proofread with a new reply and a rewrite that has a question; open tasks; and a done one with a tick.">
+  <figcaption>The task menu. Two tasks carried on in the background: one has replied, the other has a question for you.</figcaption>
+</figure>
+<p>You can keep typing while it works. <kbd>⏎</kbd> queues your message for when the turn ends. <kbd>⌥</kbd><kbd>⏎</kbd> sends it now, and the assistant reads it at its next step (on assistants that support this, like Claude Code). Queued messages wait above the box, where you can edit them or take them back.</p>
+
+<h2>What it did, as sentences</h2>
+<p>An assistant like Claude Code works through tools: read a file, search, edit, run a command. Foreword turns each tool call into a sentence about the book. A chapter is named by its first heading and numbered by its place in the main file, the way the book numbers it. A preface without a numbered heading doesn’t push chapter 1 to chapter 2.</p>
+<ul>
+  <li>Read “Story of the Door” (chapter 1) · lines 1–30</li>
+  <li>Searched for “lighthouse” in chapters/ · 3 matches</li>
+  <li>Ran the Python script plot.py</li>
+  <li>Asked you a question · you said “Warm”</li>
+  <li>Changed Foreword’s settings · text size 15 px, rulers at 100</li>
+</ul>
+<p>Each step has a coloured dot: blue for looking, violet for changing, grey for thinking, amber when it needs you, red when something failed. An edit says where it was and how many words it changed (“line 6 +2 −7 words”). <span class="ui">Show change</span> opens the edit word by word, with the words it cut struck through and the words it wrote in their place. From there, <span class="ui">Show in editor</span> selects what it wrote, and <span class="ui">Undo this edit</span> takes it out (in the editor, so <kbd>⌘</kbd><kbd>Z</kbd> puts it back).</p>
+<p>Under the reply: how long the turn took, and <span class="ui">Saved in History</span>, a link to the version History kept of it. After the turns, <strong>Changed in this task</strong> lists each file it touched, with a strip showing where in the file it read and where it wrote.</p>
+<p>Why sentences: an early version showed the raw commands. A request to allow <code>sed -n '205,242p' chapters/ch01_what_is_a_vector.typ</code> means nothing to most writers, and shouldn’t have to. The command is still there if you want it: it folds out under its row.</p>
+
+<h2>The lines it changed stay marked</h2>
+<p>Every line the assistant wrote gets a violet bar beside the line number, and a faint tint. It keeps that mark until you rewrite the line, at which point it’s yours. Hover the line number and you see the request that changed it, when, and what the line said before. Lines it read in this conversation get a thin blue bar. Both colours are in Settings ▸ Editor ▸ The assistant’s marks, and the dots in the trace follow them.</p>
+<p>The marks don’t come from the chat. They come from History, which saves a version before and after every turn that changes a file. So they cover every way the assistant can change a file (an edit, a whole new file, a shell command), and they survive restarts. Foreword maps each of the file’s last 12 assistant versions onto the text as it is now: add lines above a marked line and the mark moves down with it.</p>
+<p>It works line by line because the assistant is asked to write one sentence per line. Typst joins the lines of a paragraph, so the book looks the same. The marks, diffs and comments then each cover one sentence, not a whole paragraph.</p>
+<p>It goes the other way too. If you rewrite a sentence the assistant wrote, your next message tells it what it wrote and what you changed it to. Without that, asked to look at the passage again, it would work from its memory of its own version, and could quietly put it back.</p>
+
+<h2>Pointing at a passage</h2>
+<p>Whatever you’ve selected goes with your next message. It shows above the box as a quote card, named by its place in the book (“Story of the Door · lines 5–8”). <kbd>⌘</kbd><kbd>I</kbd> pins it, so it stays while you select something else. You can select in the typeset pages too: Foreword finds the passage in the source, even across markup and typographic quotes. The assistant gets the exact text and its lines, and if the file changed after you selected it, it’s told to read the file again.</p>
+
+<h2>Five modes</h2>
+<p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> cycles through them, and so do <code>/write</code>, <code>/ask</code>, <code>/discuss</code>, <code>/options</code> and <code>/figures</code>.</p>
+<dl class="facts">
+  <dt>Write</dt><dd>Writes and edits the book.</dd>
+  <dt>Ask</dt><dd>Questions about the book, answered in the chat. It can’t change files. After an answer, <span class="ui">Go ahead</span> switches to Write and makes the change you talked about.</dd>
+  <dt>Discuss</dt><dd>Thinks a direction through with you: two or three real options, what each costs, which it would pick. It pushes back on a weaker idea with the strongest case against it, and points to the book’s own lines. It can’t change files. <span class="ui">Write it</span> first says what you agreed, then writes it.</dd>
+  <dt>Options</dt><dd>Three versions of the selected passage to pick from. It can’t change files. You put one in.</dd>
+  <dt>Figures</dt><dd>Diagrams, charts, illustrations and tables, drawn as Typst code you can see in the preview.</dd>
+</dl>
+<figure class="small">
+  <img src="../images/f/assistant-modes.webp" width="1100" height="760" alt="The mode menu open above the message box: Write, Ask, Discuss, Options and Figures, each with a line saying what it does, and a note that Shift-Tab switches mode.">
+  <figcaption>The mode menu. Each mode says what it can and can’t do.</figcaption>
+</figure>
+<p>“Can’t change files” isn’t a request to the model. In Ask, Discuss and Options, Foreword refuses every edit, every write, and every command that changes something. Commands that only look still run. And every mode is Foreword’s own. Claude Code has a plan mode of its own, which wrote its plans to a file outside the book and left only a card in the chat. Foreword starts Claude Code with that mode switched off.</p>
+
+<h3>When another mode would suit</h3>
+<p>Ask “should the exercises stay in their own chapter at the end, or should each chapter end with its own?” in Write, and there’s nothing to write yet: it’s a question of direction. So the assistant says so, and under its reply asks <strong>How should it go on?</strong>, with two ways, each in a sentence: Discuss (“Weigh a single closing exercises chapter against exercises at the end of each chapter, and recommend one. Nothing changes.”) or Write (“Move the exercises to the end of each chapter, splitting chapter VII up.”). A click picks one and carries on. It offers at most once per reply, and never a mode you’ve already turned down in this task.</p>
+<figure class="small">
+  <img src="../images/f/assistant-offer.webp" width="1400" height="771" alt="A question about where The Elements of Style's exercises should go, asked in Write mode. Claude Code replies that it's an open question of direction that fits Discuss better, then How should it go on?: Discuss, Weigh a single closing exercises chapter against exercises at the end of each chapter, and recommend one. Nothing changes. Talk it through. Or Write: Stay in Write and move the exercises to the end of each chapter, splitting chapter VII up. Write it.">
+  <figcaption>Asked a question of direction in Write, it offers Discuss, and says what it would do either way.</figcaption>
+</figure>
+<p>The offer is a small block at the end of the reply, which the chat reads and hides. An early version used a tool for it, and some models never called it. A block in the reply works with every assistant.</p>
+
+<h2>Three versions: Options</h2>
+<p>Select a passage and say what should change: “make it punchier”, “less formal”. You get three complete versions as cards, each with a short label and a line on how it differs. <span class="ui">Use this</span> puts one in place as an ordinary edit (unsaved, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out). The others change to <span class="ui">Use this instead</span>, so you can swap. If you edited the passage while it was thinking, Foreword won’t guess where it went. It says the passage has changed and leaves your text alone.</p>
+<figure>
+  <img src="../images/f/assistant-options.webp" width="2560" height="1600" alt="Jekyll and Hyde's opening sentence selected, and three versions of it from Claude Code as cards: Dry Irony First, Paradox Delayed (in use, and selected in the editor), and Neighbours' Verdict, each with a line on what it does.">
+  <figcaption>“Three ways to open the book with more pull.” Option 2 is in, and selected in the editor. Option 1 or 3 is one click away.</figcaption>
+</figure>
+
+<h2>When it needs a decision</h2>
+<p>Instead of a list of questions buried in a reply, they come in a panel that takes the message box’s place, one question at a time. Each has a short title, two to four answers with a line each, and the assistant’s pick marked <strong>Recommended</strong>. There’s always a box for an answer of your own. Number keys choose, the arrow keys move between questions, and a last tab shows all your answers before you send them.</p>
+<figure class="small">
+  <img src="../images/f/assistant-question.webp" width="1250" height="1109" alt="Claude Code asked to add a section to chapter 3 of Calculus Made Easy for readers who get stuck: Needs you, the assistant asks you 3 questions, and the panel below with tabs for Purpose, Placement and Heading. What should the section do for a stuck reader? Recap and reassure (recommended), Re-explain differently, Checklist of fixes, or your own answer.">
+  <figcaption>Three questions before it writes: what the section is for, where it goes, what it’s called. Press 1 for the recommended answer.</figcaption>
+</figure>
+<p>Each assistant asks in its own way: OpenCode with its question tool, Claude Code with AskUserQuestion, Codex with its own. Gemini CLI has no question tool when it’s driven by another app, so it writes its questions as a small block that Foreword shows in the same panel. Your answers go back to each in the shape it expects. The panel never takes the keyboard from the editor, and whatever you’d typed in the box comes back when it’s gone.</p>
+
+<h2>Slash commands</h2>
+<p>Type <code>/</code> at the start of the box, or after a space in the middle of a message, for a list. “Rewrite this /options” switches to Options and leaves “Rewrite this” in the box, ready to send. A slash inside a word (“and/or”, a path) does nothing.</p>
+<dl class="facts">
+  <dt>Modes</dt><dd><code>/write</code> <code>/ask</code> <code>/discuss</code> <code>/options</code> <code>/figures</code> (<code>/plan</code> still works, as Discuss)</dd>
+  <dt>Tasks</dt><dd><code>/new</code> <code>/done</code> <code>/compact</code> <code>/stop</code> <code>/resume</code></dd>
+  <dt>Settings</dt><dd><code>/model sonnet</code> <code>/effort high</code> <code>/assistant codex</code> <code>/permissions edit</code></dd>
+  <dt>The book</dt><dd><code>/fix</code> (every open review comment) <code>/export</code> <code>/pdf</code></dd>
+</dl>
+
+<h2>Ask it to change Foreword</h2>
+<p>“Make the text bigger.” “Put a ruler at 80.” “Switch me to Claude Code with its default model.” The assistant has Foreword’s own tools for its settings, so these just happen. The trace shows what changed: “Changed Foreword’s settings · text size 15 px, rulers at 80”. Under the default permissions it asks you first. A change to the assistant itself (its model, its mode, which assistant it is) waits until the reply ends, so the turn isn’t cut off.</p>
+<p>It can’t change its own permissions, the commands it may run, or the programs Foreword runs. Those tools refuse and point to Settings. That way a passage in a book can’t talk it into more power.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>Whether it offers another mode, asks a question, or follows the style guide is up to the model. A stronger model does each more reliably.</li>
+    <li>Word-by-word edit cards need the old and new text from the assistant. Codex’s edits don’t include it, so they show as “Edited …” without the words. History still has the full change.</li>
+    <li>Marks are drawn in files that are open in tabs.</li>
+    <li>Task status (done or open) is kept on your Mac, not in the book.</li>
+  </ul>
+</div>

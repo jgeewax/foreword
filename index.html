@@ -15,174 +15,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --paper: #fbfaf7;
-    --paper-2: #f3f1ec;
-    --card: #ffffff;
-    --ink: #121729;
-    --ink-2: #3a4155;
-    --muted: #6b7184;
-    --line: #e6e2da;
-    --blue: #2f63d8;
-    --blue-deep: #1d3f9e;
-    --blue-soft: #4a8ff0;
-    --coral: #e9573f;
-    --button: #121729;
-    --button-ink: #ffffff;
-    --shot-shadow: 0 50px 100px -30px rgba(20, 32, 80, 0.45), 0 30px 60px -30px rgba(0, 0, 0, 0.35);
-    --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
-    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper: #0b0e17;
-      --paper-2: #10141f;
-      --card: #131826;
-      --ink: #eef0f6;
-      --ink-2: #c3c8d6;
-      --muted: #8a90a2;
-      --line: #222838;
-      --blue: #6d9cff;
-      --button: #ffffff;
-      --button-ink: #0b0e17;
-      --shot-shadow: 0 50px 120px -30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
-    }
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--paper); color: var(--ink-2); font: 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
-  img { display: block; max-width: 100%; height: auto; }
-  a { color: inherit; }
-  .wrap { width: min(1180px, 100% - 40px); margin: 0 auto; }
-
-  /* The bar along the top: the name, a few links, and Download. */
-  header.top { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px); background: color-mix(in srgb, var(--paper) 78%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
-  header.top .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
-  .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 650; letter-spacing: -0.01em; text-decoration: none; }
-  .brand img { width: 30px; height: 30px; }
-  nav.links { display: flex; align-items: center; gap: 26px; margin-left: auto; font-size: 15px; }
-  nav.links a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
-  nav.links a:hover { color: var(--ink); }
-  nav.links a.button, nav.links a.button:hover { color: var(--button-ink); }
-
-  /* Download buttons: the one call to action, everywhere it appears. */
-  .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 52px; padding: 0 26px; border-radius: 14px; background: var(--button); color: var(--button-ink); font: 600 16px/1 var(--sans); text-decoration: none; letter-spacing: -0.005em; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 10px 24px -10px rgba(18, 23, 41, 0.5); transition: transform 0.15s, box-shadow 0.15s; }
-  .button:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 16px 30px -12px rgba(18, 23, 41, 0.55); }
-  .button svg { width: 19px; height: 19px; margin-top: -2px; }
-  .button.small { height: 36px; padding: 0 16px; border-radius: 10px; font-size: 14px; box-shadow: none; }
-  .button.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-  .button.ghost:hover { box-shadow: inset 0 0 0 1px var(--muted); }
-
-  /* The opening: what it is, Download, and the app itself. */
-  .hero { position: relative; padding: 92px 0 0; overflow-x: clip; text-align: center; }
-  .hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 900px; z-index: -1; background: radial-gradient(42% 46% at 50% 38%, color-mix(in srgb, var(--blue-soft) 22%, transparent), transparent 70%), radial-gradient(26% 30% at 74% 22%, color-mix(in srgb, var(--coral) 12%, transparent), transparent 70%); }
-  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--card) 70%, transparent); color: var(--muted); font-size: 14px; text-decoration: none; }
-  .pill b { flex: none; white-space: nowrap; padding: 2px 9px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 600; }
-  .pill span { text-align: left; }
-  h1 { margin: 26px auto 0; max-width: 980px; color: var(--ink); font: 500 clamp(42px, 7vw, 88px)/1.03 var(--serif); letter-spacing: -0.025em; text-wrap: balance; }
-  h2 { text-wrap: balance; }
-  h1 em { display: block; font-style: italic; color: var(--blue-deep); }
-  @media (prefers-color-scheme: dark) { h1 em { color: var(--blue); } }
-  .lede { text-wrap: pretty; max-width: 640px; margin: 26px auto 0; font-size: clamp(17px, 2vw, 20px); line-height: 1.55; }
-  .cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 38px; }
-  .fine { display: flex; flex-wrap: wrap; justify-content: center; row-gap: 2px; margin: 16px 0 0; color: var(--muted); font-size: 14px; }
-  .fine span { white-space: nowrap; }
-  .fine span + span::before { content: "·"; margin: 0 8px; opacity: 0.6; }
-  .shot { margin: 72px auto 0; width: min(1180px, 100% - 40px); }
-  .shot img { width: 100%; border-radius: 14px; box-shadow: var(--shot-shadow); outline: 1px solid color-mix(in srgb, var(--line) 60%, transparent); outline-offset: -1px; }
-  .shot figcaption { margin-top: 18px; color: var(--muted); font-size: 14px; }
-
-  /* The assistants it works with, each with its mark. */
-  .assistants { padding: 110px 0 20px; text-align: center; }
-  .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--coral); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-  .eyebrow::before { content: ""; width: 9px; height: 13px; background: var(--coral); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
-  h2 { margin: 14px 0 0; color: var(--ink); font: 500 clamp(32px, 4.4vw, 52px)/1.08 var(--serif); letter-spacing: -0.02em; }
-  .assistants p.sub { max-width: 620px; margin: 16px auto 0; }
-  .marks { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 40px; }
-  .mark { display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
-  .mark i { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; color: #fff; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
-  .mark i svg { width: 22px; height: 22px; }
-  .mark b { display: block; color: var(--ink); font-size: 15px; font-weight: 600; }
-  .mark small { color: var(--muted); font-size: 13px; }
-  .m-opencode { background: linear-gradient(160deg, #545c6b, #2d323b); }
-  .m-claude { background: linear-gradient(160deg, #e3906f, #c6613f); }
-  .m-codex { background: linear-gradient(160deg, #1fb88f, #0d8566); }
-  .m-antigravity { background: linear-gradient(160deg, #7b8cff, #3d4fd6); }
-  .m-gemini { background: linear-gradient(135deg, #4b8ef7 5%, #9a6fd0 60%, #d8687a); }
-
-  /* Features: a sentence or two beside a picture of it. */
-  .feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; gap: 64px; padding: 110px 0 0; }
-  .feature.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-  .feature.flip .copy { order: 2; }
-  .feature p { margin: 18px 0 0; }
-  .feature ul { margin: 22px 0 0; padding: 0; list-style: none; }
-  .feature li { position: relative; padding: 9px 0 9px 28px; border-top: 1px solid var(--line); font-size: 15.5px; }
-  .feature li::before { content: ""; position: absolute; left: 2px; top: 17px; width: 12px; height: 7px; border-left: 2px solid var(--blue); border-bottom: 2px solid var(--blue); transform: rotate(-45deg); }
-  .feature figure { margin: 0; }
-  .feature img { width: 100%; border-radius: 12px; box-shadow: var(--shot-shadow); }
-  .feature figcaption { margin-top: 14px; color: var(--muted); font-size: 14px; }
-  /* A picture that needs the width (two panes side by side): the words above it, the list beside them. */
-  .feature.wide { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); align-items: end; row-gap: 44px; }
-  .feature.wide > ul { margin: 0; }
-  .feature.wide figure { grid-column: 1 / -1; }
-
-  /* Everything else, in brief. */
-  .more { padding: 130px 0 0; text-align: center; }
-  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 46px; text-align: left; }
-  .card { padding: 26px 26px 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
-  .card svg { box-sizing: content-box; width: 22px; height: 22px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); }
-  .card h3 { margin: 16px 0 6px; color: var(--ink); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-  .card p { margin: 0; font-size: 15px; line-height: 1.55; }
-
-  /* The last word: Download again, on the icon's blue. */
-  .closing { margin: 140px auto 0; padding: 84px 32px 76px; border-radius: 28px; background: radial-gradient(70% 90% at 50% 0%, #5b9af2 0%, transparent 70%), linear-gradient(180deg, #2f63d8, #1d3f9e); color: #dfe8ff; text-align: center; box-shadow: 0 40px 90px -40px rgba(29, 63, 158, 0.7); }
-  .closing img { width: 96px; height: 96px; margin: 0 auto; filter: drop-shadow(0 14px 24px rgba(8, 20, 60, 0.45)); }
-  .closing h2 { margin-top: 26px; color: #fff; }
-  .closing p { max-width: 520px; margin: 14px auto 0; text-wrap: balance; }
-  .closing .button { margin-top: 34px; background: #fff; color: #121729; }
-  .closing .fine { color: #b8c9f5; }
-  .source { margin-top: 26px; font-size: 14.5px; }
-  .source summary { color: #fff; cursor: pointer; }
-  .source pre { display: inline-block; margin: 14px 0 0; padding: 16px 20px; border-radius: 12px; background: rgba(6, 14, 40, 0.35); color: #e7eeff; font: 13.5px/1.65 "SF Mono", ui-monospace, Menlo, monospace; text-align: left; white-space: pre-wrap; }
-
-  footer { padding: 56px 0 64px; color: var(--muted); font-size: 14px; }
-  footer .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
-  footer .brand { font-size: 15px; }
-  footer .brand img { width: 24px; height: 24px; }
-  footer nav { display: flex; gap: 20px; margin-left: auto; }
-  footer nav a { text-decoration: none; }
-  footer nav a:hover { color: var(--ink); }
-  footer .made { width: 100%; }
-
-  @media (max-width: 900px) {
-    nav.links a:not(.button) { display: none; }
-    .feature, .feature.flip, .feature.wide { grid-template-columns: minmax(0, 1fr); gap: 34px; padding-top: 90px; }
-    .feature.wide { row-gap: 22px; }
-    .feature.wide figure { margin-top: 12px; }
-    .feature.flip .copy { order: 0; }
-    .grid { grid-template-columns: minmax(0, 1fr); }
-    .hero { padding-top: 64px; }
-    .shot { margin-top: 52px; }
-    .closing { margin-top: 100px; padding: 64px 22px 56px; border-radius: 22px; }
-    footer nav { margin-left: 0; }
-  }
-  @media (max-width: 560px) {
-    .wrap, .shot { width: calc(100% - 32px); }
-    .cta .button { width: 100%; }
-    .mark { flex: 1 1 100%; }
-  }
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#"><img src="images/icon.png" alt="" width="30" height="30">Foreword</a>
+    <a class="brand" href="./"><img src="images/icon.png" alt="" width="30" height="30">Foreword</a>
     <nav class="links">
-      <a href="#features">Features</a>
-      <a href="#assistants">Assistants</a>
+      <div class="menu">
+        <button class="menu-toggle" type="button" aria-expanded="false">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
+        <div class="menu-panel">
+          <div><h4>Writing</h4><a href="features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="features/">All features →</a></div>
+        </div>
+      </div>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
       <a class="button small" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg">Download</a>
     </nav>
@@ -221,6 +67,7 @@
       <span class="eyebrow">Your assistant</span>
       <h2>Bring the assistant you already use</h2>
       <p class="sub">It's a program on your Mac, signed in with your own account. Pick one in Settings, or from the chat, with its model and how hard it thinks. Or just ask: “switch me to Claude Code”. Each conversation is its own task, and several can run at once.</p>
+      <a class="more-link" href="features/assistants.html">How Foreword works with each</a>
       <div class="marks">
         <div class="mark"><i class="m-opencode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4.5C6.8 4.5 6 5.3 6 7v2.6c0 1.3-.7 2.4-2 2.4 1.3 0 2 1.1 2 2.4V17c0 1.7.8 2.5 2.5 2.5M15.5 4.5c1.7 0 2.5.8 2.5 2.5v2.6c0 1.3.7 2.4 2 2.4-1.3 0-2 1.1-2 2.4V17c0 1.7-.8 2.5-2.5 2.5"/></svg></i><span><b>OpenCode</b><small>Any model you've set up</small></span></div>
         <div class="mark"><i class="m-claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 3.5v17M3.5 12h17M6.3 6.3l11.4 11.4M17.7 6.3L6.3 17.7"/></svg></i><span><b>Claude Code</b><small>Your Claude plan</small></span></div>
@@ -237,6 +84,7 @@
         <span class="eyebrow">Live pages</span>
         <h2>The pages as they'll print, while you type</h2>
         <p>Foreword typesets the book from what you've typed, saved or not, and redraws only the pages in view. In a 491-page book, a change shows up in about a tenth of a second.</p>
+        <a class="more-link" href="features/preview.html">How the live preview works</a>
       </div>
       <ul>
         <li>Click a passage in the pages to go to its source.</li>
@@ -259,6 +107,7 @@
         <span class="eyebrow">A writing assistant</span>
         <h2>An assistant that edits, and shows its work</h2>
         <p>Select a passage and ask about it, or ask for a change. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves, in plain sentences, never shell commands.</p>
+        <a class="more-link" href="features/assistant.html">How the assistant works</a>
       </div>
       <ul>
         <li>Lines it changed are marked until you rewrite them.</li>
@@ -283,6 +132,7 @@
         <span class="eyebrow">Your style guide</span>
         <h2>A style guide, written with you</h2>
         <p>Every book gets a short guide to how it's written (voice, tone, the words it uses) that every request to the assistant follows. Answer a few rounds of questions about your book, and the assistant writes it from your answers.</p>
+        <a class="more-link" href="features/style-guide.html">How the style guide works</a>
         <ul>
           <li>Or start from a template made for your kind of book.</li>
           <li>Or have it drafted from the chapters you've written.</li>
@@ -302,6 +152,7 @@
         <span class="eyebrow">History</span>
         <h2>Every version, and what changed in it</h2>
         <p>History saves a version as you work and around every assistant change, on a timeline coloured by who made each one. Click a version to see what changed, line by line or word by word, then undo just that change or put the whole book back.</p>
+        <a class="more-link" href="features/history.html">How History works</a>
         <ul>
           <li>Name a version, like “Draft sent to my editor”.</li>
           <li>Already use Git? Source Control commits, pulls and pushes.</li>
@@ -318,6 +169,7 @@
         <span class="eyebrow">Templates and samples</span>
         <h2>Novels, textbooks, picture books and papers</h2>
         <p>Start from a template at the page sizes printers use in the US, the UK and Europe, and Asia. Papers start from IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS or APA.</p>
+        <a class="more-link" href="features/templates.html">The templates and samples</a>
       </div>
       <ul>
         <li>Or open a finished sample: Jekyll and Hyde, Calculus Made Easy, Luca's Wonderful Brain…</li>
@@ -338,52 +190,53 @@
     <div class="wrap">
       <span class="eyebrow">And more</span>
       <h2>Made for the whole job of a book</h2>
+      <a class="more-link" href="features/">Every feature, in detail</a>
       <div class="grid">
-        <div class="card">
+        <a class="card" href="features/comments.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z"/><path d="M8 9.5h8M8 12.5h5"/></svg>
           <h3>Review comments</h3>
           <p>Comment on passages as an editor would, then have the assistant address them, each change kept or undone on its own.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/code.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5"/></svg>
           <h3>Code that runs</h3>
           <p>Examples in Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell run from the book, with their real output set beneath.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/printing.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h9l3 3v14H6z"/><path d="M15 3.5v3h3M9 11h6M9 14h6M9 17h3"/></svg>
           <h3>Covers and printing</h3>
           <p>Design a print cover with the spine worked out from the page count, check the files, and order through Mixam.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/ebooks.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 7.5h6M9 10.5h6M9 13.5h4M11 18h2"/></svg>
           <h3>E-books</h3>
           <p>Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, every page as typeset for picture books and papers.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5.5A2 2 0 0 1 7 3.5h12v14H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h12v-4"/></svg>
           <h3>New to Typst?</h3>
           <p>Typst is plain text with a little markup. Typst basics opens beside your book and takes about five minutes.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg>
           <h3>Familiar keys</h3>
           <p>A command palette, Go to File, tabs and shortcuts as in VS Code (type * over a word to wrap it), formatting on save, wrapping at a column with rulers, and a window for each book.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
           <h3>Find anything</h3>
           <p>Search every chapter at once and replace across the book, see the whole book in Contents with each chapter's sections and words, and go to a chapter by its number.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 2-.9 2-1.9 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.8 1.8-1.8h2.1a3.8 3.8 0 0 0 3.8-3.8C20.5 6.6 16.7 3.5 12 3.5z"/><circle cx="7.6" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="7.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.4" cy="7.4" r="1.1" fill="currentColor" stroke="none"/></svg>
           <h3>A colour for each book</h3>
           <p>As VS Code's Peacock does for a folder: the title bar, icons and status bar wear the book's colour, so you can tell its window from the rest. A book with a Peacock colour keeps it.</p>
-        </div>
-        <div class="card">
+        </a>
+        <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
           <h3>A tour to start</h3>
           <p>The first time you open a book, a minute's tour shows you around the window, one part at a time. Help ▸ Take the Tour runs it again.</p>
-        </div>
+        </a>
       </div>
     </div>
   </section>
@@ -410,9 +263,10 @@ cd foreword &amp;&amp; npm install &amp;&amp; npm run app</pre>
 
 <footer>
   <div class="wrap">
-    <a class="brand" href="#"><img src="images/icon.png" alt="" width="24" height="24">Foreword</a>
+    <a class="brand" href="./"><img src="images/icon.png" alt="" width="24" height="24">Foreword</a>
     <span>Made by JJ Geewax in Singapore</span>
     <nav>
+      <a href="features/">Features</a>
       <a href="https://github.com/jgeewax/foreword/releases">Releases</a>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
       <a href="https://typst.app">Typst</a>
@@ -421,21 +275,6 @@ cd foreword &amp;&amp; npm install &amp;&amp; npm run app</pre>
   </div>
 </footer>
 
-<script>
-  // The newest release: its version, its DMG's size, and a direct link to it.
-  fetch('https://api.github.com/repos/jgeewax/foreword/releases/latest')
-    .then((r) => (r.ok ? r.json() : null))
-    .then((release) => {
-      if (!release) return;
-      const version = release.tag_name.replace(/^v/, '');
-      const dmg = (release.assets || []).find((a) => a.name.endsWith('.dmg'));
-      document.querySelectorAll('[data-version]').forEach((e) => (e.textContent = `Version ${version}`));
-      if (dmg) {
-        document.querySelectorAll('[data-download]').forEach((a) => (a.href = dmg.browser_download_url));
-        document.querySelectorAll('[data-size]').forEach((e) => (e.textContent = `Free · ${Math.round(dmg.size / 1e6)} MB`));
-      }
-    })
-    .catch(() => {});
-</script>
+<script src="assets/site.js"></script>
 </body>
 </html>

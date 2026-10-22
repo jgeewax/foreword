@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The editor · Foreword</title>
+<meta name="description" content="Foreword&#x27;s editor: VS Code&#x27;s editor with Typst&#x27;s highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, and a colour for each book.">
+<meta property="og:title" content="The editor · Foreword">
+<meta property="og:description" content="Foreword&#x27;s editor: VS Code&#x27;s editor with Typst&#x27;s highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, and a colour for each book.">
+<meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/editor-search.webp">
+<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="../images/favicon.png">
+<link rel="apple-touch-icon" href="../images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="30" height="30">Foreword</a>
+    <nav class="links">
+      <div class="menu">
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
+        <div class="menu-panel">
+          <div><h4>Writing</h4><a href="../features/editor.html" aria-current="page"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+        </div>
+      </div>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a class="button small" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg">Download</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <div class="doc-head">
+    <div class="crumbs"><a href="./">Features</a><span>Writing</span></div>
+    <h1>The editor</h1>
+    <p class="lede">It’s Monaco, the editor inside VS Code, with Typst’s own highlighting and VS Code’s keys. Around it, what a book needs that a code editor doesn’t have: search across every chapter, a table of contents to move by, chapters you can find by number, and a merge that never throws away what you typed.</p>
+  </div>
+  <article class="doc">
+<figure class="lead">
+  <img src="../images/f/editor-search.webp" width="2560" height="1600" alt="Search across Jekyll and Hyde for lawyer, with results grouped under each numbered chapter, and the Replace with box open, beside chapter 1 in the editor with a match selected.">
+  <figcaption>Search the whole book, with results under each chapter’s number and title.</figcaption>
+</figure>
+
+<h2 id="writing-in-it">Writing in it</h2>
+<p>Typst is plain text with a little markup, and the editor shows it. Headings are bold, maths is coloured, <code>_emphasis_</code> is set in italic and <code>*strong*</code> in bold, as they’ll print. <code>// TODO:</code>, <code>FIXME</code> and <code>NOTE</code> comments get a coloured tag and a mark in the scrollbar. The highlighting is Tinymist’s own grammar, the one VS Code’s Typst extension uses, so it matches what you’d see there.</p>
+<p>Select a word and type <code>_</code> and the word is wrapped, <code>_word_</code>, still selected, so another <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes. (Both took some fixing: the Mac’s own Undo was undoing a hidden text field, not the editor.)</p>
+<figure class="small">
+  <img src="../images/f/editor-wrap.webp" width="2480" height="560" alt="The word lovable selected in Jekyll and Hyde and wrapped as _lovable_ by typing an underscore, shown in italic in the editor and on the typeset page beside it.">
+  <figcaption>Type <code>_</code> over a word: it’s wrapped, and italic on the page.</figcaption>
+</figure>
+<p>Long lines wrap at the edge of the pane, at a column you choose, or not at all, with rulers wherever you want them (Settings ▸ Editor ▸ Long lines). Text size is separate from the rest of the window.</p>
+
+<h2 id="formatting-on-save">Formatting on save</h2>
+<p><kbd>⌘</kbd><kbd>S</kbd> tidies the Typst first: spacing and indentation in code, the <code>&amp;</code> columns of multi-line equations lined up, and a blank line around each heading. Your sentences and where you broke them stay as you wrote them. The cursor stays where it was, and <kbd>⌘</kbd><kbd>Z</kbd> takes out only the formatting. It uses the same formatter and 120-column default as VS Code’s Typst extension, so a book formatted here doesn’t change when you open it there. It’s on by default; turn it off in Settings ▸ Editor, or save once without it from the command palette.</p>
+
+<h2 id="finding-your-way">Finding your way</h2>
+<h3>Search the book</h3>
+<p><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd> searches every chapter at once, with options for case, whole words and patterns. Open chapters are searched as they are in the editor, unsaved changes included. Results are grouped under each chapter’s number and title, in reading order, and follow your edits. <span class="ui">Replace All</span> asks first, then saves a version in <a href="history.html">History</a> before it changes anything, so one click takes the whole book back.</p>
+
+<h3>Contents</h3>
+<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit; click any heading to go there. <span class="ui">Collapse all</span> folds it to just the chapters, and the chapter you’re in stays lit.</p>
+<div class="pair">
+  <figure>
+    <img src="../images/f/editor-contents.webp" width="600" height="1312" alt="The Contents view for The Elements of Style: each chapter numbered, with its rules as sections and a word count, and the section the cursor is in lit.">
+    <figcaption>Contents, open, for The Elements of Style.</figcaption>
+  </figure>
+  <figure>
+    <img src="../images/f/editor-goto.webp" width="1130" height="510" alt="Go to File in Calculus Made Easy: chapters listed by number and title, 1. To deliver you from the Preliminary Terrors to 5. Next Stage, with the Prologue and Answers unnumbered.">
+    <figcaption>Go to File lists chapters by number and title. The Prologue and Answers aren’t numbered, as in the book.</figcaption>
+  </figure>
+</div>
+
+<h3>Chapters by number</h3>
+<p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, and typing <code>4</code> finds it. The numbers come from reading the main file the way Typst does, so they’re right however the book includes its chapters: <code>#include "ch04.typ"</code>, or inside code, as in <code>#book-chapter(include "ch04.typ")</code>. A preface without a numbered heading doesn’t push chapter 1 to 2. Go to File, Contents, Search and the assistant all use the same numbering, so they never disagree.</p>
+
+<h3>VS Code’s keys</h3>
+<p>The command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) has about 120 commands, each with its shortcut, your recent ones first. Tabs work as they do in VS Code: <kbd>⌘</kbd><kbd>W</kbd>, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>T</kbd> to reopen, <kbd>⌃</kbd><kbd>⇥</kbd> to step through, <kbd>⌃</kbd><kbd>1</kbd>–<kbd>9</kbd>. Under the tabs, a path bar with the chapter’s headings. If your fingers know VS Code, they know this.</p>
+
+<h2 id="a-colour-for-each-book">A colour for each book</h2>
+<p>With two books open, every window looks the same. Give each book a colour (Settings ▸ This book ▸ Colour, or <span class="ui">Surprise me</span>) and its title bar, the icons down the side, and the status bar wear it. The shades are worked out the way VS Code’s Peacock extension works them out, value for value, so a book you’ve already coloured in VS Code looks the same here, and wears that colour without being asked.</p>
+<figure class="small">
+  <img src="../images/f/editor-colour.webp" width="2560" height="1600" alt="A Foreword window with its title bar, activity bar and status bar in the book's teal.">
+  <figcaption>The book’s colour on the title bar, the activity bar and the status bar.</figcaption>
+</figure>
+
+<h2 id="for-someone-new">For someone new</h2>
+<p>The first time you open a book, a short tour shows you around the window, one part at a time, nine steps in about a minute. Help ▸ Take the Tour runs it again. <em>Typst basics</em>, from the welcome screen, opens beside your book and takes about five minutes. Typst itself is far smaller than LaTeX: headings are <code>=</code>, emphasis is <code>_</code>, and most of the rest the assistant can write for you.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>No Typst completions or hover documentation yet, and no spell check.</li>
+    <li>Search doesn’t look inside pictures, PDFs or exports.</li>
+    <li>Word counts leave out code, maths and labels, so they’re “about”.</li>
+  </ul>
+</div>
+  </article>
+  <nav class="doc-next"><a href="./"><small>← All features</small><b>Features</b></a><a class="next" href="preview.html"><small>Next →</small><b>Live preview</b></a></nav>
+  <div class="doc-cta">
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.5.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="24" height="24">Foreword</a>
+    <span>Made by JJ Geewax in Singapore</span>
+    <nav>
+      <a href="../features/">Features</a>
+      <a href="https://github.com/jgeewax/foreword/releases">Releases</a>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a href="https://typst.app">Typst</a>
+    </nav>
+    <p class="made">Foreword (called Typst Studio up to 0.3) is an independent project. It isn't made by, or affiliated with, the Typst team.</p>
+  </div>
+</footer>
+<script src="../assets/site.js"></script>
+</body>
+</html>

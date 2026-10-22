@@ -1,0 +1,94 @@
+<!--
+title: Style guide
+heading: The style guide
+lede: <code>WRITING_STYLE.md</code> is a file in your book’s folder that says how the book is written: its voice, tense, spelling, the words it avoids, how it’s formatted. Foreword gives it to the assistant in every conversation, so what it writes reads like the rest of the book. The assistant can also write the guide with you, change one rule of it, or redraft it.
+description: How Foreword’s style guide works: one file of rules in the book’s folder that every request to the assistant follows, and four ways to write it, from a template, your chapters, an interview, or by hand.
+image: images/f/style-revise.webp
+-->
+<figure class="lead">
+  <img src="../images/f/style-revise.webp" width="2560" height="1600" alt="WRITING_STYLE.md for Jekyll and Hyde in the editor, the changed line marked, beside Claude Code's account of revising it: Never use semicolons. It read the guide, rewrote the one rule built on semicolons word by word, added a rule under Don't, and said what it changed.">
+  <figcaption>“Never use semicolons,” on Jekyll and Hyde’s guide. It rewrote the one rule that asked for them, added the new rule under Don’t, and left the other 87 lines as they were.</figcaption>
+</figure>
+
+<h2>What’s in it</h2>
+<p>It’s Markdown, a few pages long, in sections: Audience, Voice and tone, Point of view and tense, Sentences and paragraphs, Words and spelling, Formatting in Typst, Figures, Do, Don’t, and Examples. The rules are meant to be concrete enough to follow. “Second person, present tense” is a rule. “Engaging tone” isn’t. Here are a few lines from the guide that comes with the Jekyll and Hyde sample:</p>
+<pre><code><span class="c">## Voice and tone</span>
+Grave and restrained, with a dry irony at the edges. Horror comes
+by understatement and suggestion…
+
+<span class="c">## Words and spelling</span>
+Years are left blank with a dash: “18—” (typed `18---`).
+
+<span class="c">## Don’t</span>
+No modern words or idioms (“okay”, “creepy”, “split personality”, “trauma”).</code></pre>
+<p>You can edit it like any other file. Save it partway through a conversation and the next reply follows the new version. The chat says so: “Using the updated WRITING_STYLE.md.”</p>
+
+<h2>How the assistant gets it</h2>
+<p>Foreword doesn’t ask the assistant to go and read the file. It sends the guide’s text itself at the start of every conversation, inside this instruction:</p>
+<blockquote><p>Everything you write or revise in this book must follow this guide: voice, tone, point of view, tense, terminology, spelling, and formatting. If a request conflicts with the guide, follow the request but point out the conflict in one sentence. If the guide is silent on something, match the existing chapters.</p></blockquote>
+<p>So when you ask for something the guide forbids, you get what you asked for, plus one sentence pointing out the conflict. It sends the guide again whenever the file changes. Claude Code, Codex, Gemini CLI and Antigravity get it with your first message. OpenCode keeps it among its instructions, which go out with every request. A guide longer than 16,000 characters is cut there, with a note telling the assistant to read the file for the rest.</p>
+
+<h2>Four ways to start one</h2>
+<p>A book without a guide shows a small card under the assistant’s greeting: <strong>Teach it your voice</strong>. It offers four things.</p>
+
+<h3>Start from a template</h3>
+<p>There are six, one for each kind of book the samples cover: Classic fiction, Friendly textbook, Picture book, Research paper, Rules and reference, and Programming book. A seventh, Blank, has the headings and a prompt under each. Foreword picks the likely one from the book’s files: a <code>story.typ</code> means a picture book, a bibliography with one chapter means a paper. Each template has a tab showing the sample book’s finished guide, so you can see what one looks like filled in.</p>
+<figure>
+  <img src="../images/f/style-templates.webp" width="1600" height="1100" alt="The Start the style guide from a template dialog: the templates down the left, Classic fiction chosen, and its In the sample tab showing the Jekyll and Hyde guide filled in.">
+  <figcaption>Each template is modelled on a sample book’s real guide, and shows it.</figcaption>
+</figure>
+
+<h3>Draft from my chapters</h3>
+<p>The assistant reads the book (all of a short one, and at least the first, a middle and the last chapter of a long one), then writes the guide from what the text already does. It may ask at most two questions, and only about things the chapters can’t show it. The guide opens in the editor when it’s written.</p>
+
+<h3>Interview me</h3>
+<p>For a book with little written yet, there’s nothing to draft from, so the assistant asks instead. The questions come in rounds in the question panel: the book and its readers, then the voice, then the words, then taste (models you like, what you never want to see, how maths or code should look). Each question has three answers that fit this book, the first one recommended, and room for your own. Below 1,500 words, this is the button the card puts first.</p>
+<figure class="small">
+  <img src="../images/interview.webp" width="1074" height="672" alt="The assistant's questions for Jekyll and Hyde's style guide, in a panel: three of them, the first asking how closely new text should imitate Stevenson's own syntax, with three answers to pick from, the first recommended, and one of your own.">
+  <figcaption>The first of three questions in a round, for Jekyll and Hyde.</figcaption>
+</figure>
+
+<h3>Write it yourself</h3>
+<p>It’s a text file. Books made with New Book start with one that has every heading and a prompt under each.</p>
+
+<h2>Changing one rule: Revise</h2>
+<p>Once a guide exists, the strip under the assistant’s header has a <span class="ui">Style guide</span> menu: <span class="ui">Open WRITING_STYLE.md</span>, <span class="ui">Revise…</span>, <span class="ui">Interview me…</span>, <span class="ui">Redraft…</span>.</p>
+<ol class="steps">
+  <li><span class="ui">Revise…</span> asks <em>What should change?</em> Say it the way you’d say it to a person: “Less formal.” “Never use semicolons.” “Numbers under ten in words.”</li>
+  <li>The assistant changes the lines that request touches and keeps every other line as it is, word for word. If the new rule goes against one already there, it replaces that one rather than keeping both.</li>
+  <li>It asks a question only if the request could mean two quite different rules, and never more than one.</li>
+  <li>It changes no chapter. If you asked for that too, it says to ask in a task of its own.</li>
+  <li>History keeps the version before, and the trace shows exactly which words went and which came in.</li>
+</ol>
+<figure class="small">
+  <img src="../images/f/style-revise-ask.webp" width="1200" height="640" alt="The Revise the style guide dialog, with Never use semicolons typed in the What should change box.">
+  <figcaption>Return sends. History keeps the version before.</figcaption>
+</figure>
+<p>Before Revise existed, the only ways to change the guide were editing it by hand or having the whole thing written again. A whole rewrite drifts: a rule you liked comes back reworded, or not at all. Revise exists so “never use semicolons” changes one rule and nothing else.</p>
+
+<h2>Redraft, keeping your rules</h2>
+<p><span class="ui">Redraft…</span> has the assistant read the chapters again and write the whole guide again. Over time you’ll have edited it by hand, and those edits are yours to keep. Foreword finds them in History. It looks up the last version of the guide that an assistant wrote, compares it with the file as it is now, and passes every line you added, removed or changed to the assistant as your own words, to keep unless the chapters plainly go against them. If no assistant ever wrote the guide, it’s all yours: the redraft fills in what’s missing and makes vague rules concrete.</p>
+
+<h2>It learns from how you rewrite it</h2>
+<p>When you keep changing what the assistant wrote the same way (cutting “utilize”, “in order to”, “basically”), that’s the clearest sign of a rule the guide is missing. History already holds the evidence. When you draft, redraft or interview, Foreword goes through the last 40 changes an assistant made, finds the lines it wrote, and compares each with what you turned it into. Spacing-only changes don’t count, and neither do later assistant edits. Up to 12 of your rewrites go to the assistant, with the instruction to find what several have in common and make it a rule. A single fixed fact or typo isn’t a style rule.</p>
+<p>In Foreword’s own test, two rewrites were planted in a book’s History. The new guide said: <em>Use “use”, not “utilize”. Use “to”, not “in order to”.</em></p>
+
+<h2>Why it’s a file</h2>
+<p>Programmers give their AI tools an <code>AGENTS.md</code>: standing rules about how the code is written, read every time. A book needs the same thing for its voice. Without it, you repeat “keep the period voice” in every request, and forget it once. A plain file in the book’s folder can be read, edited, versioned in History, and kept in Git with the rest of the book. Nothing about it is locked inside Foreword.</p>
+<p>The instructions behind the buttons stay out of the chat. You see “Draft my writing style guide from the chapters”, not a page of numbered instructions. The assistant is told what the guide is for and never to ask about the guide itself (who it’s for, how long, what format), because an early version did, and that’s not a question a writer should have to answer.</p>
+
+<dl class="facts">
+  <dt>Where it lives</dt><dd><code>WRITING_STYLE.md</code>, in the book’s folder</dd>
+  <dt>Open it</dt><dd>Book ▸ Writing Style Guide, or the <span class="ui">Style guide</span> menu in the assistant pane</dd>
+  <dt>Palette</dt><dd>Revise Writing Style Guide…, Redraft Writing Style Guide…, Write Style Guide by Interview…, Writing Style Guide Templates…</dd>
+  <dt>Settings</dt><dd>Settings ▸ This book ▸ Assistant ▸ Writing style guide</dd>
+</dl>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>Nothing checks the book against the guide. Following it is up to the assistant, and a weaker model follows it less closely.</li>
+    <li>Revise’s “only that” is an instruction, not a lock. Foreword’s tests measure that the other lines stay the same, but nothing stops a model that ignores it, and History keeps the version before in case one does.</li>
+    <li>The guide isn’t updated on its own. Your rewrites are only read when you draft, redraft or interview.</li>
+  </ul>
+</div>

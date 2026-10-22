@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choosing an assistant · Foreword</title>
+<meta name="description" content="The five assistants Foreword works with (OpenCode, Claude Code, Codex, Gemini CLI, Antigravity), how it talks to each, how to sign in, choose a model and effort, or switch by asking, and what Foreword adds on top of every one.">
+<meta property="og:title" content="Choosing an assistant · Foreword">
+<meta property="og:description" content="The five assistants Foreword works with (OpenCode, Claude Code, Codex, Gemini CLI, Antigravity), how it talks to each, how to sign in, choose a model and effort, or switch by asking, and what Foreword adds on top of every one.">
+<meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/assistants-settings.webp">
+<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="../images/favicon.png">
+<link rel="apple-touch-icon" href="../images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="30" height="30">Foreword</a>
+    <nav class="links">
+      <div class="menu">
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
+        <div class="menu-panel">
+          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html" aria-current="page"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+        </div>
+      </div>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a class="button small" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg">Download</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <div class="doc-head">
+    <div class="crumbs"><a href="./">Features</a><span>The assistant</span></div>
+    <h1>Bring the assistant you already use</h1>
+    <p class="lede">The assistant is a program on your Mac, signed in with your own account: OpenCode, Claude Code, Codex, Gemini CLI or Antigravity. Foreword runs it, and wraps it in its own modes, instructions, permissions and tools, so each one behaves like a writing assistant, not a coding one. There’s no new subscription.</p>
+  </div>
+  <article class="doc">
+<figure class="lead">
+  <img src="../images/f/assistants-settings.webp" width="1834" height="1337" alt="Settings, Assistant: five cards (OpenCode, Claude Code, Gemini CLI, Codex, Antigravity), each with its maker, the account it uses and whether it's installed and signed in, and below them the chosen one's panel.">
+  <figcaption>Settings ▸ Assistant. Each card says what the assistant runs on and whether it’s ready.</figcaption>
+</figure>
+
+<h2 id="the-five">The five</h2>
+<dl class="facts">
+  <dt>OpenCode</dt><dd>Open source. Runs any model you’ve set up in it: OpenAI, Anthropic, Google, or one on your Mac. It comes inside Foreword, so it works with nothing else installed (it still needs a model to talk to).</dd>
+  <dt>Claude Code</dt><dd>Anthropic’s. Claude, with your Claude plan or an API key.</dd>
+  <dt>Codex</dt><dd>OpenAI’s. Its models, with your ChatGPT plan or an API key.</dd>
+  <dt>Gemini CLI</dt><dd>Google’s. Gemini, with a paid API key or a Gemini Code Assist work account. It stopped taking personal Google logins in June 2026.</dd>
+  <dt>Antigravity</dt><dd>Google’s newer one: Gemini and more, with your Google account, a Gemini API key or Gemini Enterprise. Settings downloads Google’s connector for it (113 MB), and keeps it only if both programs are signed by Google.</dd>
+</dl>
+<p>Settings ▸ Assistant shows each one’s state without starting anything: <em>Installed · 2.0.20</em>, <em>Signed in with ChatGPT</em>, <em>Not signed in</em>, <em>Needs Node.js</em>. Foreword reads that from where each program keeps it, for example <code>claude auth status</code> or Codex’s <code>auth.json</code>. To sign in, <span class="ui">Sign in in Terminal</span> opens Terminal with the right command already running (<code>claude auth login</code>, <code>codex login</code>, …) and a note saying what to do. Come back to Foreword and the assistant restarts on its own.</p>
+
+<h2 id="how-foreword-talks-to-them">How Foreword talks to them</h2>
+<p>OpenCode runs as a local server: Foreword starts <code>opencode serve</code> on a free port on your Mac, with a password made fresh each time, and talks to it over HTTP.</p>
+<p>The other four are spoken to over the <a href="https://agentclientprotocol.com">Agent Client Protocol</a> (ACP), the protocol the Zed editor made for this and JetBrains’ IDEs also use. Foreword chose it because in ACP the assistant asks the app before it acts, which is exactly what Foreword’s permission cards need. Each runs through its connector: <code>claude-agent-acp</code>, <code>codex-acp</code>, <code>gemini --acp</code>, and Google’s <code>antigravity-acp</code>. The versions are pinned, so a connector update can’t break the conversation without warning.</p>
+<p>Both paths look the same from the chat. Tasks, queued messages, Stop and Resume work the same whichever assistant you choose.</p>
+
+<h2 id="what-foreword-adds-to-every-one">What Foreword adds to every one</h2>
+<ul>
+  <li><strong>Instructions for a book, not a codebase.</strong> One sentence per line. Never compile (the preview does that). Read files with the read tool, not <code>sed</code> or <code>head</code>. Say what changed in one to three sentences. Write maths as Typst maths. Don’t write scripts or build tooling.</li>
+  <li><strong>The book’s <a href="style-guide.html">style guide</a></strong>, in every conversation.</li>
+  <li><strong>Its own <a href="assistant.html#five-modes">modes</a></strong>: Write, Ask, Discuss, Options and Figures, enforced by Foreword’s rules, not the assistant’s own modes.</li>
+  <li><strong>One question panel</strong> for all five, whatever their own way of asking.</li>
+  <li><strong>Every step in words</strong>, whichever tool the assistant used.</li>
+  <li><strong><a href="permissions.html">Permissions</a></strong> that are Foreword’s, not each assistant’s.</li>
+  <li><strong>Seven tools of Foreword’s own</strong>, served to the assistant over MCP on your Mac only: read the settings, change them, list models, set the model, switch assistant, set the mode, open Settings.</li>
+</ul>
+
+<h2 id="model-and-effort">Model and effort</h2>
+<p>Under the message box: the assistant, the model, and how hard it thinks. Effort matters as much as the model for speed and quality, so it gets its own menu, with a meter for each level. Claude Code has Default, Low, Medium, High, Extra high and Max. Codex has its reasoning-effort levels, and OpenCode a model’s variants. The level is kept per model. Every reply’s byline records the model and effort that turn actually ran with: “Claude Code · Sonnet 5.5 · low effort”.</p>
+<figure class="small">
+  <img src="../images/f/assistants-effort.webp" width="1283" height="816" alt="The effort menu open above the message box: How hard the model thinks before it answers, with Default, Low, Medium, High, Extra high and Max, each with a bar meter.">
+  <figcaption>Effort, beside the model. More is slower.</figcaption>
+</figure>
+<p><code>/model sonnet</code>, <code>/effort high</code> and <code>/assistant codex</code> do the same from the message box.</p>
+
+<h2 id="or-ask-for-it">Or ask for it</h2>
+<p>“Switch me to Claude Code with its default model, on high effort.” The assistant has Foreword’s tools for this. Under the default permissions it asks you first, then the switch happens when its reply ends, so the turn isn’t cut off. The new conversation opens with a line saying what happened: “Claude Code is the writing assistant now (model Default, effort High), as you asked. This is a new conversation: your last one is kept with Codex, to carry on if you switch back.”</p>
+
+<h2 id="why-bring-your-own">Why bring your own</h2>
+<p>You already pay for one of these, and you’ve already chosen it. Foreword shouldn’t sell you another subscription, or tie your book to one company’s models. The assistants also improve every few weeks. Running the one you have means Foreword gets better when it does.</p>
+<p>The same programs are built for writing code, though, and left alone they behave like it: they compile, write scripts, report in diffs, and keep their own permission rules. Everything in the list above is there to make a coding assistant behave like a writing assistant without losing what it’s good at.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>Foreword has no model of its own. The bundled OpenCode still needs a provider key, or a model running on your Mac.</li>
+    <li>One assistant per window at a time. Switching starts a new conversation, and can’t happen mid-turn.</li>
+    <li>Gemini CLI and Antigravity haven’t been tested through a signed-in conversation. Claude Code, Codex and OpenCode have.</li>
+    <li>Claude Code and Codex via <code>npx</code> need Node.js. The first start downloads the connector, which can take a minute.</li>
+  </ul>
+</div>
+  </article>
+  <nav class="doc-next"><a href="comments.html"><small>← Previous</small><b>Comments and Fix all</b></a><a class="next" href="history.html"><small>Next →</small><b>History</b></a></nav>
+  <div class="doc-cta">
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.5.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="24" height="24">Foreword</a>
+    <span>Made by JJ Geewax in Singapore</span>
+    <nav>
+      <a href="../features/">Features</a>
+      <a href="https://github.com/jgeewax/foreword/releases">Releases</a>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a href="https://typst.app">Typst</a>
+    </nav>
+    <p class="made">Foreword (called Typst Studio up to 0.3) is an independent project. It isn't made by, or affiliated with, the Typst team.</p>
+  </div>
+</footer>
+<script src="../assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code that runs · Foreword</title>
+<meta name="description" content="How runnable code examples work in Foreword: #run in the book, real output set beneath it, expected output as a test, stale output marked in the preview, and examples re-run after the assistant changes them.">
+<meta property="og:title" content="Code that runs · Foreword">
+<meta property="og:description" content="How runnable code examples work in Foreword: #run in the book, real output set beneath it, expected output as a test, stale output marked in the preview, and examples re-run after the assistant changes them.">
+<meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/code-fail.webp">
+<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="../images/favicon.png">
+<link rel="apple-touch-icon" href="../images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="30" height="30">Foreword</a>
+    <nav class="links">
+      <div class="menu">
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
+        <div class="menu-panel">
+          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html" aria-current="page"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+        </div>
+      </div>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a class="button small" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg">Download</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <div class="doc-head">
+    <div class="crumbs"><a href="./">Features</a><span>Publishing</span></div>
+    <h1>Code that runs</h1>
+    <p class="lede">In a programming book, the output under an example has to be what the code really prints. Foreword runs the examples and sets their real output beneath them. Give an example the output you expect, and it becomes a test, marked ✓ or ✗ in the book itself.</p>
+  </div>
+  <article class="doc">
+<figure class="lead">
+  <img src="../images/f/code-run.webp" width="2560" height="1216" alt="Counting Words in the editor, with Run lenses above each Python example and their status, beside the typeset page showing each example with its output beneath and a green tick.">
+  <figcaption>Counting Words: each example with ▶ Run above it in the editor, and its real output, checked, on the page.</figcaption>
+</figure>
+
+<h2 id="in-the-book">In the book</h2>
+<pre><code>#import "/code.typ": run
+
+#run("hello", ```python
+print("Hello, writer.")
+```, expect: "Hello, writer.")</code></pre>
+<p>The book shows the code, then a panel with what it printed. With <code>expect:</code>, the panel says <strong>Output ✓</strong> when they match. When they don’t, it’s red: <strong>Output (✗ expected “Hello, writer.”)</strong>. Change the code and the panel turns amber, <em>out of date</em>, as you type, before anything runs. A failed run shows its exit code and what it printed to stderr.</p>
+<figure class="small">
+  <img src="../images/f/code-fail.webp" width="2560" height="608" alt="An example whose output no longer matches: the Run lens says wrong output, and the page shows the output in red with expected Hello, writer.">
+  <figcaption>Change the code so the output no longer matches, run it, and the book says so.</figcaption>
+</figure>
+
+<h2 id="running-them">Running them</h2>
+<p>Above each example in the editor is a lens: <span class="ui">▶ Run hello</span>, with its state: ✓ ok, ⚠ out of date, ✗ failed, ✗ wrong output. The <strong>Code examples</strong> view lists them all by chapter, with <span class="ui">Run all</span>, or <span class="ui">Run 3 not up to date</span>. Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell are supported, with whatever interpreter you have installed.</p>
+<p>Each example runs as its own process, in the book’s folder, so <code>open("texts/opening.txt")</code> finds the book’s files. Input is closed, it’s stopped after 30 seconds (and everything it started with it), and output is capped at 256 KB. Nothing runs while you type. Examples run when you click, before you export (if any are out of date, Export PDF asks), and after the assistant changes one.</p>
+<p>The first time, Foreword asks: “Run the code examples in Counting Words? They run on your Mac with your permissions, so they can read and change your files. Only run code you trust.” Until you allow it, nothing runs.</p>
+
+<h2 id="where-the-output-lives">Where the output lives</h2>
+<p>In <code>code-output/outputs.json</code>, in the book’s folder, saved with the code that produced it. That makes it part of the book: <code>typst compile</code> and <code>make</code> work without Foreword, and print the same output. It’s also how “out of date” works without running anything: <code>code.typ</code>, the small Typst file that defines <code>#run</code>, compares each example’s code with the code that was stored with its output. If they differ, the panel turns amber, even in a plain <code>typst compile</code>.</p>
+
+<h2 id="with-the-assistant">With the assistant</h2>
+<p>The assistant writes and edits examples, but it never runs them and never touches <code>outputs.json</code>. After its turn, Foreword re-runs any example it changed and says how that went: “Ran 3 changed code examples: all fine.” Or, when one fails, “1 code example failed: fib: expected "55", got "54" (chapters/02-functions.typ:41)”, with <span class="ui">Ask the assistant to fix them</span>. In a test, a bug planted in a Fibonacci function came back exactly like that, the button had it fixed, and the re-run was clean.</p>
+
+<h2 id="why">Why</h2>
+<p>In a technical book, the output printed under an example is a claim, and it goes stale the first time you change the code and forget to paste the new output in. Readers find these. Here the output can’t drift from the code without the book showing it.</p>
+<p>The sample <em>Counting Words</em> is a short book about measuring prose with Python. It has 33 examples, 30 of them checked, analysing the opening of <em>Pride and Prejudice</em>.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>No sandbox: examples run with your permissions, which is why it asks first.</li>
+    <li>Examples don’t share state; each is a fresh process. No input, no plots or images.</li>
+    <li>The check is an exact match on what was printed, after trimming spaces.</li>
+  </ul>
+</div>
+  </article>
+  <nav class="doc-next"><a href="ebooks.html"><small>← Previous</small><b>E-books</b></a><a class="next" href="./"><small>All features →</small><b>Features</b></a></nav>
+  <div class="doc-cta">
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.5.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="24" height="24">Foreword</a>
+    <span>Made by JJ Geewax in Singapore</span>
+    <nav>
+      <a href="../features/">Features</a>
+      <a href="https://github.com/jgeewax/foreword/releases">Releases</a>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a href="https://typst.app">Typst</a>
+    </nav>
+    <p class="made">Foreword (called Typst Studio up to 0.3) is an independent project. It isn't made by, or affiliated with, the Typst team.</p>
+  </div>
+</footer>
+<script src="../assets/site.js"></script>
+</body>
+</html>

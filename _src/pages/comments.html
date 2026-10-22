@@ -1,0 +1,57 @@
+<!--
+title: Comments and Fix all
+heading: Comments, then Fix all
+lede: Read a chapter the way an editor would and leave a comment wherever something’s off: <em>too slow</em>, <em>cut this</em>, <em>needs a source</em>. Then press Fix all. The assistant works through every comment in one go, says what it did with each, and you keep or undo each change on its own.
+description: How review comments and Fix all work in Foreword: comments beside the text, never in it, anchored to the passage as you edit; the assistant working through every one; and each change checked, kept or undone on its own.
+image: images/f/comments-check.webp
+-->
+<figure class="lead">
+  <img src="../images/f/comments-check.webp" width="2560" height="1600" alt="The Review view listing comments to check and comments still open, and in the editor a comment card reading Changed — check it, with the assistant's note, the passage's change word by word, and Keep and Undo change buttons.">
+  <figcaption>After Fix all: each comment shows what the assistant changed for it, with Keep and Undo change.</figcaption>
+</figure>
+
+<h2>Leaving a comment</h2>
+<ol class="steps">
+  <li>Select the passage, in the text or in the typeset pages.</li>
+  <li>Click the <span class="ui">Comment</span> bubble that appears beside the selection, or press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>.</li>
+  <li>Type what should change, and press <kbd>⏎</kbd>.</li>
+</ol>
+<p>The passage is highlighted and the comment sits in a card under it, in the editor, where you’ll see it when you come back to that page. A comment can hold Typst maths (“Give the exact value, $1/sqrt(3)$, then the decimal”), drawn as maths. The editor never goes into a separate “review mode”: you can keep writing around your comments, and fix one yourself and press <span class="ui">Resolve</span>.</p>
+<figure class="small">
+  <img src="../images/f/comments-open.webp" width="1500" height="980" alt="Three comments on Jekyll and Hyde's first chapter, each as a card under its highlighted passage, and the Review view on the left listing them by chapter with Fix all 3 with the assistant.">
+  <figcaption>Three comments on chapter 1, in place and in the Review view.</figcaption>
+</figure>
+
+<h2>Fix all</h2>
+<p>The Review view lists every open comment, grouped by chapter, with a button at the top: <span class="ui">Fix all 3 with the assistant</span> (or <code>/fix</code> in the message box). It switches to Write mode and sends one message with every comment: where it is, the passage it’s on, and what you said. The instruction is plain:</p>
+<blockquote><p>For each one, make the change it asks for in that passage, in the book’s voice and style guide, and change nothing else. If a comment can’t or shouldn’t be done, leave the text and say why.</p></blockquote>
+<p>The assistant ends its reply with a line per comment saying whether it changed it or declined it, and why. Foreword reads those lines, hides them from the chat, and puts each verdict on its comment. A note in the chat sums it up: “Review: 2 changed (check them in the editor or the Review tab: keep or undo); 1 declined (the reason is on the comment).”</p>
+
+<h2>Checking each change</h2>
+<p>A comment the assistant changed moves to <strong>To check</strong>, and its card says <strong>Changed — check it</strong>, with the assistant’s note and the passage’s change, word by word.</p>
+<ul>
+  <li><span class="ui">Keep</span> resolves the comment.</li>
+  <li><span class="ui">Undo change</span> puts the passage back as it was and opens the comment again. If you’ve edited the passage since, it won’t guess: it says so, and History has the earlier text.</li>
+  <li>A comment it declined stays open, with its reason: “✦ Declined: the next sentence depends on it.” You can argue back, or fix it yourself.</li>
+</ul>
+<p>This is the part that matters. An early version sent all the comments in one message and marked them resolved on the assistant’s word. You couldn’t see what it did for each one, keep one change and undo another, or hear why it skipped one. Each comment now gets its own result, its own diff, and its own undo.</p>
+
+<h2>Comments stay beside the text</h2>
+<p>Comments are kept in <code>.foreword/review.json</code> in the book’s folder, never in the chapters, so the source and the typeset book stay clean, and comments travel with the book. Each one remembers the exact words it’s on, a little text either side, and roughly which line. As you edit, Foreword finds the passage again, choosing the place whose surrounding text matches best. Cards move down as lines are added above them. A short quote, say a single word, needs its surroundings to match too, so a comment on one “however” never jumps to another.</p>
+
+<dl class="facts">
+  <dt>Add a comment</dt><dd><kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>, the <span class="ui">Comment</span> bubble, or right-click ▸ Add Comment…</dd>
+  <dt>See them all</dt><dd>The Review view (the speech bubble in the activity bar)</dd>
+  <dt>Fix them</dt><dd><span class="ui">Fix all</span>, <span class="ui">Fix with assistant</span> on one card, Assistant ▸ Fix Review Comments, or <code>/fix</code></dd>
+  <dt>Where they live</dt><dd><code>.foreword/review.json</code>, in the book’s folder</dd>
+</dl>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>The change is made in the file when the assistant makes it. You check it afterwards: it isn’t held back as a suggestion until you accept it.</li>
+    <li>Rewrite the words a comment is on and it loses its place: it shows “text changed” in the list, and leaves the editor.</li>
+    <li>A card shows the change at its passage. If the assistant changed something elsewhere for a comment, History shows that.</li>
+    <li>Comments don’t have replies or threads yet.</li>
+  </ul>
+</div>

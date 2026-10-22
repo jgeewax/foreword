@@ -1,0 +1,40 @@
+<!--
+title: E-books
+heading: E-books
+lede: Book ▸ Export EPUB… makes one file for Apple Books, Kobo, Google Play and Kindle. There are two kinds of EPUB, and they suit different books: reflowing text, which fits any screen, or every page exactly as typeset. Foreword picks for each book, says why, and lists what didn’t carry over.
+description: How Foreword exports EPUB: reflowing text through Typst's own HTML export, or fixed layout with every page as typeset; how it picks between them, what it says didn't carry over, and how the files are checked.
+image: images/f/epub-done.webp
+-->
+<figure class="lead">
+  <img src="../images/f/epub-done.webp" width="1400" height="1100" alt="The Export EPUB dialog after exporting Jekyll and Hyde: made as reflowing text in 11 parts, because it's mostly text, and a list of what didn't carry over: centred lines, page breaks, the page size and margins, space set by hand.">
+  <figcaption>Jekyll and Hyde as reflowing text: why it chose that, and what an e-reader lays out itself.</figcaption>
+</figure>
+
+<h2>Two kinds of e-book</h2>
+<dl class="facts">
+  <dt>Reflowing text</dt><dd>The reader sets the type size, and the text flows to fit a phone or a tablet. It can be searched and read aloud. Page breaks, centring and space set by hand are left to the reader. For prose.</dd>
+  <dt>Fixed layout</dt><dd>Every page exactly as typeset. Fine on a tablet, small on a phone, and it can’t be searched or read aloud. For books whose layout is the point.</dd>
+</dl>
+<p><strong>Best for this book</strong> picks: fixed layout for a picture book, a paper, or a book with maths on most pages; reflowing text for the rest. The rules are plain. A book with a <code>story.typ</code>, or picture-book spreads, is a picture book. One with a bibliography and no chapters is a paper. A book with at least 30 equations, and roughly one for every three paragraphs or more, is a maths book. If reflowing fails for any reason, it says why and makes fixed layout instead.</p>
+<p>In the samples: Jekyll and Hyde (11 parts), The Elements of Style and Counting Words reflow. Calculus Made Easy (558 pieces of maths to 174 paragraphs), Luca’s Wonderful Brain and Attention Is All You Need come out fixed.</p>
+
+<h2>How reflowing works</h2>
+<p>Typst can write HTML itself, so Foreword uses that rather than a converter of its own. Before the book’s own rules it adds a few: maths, grids and figures are drawn as pictures (SVG), and a page reference, which means nothing in a book without pages, is dropped. It marks where each chapter begins so the book can be split into parts. All of this happens in a temporary copy of the book made of links, so nothing is written into your book and History never sees it.</p>
+<p>Then it tidies what Typst wrote into what an EPUB requires: XHTML, unique IDs in every picture (Typst reuses them, which e-readers reject), links rewritten between parts, and a chapter heading your book draws by hand (“CHAPTER 1” and a title in two paragraphs) turned into a real heading, so the e-reader’s contents work.</p>
+<p>What Typst couldn’t carry over, it says in its warnings. Foreword puts those into words: “centred and right-aligned lines”, “page breaks (each chapter still starts on a new page)”, “the page size and margins (each reader sets its own)”, “space set by hand”.</p>
+
+<h2>How fixed layout works</h2>
+<p>Every page becomes an SVG, each in a page of the EPUB at the book’s own size. The first page is the cover. The contents come from the PDF’s outline.</p>
+
+<h2>Checked</h2>
+<p>Every sample, exported every way, passes <a href="https://www.w3.org/publishing/epubcheck/">epubcheck</a> 5.4, the standard EPUB validator, with no errors and no warnings. A book gets the same ID every time it’s exported, so a new export replaces the old one in a reader’s library instead of appearing twice. Kindle takes EPUB now (Send to Kindle and KDP), so there’s no MOBI: Amazon stopped taking it.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>A reflowing EPUB has no cover image yet. Fixed layout uses the first page.</li>
+    <li>Maths is pictures, not MathML or text.</li>
+    <li>Typst’s HTML export is still marked incomplete by Typst, so some layouts won’t reflow and come out fixed.</li>
+    <li>It’s been checked with epubcheck and in WebKit at a phone’s width, not on every e-reader.</li>
+  </ul>
+</div>

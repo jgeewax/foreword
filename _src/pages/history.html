@@ -1,0 +1,74 @@
+<!--
+title: History
+heading: Every version, kept for you
+lede: Foreword saves a version of the book as you work, and before and after every change the assistant makes. Click one to see what changed, word by word. Then take out just that change, or put the whole book back. It needs no setup, and it never touches your own Git.
+description: How Foreword's History works: versions saved as you work and around every assistant change, in a Git repository of its own outside the book; a timeline coloured by who changed what; What changed word by word; undoing just the assistant's change; and how your typing and the assistant's merge.
+image: images/f/history-changes.webp
+-->
+<figure class="lead">
+  <img src="../images/f/history-changes.webp" width="2560" height="1136" alt="History for Jekyll and Hyde: a timeline from Now down to Started keeping history, with the author's edits in grey, a named version, Draft sent to my editor, and two assistant versions; the assistant's version about gin is open, with its file and Compare with now, Undo these changes and Restore this version, and beside it What changed, in Words: to mortify a taste for vintages struck through, to curb his taste for fine wine put in.">
+  <figcaption>The timeline (your edits in grey, the assistant’s with ✦, a named version in bold), and what the assistant’s version changed, word by word.</figcaption>
+</figure>
+
+<h2>When versions are saved</h2>
+<ul>
+  <li>When you open the book. If it changed while Foreword was closed, that version says so: “Changed outside Foreword: ch3.typ”.</li>
+  <li>Ten seconds after you stop saving, whether that’s <kbd>⌘</kbd><kbd>S</kbd>, auto save, or a change from another program.</li>
+  <li>Just before each turn of the assistant, so your own edits are a version of their own, and just after, if it changed anything.</li>
+  <li>When you name one (“Draft sent to my editor”), and when you mark an assistant task done (“Task done: …”).</li>
+  <li>Before and after every restore and undo, so going back can itself be undone.</li>
+</ul>
+<p>A save that changes nothing doesn’t make a version. Unsaved typing isn’t in History until it’s saved, but Foreword saves your open files before every message to the assistant, and auto saves every five minutes.</p>
+
+<h2>The timeline</h2>
+<p>History is a view down the side, a line of versions from <strong>Now</strong> back to “Started keeping history”. Each version is a dot, coloured by who made it: grey for you, a violet ✦ for the assistant (labelled with your request), an amber diamond for a version you named, a blue ↺ for a restore. Each shows how many files and lines it changed, with a five-block bar for size.</p>
+<p>Click a version and its files fold out beneath it, with <span class="ui">Compare with now</span>, <span class="ui">Restore this version</span>, and, for the assistant’s, <span class="ui">Undo these changes</span>. A <strong>What changed</strong> tab opens beside it, with <span class="ui">◀ Older</span> and <span class="ui">Newer ▶</span> (<kbd>⌥</kbd><kbd>←</kbd> <kbd>⌥</kbd><kbd>→</kbd>) to step through versions. <span class="ui">History of This File</span>, from a file’s right-click menu, narrows the line to the versions that touched that file.</p>
+
+<h2>What changed, in words</h2>
+<p>Code tools count changed lines. In prose, a paragraph is often one line, so “+1 −1” could mean a comma or a rewritten paragraph. What changed has a <strong>Words</strong> view: the words that went are struck through, the words that came in are highlighted, with a line of context around each passage and a link to its line. Changed equations are drawn, old → new. <strong>Lines</strong> is the usual side-by-side diff.</p>
+<p>Click a passage, or move through it with the arrow keys, and the preview scrolls to that place in the typeset pages. The diff may be from an old version, so Foreword first traces the line to where it lives in today’s text.</p>
+
+<h2>Undo just the assistant’s change</h2>
+<p>Say the assistant rewrote three sentences of chapter 1, and since then you’ve fixed a typo in one of them and written a new paragraph. <span class="ui">Undo these changes</span> on its version takes out what it did and keeps what you did since. It works like a merge: the version before the assistant, the assistant’s version, and the file as it is now, unsaved typing included. If you changed the very words it changed, that file is left alone and named, rather than guessed at. Files the assistant created are left in place, and named too.</p>
+<p><span class="ui">Restore this version</span> puts the whole book back as it was then. Files added since are left alone (Foreword never deletes them), open files with unsaved edits are skipped and named, and the book as it was a moment ago is saved first, so you can go forward again.</p>
+<figure class="small">
+  <img src="../images/f/history-undo.webp" width="2240" height="600" alt="What changed by Undid “Agent: Make the sentence about gin plainer”: to curb his taste for fine wine goes back to to mortify a taste for vintages, while the author's own later edit, easy tolerance, two lines down, stays.">
+  <figcaption>Undoing the assistant’s version: its words go back to Stevenson’s. The author’s own edit since, “easy tolerance” in the next paragraph, stays.</figcaption>
+</figure>
+
+<h2>Where it’s kept</h2>
+<p>In an ordinary Git repository of its own, outside the book’s folder:</p>
+<pre><code>~/Library/Application Support/org.typststudio.app/history/&lt;id&gt;.git</code></pre>
+<p>A version is one commit of every file in the book that isn’t ignored, pictures included. Git stores a file that didn’t change only once, so a version that changes one chapter costs about one chapter. The repository runs with your own Git settings turned off (no hooks, no signing, a fixed author), so a version is never slowed down by a pre-commit hook. It’s plain Git, readable without Foreword: the help at the foot of the timeline has <span class="ui">Copy Git command</span>, which gives you the <code>git log -p</code> line for it.</p>
+<p>Restoring never runs Git on your book folder. Old text is read out of the repository and written through the same safe write every save uses: check the file is as expected, write a temporary copy, check again, then swap it in. An open file takes the change as one undoable edit.</p>
+
+<h2>Why not just Git</h2>
+<p>Engineers keep every version in Git. Most writers keep <em>chapter-3-final-v2-REAL.docx</em>. History asks nothing of you: no commits, no messages, no branches. Even for a book that is in Git, your log is yours. A version every ten seconds and around every assistant turn would bury it, and Foreword needs to know which changes were the assistant’s, which Git alone can’t say. So History lives outside the book, and your own <code>.git</code> is never read or written by it.</p>
+<p>If the book is in Git, <strong>Source Control</strong> appears as its own view: stage, commit (<kbd>⌘</kbd><kbd>⏎</kbd>), commit and push, pull, a graph of commits with how far ahead or behind you are. It uses your own Git settings, and nothing in it discards work: there’s no reset, checkout or clean.</p>
+
+<h2>Your typing and the assistant’s, at once</h2>
+<p>You can keep writing while the assistant works, in the same chapter. When a file you have open changes on disk (the assistant, Git, another editor), Foreword merges the change into what you’re typing instead of asking you to choose. Your unsaved typing stays. Their change goes in around it, as one step <kbd>⌘</kbd><kbd>Z</kbd> takes out.</p>
+<p>The merge goes word by word inside a line. A Typst paragraph is usually one line, and Foreword asks the assistant for one sentence per line, so you fixing one sentence while it fixes the next is no conflict at all. Only where you both changed the same words does it ask, with a card under the passage: <strong>Claude Code changed this too</strong>, its version word by word, and <span class="ui">Keep mine</span>, <span class="ui">Use theirs</span>, or <span class="ui">Resolve with Claude Code</span>, which sends both versions to the assistant to combine.</p>
+<figure class="small">
+  <img src="../images/f/history-merge.webp" width="1880" height="520" alt="A merge card under the first line of Jekyll and Hyde, where the author typed weathered and the assistant wrote rugged face: Claude Code changed this too. The editor has yours. Use theirs makes these changes, word by word, with Keep mine, Use theirs, Resolve with Claude Code. The assistant's other change on the same line, awkward in talk, went in without asking.">
+  <figcaption>Where you and the assistant changed the same words, it asks. Everywhere else, both changes simply stay.</figcaption>
+</figure>
+<p>A save you make while the assistant works stays, even if it then writes from the copy it read before you saved. Foreword notices that its version doesn’t have your change, keeps yours, and puts it back on disk at once.</p>
+<p>Before this, the editor showed a banner with two buttons when a file changed under you: reload from disk, which dropped your typing, or keep my version, which dropped theirs. Both threw something away. Other tools do the same, and leave you to piece the two together by hand.</p>
+
+<dl class="facts">
+  <dt>Open History</dt><dd>The clock in the activity bar, or View ▸ History</dd>
+  <dt>Name a version</dt><dd><span class="ui">Name this version…</span> at the top of the timeline, or Book ▸ Name This Version…</dd>
+  <dt>Auto save</dt><dd>Settings ▸ Editor ▸ Auto save, every 5 minutes by default (1 to 120). It doesn’t format, so nothing moves while you type.</dd>
+</dl>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>Nothing is thinned out yet: History grows with the book. A long book’s History is a few megabytes.</li>
+    <li>Moving or renaming the book’s folder starts a new History. The old one stays where it was.</li>
+    <li>You can compare a version with the one before it, or with now, but not two arbitrary versions with each other.</li>
+    <li>Edits you save while the assistant is mid-turn land in the assistant’s version.</li>
+    <li>Only files open in the editor are merged. Source Control’s pull is fast-forward only.</li>
+  </ul>
+</div>

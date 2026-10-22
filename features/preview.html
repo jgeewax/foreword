@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live preview · Foreword</title>
+<meta name="description" content="How Foreword&#x27;s live preview works: the book typeset from unsaved text by Tinymist as you type, click-to-jump both ways, errors with the last good pages kept, a preview of just one chapter for long books, and memory kept low.">
+<meta property="og:title" content="Live preview · Foreword">
+<meta property="og:description" content="How Foreword&#x27;s live preview works: the book typeset from unsaved text by Tinymist as you type, click-to-jump both ways, errors with the last good pages kept, a preview of just one chapter for long books, and memory kept low.">
+<meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/preview-chapter.webp">
+<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="../images/favicon.png">
+<link rel="apple-touch-icon" href="../images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="30" height="30">Foreword</a>
+    <nav class="links">
+      <div class="menu">
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
+        <div class="menu-panel">
+          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html" aria-current="page"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+        </div>
+      </div>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a class="button small" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg">Download</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <div class="doc-head">
+    <div class="crumbs"><a href="./">Features</a><span>Writing</span></div>
+    <h1>The pages, as you type</h1>
+    <p class="lede">Beside the text, the typeset pages, drawn from what’s in the editor whether you’ve saved it or not. A change shows up about a tenth of a second after you make it. Click a word on a page and you’re at its source. Click in the text and the pages scroll there.</p>
+  </div>
+  <article class="doc">
+<figure class="lead">
+  <img src="../images/f/preview-typing.webp" width="2560" height="1200" alt="A new sentence typed into chapter 1 of Jekyll and Hyde, not yet saved, and the same sentence already set on the page in the preview beside it.">
+  <figcaption>An unsaved sentence in chapter 1 (the tab’s dot says it isn’t saved) is already on the page.</figcaption>
+</figure>
+
+<h2 id="what-you-see">What you see</h2>
+<p>Type in any chapter and the page changes. Nothing needs saving. The preview follows the cursor: when you click or use the arrow keys, it scrolls to that place on the page 150 ms later, with a brief ripple. While you type, it follows quietly after a pause, with no ripple, so the page doesn’t flash at you.</p>
+<p>Click a word on a page and its source opens, selected, a little below the top of the editor so you can see what comes after it, with a ring around the cursor. Select text on a page and the same text is selected in the source, ready to <a href="comments.html">comment on</a> or send to the assistant.</p>
+<p>The status bar measures itself as you work: one figure for a keystroke to reach the editor, another for an edit to reach the page, each with its typical and worst times.</p>
+
+<h2 id="mistakes-without-a-blank-page">Mistakes, without a blank page</h2>
+<p>A mistake gets a red underline where it is, with Typst’s message on hover, and the status bar counts it (“1 error”; click to go to it). The pages keep showing the last version that typeset, so you can still see the chapter while you fix it, and the preview header says <em>error in source (showing last good render)</em>. Typst’s messages are terse. <span class="ui">Ask the assistant to fix it</span> in the status bar, or <span class="ui">Fix This Error with the Assistant</span> on the right-click menu, explains it in plain words and fixes it.</p>
+<figure class="small">
+  <img src="../images/f/preview-error.webp" width="2560" height="880" alt="A stray # before lawyer in chapter 1 of Jekyll and Hyde, underlined in red, with Typst's message on hover: unknown variable: lawyer. The preview header says error in source (showing last good render), and the page stays up.">
+  <figcaption>The error where it is. The pages stay as they were until it’s fixed.</figcaption>
+</figure>
+
+<h2 id="just-this-chapter-for-a-long-book">Just this chapter, for a long book</h2>
+<p>Typst typesets the whole book on every change. For a few hundred pages that’s quick. For a 743-page book, a keystroke took about half a second to reach the page, and one to five seconds when it pushed text onto another page. Almost all of that was the typesetting, not the drawing.</p>
+<div class="numbers">
+  <div><b>550 ms</b><span>a keystroke to the page, whole 743-page book</span></div>
+  <div><b>68 ms</b><span>the same keystroke with only its chapter shown (45 pages)</span></div>
+  <div><b>0.6 s</b><span>to move the preview on to the next chapter</span></div>
+</div>
+<p>So the preview can show just the chapter you’re in: <strong>Chapter</strong> in the Book | Chapter | Cover switch above it, or Settings ▸ General ▸ Preview ▸ Shows. Open another chapter and the preview moves there.</p>
+<figure>
+  <div class="pair">
+    <img src="../images/f/preview-book.webp" width="1300" height="690" alt="Chapter 4 of Calculus Made Easy in the whole book: page 15, where the reference reads as explained above (page 5).">
+    <img src="../images/f/preview-chapter.webp" width="1300" height="690" alt="The same page with only chapter 4 shown: numbered page 1, with the reference to chapter 2 shown in grey as (smallness), and the running head still 4 Simplest Cases.">
+  </div>
+  <figcaption>Calculus Made Easy, chapter 4: in the whole book (left) and alone (right). Alone, it’s still chapter 4, but its pages start at 1, and the reference into chapter 2 shows in grey instead of a page number.</figcaption>
+</figure>
+<p>How it works matters, because a chapter usually can’t be typeset on its own. It relies on the main file’s page setup, show rules, fonts and counters. Copying those into a separate preview file goes stale the first time you change the main file. Foreword doesn’t copy anything. It typesets the main file itself, with every other chapter’s <code>include</code> taken out, so the book’s setup applies exactly as written. In each removed chapter’s place it steps the heading counter once for each numbered heading that chapter had, so chapter 4 is still chapter 4. A reference to a label in a removed chapter shows in grey, with the heading’s words, instead of stopping the preview with an error.</p>
+
+<h2 id="memory-on-a-long-book">Memory, on a long book</h2>
+<p>Coming back to a long book after a while, the preview used to start again at page 1. The cause was in macOS’s log: WebKit had closed the preview for using too much memory, 11 times in 27 hours on a 739-page book. Tinymist’s renderer drew every page you’d scrolled past into an image at three pixels per point, and kept them all, about 10 MB a page.</p>
+<div class="numbers">
+  <div><b>8 GB</b><span>the preview after reading through a 739-page book, every page kept</span></div>
+  <div><b>528 MB</b><span>the same, keeping only the pages near the ones on screen</span></div>
+</div>
+<p>Now the preview keeps the pages near the ones on screen drawn and lets the rest go, and draws them again as you scroll to them. It also remembers your place, so if it ever does reload, it comes back to where you were. To keep every page drawn instead, there’s Settings ▸ General ▸ Preview ▸ Pages kept drawn.</p>
+
+<h2 id="how-it-s-made">How it’s made</h2>
+<p>One <a href="https://github.com/Myriad-Dreamin/tinymist">Tinymist</a> process per window does the typesetting; it’s the language server behind Typst’s VS Code extension. Every change in the editor goes to it at once, unsaved. It redraws only the pages in view, as SVG. The preview is a separate web view with its own process, laid over its pane, so a slow redraw can never hold up a keystroke in the editor. Tinymist comes inside Foreword, so the preview works with nothing else installed.</p>
+<div class="numbers">
+  <div><b>113 ms</b><span>an edit to the page, on a 491-page book (typical)</span></div>
+  <div><b>8 ms</b><span>a keystroke to the editor’s screen, same book</span></div>
+</div>
+
+<h2 id="export">Export</h2>
+<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it asks first: run them, then export, so a PDF never goes out with stale output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one. The <strong>Cover</strong> view is the <a href="printing.html">print cover</a>, with guides.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>With one chapter shown, page numbers and references to other chapters are only right in the whole book.</li>
+    <li>Jumping from text to page only works where the source maps to text on the page; some lines of code and maths don’t.</li>
+    <li>The preview is a separate native view, so it hides while a dialog is open.</li>
+    <li>Error messages are Typst’s own; the plain-words version comes from the assistant when you ask.</li>
+  </ul>
+</div>
+  </article>
+  <nav class="doc-next"><a href="editor.html"><small>← Previous</small><b>The editor</b></a><a class="next" href="templates.html"><small>Next →</small><b>Templates and samples</b></a></nav>
+  <div class="doc-cta">
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.5.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../images/icon.png" alt="" width="24" height="24">Foreword</a>
+    <span>Made by JJ Geewax in Singapore</span>
+    <nav>
+      <a href="../features/">Features</a>
+      <a href="https://github.com/jgeewax/foreword/releases">Releases</a>
+      <a href="https://github.com/jgeewax/foreword">GitHub</a>
+      <a href="https://typst.app">Typst</a>
+    </nav>
+    <p class="made">Foreword (called Typst Studio up to 0.3) is an independent project. It isn't made by, or affiliated with, the Typst team.</p>
+  </div>
+</footer>
+<script src="../assets/site.js"></script>
+</body>
+</html>

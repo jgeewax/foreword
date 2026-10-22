@@ -1,0 +1,45 @@
+<!--
+title: Printing and covers
+heading: Printing and covers
+lede: Foreword makes the files a printer wants: the interior with bleed, and a cover drawn as one spread, back, spine and front, with the spine as wide as your page count makes it. It checks both against the printer’s rules, then opens the printer’s site. You place the order there.
+description: How Foreword prepares a book for print: a cover designer whose spine follows the page count, an interior with bleed made without touching the book, and checks against Mixam's file rules before you order.
+image: images/f/print-cover.webp
+-->
+<figure class="lead">
+  <img src="../images/f/print-cover.webp" width="2560" height="1500" alt="The cover of Jekyll and Hyde in the preview, as one wrap: back, spine and front, with pink guides for the bleed, the trim, the spine folds, the safe area and the barcode box, beside cover/design.typ in the editor.">
+  <figcaption>Jekyll and Hyde’s cover, with guides: bleed, trim, spine folds, the safe area, and where the barcode goes.</figcaption>
+</figure>
+
+<h2>The cover</h2>
+<p>Book ▸ Design Cover… asks for a style (Classic, Band or Picture), the title and author (read from the book), the trim size (from the book’s page setup) and the page count (from the book as it is now). Then it writes the cover as a few Typst files in <code>cover/</code>, and the preview switches to <strong>Cover</strong>.</p>
+<p>A printed cover is one sheet that wraps round the book, so its width depends on the book’s thickness:</p>
+<pre><code>#let spine = if spine-width != none { spine-width } else { pages * paper }
+#let cover-width = 2 * trim-width + spine + 2 * bleed
+#let cover-height = trim-height + 2 * bleed</code></pre>
+<p><code>paper</code> is the thickness of one page, from the paper you pick: 0.0025 in for cream, 0.002252 in for white, 0.002347 in for colour (Amazon KDP’s published figures). Jekyll and Hyde, 90 pages at 5 × 8 in on cream, gets a 5.7 mm spine and a 10.475 × 8.25 in cover. A printer’s own spine calculator is the number to trust, so <strong>Exact width from my printer</strong> takes theirs instead. The title goes on the spine only once it’s at least a quarter of an inch wide, about 100 pages.</p>
+<p>The design is yours to edit in <code>cover/design.typ</code>; the preview draws it with guides in pink. When the book changes, <span class="ui">Update from book</span> rewrites three lines of <code>cover/spec.typ</code> (trim width, trim height, pages) and nothing else, so a bleed or exact spine you set stays set. <span class="ui">Export cover</span> writes the PDF without the guides.</p>
+
+<h2>The interior, with bleed</h2>
+<p>A picture that runs to the edge of the page has to run past it, so the printer can trim. That extra is the bleed: 0.125 in on each side, for Mixam. Rather than change your book to add it, Foreword exports a small file of its own:</p>
+<pre><code>#set page(bleed: 0.125in)
+#include "/main.typ"</code></pre>
+<p>Your book is untouched, the pages break exactly as they did, and the PDF records where to trim (its TrimBox).</p>
+
+<h2>Checks, then Mixam</h2>
+<p>Book ▸ Print with Mixam… makes both files and reads them back, the actual PDFs, not the book’s source. It checks the page size and that every page is the same size, the bleed, that the trim matches the book’s, that the cover is one spread exactly <code>2 × trim + spine + 2 × bleed</code> wide, and that its page count matches the interior’s. It warns about an odd page count (books are bound in sheets), fewer than 32 pages (too thin for a glued spine; Mixam staples those), pictures meant to run to the edge that never reach into the bleed, and code examples that are out of date. Where there’s a fix, there’s a button beside it: <span class="ui">Design a cover…</span>, <span class="ui">Update cover from book</span>, <span class="ui">Run code examples</span>.</p>
+<figure class="small">
+  <img src="../images/f/print-checks.webp" width="1400" height="1300" alt="The Print with Mixam dialog for Jekyll and Hyde: every check passed, the interior of 90 pages at 5 by 8 inches with bleed, the cover as one spread with a 5.7 mm spine, the two files to upload, and what to choose on Mixam's site.">
+  <figcaption>Every check passed, the two files to upload, and what to pick on Mixam’s order page.</figcaption>
+</figure>
+<p>Then it tells you what to choose on Mixam’s site (size, page count, binding), lets you paste in Mixam’s own spine width to remake the cover, and opens Mixam (US, UK, Canada or Australia). Nothing is ordered or paid from Foreword. Mixam only gives prices to apps with an approved account, so the quote and the order happen on its site.</p>
+<p>The rules it checks are from Mixam’s own file setup guide: 0.125 in bleed, single pages for the interior, the cover as one spread, a glued spine from 32 to 48 pages up depending on the paper, and text kept a quarter of an inch from the edges and half an inch from the binding.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>Colours are RGB, and the PDFs aren’t PDF/X. Mixam converts to CMYK, which can dull bright colours: order one copy first.</li>
+    <li>No hardcover or dust-jacket covers, no ISBN barcode (just the box for one), and no check of image resolution.</li>
+    <li>Paper presets are KDP’s figures. For another printer, type in their spine width.</li>
+    <li>Mixam is the only printer it prepares for so far.</li>
+  </ul>
+</div>
