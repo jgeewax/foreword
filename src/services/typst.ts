@@ -1,6 +1,6 @@
 // TypstService: LSP client for the single Tinymist process (diagnostics +
 // live preview from unsaved buffers). Transport is the Rust stdio bridge.
-import type { LspContentChange, LspDiagnostic, LspSymbol, LspTextEdit } from '../editor/lsp-convert';
+import type { LspContentChange, LspDiagnostic, LspLocation, LspLocationLink, LspPosition, LspSymbol, LspTextEdit } from '../editor/lsp-convert';
 import { relativeToUri } from '../editor/lsp-convert';
 import { Channel, ipc } from '../lib/ipc';
 import { Emitter } from '../lib/store';
@@ -92,7 +92,13 @@ export class TypstService extends Emitter<Events> {
       rootUri,
       workspaceFolders: [{ uri: rootUri, name: root.split('/').pop() }],
       capabilities: {
-        textDocument: { synchronization: { didSave: true }, publishDiagnostics: { versionSupport: true }, documentSymbol: { hierarchicalDocumentSymbolSupport: true } },
+        textDocument: {
+          synchronization: { didSave: true },
+          publishDiagnostics: { versionSupport: true },
+          documentSymbol: { hierarchicalDocumentSymbolSupport: true },
+          // LocationLinks say which name was asked about: all of `key-idea`, not the word `key`.
+          definition: { linkSupport: true },
+        },
         workspace: { configuration: true, workspaceFolders: true },
         window: { workDoneProgress: false, showDocument: { support: true } },
       },
@@ -165,6 +171,12 @@ export class TypstService extends Emitter<Events> {
   async documentSymbols(uri: string): Promise<LspSymbol[] | null> {
     if (!this.running) return null;
     return (await this.request('textDocument/documentSymbol', { textDocument: { uri } })) ?? null;
+  }
+
+  /** Where the name at a place in an open document is defined: a #let, a label. None for built-ins like #figure. */
+  async definition(uri: string, position: LspPosition): Promise<LspLocation | LspLocation[] | LspLocationLink[] | null> {
+    if (!this.running) return null;
+    return (await this.request('textDocument/definition', { textDocument: { uri }, position })) ?? null;
   }
 
   /**

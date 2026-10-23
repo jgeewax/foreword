@@ -282,6 +282,14 @@ export function EditorPane() {
         lensChanged.fire(undefined as never);
       }
     });
+    // Go to Definition: holding ⌘ underlines a name defined in the book (#key-idea, @fig-1), and ⌘-click goes there.
+    const definitionProvider = monaco.languages.registerDefinitionProvider('typst', {
+      provideDefinition: (model, position) => studio.definitionsAt(model, position),
+    });
+    // Monaco only moves within the file it shows; a definition in another file opens in its tab.
+    const definitionOpener = monaco.editor.registerEditorOpener({
+      openCodeEditor: (_source, uri, at) => (uri.toString() === editor.getModel()?.uri.toString() ? false : studio.openDefinition(uri, at)),
+    });
     // Review comments: their passages highlighted, and a card under each (open, or changed
     // and waiting to be checked), in a view zone. The comment being written is one too, and
     // so is each passage a merge with the file on disk asks about (documents.ts).
@@ -462,6 +470,8 @@ export function EditorPane() {
       offLens();
       lenses.dispose();
       runCommand.dispose();
+      definitionProvider.dispose();
+      definitionOpener.dispose();
       studio.editor = null;
       editor.dispose();
     };

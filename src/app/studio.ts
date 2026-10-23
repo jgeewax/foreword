@@ -7,8 +7,9 @@ import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-
 import { tildePath } from '../lib/paths';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type MergeQuestion } from '../editor/documents';
-import { uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
+import { definitions, toMonacoRange, uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
+import { definitionPreview } from '../editor/definition-preview';
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
 import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
@@ -2492,6 +2493,51 @@ export class Studio {
     this.editor?.setPosition({ lineNumber: line, column: 1 });
     this.editor?.revealLineInCenter(line);
     this.editor?.focus();
+  }
+
+  /**
+   * Go to Definition (⌘-click; ⌘ alone underlines): where Tinymist says the
+   * name at a place in a Typst file is defined, when that's in the book: a
+   * #let in the style file, a label. Built-ins like #figure are defined in
+   * Typst itself, and a package's files aren't the book's, so they're not
+   * links. A definition's file is opened (without a tab) as it's found, so the
+   * editor can show the definition under the pointer.
+   */
+  async definitionsAt(model: monaco.editor.ITextModel, position: monaco.IPosition): Promise<monaco.languages.LocationLink[]> {
+    const docs = this.docs;
+    const root = this.state.workspace?.root;
+    const doc = docs?.all().find((d) => d.model === model);
+    if (!docs || !root || !doc?.lspOpen) return [];
+    const found = await this.typst.definition(doc.uri, { line: position.lineNumber - 1, character: position.column - 1 }).catch(() => null);
+    const links: monaco.languages.LocationLink[] = [];
+    for (const d of definitions(found)) {
+      const path = this.asWritten(uriToRelative(d.uri, root));
+      const target = path && (await docs.open(path).catch(() => null));
+      if (!target) continue;
+      // Tinymist's range is the name alone; the editor shows the range's text under the pointer.
+      const lines = target.model.getLinesContent();
+      const { from, to } = definitionPreview(lines, d.nameRange.start.line);
+      const range = new monaco.Range(from + 1, 1, to + 1, (lines[to]?.length ?? 0) + 1);
+      const originSelectionRange = d.originRange && toMonacoRange(d.originRange);
+      links.push({ uri: target.model.uri, range, targetSelectionRange: toMonacoRange(d.nameRange), originSelectionRange });
+    }
+    return links;
+  }
+
+  /** A definition in another file (⌘-click): its tab, with the cursor where Monaco puts it. False if it isn't the book's. */
+  async openDefinition(uri: monaco.Uri, at?: monaco.IRange | monaco.IPosition): Promise<boolean> {
+    const root = this.state.workspace?.root;
+    const path = root ? this.asWritten(uriToRelative(uri.toString(), root)) : null;
+    if (!path || !this.docs?.get(path)) return false;
+    await this.openFile(path);
+    const editor = this.editor;
+    if (!editor || this.state.active !== path) return false;
+    if (at) {
+      const range = 'startLineNumber' in at ? monaco.Range.lift(at) : monaco.Range.fromPositions(at);
+      editor.setSelection(range);
+      editor.revealRangeInCenterIfOutsideViewport(range, monaco.editor.ScrollType.Immediate);
+    }
+    return true;
   }
 
   /** The book's tasks (conversations): in the assistant pane, with its list of them open. */

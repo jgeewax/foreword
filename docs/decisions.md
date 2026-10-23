@@ -2224,6 +2224,39 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   book's first ⌘S tidies those files. Formatting the templates needs care with
   their `{{placeholders}}`.
 
+### Go to Definition: ⌘-click a name
+
+- **Asked for by the author:** ⌘-click `#key-idea` to open where it's defined,
+  with ⌘ held underlining the name like a link. This is VS Code's gesture, and
+  its key: ⌘, not ⌃ (⌃-click is the Mac's right click). Monaco's own
+  go-to-definition does the underline, the pointer cursor and the click. We give
+  it a definition provider, `textDocument/definition` from Tinymist.
+- **What's a link:** a name Tinymist finds in the book, such as a `#let` in the
+  style file or code.typ, a `#let` in the same file, or a label behind
+  `@fig-square`. It answers in ~8 ms. Built-ins like `#figure` and `#upper` are
+  defined inside Typst, so they have no source and aren't links. A package's
+  files (`@preview/…`) are outside the book, so they aren't links either. With
+  `linkSupport` Tinymist sends LocationLinks, which say which name was asked
+  about. The whole `key-idea` is underlined, not just the word `key` under the
+  pointer (Typst names have hyphens; Monaco's words don't).
+- **Another file opens in its tab.** Standalone Monaco only moves within the
+  model it shows. `registerEditorOpener` hands it to `openDefinition`, which
+  opens the tab and puts the cursor on the name. Monaco then highlights the name
+  briefly. A definition in the same file is left to Monaco.
+- **The definition under the pointer.** With ⌘ held, Monaco shows the
+  definition's text in a hover, but only for a file that has a model; for any
+  other file it shows no underline at all. So the provider opens the target
+  file in Documents, without a tab, as it answers. Tinymist's range is the name
+  alone, so the hover would say just "key-idea". Instead it shows the `///` doc
+  comments above the definition and the definition itself, to where its
+  brackets close (`definitionPreview`). If all that is over 7 lines, it shows
+  only the first line, such as `#let run(name, src, …) = {`.
+- Checked in a scratch build with real AppKit events, on the Counting Words
+  sample. A mouse move without ⌘ over `#key-idea` shows nothing. With ⌘ it
+  underlines `key-idea` and shows its doc comment and definition. ⌘-click
+  opens style.typ in a new tab at 129:6. A `#let` in the same file jumps there.
+  `#upper` is no link.
+
 ### The editor's text size
 
 - **The author found the writing too big next to the controls.** The editor

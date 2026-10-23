@@ -57,17 +57,29 @@ export type LspDiagnostic = { range: LspRange; message: string; severity?: numbe
 export type MarkerSeverityLevel = 'error' | 'warning' | 'info' | 'hint';
 export type Marker = MonacoRange & { message: string; severity: MarkerSeverityLevel; source?: string };
 
+export function toMonacoRange(r: LspRange): MonacoRange {
+  return { startLineNumber: r.start.line + 1, startColumn: r.start.character + 1, endLineNumber: r.end.line + 1, endColumn: r.end.character + 1 };
+}
+
 export function toMarker(d: LspDiagnostic): Marker {
   const severity: MarkerSeverityLevel = d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : d.severity === 4 ? 'hint' : 'info';
-  return {
-    startLineNumber: d.range.start.line + 1,
-    startColumn: d.range.start.character + 1,
-    endLineNumber: d.range.end.line + 1,
-    endColumn: d.range.end.character + 1,
-    message: d.message,
-    severity,
-    source: d.source,
-  };
+  return { ...toMonacoRange(d.range), message: d.message, severity, source: d.source };
+}
+
+export type LspLocation = { uri: string; range: LspRange };
+export type LspLocationLink = { originSelectionRange?: LspRange; targetUri: string; targetRange: LspRange; targetSelectionRange: LspRange };
+
+/** Where something is defined: its file, the whole definition, its name in it, and (if the server says) the name that was asked about. */
+export type Definition = { uri: string; range: LspRange; nameRange: LspRange; originRange?: LspRange };
+
+/** textDocument/definition's answer (a Location, Locations or LocationLinks) as a list. */
+export function definitions(result: LspLocation | LspLocation[] | LspLocationLink[] | null | undefined): Definition[] {
+  const list: (LspLocation | LspLocationLink)[] = result == null ? [] : Array.isArray(result) ? result : [result];
+  return list.map((d) =>
+    'targetUri' in d
+      ? { uri: d.targetUri, range: d.targetRange, nameRange: d.targetSelectionRange, originRange: d.originSelectionRange }
+      : { uri: d.uri, range: d.range, nameRange: d.range },
+  );
 }
 
 /** file:// URI → workspace-relative path, or null if outside `root`. */

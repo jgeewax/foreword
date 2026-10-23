@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyLspChanges, relativeToUri, toLspChanges, toMarker, uriToRelative } from './lsp-convert';
+import { applyLspChanges, definitions, relativeToUri, toLspChanges, toMarker, toMonacoRange, uriToRelative } from './lsp-convert';
 import { minimalEdit } from './text-edit';
 
 describe('toLspChanges', () => {
@@ -52,6 +52,33 @@ describe('toMarker', () => {
       severity: 'error',
       source: undefined,
     });
+  });
+});
+
+describe('definitions', () => {
+  const range = (line: number, from: number, to: number) => ({ start: { line, character: from }, end: { line, character: to } });
+
+  it('reads LocationLinks: the name defined, and the name clicked (#key-idea, with its hyphen)', () => {
+    expect(
+      definitions([{ originSelectionRange: range(171, 1, 9), targetUri: 'file:///b/style.typ', targetRange: range(128, 0, 60), targetSelectionRange: range(128, 5, 13) }]),
+    ).toEqual([{ uri: 'file:///b/style.typ', range: range(128, 0, 60), nameRange: range(128, 5, 13), originRange: range(171, 1, 9) }]);
+  });
+
+  it('reads a Location, or a list of them', () => {
+    const location = { uri: 'file:///b/main.typ', range: range(3, 2, 8) };
+    const expected = [{ uri: 'file:///b/main.typ', range: range(3, 2, 8), nameRange: range(3, 2, 8) }];
+    expect(definitions(location)).toEqual(expected);
+    expect(definitions([location])).toEqual(expected);
+  });
+
+  it('is empty when there is no definition (a built-in like #figure)', () => {
+    expect(definitions(null)).toEqual([]);
+    expect(definitions(undefined)).toEqual([]);
+    expect(definitions([])).toEqual([]);
+  });
+
+  it('converts to Monaco ranges, 1-based', () => {
+    expect(toMonacoRange(range(128, 5, 13))).toEqual({ startLineNumber: 129, startColumn: 6, endLineNumber: 129, endColumn: 14 });
   });
 });
 
