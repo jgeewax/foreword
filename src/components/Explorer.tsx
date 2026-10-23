@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { uncommitted } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
+import { isPicture } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
@@ -49,7 +50,7 @@ function FileTree() {
             const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
             // Open, make something new here, change this item, then where it is.
             return [
-              !n.dir && { label: /\.pdf$/i.test(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
+              !n.dir && { label: /\.pdf$/i.test(n.path) || isPicture(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
               'separator',
               (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
               { label: 'New File…', action: () => void studio.newFile(folder) },

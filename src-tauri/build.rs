@@ -28,6 +28,7 @@ fn main() {
             "sample_create",
             "project_create_from_package",
             "reveal_in_finder",
+            "open_picture",
             "fs_mkdir",
             "fs_rename",
             "fs_copy",

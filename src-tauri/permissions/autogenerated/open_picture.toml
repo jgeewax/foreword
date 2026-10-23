@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-picture"
+description = "Enables the open_picture command without any pre-configured scope."
+commands.allow = ["open_picture"]
+
+[[permission]]
+identifier = "deny-open-picture"
+description = "Denies the open_picture command without any pre-configured scope."
+commands.deny = ["open_picture"]

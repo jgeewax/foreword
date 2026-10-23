@@ -39,6 +39,7 @@
     "allow-sample-create",
     "allow-project-create-from-package",
     "allow-reveal-in-finder",
+    "allow-open-picture",
     "allow-fs-mkdir",
     "allow-fs-rename",
     "allow-fs-copy",

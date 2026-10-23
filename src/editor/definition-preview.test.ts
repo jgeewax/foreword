@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { definitionPreview } from './definition-preview';
+import { definitionPreview, filePreview } from './definition-preview';
 
 const STYLE = `#let accent = rgb("#1f4e79")
 
@@ -60,5 +60,22 @@ describe('definitionPreview', () => {
   it('keeps no more than `max` lines of doc comments', () => {
     const lines = ['/// one', '/// two', '/// three', '#let x = 1'];
     expect(definitionPreview(lines, 3, 3)).toEqual({ from: 1, to: 3 });
+  });
+});
+
+describe('filePreview', () => {
+  it("shows a chapter from its heading, past its imports", () => {
+    const chapter = ['#import "../style.typ": *', '#import "/code.typ": run', '', '= First Steps', '<ch-first>', '', 'Counting words is easy.', 'Or is it?', 'More.'];
+    expect(filePreview(chapter)).toEqual({ from: 3, to: 8 });
+    expect(filePreview(chapter, 3)).toEqual({ from: 3, to: 4 });
+  });
+
+  it('shows a file without a heading from its first line with text', () => {
+    expect(filePreview(['', '// The book’s look.', '#let accent = blue', ''])).toEqual({ from: 1, to: 2 });
+    expect(filePreview(['@book{knuth,', '  title = {TAOCP},', '}'])).toEqual({ from: 0, to: 2 });
+  });
+
+  it('shows an empty file as its one empty line', () => {
+    expect(filePreview([''])).toEqual({ from: 0, to: 0 });
   });
 });

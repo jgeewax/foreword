@@ -437,6 +437,37 @@ pub async fn reveal_in_finder(state: Win, path: String) -> CmdResult<()> {
     Ok(())
 }
 
+/// Extensions of the pictures the editor can't show as text (an SVG is text).
+const PICTURES: [&str; 10] = [
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic", "avif",
+];
+
+fn is_picture(p: &Path) -> bool {
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| PICTURES.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// Open a picture in the book in the default viewer (Preview, unless the
+/// author chose another), as a PDF is. Pictures only, so nothing runs.
+#[tauri::command]
+pub async fn open_picture(state: Win, path: String) -> CmdResult<()> {
+    let target = resolve(&state.root()?, &path)?;
+    if !is_picture(&target) {
+        return Err(CmdError::Invalid(format!("not a picture: {path}")));
+    }
+    if !target.is_file() {
+        return Err(CmdError::NotFound(format!("{path} doesn't exist")));
+    }
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg(&target)
+        .status()?;
+    if !status.success() {
+        return Err(CmdError::Io(format!("couldn't open {}", target.display())));
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 pub struct NewFile {
     path: String,
@@ -627,6 +658,16 @@ mod tests {
         NewFile {
             path: path.into(),
             text: text.into(),
+        }
+    }
+
+    #[test]
+    fn pictures_open_in_the_viewer_but_nothing_that_runs() {
+        for p in ["figures/a.png", "a.JPG", "b.jpeg", "c.webp", "d.tiff"] {
+            assert!(is_picture(Path::new(p)), "{p}");
+        }
+        for p in ["a.svg", "main.typ", "run.command", "x.app", "png"] {
+            assert!(!is_picture(Path::new(p)), "{p}");
         }
     }
 

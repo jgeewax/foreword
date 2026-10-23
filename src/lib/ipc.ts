@@ -174,6 +174,8 @@ export const ipc = {
   /** Move to the macOS Trash (recoverable). */
   fsTrash: (path: string) => invoke<void>('fs_trash', { path }),
   revealInFinder: (path: string) => invoke<void>('reveal_in_finder', { path }),
+  /** Open a picture in the book (PNG, JPEG…) in the default viewer. */
+  openPicture: (path: string) => invoke<void>('open_picture', { path }),
   fsWrite: (path: string, text: string, expectedHash: string | null) =>
     invoke<string>('fs_write', { path, text, expectedHash }),
   /** The chapter preview's file on disk (a stub; Tinymist gets its text from the app), kept out of git. */

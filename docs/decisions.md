@@ -2257,6 +2257,46 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   opens style.typ in a new tab at 129:6. A `#let` in the same file jumps there.
   `#upper` is no link.
 
+### ⌘-click a path to open its file
+
+- **Asked for by the author:** ⌘-click a file path in the editor to open the
+  file, as ⌘-click on a name opens where it's defined. It's the same gesture and
+  the same definition provider: a path is just another kind of link.
+- **What's a link:** any string in quotes, under the pointer, that names a file
+  in the book: `#include "chapters/one.typ"`, `#import "/code.typ"`,
+  `image("../figures/a.png")`, `json(…)`, `bibliography(…)`, or a plain list of
+  the chapters' files (`("chapters/ch01.typ", …)`). It's resolved as Typst
+  resolves it (`resolveRef`, shared with renaming and deleting files): from
+  the file's own folder, or from the Typst root for `/…`. A path to nothing,
+  a package (`@preview/…`) or a folder is no link. Tinymist alone wasn't
+  enough: it answers definitions only for `#import` and `#include`, and its
+  document links leave out `#import` and plain strings. So the provider looks
+  for a path first, without asking Tinymist, and asks about names after.
+- **Where it opens:** a text file opens in its tab, as from Files. The link goes
+  to the file's start, and `openDefinition` treats that as "the file": a file
+  already open keeps its cursor and scroll. Under the pointer, the hover shows
+  the file's opening (`filePreview`): from its first heading, past its
+  `#import`s, or from its first line with text, 7 lines at most.
+- **Pictures and PDFs open in Preview.** The editor can't show a PNG or JPEG,
+  and clicking one in Files used to say "binary files can't be opened". Now
+  `openFile` sends pictures to the default viewer as it does PDFs
+  (`open_picture`, pictures only, inside the book, so nothing can be run). An
+  SVG is text and still opens in the editor. Monaco underlines only a link to a
+  model, so an empty one (scheme `foreword-viewer`) stands in for the picture.
+  Its hover is empty, so the path is underlined with no preview.
+- Monaco asks for a definition only with a word next to the pointer, so a link
+  is found from the letters of a path, not from between `../`. The whole
+  quoted string is underlined.
+- Checked in a scratch build with real AppKit events, on Counting Words with a
+  picture, a PDF and a list of paths added. ⌘ over `#include
+  "chapters/01-first-steps.typ"` underlines the whole string and shows "= First
+  Steps" and its opening. ⌘-click opens it at 1:1, and again, after moving the
+  cursor there, at 10:3. `"texts/opening.txt"` in a list opens that file.
+  `"nowhere.typ"` is no link. `image("../figures/square.png")` and
+  `"/figures/handout.pdf"` go to the viewer, and the editor stays put.
+  `#import "/code.typ"` opens code.typ. `#key-idea` still goes to style.typ at
+  129:6.
+
 ### The editor's text size
 
 - **The author found the writing too big next to the controls.** The editor

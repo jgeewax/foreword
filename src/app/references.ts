@@ -31,6 +31,22 @@ export function resolveRef(fromFile: string, spec: string, root = ''): string | 
   return normalize(dir ? `${dir}/${spec}` : spec);
 }
 
+/**
+ * The quoted string on a line that a place (0-based, between characters, as
+ * the cursor or pointer is) is in or at the edge of: its text, and where its
+ * quotes are (`end` is past the closing one). Null outside one.
+ */
+export function quotedAt(line: string, at: number): { text: string; start: number; end: number } | null {
+  for (let i = 0; i < line.length && i <= at; i++) {
+    if (line[i] !== '"') continue;
+    const start = i;
+    for (i++; i < line.length && line[i] !== '"'; i++) if (line[i] === '\\') i++;
+    if (i >= line.length) return null;
+    if (at <= i + 1) return { text: line.slice(start + 1, i), start, end: i + 1 };
+  }
+  return null;
+}
+
 /** A relative path from the folder of `fromFile` to `target`. */
 export function relativeRef(fromFile: string, target: string): string {
   const from = dirOf(fromFile).split('/').filter(Boolean);

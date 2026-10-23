@@ -290,7 +290,8 @@ export function EditorPane() {
         lensChanged.fire(undefined as never);
       }
     });
-    // Go to Definition: holding ⌘ underlines a name defined in the book (#key-idea, @fig-1), and ⌘-click goes there.
+    // Go to Definition: holding ⌘ underlines a name defined in the book (#key-idea, @fig-1) or a path to one of its
+    // files (#include "chapters/one.typ", image("a.png")), and ⌘-click goes there.
     const definitionProvider = monaco.languages.registerDefinitionProvider('typst', {
       provideDefinition: (model, position) => studio.definitionsAt(model, position),
     });

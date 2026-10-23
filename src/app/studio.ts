@@ -4,12 +4,12 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { tildePath } from '../lib/paths';
+import { isPicture, tildePath } from '../lib/paths';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type MergeQuestion } from '../editor/documents';
 import { definitions, toMonacoRange, uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
-import { definitionPreview } from '../editor/definition-preview';
+import { definitionPreview, filePreview } from '../editor/definition-preview';
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
 import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
@@ -58,7 +58,7 @@ import { OUTPUTS_FILE } from '../code/cells';
 import { message } from '@tauri-apps/plugin-dialog';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
-import { referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
+import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
@@ -549,6 +549,9 @@ const EXPORT_TARGETS_KEY = 'studio.exportTargets';
 
 /** How many of the assistant's latest versions of a file are marked in the editor. */
 const AI_EDIT_VERSIONS = 12;
+
+/** A picture or PDF named in the text (⌘-click): an empty model stands in for it, since Monaco only links to one. */
+const VIEWER_SCHEME = 'foreword-viewer';
 
 export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
@@ -2516,18 +2519,22 @@ export class Studio {
   }
 
   /**
-   * Go to Definition (⌘-click; ⌘ alone underlines): where Tinymist says the
-   * name at a place in a Typst file is defined, when that's in the book: a
-   * #let in the style file, a label. Built-ins like #figure are defined in
-   * Typst itself, and a package's files aren't the book's, so they're not
-   * links. A definition's file is opened (without a tab) as it's found, so the
-   * editor can show the definition under the pointer.
+   * Go to Definition (⌘-click; ⌘ alone underlines): a file the path under the
+   * pointer names (fileLinkAt), or where Tinymist says the name there is
+   * defined, when that's in the book: a #let in the style file, a label.
+   * Built-ins like #figure are defined in Typst itself, and a package's files
+   * aren't the book's, so they're not links. A definition's file is opened
+   * (without a tab) as it's found, so the editor can show the definition under
+   * the pointer.
    */
   async definitionsAt(model: monaco.editor.ITextModel, position: monaco.IPosition): Promise<monaco.languages.LocationLink[]> {
     const docs = this.docs;
     const root = this.state.workspace?.root;
     const doc = docs?.all().find((d) => d.model === model);
-    if (!docs || !root || !doc?.lspOpen) return [];
+    if (!docs || !root || !doc) return [];
+    const file = await this.fileLinkAt(doc.path, model, position);
+    if (file) return [file];
+    if (!doc.lspOpen) return [];
     const found = await this.typst.definition(doc.uri, { line: position.lineNumber - 1, character: position.column - 1 }).catch(() => null);
     const links: monaco.languages.LocationLink[] = [];
     for (const d of definitions(found)) {
@@ -2544,16 +2551,50 @@ export class Studio {
     return links;
   }
 
-  /** A definition in another file (⌘-click): its tab, with the cursor where Monaco puts it. False if it isn't the book's. */
+  /**
+   * A path in quotes under the pointer that names a file in the book, found as
+   * Typst finds it (from this file's folder, or the Typst root for "/…"):
+   * `#include "chapters/one.typ"`, `image("figures/a.png")`, a list of the
+   * chapters' files. The link goes to the start of the file, and the editor
+   * shows its opening lines under the pointer. A picture or PDF opens in
+   * Preview; an empty model stands in for it.
+   */
+  private async fileLinkAt(from: string, model: monaco.editor.ITextModel, position: monaco.IPosition): Promise<monaco.languages.LocationLink | null> {
+    const quoted = quotedAt(model.getLineContent(position.lineNumber), position.column - 1);
+    const path = quoted && resolveRef(from, quoted.text, this.typstRoot());
+    if (!quoted || !path || path === from || !this.state.workspace?.files.includes(path)) return null;
+    const originSelectionRange = new monaco.Range(position.lineNumber, quoted.start + 1, position.lineNumber, quoted.end + 1);
+    const start = new monaco.Range(1, 1, 1, 1);
+    if (isPicture(path) || /\.pdf$/i.test(path)) {
+      const uri = monaco.Uri.from({ scheme: VIEWER_SCHEME, path: `/${path}` });
+      if (!monaco.editor.getModel(uri)) monaco.editor.createModel('', 'plaintext', uri);
+      return { uri, range: start, originSelectionRange };
+    }
+    const target = await this.docs?.open(path).catch(() => null);
+    if (!target) return null;
+    const lines = target.model.getLinesContent();
+    const { from: top, to } = filePreview(lines);
+    return { uri: target.model.uri, range: new monaco.Range(top + 1, 1, to + 1, lines[to].length + 1), targetSelectionRange: start, originSelectionRange };
+  }
+
+  /**
+   * A definition in another file (⌘-click): its tab, with the cursor where
+   * Monaco puts it. A path goes to the start of its file, so the file opens
+   * where it was left, as from Files. False if it isn't the book's.
+   */
   async openDefinition(uri: monaco.Uri, at?: monaco.IRange | monaco.IPosition): Promise<boolean> {
+    if (uri.scheme === VIEWER_SCHEME) {
+      await this.openFile(uri.path.slice(1));
+      return true;
+    }
     const root = this.state.workspace?.root;
     const path = root ? this.asWritten(uriToRelative(uri.toString(), root)) : null;
     if (!path || !this.docs?.get(path)) return false;
     await this.openFile(path);
     const editor = this.editor;
     if (!editor || this.state.active !== path) return false;
-    if (at) {
-      const range = 'startLineNumber' in at ? monaco.Range.lift(at) : monaco.Range.fromPositions(at);
+    const range = at && ('startLineNumber' in at ? monaco.Range.lift(at) : monaco.Range.fromPositions(at));
+    if (range && !(range.startLineNumber === 1 && range.startColumn === 1)) {
       editor.setSelection(range);
       editor.revealRangeInCenterIfOutsideViewport(range, monaco.editor.ScrollType.Immediate);
     }
@@ -2655,8 +2696,9 @@ export class Studio {
 
   async openFile(path: string, { activate = true } = {}) {
     if (!this.docs) return;
-    // PDFs (an exported book, say) open in the PDF viewer, not as text.
+    // PDFs (an exported book, say) open in the PDF viewer, not as text, and pictures in Preview.
     if (/\.pdf$/i.test(path)) return this.openPdf(path);
+    if (isPicture(path)) return this.openPicture(path);
     try {
       await this.docs.open(path);
     } catch (e) {
@@ -5688,6 +5730,18 @@ export class Studio {
   async openPdf(path: string) {
     try {
       await this.pdfViewer(path);
+    } catch (e) {
+      this.toast(`Couldn't open ${path}: ${errorMessage(e)}`, 'error');
+    }
+  }
+
+  /** Opens a picture in the book in Preview (replaced in self-tests, which mustn't open windows). */
+  pictureViewer: (path: string) => Promise<void> = (path) => ipc.openPicture(path);
+
+  /** Open a picture in the book (PNG, JPEG…) in Preview: the editor can't show it. */
+  async openPicture(path: string) {
+    try {
+      await this.pictureViewer(path);
     } catch (e) {
       this.toast(`Couldn't open ${path}: ${errorMessage(e)}`, 'error');
     }

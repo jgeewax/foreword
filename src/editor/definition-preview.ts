@@ -17,6 +17,19 @@ export function definitionPreview(lines: readonly string[], line: number, max = 
   return { from, to: line };
 }
 
+/**
+ * The lines (0-based, inclusive) to show for a whole file, named by its path
+ * (`#include "chapters/one.typ"`): from its first heading near the top, or its
+ * first line with text when it has none, `max` lines at most.
+ */
+export function filePreview(lines: readonly string[], max = 7): { from: number; to: number } {
+  let from = lines.slice(0, 30).findIndex((l) => /^\s*=+\s/.test(l));
+  if (from < 0) from = Math.max(0, lines.findIndex((l) => l.trim()));
+  let to = Math.min(lines.length - 1, from + max - 1);
+  while (to > from && !lines[to].trim()) to--;
+  return { from, to };
+}
+
 /** Brackets opened on a line less those closed, outside strings and `//` comments. */
 function netBrackets(text: string): number {
   let n = 0;

@@ -584,6 +584,7 @@ pub fn run() {
             workspace::sample_create,
             packages::project_create_from_package,
             workspace::reveal_in_finder,
+            workspace::open_picture,
             files::fs_mkdir,
             files::fs_rename,
             files::fs_copy,
