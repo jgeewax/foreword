@@ -525,7 +525,7 @@ function TaskBar() {
       <button
         className={`task-bar-button new-task${long ? ' hot' : ''}`}
         title={running ? 'Start a new task: this one carries on in the background (⌘T)' : 'Start a new task: this one stays in your list (⌘T)'}
-        onClick={() => studio.newSession()}
+        onClick={() => studio.newTask()}
       >
         <Icon name="plus" size={14} />
         New task

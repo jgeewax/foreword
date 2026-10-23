@@ -876,7 +876,7 @@ export class Studio {
     'add-makefile': () => (this.state.workspace?.files.includes('Makefile') ? this.openFile('Makefile') : this.addMakefile()),
     'book-settings': () => this.openSettings('book'),
     // Assistant
-    'new-task': () => this.newSession(),
+    'new-task': () => this.newTask(),
     'task-done': () => this.finishTask(),
     'ask-selection': () => this.attachSelection(),
     'fix-comments': () => this.runSlash('/fix'),
@@ -3978,6 +3978,13 @@ export class Studio {
     void this.refreshEfforts();
   }
 
+  /** New task (the button, ⌘T, /new, Done): a blank conversation, its message box focused to type in. */
+  newTask() {
+    this.newSession();
+    this.events.emit('show-agent-pane');
+    this.events.emit('focus-composer');
+  }
+
   // ---- several conversations at once ----------------------------------------------------
 
   private backgroundPoll: number | undefined;
@@ -4209,7 +4216,7 @@ export class Studio {
     const title = this.taskTitle(sessionId);
     this.setTaskRecord(sessionId, 'done');
     await this.history.saveNamed(`Task done: ${title}`).catch(() => {});
-    this.newSession();
+    this.newTask();
     await this.loadTasks();
     this.toast(`Done: ${title}. Ready for the next one.`, 'info', [{ label: 'Open it again', run: () => void this.switchTask(sessionId) }]);
   }
@@ -4728,7 +4735,7 @@ export class Studio {
         await this.setMode(cmd.name);
         break;
       case 'new':
-        this.newSession();
+        this.newTask();
         break;
       case 'done':
         if (!this.state.agent.sessionId) say('There’s no task to finish yet.', 'error');

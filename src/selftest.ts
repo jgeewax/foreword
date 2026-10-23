@@ -6339,7 +6339,8 @@ async function agentSettingsChecks() {
 /**
  * Done and New task on the message box, not the header: no bar on a blank conversation;
  * Done greyed before a reply, while it works and once done; New task blue with a hint once
- * the conversation is long, the hint dropping out of a narrow pane; ⌘T and ⇧⌘D in the palette.
+ * the conversation is long, the hint dropping out of a narrow pane; New task leaves the message
+ * box focused, to type in; ⌘T and ⇧⌘D in the palette.
  * The states are set in the store and put back after.
  */
 async function taskBarChecks() {
@@ -6398,8 +6399,15 @@ async function taskBarChecks() {
     out.alreadyDone = await read('already-done');
     set({ tasks: saved.tasks.filter((t) => t.sessionId !== session) });
     await sleep(100);
-    document.querySelector<HTMLButtonElement>('.agent-pane .task-bar-button.new-task')?.click();
-    out.afterNewTask = { sessionId: studio.state.agent.sessionId, ...(await read('after-new-task')) };
+    // A real click focuses the button first, and the button goes with the bar: the message box gets the keys.
+    const fresh = document.querySelector<HTMLButtonElement>('.agent-pane .task-bar-button.new-task');
+    fresh?.focus();
+    fresh?.click();
+    out.afterNewTask = {
+      sessionId: studio.state.agent.sessionId,
+      ...(await read('after-new-task')),
+      typeHere: document.activeElement === document.querySelector('.agent-pane .composer textarea'),
+    };
   } finally {
     if (composer) composer.style.width = '';
     studio.store.set(() => ({ agent: saved }));
@@ -6424,6 +6432,7 @@ async function taskBarChecks() {
     !!r.narrow.meter &&
     r.alreadyDone.done?.enabled === false &&
     !r.afterNewTask.shown &&
+    (out.afterNewTask as { typeHere?: boolean }).typeHere === true &&
     (out.keys as { newTask?: string; taskDone?: string }).newTask === '⌘T' &&
     (out.keys as { newTask?: string; taskDone?: string }).taskDone === '⇧⌘D';
   return { ok, ...out };
