@@ -16,7 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.5:** Discuss mode, which weighs a direction with you and argues back · the assistant offers the mode that suits what you asked · a preview of just the chapter you're in, for a long book's speed · Done and New task on the message box · <kbd>⌘</kbd><kbd>Z</kbd> a step at a time, and typing `*` over a word wraps it
+**New in 0.6:** formulas in the chat set in your book's own notation · Options shows each version as it would print · a button's message shows what you asked for, not the brief behind it · light or dark, whatever the Mac is set to · dividers you can grab, in the title bar's colour
 
 <br>
 
@@ -73,9 +73,9 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 
 ### An AI assistant, in an editor made for writing
 
-AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text, ask about it or ask for a change, and it edits the book itself, then tells you what it did in a sentence or two. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands.
+AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text, ask about it or ask for a change, and it edits the book itself, then tells you what it did in a sentence or two. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands, and the formulas and Typst in its replies are drawn as your book sets them, in the book's own notation.
 
-It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Ask** answers questions in the chat and changes nothing. **Discuss** thinks a direction through with you before anything is written: it says what it would do, and argues back. **Options** gives you three versions of a passage to pick from. When another mode would suit what you asked, it says so and offers it, with what it would do either way. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking: before a command runs, it says what the command does, and an “always” is a rule you can read and take back.
+It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Ask** answers questions in the chat and changes nothing. **Discuss** thinks a direction through with you before anything is written: it says what it would do, and argues back. **Options** gives you three versions of a passage to pick from, as text or set as they'd print. When another mode would suit what you asked, it says so and offers it, with what it would do either way. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking: before a command runs, it says what the command does, and an “always” is a rule you can read and take back.
 
 </td>
 </tr>
@@ -179,7 +179,7 @@ Each conversation is its own task, and several can run at once. Choose the model
 - **E-books.** Export an EPUB for Apple Books, Kobo, Google Play and Kindle: reflowing text for prose, or every page exactly as typeset for picture books, papers and books full of math. Foreword picks for you and says what didn't carry over.
 - **Your style, kept.** A `WRITING_STYLE.md` for each book (voice, tone, terminology) that every request follows. Start it from a template for your kind of book, let the assistant draft it from your chapters, or answer its questions and have it write the guide from your answers. Revise it by saying what should change, and it changes only that. Or redraft it whenever it isn't quite right: it keeps the rules you wrote, and learns from how you've rewritten its text.
 - **Find anything.** Search every chapter at once and replace across the book (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd>), see the whole book in Contents (each chapter with its sections and how many words), and go to a chapter by its number or name (<kbd>⌘</kbd><kbd>P</kbd>).
-- **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons and status bar wear it. A book that already has a Peacock colour keeps it.
+- **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons, status bar and the dividers between the panes wear it. A book that already has a Peacock colour keeps it. Light or dark is your choice too, whatever the Mac is set to.
 - **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Foreword? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).
 - **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code (type `_` or `*` over a word to wrap it), formatting on save, wrapping at a column with rulers, and a window for each book.
 

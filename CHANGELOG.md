@@ -2,6 +2,39 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.6.0 · 23 October 2026
+
+### The assistant
+
+- **Formulas in the chat are set in your book's own notation.** The chat drew `$…$` formulas and Typst blocks, but set each one on its own, so a formula using the book's own functions (`$#mmat("R")_90^2$`, `#trythis`) showed as code. Now they're set with what the book's files import, as the book sets them: `#mmat` comes out bold and upright, and `#trythis` is the book's own box. The same goes for review comments, What changed and Options. An equation on lines of its own (`$ … $`) is drawn as one, centred, and a Typst block wraps at the chat's width like a paragraph.
+- **Options shows each version as it would print.** Beside *Pick one to replace…* are two tabs, **Text** and **Preview**. Preview sets each option as a paragraph, as wide as its card, with emphasis, bold and maths as they'd print, so you can compare the three as text. Foreword remembers your choice.
+- **A button's message shows what you asked for, not the brief behind it.** Write it, Go ahead, Fix This Error, Explain This, a TODO, Fix all, Interview me and the rest still send the assistant its full instructions. In the chat, your message shows the request as a step, "Explain this passage · in plain words", with what it's about a line each: the error, the TODO, each comment, each question and your answer. Your own messages show as you wrote them. The same goes for a conversation you open again later, History's name for the turn ("Agent: Write it") and a task's name.
+- **"Always allow" for code it writes on the spot.** A command like `uv run python -c "…"` had no "always", since the code is new every time. Now it offers *Any Python code it writes, through uv*. A `>` inside quoted code is code, not writing a file, so `print(a > b)` no longer asks for that. And a rule you make in Settings or in Your rules answers a card that's already waiting on it.
+
+### The window
+
+- **Light or dark, as you choose.** Settings ▸ General ▸ Appearance ▸ Theme is *As the Mac is* (as before), *Light* or *Dark*, and the palette has all three. Before, Foreword was light only when the Mac was.
+- **Dividers you can grab.** Each divider between the panes is a 4 px band in the title bar's colour, as in VS Code: the book's colour when it has one, lit as you point at it. It takes a press 6 px either side; before, it was a 1 px line, and a press just beside it on the editor's side also jumped the text.
+- **One click is enough in a window that isn't in front.** With another app in front, or another Foreword window, the first click on a button (say, *Always allow* on a card that was waiting for you) only brought the window forward, and it took a second click to press it. Now one click does both, in the preview too.
+
+### The preview
+
+- **A click in the preview puts the source level with the click.** The editor scrolls so the line you clicked is at the height you clicked it, so your eye doesn't have to look for it. Before, it moved only when the line was off screen.
+
+### The sidebar
+
+- **Contents opens where you are.** Working in chapter 17, opening Contents scrolls the list so the section you're in sits in the middle.
+- **Source Control's file names get the row.** A row's buttons take no room until you point at it, as in VS Code. In a narrow sidebar a name showed as "ch1…" beside empty space; now it shows whole.
+
+### The editor
+
+- **Formatting leaves one blank line at most in a row**, and none at the start or end of the file. Typst prints any number of blank lines as one paragraph break, so the book looks the same. Raw text and `/* comments */` keep theirs.
+
+### Fixes
+
+- With one chapter shown, a reference written `#ref(<label>)` to another chapter stopped the preview with "label does not exist". It shows in grey now, as `@label` did.
+- The style guide's templates dialog cut its preview off on the right.
+
 ## 0.5.0 · 22 October 2026
 
 ### The assistant
