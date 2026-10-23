@@ -660,6 +660,21 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .todo-ask:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .todo-row:hover .todo-ask, .todo-row:focus-visible .todo-ask, .todo-ask:focus-visible { visibility: visible; }
 .todo-row:hover .todo-line, .todo-row:focus-visible .todo-line, .todo-row:has(.todo-ask:focus-visible) .todo-line { visibility: hidden; }
+/* A TODO comment's actions, over it while the pointer rests there (TodoHover.tsx): a popover card with the To do list's icons. */
+.todo-hover {
+  display: flex; align-items: center; gap: 2px; margin-bottom: 3px; padding: 3px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); font: 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  white-space: nowrap; animation: appear 0.12s ease-out;
+}
+.todo-hover button { --tone: var(--muted); display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px; border: none; border-radius: 5px; background: transparent; }
+.todo-hover button .icon-svg { color: var(--tone); stroke-width: 2; }
+.todo-hover button:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 13%, transparent); }
+.todo-hover .todo-hover-ask { --tone: var(--ai-edit); background: color-mix(in srgb, var(--tone) 9%, transparent); }
+.todo-hover .todo-hover-ask:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 18%, transparent); }
+.todo-hover .todo-hover-done { --tone: var(--good); }
+.todo-hover .todo-hover-all { color: var(--muted); }
+.todo-hover .todo-hover-all:hover { color: var(--fg); }
 /*
  * The chat before its first message (Starter): a welcome in the middle of the
  * pane, things to ask in the colours of what they do (the trace's: blue looks,

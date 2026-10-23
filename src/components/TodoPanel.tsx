@@ -1,12 +1,9 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { studio } from '../app/studio';
 import { numberedTitle } from '../app/tool-labels';
-import type { Todo } from '../app/todos';
+import { removable } from '../app/todos';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
-
-/** Whether Done can take the TODO out by itself: a `// TODO` comment, not a block comment or a #todo call. */
-const removable = (t: Todo) => t.kind === 'line-comment' || t.kind === 'inline-comment';
 
 /** A button inside a row: its click is its own, not the row's. */
 const own = (run: () => void) => (e: MouseEvent) => {

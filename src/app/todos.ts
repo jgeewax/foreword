@@ -41,6 +41,27 @@ export function parseTodos(text: string, path: string): Todo[] {
   return todos;
 }
 
+/**
+ * The TODO on a line, for the editor's hover and right-click menu, with its
+ * columns (1-based, Monaco's): from its `//`, `/*` or `#todo` to where it ends.
+ * With a column, only if that column is on it.
+ */
+export function todoAt(lineText: string, path: string, line: number, column?: number): { todo: Todo; from: number; to: number; fix: boolean } | null {
+  if (path.endsWith('.md')) return null;
+  const [todo] = parseTodos(lineText, path);
+  if (!todo) return null;
+  const m = (todo.kind === 'block-comment' ? BLOCK : todo.kind === 'call' ? CALL : INLINE).exec(lineText);
+  if (!m) return null;
+  const lead = /^\s*/.exec(m[0])![0].length;
+  const from = m.index + lead + 1;
+  const to = todo.kind === 'block-comment' || todo.kind === 'call' ? m.index + m[0].length + 1 : lineText.length + 1;
+  if (column !== undefined && (column < from || column > to)) return null;
+  return { todo: { ...todo, line }, from, to, fix: todo.kind !== 'call' && /^fixme$/i.test(m[1]) };
+}
+
+/** Whether Done can take the TODO out by itself: a `// TODO` comment, not a block comment or a #todo call. */
+export const removable = (t: Todo) => t.kind === 'line-comment' || t.kind === 'inline-comment';
+
 /** The line without its TODO (for "Done"); null when that isn't a simple edit. */
 export function withoutTodo(lineText: string, todo: Todo): string | null {
   if (todo.kind === 'line-comment') return '';

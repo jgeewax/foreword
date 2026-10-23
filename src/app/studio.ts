@@ -1228,7 +1228,10 @@ export class Studio {
       if (edit) {
         const start = doc.model.getPositionAt(edit.start);
         const end = doc.model.getPositionAt(edit.end);
+        // Its own step in the editor's undo, not part of what the author last typed.
+        doc.model.pushStackElement();
         doc.model.pushEditOperations([], [{ range: monaco.Range.fromPositions(start, end), text: edit.text }], () => null);
+        doc.model.pushStackElement();
       }
       if (!wasDirty) await this.docs.save(path);
       return true;

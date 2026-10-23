@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTodos, todoPrompt, withoutTodo } from './todos';
+import { parseTodos, todoAt, todoPrompt, withoutTodo } from './todos';
 
 const TYP = `= Vectors
 // TODO: check this date with the archive
@@ -29,6 +29,33 @@ describe('parseTodos', () => {
       'Ask the editor about chapter 3',
       'pick a cover',
     ]);
+  });
+});
+
+describe('todoAt (the editor’s hover)', () => {
+  const at = (text: string, column?: number) => {
+    const r = todoAt(text, 'ch1.typ', 7, column);
+    return r && [r.from, r.to, r.todo.kind, r.todo.line, r.todo.text, r.fix];
+  };
+
+  it('covers a comment from its slashes to the end of the line', () => {
+    expect(at('  // TODO: check this date', 3)).toEqual([3, 27, 'line-comment', 7, 'check this date', false]);
+    expect(at('  // TODO: check this date', 2)).toBeNull();
+    expect(at('The ship sailed. // FIXME cite the log', 10)).toBeNull();
+    expect(at('The ship sailed. // FIXME cite the log', 20)).toEqual([18, 39, 'inline-comment', 7, 'cite the log', true]);
+  });
+
+  it('covers a block comment or a #todo call, not what follows it', () => {
+    expect(at('/* FIXME too wide */ #figure', 4)).toEqual([1, 21, 'block-comment', 7, 'too wide', true]);
+    expect(at('/* FIXME too wide */ #figure', 24)).toBeNull();
+    expect(at('Text #todo[Add an example] more', 8)).toEqual([6, 27, 'call', 7, 'Add an example', false]);
+    expect(at('#todo("fixme")', 2)?.[5]).toBe(false);
+  });
+
+  it('without a column, the line’s TODO; none in Markdown or plain text', () => {
+    expect(at('The ship sailed. // todo cite')?.[2]).toBe('inline-comment');
+    expect(at('See https://example.com//todo-list', 30)).toBeNull();
+    expect(todoAt('TODO: pick a cover', 'notes.md', 1)).toBeNull();
   });
 });
 

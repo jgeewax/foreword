@@ -8,6 +8,8 @@ import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
+import { removable, todoAt } from '../app/todos';
+import { attachTodoHover } from './TodoHover';
 import { headings, type Heading } from '../editor/outline';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
@@ -133,10 +135,14 @@ export function EditorPane() {
         pos && path && model && studio.state.settings.markAiEdits
           ? editMarks(studio.aiEditsFor(path), model.getValue()).find((m) => m.from <= pos.lineNumber && pos.lineNumber <= m.to)
           : undefined;
+      const todo = pos && path && model ? todoAt(model.getLineContent(pos.lineNumber), path, pos.lineNumber) : null;
+      const ready = studio.state.agent.status === 'ready';
       // What's under the pointer first, then the selection, then editing. File- and
       // book-level commands live in the menu bar and the tab's menu.
       void showContextMenu([
         error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
+        todo && ready && { label: todo.fix ? 'Fix This with the Assistant' : 'Do This TODO with the Assistant', action: () => void studio.askTodo(todo.todo) },
+        todo && removable(todo.todo) && { label: 'Mark as Done', action: () => void studio.todoDone(todo.todo) },
         mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         'separator',
         hasSelection && { label: 'Ask the Assistant About This', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
@@ -239,6 +245,8 @@ export function EditorPane() {
       tagTimer = window.setTimeout(paintTags, 120);
     });
     paintTags();
+    // Resting the pointer on a TODO comment: ask the assistant to do it, mark it done, or see the others.
+    const offTodoHover = attachTodoHover(editor);
     // The headings, for the path bar (the cursor's own line comes from the store).
     const readOutline = () => {
       const model = editor.getModel();
@@ -462,6 +470,7 @@ export function EditorPane() {
       clearTimeout(aiTimer);
       clearTimeout(outlineTimer);
       showVersion.dispose();
+      offTodoHover();
       offReview();
       clearTimeout(commentTimer);
       clearTimeout(widgetTimer);
