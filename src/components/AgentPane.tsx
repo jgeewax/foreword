@@ -4,6 +4,7 @@ import { composerKeyAction, sendHint } from '../app/settings';
 import { pendingQuestion, studio, type QuestionItem } from '../app/studio';
 import { setupLine } from '../app/mode-setups';
 import { useStore } from '../lib/store';
+import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
@@ -925,7 +926,7 @@ const TIPS: ReactNode[] = [
 
 const greeting = (hour: number) => (hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening');
 
-/** Shown before the first message: a welcome, things to ask (your TODOs first), the style guide's offer, and a tip. */
+/** Shown before the first message: a welcome under Foreword's icon and name, things to ask (your TODOs first), the style guide's offer, and a tip. */
 function Starter() {
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const todos = useStore(studio.store, (s) => s.todos);
@@ -938,10 +939,9 @@ function Starter() {
     <div className="starter">
       <div className="starter-hero">
         <span className="starter-emblem" aria-hidden>
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-            <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9zM18.5 16l.8 2 2 .7-2 .8-.8 2-.7-2-2-.8 2-.7z" />
-          </svg>
+          <img src={appIcon} alt="" width={60} height={60} />
         </span>
+        <span className="starter-wordmark">Foreword</span>
         <h3>{hello}</h3>
         <p>What shall we work on? Every change it makes is marked in your text, and can be undone.</p>
       </div>
