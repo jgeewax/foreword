@@ -2789,11 +2789,12 @@ async function menuChecks() {
   const host = editor.getDomNode()!.getBoundingClientRect();
   out.editor = await right(editor.getDomNode()!.querySelector('.view-lines'), host.left + p.left, host.top + p.top + 5);
   out.monacoMenuShown = !!document.querySelector('.monaco-menu-container, .context-view .monaco-menu');
-  action('Three Versions to Pick From…')?.();
+  // Options… opens the selection bar's card, on Options, with the cursor in its box.
+  action('Three Options to Pick From…')?.();
   await sleep(500);
-  out.threeVersions = { mode: studio.state.agent.mode, attachments: studio.state.agent.attachments.map((a) => a.label) };
-  await studio.setMode('write');
-  studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
+  out.threeOptions = { card: !!document.querySelector('.selection-card.sel-options'), focused: !!document.activeElement?.matches('.selection-card .sel-input') };
+  document.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();
+  await sleep(100);
 
   out.tab = await right(document.querySelector('.tab.active'));
   out.explorerFile = await right([...document.querySelectorAll('.tree-row')].find((e) => e.textContent?.includes('ch1-vectors.typ')) ?? null);
@@ -2837,7 +2838,8 @@ async function reviewChecks(withAgent: boolean) {
   const model = editor.getModel()!;
   const select = (phrase: string) => {
     const at = model.getValue().indexOf(phrase);
-    editor.setSelection(monaco.Range.fromPositions(model.getPositionAt(at), model.getPositionAt(at + phrase.length)));
+    // As the author would (the selection bar comes for theirs, not for Foreword's own).
+    editor.setSelection(monaco.Range.fromPositions(model.getPositionAt(at), model.getPositionAt(at + phrase.length)), 'mouse');
     editor.revealRangeInCenter(editor.getSelection()!);
   };
   const write = async (text: string, submit: 'enter' | 'button') => {
@@ -2852,10 +2854,10 @@ async function reviewChecks(withAgent: boolean) {
     return true;
   };
 
-  // The bubble by a selection.
+  // Comment, on the bar under a selection.
   select('is singular');
   await sleep(700);
-  const widget = document.querySelector<HTMLButtonElement>('.comment-widget');
+  const widget = document.querySelector<HTMLButtonElement>('.selection-bar .sel-comment');
   out.bubble = !!widget && widget.getBoundingClientRect().width > 0;
   widget?.click();
   out.composerFocused = await waitFor(() => document.activeElement?.closest('.comment-card.composer'), 3000, 'focus').then(() => true, () => false);

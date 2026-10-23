@@ -225,7 +225,7 @@ function ReadBar({ read }: { read: { path: string; from: number; to: number } })
 }
 
 /** Words of a diff: the same, cut (struck through) and put in. */
-function DiffText({ pieces, prose }: { pieces: Piece[]; prose: boolean }) {
+export function DiffText({ pieces, prose }: { pieces: Piece[]; prose: boolean }) {
   return (
     <p className={`diff-text${prose ? ' prose' : ''}`}>
       {pieces.map((p, i) => (p.kind === 'same' ? <span key={i}>{p.text}</span> : p.kind === 'del' ? <del key={i}>{p.text}</del> : <ins key={i}>{p.text}</ins>))}

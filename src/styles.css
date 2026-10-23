@@ -582,7 +582,6 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .review-footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; font-size: 11.5px; color: var(--muted); }
 .review-highlight { background: rgba(227, 160, 8, 0.22); border-bottom: 1px solid rgba(227, 160, 8, 0.8); }
 .review-line { background: #e3a008; width: 3px !important; margin-left: 3px; }
-.comment-widget { white-space: nowrap; font-size: 11.5px; padding: 2px 8px; border-radius: 12px; background: var(--accent); color: var(--accent-fg); border: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); cursor: pointer; }
 .prompt textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; outline: none; resize: vertical; }
 .prompt textarea:focus { border-color: var(--accent); }
 
@@ -679,6 +678,82 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .todo-hover .todo-hover-done { --tone: var(--good); }
 .todo-hover .todo-hover-all { color: var(--muted); }
 .todo-hover .todo-hover-all:hover { color: var(--fg); }
+/*
+ * Under a selection (SelectionBar.tsx), drawn as the TODO bar: each action in
+ * the colour of what it does (purple changes the book, as the assistant's
+ * marks; Options in its mode's green; blue only looks; amber comments). Revise
+ * and Options open a card in its place; a request sent from it gets a note
+ * under its passage while it waits and works, and when it's done.
+ */
+/* Room Monaco counts when it moves a widget in from the right edge, so it stops short of the scrollbar. */
+.selection-widget { padding-right: 20px; pointer-events: none; }
+.selection-widget > * { pointer-events: auto; }
+.selection-bar, .selection-card, .selection-note {
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --mono: "SF Mono", Menlo, monospace;
+  margin-top: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); font: 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  white-space: nowrap; animation: appear 0.12s ease-out;
+}
+.selection-bar, .selection-note, .sel-note-row { display: flex; align-items: center; gap: 2px; padding: 3px; }
+.sel-btn { --tone: var(--muted); display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px; border: none; border-radius: 5px; background: transparent; }
+.sel-revise { --tone: var(--ai-edit); }
+.sel-options { --tone: var(--good); }
+.sel-explain { --tone: var(--ai-read); }
+.sel-comment { --tone: #e3a008; }
+.sel-fix { --tone: var(--bad); }
+.sel-btn .icon-svg, .sel-glyph { flex: none; color: var(--tone); stroke-width: 2; }
+.sel-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 14%, transparent); }
+.sel-btn.lead { background: color-mix(in srgb, var(--tone) 10%, transparent); }
+.sel-btn.lead:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 20%, transparent); }
+.sel-btn.icon-only { width: 26px; padding: 0; justify-content: center; }
+.sel-btn kbd { margin-left: 0; font-size: 11px; color: var(--muted); opacity: 1; }
+.sel-btn.sel-quiet { color: var(--muted); }
+.sel-btn.sel-quiet:hover:not(:disabled) { color: var(--fg); }
+.sel-glyph { font-size: 15px; font-weight: 700; line-height: 1; }
+.sel-sep { flex: none; width: 1px; height: 16px; margin: 0 3px; background: var(--border); }
+/* The card: Revise or Options, a box to say how, the usual ones, and the way to the chat. */
+.selection-card { --tone: var(--ai-edit); width: 470px; display: flex; flex-direction: column; gap: 9px; padding: 8px; border-radius: 10px; white-space: normal; }
+.selection-card.sel-options { --tone: var(--good); }
+.sel-card-head, .sel-card-foot { display: flex; align-items: center; gap: 8px; }
+.sel-tabs { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
+.sel-tab { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 8px; border: none; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; }
+.sel-tab .icon-svg, .sel-tab .sel-glyph { color: var(--tone); stroke-width: 2; }
+.sel-tab:hover:not(:disabled) { color: var(--fg); }
+.sel-tab[aria-selected="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+.sel-card-where { font-size: 11.5px; color: var(--muted); }
+.sel-close { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: none; border-radius: 5px; background: transparent; color: var(--muted); }
+.sel-close:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.sel-input {
+  height: 32px; padding: 0 10px; border: 1px solid var(--tone); border-radius: 7px; background: var(--bg-2); color: var(--fg); outline: none;
+  font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+  -webkit-user-select: text; user-select: text;
+}
+.sel-input::placeholder { color: var(--muted); }
+.sel-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.sel-preset { height: 24px; padding: 0 10px; border: 1px solid var(--border); border-radius: 12px; background: transparent; font-size: 11.5px; }
+.sel-preset:hover:not(:disabled) { border-color: color-mix(in srgb, var(--tone) 55%, var(--border)); background: color-mix(in srgb, var(--tone) 12%, transparent); }
+.sel-card-foot { padding-top: 7px; border-top: 1px solid var(--border); }
+.sel-to-chat { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 7px; border: none; border-radius: 5px; background: transparent; color: var(--muted); }
+.sel-to-chat:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.sel-hint { font-size: 11px; color: var(--muted); }
+.sel-go { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border: 1px solid var(--tone); border-radius: 6px; background: color-mix(in srgb, var(--tone) 22%, var(--bg)); font-weight: 600; }
+.sel-go:hover:not(:disabled) { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 32%, var(--bg)); }
+.sel-go kbd { margin-left: 0; font-weight: 400; color: var(--muted); opacity: 1; }
+/* The note under a passage sent from the bar. */
+.selection-note { gap: 6px; padding-left: 9px; }
+.selection-note.done { display: block; padding: 0; }
+.selection-note.done.open { width: 460px; white-space: normal; }
+.selection-note.done .sel-note-row { padding-left: 9px; gap: 6px; white-space: nowrap; }
+.selection-note.done .diff-text { max-height: 220px; overflow-y: auto; border-top: 1px solid var(--border); }
+.sel-note-icon { display: grid; }
+.sel-note-icon.ok { color: var(--good); }
+.sel-note-icon.queued { color: var(--warn); }
+.sel-words { font: 11px var(--mono); color: var(--muted); }
+.sel-in-chat { padding: 0 4px; }
+.sel-spin { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--tone, var(--muted)) 30%, transparent); border-top-color: var(--tone, var(--muted)); animation: spin 0.8s linear infinite; }
+.monaco-editor .sel-pending { background: color-mix(in srgb, var(--ai-edit) 16%, transparent); border-bottom: 1px dashed var(--ai-edit); animation: sel-pending 1.6s ease-in-out infinite; }
+@keyframes sel-pending { 50% { background: color-mix(in srgb, var(--ai-edit) 6%, transparent); } }
 /*
  * The chat before its first message (Starter): a welcome in the middle of the
  * pane, things to ask in the colours of what they do (the trace's: blue looks,

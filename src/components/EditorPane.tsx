@@ -10,6 +10,7 @@ import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
 import { removable, todoAt } from '../app/todos';
 import { attachTodoHover } from './TodoHover';
+import { attachSelectionBar } from './SelectionBar';
 import { headings, type Heading } from '../editor/outline';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
@@ -146,8 +147,9 @@ export function EditorPane() {
         mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         'separator',
         hasSelection && { label: 'Ask the Assistant About This', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
+        hasSelection && ready && { label: 'Revise…', action: () => studio.events.emit('selection-card', 'revise') },
+        hasSelection && ready && { label: 'Three Options to Pick From…', action: () => studio.events.emit('selection-card', 'options') },
         hasSelection && { label: 'Explain This', action: () => void studio.explainSelection() },
-        hasSelection && { label: 'Three Versions to Pick From…', action: () => void studio.optionsForSelection() },
         hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
         'separator',
         'cut',
@@ -404,32 +406,8 @@ export function EditorPane() {
       clearTimeout(commentTimer);
       commentTimer = window.setTimeout(syncComments, 400);
     });
-    // A small "Comment" bubble by a selection (after a moment): ⌥⌘M and right-click work too.
-    const commentButton = document.createElement('button');
-    commentButton.className = 'comment-widget';
-    commentButton.textContent = 'Comment';
-    commentButton.title = 'Comment on the selection (⌥⌘M)';
-    commentButton.onmousedown = (e) => e.preventDefault();
-    commentButton.onclick = () => void studio.addComment();
-    let widgetAt: monaco.IPosition | null = null;
-    let widgetTimer: number | undefined;
-    const commentWidget: monaco.editor.IContentWidget = {
-      getId: () => 'studio.comment',
-      getDomNode: () => commentButton,
-      getPosition: () => (widgetAt ? { position: widgetAt, preference: [monaco.editor.ContentWidgetPositionPreference.ABOVE, monaco.editor.ContentWidgetPositionPreference.BELOW] } : null),
-    };
-    editor.addContentWidget(commentWidget);
-    editor.onDidChangeCursorSelection((e) => {
-      clearTimeout(widgetTimer);
-      widgetAt = null;
-      editor.layoutContentWidget(commentWidget);
-      if (e.selection.isEmpty()) return;
-      widgetTimer = window.setTimeout(() => {
-        const sel = editor.getSelection();
-        widgetAt = sel && !sel.isEmpty() && !studio.state.review.draft ? sel.getEndPosition() : null;
-        editor.layoutContentWidget(commentWidget);
-      }, 450);
-    });
+    // Under a selection (after a moment): Revise, Options, Explain, Comment and Ask in chat.
+    const offSelectionBar = attachSelectionBar(editor);
     editor.addAction({
       id: 'studio.addComment',
       label: 'Add Review Comment',
@@ -474,9 +452,8 @@ export function EditorPane() {
       offTodoHover();
       offReview();
       clearTimeout(commentTimer);
-      clearTimeout(widgetTimer);
+      offSelectionBar();
       clearZones();
-      editor.removeContentWidget(commentWidget);
       offLens();
       lenses.dispose();
       runCommand.dispose();

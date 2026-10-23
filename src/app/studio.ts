@@ -82,7 +82,7 @@ import { commandPermissionRules, ruleKey, rulesUsed, type CommandRule, type Rule
 import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
-import { EXPLAIN_PROMPT, fixErrorPrompt, mergePrompt, messageLine, stockTitle } from './stock-prompts';
+import { EXPLAIN_PROMPT, fixErrorPrompt, mergePrompt, messageLine, optionsPrompt, revisePrompt, stockTitle } from './stock-prompts';
 import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
@@ -649,6 +649,8 @@ export class Studio {
     'focus-search': [text: string | null];
     'focus-editor': [];
     'fill-composer': [text: string];
+    /** The selection bar's card, open on Revise or Options (the context menu, the command). */
+    'selection-card': [kind: 'revise' | 'options'];
     'find-in-settings': [];
     'show-agent-pane': [];
     /** The assistant pane's list of the book's tasks, opened (View ▸ Assistant Tasks). */
@@ -1603,14 +1605,82 @@ export class Studio {
     return path && d ? { path, d } : null;
   }
 
-  // ---- selection actions (context menus) -------------------------------------------
+  // ---- selection actions (the selection bar, context menus) ---------------------------
 
-  /** Options mode on the current selection: attach it and wait for the author's request. */
-  async optionsForSelection() {
-    await this.setMode('options');
+  /** Revise (the selection bar): the passage changed in place, as asked. That changes the book, so it's done in Write mode. */
+  reviseSelection(instruction: string, signal?: AbortSignal): Promise<boolean> {
+    return this.sendAboutSelection('write', revisePrompt(instruction), signal);
+  }
+
+  /** Options (the selection bar): three versions of the selection to pick from, in Options mode. */
+  optionsForSelection(instruction: string, signal?: AbortSignal): Promise<boolean> {
+    return this.sendAboutSelection('options', optionsPrompt(instruction), signal);
+  }
+
+  /**
+   * A message about the selection alone, in `mode`. The selection goes with
+   * it, and the editor lets go of it (the cursor at its end), so the mark on
+   * the passage shows while the assistant works. A reply running in another
+   * mode is let finish first, so it keeps what its mode allowed (an Ask reply
+   * never gets to edit); `signal` calls it off meanwhile.
+   */
+  private async sendAboutSelection(mode: AgentMode, message: string, signal?: AbortSignal): Promise<boolean> {
     this.setAgent({ attachments: [] });
-    await this.attachSelection();
+    await this.attachSelection({ focus: false });
+    const end = this.editor?.getSelection()?.getEndPosition();
+    if (end) this.editor!.setSelection(monaco.Range.fromPositions(end));
     this.events.emit('show-agent-pane');
+    if (this.state.agent.mode !== mode) {
+      await this.untilIdle();
+      if (signal?.aborted) return false;
+      await this.setMode(mode);
+      if (this.state.agent.mode !== mode) return false;
+    }
+    return !signal?.aborted && this.send(message);
+  }
+
+  /** Once no reply is running in the conversation shown. */
+  private untilIdle(): Promise<void> {
+    if (!this.state.agent.running) return Promise.resolve();
+    return new Promise((resolve) => {
+      const off = this.store.subscribe(() => {
+        if (this.state.agent.running) return;
+        off();
+        resolve();
+      });
+    });
+  }
+
+  /** "Ask in chat" (the selection bar's ⌘I): the selection goes with the chat, which shows with the cursor in its message box. */
+  async askAboutSelection() {
+    this.events.emit('show-agent-pane');
+    await this.attachSelection();
+  }
+
+  /** The Revise card's "Continue in chat": in Revise's mode or Options', what the author typed goes after what's in the message box. */
+  async continueInChat(kind: 'revise' | 'options', draft: string) {
+    await this.setMode(kind === 'options' ? 'options' : 'write');
+    this.events.emit('show-agent-pane');
+    await this.attachSelection({ focus: false });
+    const typed = draft.trim();
+    if (!typed) return this.events.emit('focus-composer');
+    const before = this.composerDraft.trimEnd();
+    this.fillComposer(before ? `${before}\n\n${typed}` : typed);
+  }
+
+  /** The first Typst error in a range of the active file (1-based), if any: the selection bar offers to fix it. */
+  errorIn(range: monaco.IRange) {
+    const path = this.state.active;
+    const d = path
+      ? (this.diagnostics.get(path) ?? []).find((x) => {
+          if (x.severity !== 1) return false;
+          const { start, end } = x.range;
+          const startsBefore = start.line + 1 < range.endLineNumber || (start.line + 1 === range.endLineNumber && start.character + 1 <= range.endColumn);
+          const endsAfter = end.line + 1 > range.startLineNumber || (end.line + 1 === range.startLineNumber && end.character + 1 >= range.startColumn);
+          return startsBefore && endsAfter;
+        })
+      : undefined;
+    return path && d ? { path, d } : null;
   }
 
   /** Ask for a plain-words explanation of the selection (no changes). */

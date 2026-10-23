@@ -33,6 +33,13 @@ export const fixErrorPrompt = (message: string) => `Typst reports an error here:
 /** "Explain This" on a selection. */
 export const EXPLAIN_PROMPT = "Explain this passage in plain words, including what any Typst markup in it does. Don't change anything.";
 
+/** "Revise" on a selection (the selection bar): the passage, changed in place as the author asked. */
+export const revisePrompt = (instruction: string) =>
+  `Revise the selected passage: ${instruction.trim()}\n\nChange only that passage, in place. Keep what I didn't ask to change: labels, citations, math and markup. Then say in a sentence what you changed.`;
+
+/** "Options" on a selection (the selection bar), sent in Options mode: three versions to pick from. */
+export const optionsPrompt = (instruction: string) => `Three options for the selected passage: ${instruction.trim()}`;
+
 /** "Resolve with the assistant" on a passage changed two ways at once: the author's is the selection. */
 export const mergePrompt = (path: string, theirs: string, yours: boolean) => {
   const quoted = theirs.trim() ? theirs.trim().split('\n').map((l) => `> ${l}`).join('\n') : '> (nothing: that version doesn’t have this passage)';
@@ -75,6 +82,9 @@ const MERGE = new RegExp(`^${esc(mergePrompt('\0', '\x01', false)).replace('\0',
 const ANSWERS = /^My answers?:\n- /;
 const EXAMPLES = new RegExp(`^${esc(failingExamplesPrompt(['\0'])).replace('\0', '((?:- [^\\n]*\\n?)+)')}$`);
 const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
+// Also on one line, as Claude Code names a task after it.
+const REVISE_SELECTION = new RegExp(`^${esc(revisePrompt('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
+const OPTIONS_SELECTION = new RegExp(`^${esc(optionsPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
 
 /** Each kind of message, read back: what it asked for, or null if it isn't that one. */
 const READERS: ((text: string) => StockAction | null)[] = [
@@ -88,6 +98,14 @@ const READERS: ((text: string) => StockAction | null)[] = [
     return m ? { verb: 'Fix this error', rows: [{ text: m[1] }], tone: 'change', icon: 'error' } : null;
   },
   (text) => (text === EXPLAIN_PROMPT ? { verb: 'Explain this passage', note: 'in plain words', tone: 'look', icon: 'bulb' } : null),
+  (text) => {
+    const m = REVISE_SELECTION.exec(text);
+    return m ? { verb: 'Revise this passage', rows: [{ text: m[1] }], tone: 'change', icon: 'edit' } : null;
+  },
+  (text) => {
+    const m = OPTIONS_SELECTION.exec(text);
+    return m ? { verb: 'Three options for this passage', rows: [{ text: m[1] }], tone: 'other', icon: 'check', mode: 'options' } : null;
+  },
   (text) => {
     const m = TODO.exec(text);
     return m ? { verb: 'Work on this TODO', rows: [{ text: m[1] }], tone: 'change', icon: 'todos' } : null;
@@ -185,6 +203,8 @@ const TITLE_OPENINGS: [string, string][] = [
   ['Please address this review comment on the book.', 'Fix this review comment'],
   ['Please address these review comments on the book.', 'Fix review comments'],
   ['These code examples fail when Foreword runs them:', 'Fix the failing code examples'],
+  ['Revise the selected passage: ', 'Revise this passage'],
+  ['Three options for the selected passage: ', 'Three options for this passage'],
 ];
 const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)})[\\s\\S]*$`);
 

@@ -943,7 +943,7 @@ section), the page starts at the window's top and the offset is measured.
   - No way to fix one comment, or to hear why one wasn't done.
 - **Now** (Google Docs comments, plus a pull-request review):
   - **No mode.** Select text in the editor (or the preview, through the
-    mapping), then use the Comment bubble beside the selection, ⌥⌘M or
+    mapping), then use Comment on the bar under the selection, ⌥⌘M or
     right-click. A box opens under the passage: ⏎ adds, ⇧⏎ makes a new line,
     Esc cancels. The editor is never read-only.
   - **Cards in place.** Open comments, and changed ones waiting to be
@@ -3595,6 +3595,55 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   worktree and port) with a reply mocked into the chat, each of seven links
   went to its place (line, column, range selected, the SVG in its tab), a
   selected link didn't open, and Enter on a focused one did.
+
+### The selection bar: Revise, Options, Explain, Comment, Ask in chat
+
+- **Asked for:** "when selecting text, i think we need a better set of
+  buttons… comment is nice, but often we want revise, etc. and a way to
+  connect over to the ai chat panel without hitting cmd+i." Designed first as
+  a mockup canvas (Revise card, the note under a passage), then built as drawn.
+- **The bar** takes the Comment bubble's place, drawn as the TODO bar: Revise
+  (purple, the assistant's changes), Options (its mode's green and ⑂), Explain
+  (blue, it only looks), Comment (amber), then Ask in chat ⌘I, which keeps the
+  selection with the chat, shows the pane and puts the cursor in its box. Over
+  a Typst error, Fix error comes first. In a narrow editor (under 560 px) all
+  but the first show only their icons. It's under the selection's end, where
+  the pointer let go, so it never covers the passage (above it at the pane's
+  bottom). It comes only for the author's own selections (mouse, keyboard),
+  not one Foreword makes (Show in editor, a search, the preview's mapping) or
+  an edit that moves one (Monaco's `modelChange`, which first brought it back
+  under a finished revision).
+- **Revise and Options open a card in its place:** a box ("How should it
+  change?"), the usual requests a click away (Tighten, Proofread, Clearer,
+  Simpler words, Expand, and Match my style guide when the book has one), and
+  Continue in chat, which carries what was typed to the message box. No
+  shortcut. The context menu's Revise… and Three Options to Pick From… and
+  their commands open the same card.
+- **Revise works in Write mode, Options in Options mode:** the bar switches.
+  A reply running in another mode is let finish first (the message waits,
+  with Cancel), so an Ask reply never gets to edit because the author pressed
+  Revise. In the same mode, the message joins the assistant's queue as typed
+  ones do (Send now, Cancel).
+- **A note under the passage** follows the request: it waits, "Revising…"
+  (with Stop) while the passage shows the assistant's purple, dashed; then
+  "Revised −11 words" with Undo and Show change (the word diff, in the book's
+  serif). The passage is a tracked decoration, so it follows the assistant's
+  edit (documents.ts applies small edits); what changed is read off it, not
+  off the tool calls, so any assistant's edits count, Codex's patches too.
+  Undo puts the passage back as one step (⌘Z brings the revision back).
+  Options says "3 options are in the chat" until one is picked. The editor
+  lets go of the selection once it's sent, so the mark shows and the passage
+  isn't offered again with the next message. The chat shows "Revise this
+  passage" or "Three options for this passage" with the instruction
+  (stock-prompts.ts).
+- Verified: unit tests (selection-bar.test.ts, stock-prompts.test.ts); in a
+  scratch instance on the Jekyll sample with Claude Code (Sonnet, low): a
+  typed Revise and a Proofread through to Revised and The passage is as it
+  was, Show change and Undo (and ⌘Z back), Options to a picked option, a
+  Revise in the assistant's queue behind a running reply, and one held back
+  behind an Ask reply (called off, then let through), Ask in chat, Continue
+  in chat, Comment, the menu's Revise…, Esc, Fix error shown first over an
+  error, a narrow pane, light and dark.
 
 ### Open questions
 
