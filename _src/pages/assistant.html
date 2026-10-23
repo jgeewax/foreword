@@ -2,7 +2,7 @@
 title: The assistant
 heading: The assistant
 lede: It works on the book’s files directly. It reads the chapters it needs, makes its edits, and tells you what it did, one sentence per step, in the book’s terms: “Read ‘Story of the Door’ (chapter 1)”, not <code>sed -n '1,30p' chapters/01.typ</code>. Every line it changes stays marked in your text, and every turn is saved in History.
-description: How Foreword's writing assistant works: tasks with one goal each, every step as a sentence in the book's terms, marked lines, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.
+description: How Foreword's writing assistant works: tasks with one goal each, every step as a sentence in the book's terms, marked lines, formulas in the book's own notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.
 image: images/f/assistant-trace.webp
 -->
 <figure class="lead">
@@ -32,6 +32,9 @@ image: images/f/assistant-trace.webp
 <p>Each step has a coloured dot: blue for looking, violet for changing, grey for thinking, amber when it needs you, red when something failed. An edit says where it was and how many words it changed (“line 6 +2 −7 words”). <span class="ui">Show change</span> opens the edit word by word, with the words it cut struck through and the words it wrote in their place. From there, <span class="ui">Show in editor</span> selects what it wrote, and <span class="ui">Undo this edit</span> takes it out (in the editor, so <kbd>⌘</kbd><kbd>Z</kbd> puts it back).</p>
 <p>Under the reply: how long the turn took, and <span class="ui">Saved in History</span>, a link to the version History kept of it. After the turns, <strong>Changed in this task</strong> lists each file it touched, with a strip showing where in the file it read and where it wrote.</p>
 <p>Why sentences: an early version showed the raw commands. A request to allow <code>sed -n '205,242p' chapters/ch01_what_is_a_vector.typ</code> means nothing to most writers, and shouldn’t have to. The command is still there if you want it: it folds out under its row.</p>
+<h3>What a button asked for</h3>
+<p>Many requests start from a button: <span class="ui">Write it</span>, <span class="ui">Go ahead</span>, <span class="ui">Fix This Error</span>, <span class="ui">Explain This</span>, a TODO, <span class="ui">Fix all</span>, the style guide’s <span class="ui">Interview me</span>. Each sends the assistant a full brief: what to do, what to keep, how to answer. In the chat, your message shows only what you asked for, as a step with its dot: “Explain this passage · in plain words”, then what it’s about, a line each (the error, the TODO, each comment, each question and your answer). Your own messages show exactly as you wrote them.</p>
+<p>The briefs used to show in full, which made a one-click request look like a page of instructions you’d written. A conversation opened again later shows the same steps, and so do History’s name for the turn (“Agent: Write it”) and a task’s name.</p>
 
 <h2>The lines it changed stay marked</h2>
 <p>Every line the assistant wrote gets a violet bar beside the line number, and a faint tint. It keeps that mark until you rewrite the line, at which point it’s yours. Hover the line number and you see the request that changed it, when, and what the line said before. Lines it read in this conversation get a thin blue bar. Both colours are in Settings ▸ Editor ▸ The assistant’s marks, and the dots in the trace follow them.</p>
@@ -41,6 +44,14 @@ image: images/f/assistant-trace.webp
 
 <h2>Pointing at a passage</h2>
 <p>Whatever you’ve selected goes with your next message. It shows above the box as a quote card, named by its place in the book (“Story of the Door · lines 5–8”). <kbd>⌘</kbd><kbd>I</kbd> pins it, so it stays while you select something else. You can select in the typeset pages too: Foreword finds the passage in the source, even across markup and typographic quotes. The assistant gets the exact text and its lines, and if the file changed after you selected it, it’s told to read the file again.</p>
+
+<h2>Maths and Typst, in the book’s notation</h2>
+<p>When the assistant writes a formula (<code>$…$</code>) or a block of Typst, the chat draws it, set by Typst. Each one is set with what the book’s files import, as the book sets it. So a formula in the book’s own notation comes out as it prints: in a book whose notation file defines <code>#mmat</code> and <code>#vect</code>, <code>$#mmat("R")_90^2$</code> shows a bold, upright R, and a box the book defines, like a <code>#trythis</code>, is drawn as the book draws it.</p>
+<figure class="small">
+  <img src="../images/f/assistant-maths.webp" width="1520" height="1130" alt="A conversation about Calculus Made Easy, chapter 4. An earlier turn folded to a line: Explain this passage. Then: Sum that rule up as one of the book's key-idea boxes, with the result as an equation. Claude Code's reply in Ask mode gives the Typst, a #key-idea block, and under Renders as, the book's own Key idea box: an orange label and rule on a pale ground, the sentence with (dx)² and y = x² set as maths, and dy/dx = 2x centred beneath.">
+  <figcaption>Calculus Made Easy defines its own <code>#key-idea</code> box. The chat draws it as the book does, with the equation centred. Above it, an earlier turn started from <span class="ui">Explain This</span>, folded to the request it made.</figcaption>
+</figure>
+<p>Before, each snippet was set on its own in an empty folder, where the book’s functions don’t exist. In a book with its own template, that was most of what the assistant wrote about it, and it showed as code. Now an equation on lines of its own is drawn as one, centred, and a Typst block wraps at the chat’s width like a paragraph. Review comments, What changed and Options draw them the same way. If one of the book’s files has an error just then, a snippet is set on its own, as before.</p>
 
 <h2>Five modes</h2>
 <p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> cycles through them, and so do <code>/write</code>, <code>/ask</code>, <code>/discuss</code>, <code>/options</code> and <code>/figures</code>.</p>
@@ -67,6 +78,11 @@ image: images/f/assistant-trace.webp
 
 <h2>Three versions: Options</h2>
 <p>Select a passage and say what should change: “make it punchier”, “less formal”. You get three complete versions as cards, each with a short label and a line on how it differs. <span class="ui">Use this</span> puts one in place as an ordinary edit (unsaved, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out). The others change to <span class="ui">Use this instead</span>, so you can swap. If you edited the passage while it was thinking, Foreword won’t guess where it went. It says the passage has changed and leaves your text alone.</p>
+<p>Beside <em>Pick one to replace…</em> are two tabs. <span class="ui">Text</span> shows each option as Typst. <span class="ui">Preview</span> sets each one as it would print, as a paragraph as wide as its card, with emphasis, bold and maths set, so you compare three passages rather than three lots of markup. Foreword remembers which you used last. An option still being written shows as text until it’s complete.</p>
+<figure class="small">
+  <img src="../images/f/assistant-options-preview.webp" width="1520" height="1093" alt="Three versions of a passage from Calculus Made Easy, chapter 4, on the Preview tab: Plain and direct, Numbers first and Chatty and reassuring, each set as it would print, with (dx)² and the fractions 1/1000 and 1/1000000 as maths, and the reference to chapter 2 shown in grey as smallness. Each has Use this and Copy.">
+  <figcaption>Options on the Preview tab: each version set as a paragraph, maths and all. The reference into chapter 2 can’t be resolved outside the book, so it shows in grey.</figcaption>
+</figure>
 <figure>
   <img src="../images/f/assistant-options.webp" width="2560" height="1600" alt="Jekyll and Hyde's opening sentence selected, and three versions of it from Claude Code as cards: Dry Irony First, Paradox Delayed (in use, and selected in the editor), and Neighbours' Verdict, each with a line on what it does.">
   <figcaption>“Three ways to open the book with more pull.” Option 2 is in, and selected in the editor. Option 1 or 3 is one click away.</figcaption>
@@ -98,6 +114,7 @@ image: images/f/assistant-trace.webp
   <ul>
     <li>Whether it offers another mode, asks a question, or follows the style guide is up to the model. A stronger model does each more reliably.</li>
     <li>Word-by-word edit cards need the old and new text from the assistant. Codex’s edits don’t include it, so they show as “Edited …” without the words. History still has the full change.</li>
+    <li>A formula or passage in the chat is set with the book’s imports, not inside the book, so a reference to one of its labels shows as the label, in grey.</li>
     <li>Marks are drawn in files that are open in tabs.</li>
     <li>Task status (done or open) is kept on your Mac, not in the book.</li>
   </ul>

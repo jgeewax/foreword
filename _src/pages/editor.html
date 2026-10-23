@@ -2,7 +2,7 @@
 title: The editor
 heading: The editor
 lede: It’s Monaco, the editor inside VS Code, with Typst’s own highlighting and VS Code’s keys. Around it, what a book needs that a code editor doesn’t have: search across every chapter, a table of contents to move by, chapters you can find by number, and a merge that never throws away what you typed.
-description: Foreword's editor: VS Code's editor with Typst's highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, and a colour for each book.
+description: Foreword's editor: VS Code's editor with Typst's highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, a colour for each book, and light or dark.
 image: images/f/editor-search.webp
 -->
 <figure class="lead">
@@ -20,14 +20,14 @@ image: images/f/editor-search.webp
 <p>Long lines wrap at the edge of the pane, at a column you choose, or not at all, with rulers wherever you want them (Settings ▸ Editor ▸ Long lines). Text size is separate from the rest of the window.</p>
 
 <h2>Formatting on save</h2>
-<p><kbd>⌘</kbd><kbd>S</kbd> tidies the Typst first: spacing and indentation in code, the <code>&amp;</code> columns of multi-line equations lined up, and a blank line around each heading. Your sentences and where you broke them stay as you wrote them. The cursor stays where it was, and <kbd>⌘</kbd><kbd>Z</kbd> takes out only the formatting. It uses the same formatter and 120-column default as VS Code’s Typst extension, so a book formatted here doesn’t change when you open it there. It’s on by default; turn it off in Settings ▸ Editor, or save once without it from the command palette.</p>
+<p><kbd>⌘</kbd><kbd>S</kbd> tidies the Typst first: spacing and indentation in code, the <code>&amp;</code> columns of multi-line equations lined up, and a blank line around each heading. Where there are several blank lines in a row it leaves one, and none at the start or end of the file; Typst prints any number of blank lines as one paragraph break, so the page doesn’t change. Raw text and <code>/* comments */</code> keep theirs. Your sentences and where you broke them stay as you wrote them. The cursor stays where it was, and <kbd>⌘</kbd><kbd>Z</kbd> takes out only the formatting. It uses the same formatter and 120-column default as VS Code’s Typst extension, so a book formatted here doesn’t change when you open it there. It’s on by default; turn it off in Settings ▸ Editor, or save once without it from the command palette.</p>
 
 <h2>Finding your way</h2>
 <h3>Search the book</h3>
 <p><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd> searches every chapter at once, with options for case, whole words and patterns. Open chapters are searched as they are in the editor, unsaved changes included. Results are grouped under each chapter’s number and title, in reading order, and follow your edits. <span class="ui">Replace All</span> asks first, then saves a version in <a href="history.html">History</a> before it changes anything, so one click takes the whole book back.</p>
 
 <h3>Contents</h3>
-<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit; click any heading to go there. <span class="ui">Collapse all</span> folds it to just the chapters, and the chapter you’re in stays lit.</p>
+<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit, and opening Contents scrolls it to the middle of the list, so in chapter 17 of a long book you don’t have to look for your place. Click any heading to go there. <span class="ui">Collapse all</span> folds it to just the chapters, and the chapter you’re in stays lit.</p>
 <div class="pair">
   <figure>
     <img src="../images/f/editor-contents.webp" width="900" height="1200" alt="The Contents view for The Elements of Style: each chapter numbered, with its rules as sections and a word count, and the section the cursor is in lit.">
@@ -51,6 +51,10 @@ image: images/f/editor-search.webp
   <img src="../images/f/editor-colour.webp" width="1500" height="700" alt="A Foreword window with its title bar, activity bar and status bar in the book's teal.">
   <figcaption>The book’s colour on the title bar, the activity bar and the status bar.</figcaption>
 </figure>
+<p>The dividers between the panes wear it too, as in VS Code: each is a 4 px band in the title bar’s colour, lit as you point at it. A divider takes a press 6 px either side of its band. It used to be a 1 px line, easy to miss, and a press just beside it on the editor’s side also hit the editor’s scrollbar and jumped the text.</p>
+
+<h2>Light or dark</h2>
+<p>Settings ▸ General ▸ Appearance ▸ Theme is <em>As the Mac is</em> (the default), <em>Light</em> or <em>Dark</em>, and the command palette has all three. Before, Foreword was light only when the Mac was set to Light. It sets the whole app’s appearance, so the editor, the chat and the window’s own buttons all follow it, in every window, from the moment it opens.</p>
 
 <h2>For someone new</h2>
 <p>The first time you open a book, a short tour shows you around the window, one part at a time, nine steps in about a minute. Help ▸ Take the Tour runs it again. <em>Typst basics</em>, from the welcome screen, opens beside your book and takes about five minutes. Typst itself is far smaller than LaTeX: headings are <code>=</code>, emphasis is <code>_</code>, and most of the rest the assistant can write for you.</p>

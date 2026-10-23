@@ -24,6 +24,7 @@ image: images/f/perm-card.webp
 <pre><code>$ uv run      python   src/scripts/lint.py         17
   through uv  Python   the script, in this book    argument</code></pre>
 <p>Chips say what it reaches beyond the book: <em>Uses the internet: github.com</em>, <em>Writes outside the book: ~/out.txt</em>, <em>Deletes files</em>. A line says why it’s asking (“Asking because ‘Run other commands’ is set to Ask”), with a link to change that. Then: <span class="ui">Allow once</span>, <span class="ui">Always allow lint.py…</span>, <span class="ui">Don’t allow</span>.</p>
+<p>A card often waits while you’re in another app. Coming back, one click presses its button: Foreword’s windows take the first click, as most Mac editors do. Before, the first click only brought the window forward, and it took a second to press anything.</p>
 <p>A few more readings it does:</p>
 <ul>
   <li><code>sudo rm -rf /tmp/x</code>: <code>sudo</code> is labelled “as an administrator”, and every broader rule is marked dangerous.</li>
@@ -41,7 +42,7 @@ image: images/f/perm-card.webp
   <li><strong>Anything through uv.</strong> “The same as letting it run every command.”</li>
 </ol>
 <p>While you choose, the command above marks which parts the rule fixes and which it leaves open. Then pick where it applies: <strong>this task</strong> (until it ends, nothing kept), <strong>this book</strong> (until you remove it), or <strong>every book</strong> on this Mac. The confirmation says it in full: “Claude Code won’t ask again for lint.py, with any arguments, in Counting Words.”</p>
-<p>Later, a command that ran because of a rule carries a <span class="ui">by your rule</span> chip. Click it: “It didn’t ask, because of a rule you made at 2:14 PM”, how many times the rule has been used, and <span class="ui">Remove rule</span>. Every rule is also listed in the permissions menu under <strong>Your rules</strong>, grouped by where it applies, with its use count and an ×.</p>
+<p>Later, a command that ran because of a rule carries a <span class="ui">by your rule</span> chip. Click it: “It didn’t ask, because of a rule you made at 2:14 PM”, how many times the rule has been used, and <span class="ui">Remove rule</span>. Every rule is also listed in the permissions menu under <strong>Your rules</strong>, grouped by where it applies, with its use count and an ×. A rule works from the moment you make it, wherever you make it: one added in Settings or Your rules while a card is waiting answers that card, and any other it covers.</p>
 <figure class="small">
   <img src="../images/f/perm-rules.webp" width="1100" height="997" alt="Above, the card after Always allow: You let Claude Code run lint.py, and remembered it, in Counting Words, with Undo. Below, the Your rules tab of the permissions menu: for this book, lint.py with any arguments; for every book, never git push; each with a remove button; and the built-in rules.">
   <figcaption>After “Always allow”: the card says what it remembered, with Undo, and Your rules lists it in words beside a “never” for <code>git push</code>.</figcaption>
@@ -54,7 +55,7 @@ image: images/f/perm-card.webp
 <p>A rule covers one command, never a chain. Foreword splits a line the way the shell reads it: at <code>&amp;&amp;</code>, <code>||</code>, <code>;</code>, <code>|</code>, a newline, and a lone <code>&amp;</code>, but not inside quotes. Every part has to be allowed on its own. With the lint.py rule above:</p>
 <dl class="facts">
   <dt>Runs</dt><dd><code>uv run python src/scripts/lint.py 17</code><br><code>ls chapters &amp;&amp; uv run python src/scripts/lint.py 17 | tail -5</code></dd>
-  <dt>Still asks</dt><dd><code>…lint.py 17; rm -rf ~</code> and the same after <code>&amp;&amp;</code>, <code>&amp;</code> or a newline<br><code>…lint.py $(rm -rf ~)</code>: anything inside <code>$(…)</code>, backticks or <code>&lt;(…)</code> asks<br><code>…lint.py 17 &gt; out.txt</code>: writing into a file asks each time</dd>
+  <dt>Still asks</dt><dd><code>…lint.py 17; rm -rf ~</code> and the same after <code>&amp;&amp;</code>, <code>&amp;</code> or a newline<br><code>…lint.py $(rm -rf ~)</code>: anything inside <code>$(…)</code>, backticks or <code>&lt;(…)</code> asks<br><code>…lint.py 17 &gt; out.txt</code>: writing into a file asks each time (a <code>&gt;</code> inside quotes, as in <code>python -c "print(a &gt; b)"</code>, is code, not a file)</dd>
   <dt>Never runs</dt><dd><code>git status &amp;&amp; git push</code>, with a “never” rule for <code>git push *</code><br><code>typst compile main.typ</code>, even with a rule allowing <code>typst *</code></dd>
 </dl>
 <p>A newline or a lone <code>&amp;</code> used to be able to carry a second command past one you’d allowed. Since 0.4, every command on a line is checked on its own.</p>

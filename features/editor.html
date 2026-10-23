@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The editor · Foreword</title>
-<meta name="description" content="Foreword&#x27;s editor: VS Code&#x27;s editor with Typst&#x27;s highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, and a colour for each book.">
+<meta name="description" content="Foreword&#x27;s editor: VS Code&#x27;s editor with Typst&#x27;s highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, a colour for each book, and light or dark.">
 <meta property="og:title" content="The editor · Foreword">
-<meta property="og:description" content="Foreword&#x27;s editor: VS Code&#x27;s editor with Typst&#x27;s highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, and a colour for each book.">
+<meta property="og:description" content="Foreword&#x27;s editor: VS Code&#x27;s editor with Typst&#x27;s highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, a colour for each book, and light or dark.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/editor-search.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -55,14 +55,14 @@
 <p>Long lines wrap at the edge of the pane, at a column you choose, or not at all, with rulers wherever you want them (Settings ▸ Editor ▸ Long lines). Text size is separate from the rest of the window.</p>
 
 <h2 id="formatting-on-save">Formatting on save</h2>
-<p><kbd>⌘</kbd><kbd>S</kbd> tidies the Typst first: spacing and indentation in code, the <code>&amp;</code> columns of multi-line equations lined up, and a blank line around each heading. Your sentences and where you broke them stay as you wrote them. The cursor stays where it was, and <kbd>⌘</kbd><kbd>Z</kbd> takes out only the formatting. It uses the same formatter and 120-column default as VS Code’s Typst extension, so a book formatted here doesn’t change when you open it there. It’s on by default; turn it off in Settings ▸ Editor, or save once without it from the command palette.</p>
+<p><kbd>⌘</kbd><kbd>S</kbd> tidies the Typst first: spacing and indentation in code, the <code>&amp;</code> columns of multi-line equations lined up, and a blank line around each heading. Where there are several blank lines in a row it leaves one, and none at the start or end of the file; Typst prints any number of blank lines as one paragraph break, so the page doesn’t change. Raw text and <code>/* comments */</code> keep theirs. Your sentences and where you broke them stay as you wrote them. The cursor stays where it was, and <kbd>⌘</kbd><kbd>Z</kbd> takes out only the formatting. It uses the same formatter and 120-column default as VS Code’s Typst extension, so a book formatted here doesn’t change when you open it there. It’s on by default; turn it off in Settings ▸ Editor, or save once without it from the command palette.</p>
 
 <h2 id="finding-your-way">Finding your way</h2>
 <h3>Search the book</h3>
 <p><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd> searches every chapter at once, with options for case, whole words and patterns. Open chapters are searched as they are in the editor, unsaved changes included. Results are grouped under each chapter’s number and title, in reading order, and follow your edits. <span class="ui">Replace All</span> asks first, then saves a version in <a href="history.html">History</a> before it changes anything, so one click takes the whole book back.</p>
 
 <h3>Contents</h3>
-<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit; click any heading to go there. <span class="ui">Collapse all</span> folds it to just the chapters, and the chapter you’re in stays lit.</p>
+<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit, and opening Contents scrolls it to the middle of the list, so in chapter 17 of a long book you don’t have to look for your place. Click any heading to go there. <span class="ui">Collapse all</span> folds it to just the chapters, and the chapter you’re in stays lit.</p>
 <div class="pair">
   <figure>
     <img src="../images/f/editor-contents.webp" width="600" height="1312" alt="The Contents view for The Elements of Style: each chapter numbered, with its rules as sections and a word count, and the section the cursor is in lit.">
@@ -86,6 +86,10 @@
   <img src="../images/f/editor-colour.webp" width="2560" height="1600" alt="A Foreword window with its title bar, activity bar and status bar in the book's teal.">
   <figcaption>The book’s colour on the title bar, the activity bar and the status bar.</figcaption>
 </figure>
+<p>The dividers between the panes wear it too, as in VS Code: each is a 4 px band in the title bar’s colour, lit as you point at it. A divider takes a press 6 px either side of its band. It used to be a 1 px line, easy to miss, and a press just beside it on the editor’s side also hit the editor’s scrollbar and jumped the text.</p>
+
+<h2 id="light-or-dark">Light or dark</h2>
+<p>Settings ▸ General ▸ Appearance ▸ Theme is <em>As the Mac is</em> (the default), <em>Light</em> or <em>Dark</em>, and the command palette has all three. Before, Foreword was light only when the Mac was set to Light. It sets the whole app’s appearance, so the editor, the chat and the window’s own buttons all follow it, in every window, from the moment it opens.</p>
 
 <h2 id="for-someone-new">For someone new</h2>
 <p>The first time you open a book, a short tour shows you around the window, one part at a time, nine steps in about a minute. Help ▸ Take the Tour runs it again. <em>Typst basics</em>, from the welcome screen, opens beside your book and takes about five minutes. Typst itself is far smaller than LaTeX: headings are <code>=</code>, emphasis is <code>_</code>, and most of the rest the assistant can write for you.</p>
@@ -101,7 +105,7 @@
   </article>
   <nav class="doc-next"><a href="./"><small>← All features</small><b>Features</b></a><a class="next" href="preview.html"><small>Next →</small><b>Live preview</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.5.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.6.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>
