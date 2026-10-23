@@ -16,6 +16,8 @@ const NOT_READY = 'The assistant isn’t ready yet';
 const { ABOVE, BELOW } = monaco.editor.ContentWidgetPositionPreference;
 /** The passage a request is about, followed through edits: what the assistant writes at its ends is part of it. */
 const GROWS = monaco.editor.TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges;
+/** Where a selection the author made comes from (Monaco's sources, and the preview's mapping in studio.ts). */
+const AUTHORS = ['mouse', 'keyboard', 'preview'];
 
 type Act = 'revise' | 'options' | 'explain' | 'comment' | 'ask' | 'fix';
 
@@ -485,8 +487,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     editor.onDidChangeCursorSelection((e) => {
       clearTimeout(showTimer);
       if (view) showBar(null);
-      // The author's own selections: not one Foreword makes (a chat chip, a search, Show in editor), nor an edit moving it.
-      if (e.selection.isEmpty() || (e.source !== 'mouse' && e.source !== 'keyboard')) return;
+      // The author's own selections, in the editor or the preview: not one Foreword makes (a chat chip, a search, Show in editor), nor an edit moving it.
+      if (e.selection.isEmpty() || !AUTHORS.includes(e.source)) return;
       showTimer = window.setTimeout(() => {
         if (selection() && !studio.state.review.draft) showBar({ kind: 'bar' });
       }, 450);

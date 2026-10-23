@@ -3609,10 +3609,11 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   a Typst error, Fix error comes first. In a narrow editor (under 560 px) all
   but the first show only their icons. It's under the selection's end, where
   the pointer let go, so it never covers the passage (above it at the pane's
-  bottom). It comes only for the author's own selections (mouse, keyboard),
-  not one Foreword makes (Show in editor, a search, the preview's mapping) or
-  an edit that moves one (Monaco's `modelChange`, which first brought it back
-  under a finished revision).
+  bottom). It comes only for the author's own selections (mouse, keyboard,
+  or one made in the preview, which studio.ts sets with the source
+  `preview`), not one Foreword makes (Show in editor, a search) or an edit
+  that moves one (Monaco's `modelChange`, which first brought it back under
+  a finished revision).
 - **Revise and Options open a card in its place:** a box ("How should it
   change?"), the usual requests a click away (Tighten, Proofread, Clearer,
   Simpler words, Expand, and Match my style guide when the book has one), and

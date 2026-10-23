@@ -1778,7 +1778,8 @@ export class Studio {
     const [s0, s1] = found ? [from + found[0], from + found[1]] : [Math.min(a, b), Math.max(a, b, model.getOffsetAt({ lineNumber: start.start[0] + 1, column: model.getLineMaxColumn(start.start[0] + 1) }))];
     const range = monaco.Range.fromPositions(model.getPositionAt(s0), model.getPositionAt(s1));
     this.selectionFrom = 'preview';
-    editor.setSelection(range);
+    // The author's own selection, so the selection bar comes for it as for one made in the editor.
+    editor.setSelection(range, 'preview');
     editor.revealRangeInCenterIfOutsideViewport(range);
     this.onEditorSelection();
   }
