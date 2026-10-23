@@ -1,68 +1,48 @@
 <!--
 title: Live preview
 heading: The pages, as you type
-lede: Beside the text, the typeset pages, drawn from what’s in the editor whether you’ve saved it or not. A change shows up about a tenth of a second after you make it. Click a word on a page and you’re at its source. Click in the text and the pages scroll there.
-description: How Foreword's live preview works: the book typeset from unsaved text by Tinymist as you type, click-to-jump both ways, errors with the last good pages kept, a preview of just one chapter for long books, and memory kept low.
+lede: Beside your text, the typeset pages, as they’ll print. They change as you type, whether you’ve saved or not. Click a word on a page and you’re at it in your text. Click in your text and the pages scroll there.
+description: How Foreword's live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages; just one chapter for a long book; and exporting the PDF.
 image: images/f/preview-chapter.webp
 -->
 <figure class="lead">
   <img src="../images/f/preview-typing.webp" width="2560" height="1200" alt="A new sentence typed into chapter 1 of Jekyll and Hyde, not yet saved, and the same sentence already set on the page in the preview beside it.">
-  <figcaption>An unsaved sentence in chapter 1 (the tab’s dot says it isn’t saved) is already on the page.</figcaption>
+  <figcaption>A sentence just typed into chapter 1, not yet saved (the dot on the tab says so), is already on the page.</figcaption>
 </figure>
 
 <h2>What you see</h2>
-<p>Type in any chapter and the page changes. Nothing needs saving. The preview follows the cursor: when you click or use the arrow keys, it scrolls to that place on the page 150 ms later, with a brief ripple. While you type, it follows quietly after a pause, with no ripple, so the page doesn’t flash at you.</p>
-<p>Click a word on a page and its source opens, selected, with a ring around the cursor, and the editor scrolls so that line sits level with where you clicked. Your eye stays where it was, and the source is beside it. (It used to move only when the line was off screen, so a line already in view could be anywhere.) Select text on a page and the same text is selected in the source, ready to <a href="comments.html">comment on</a> or send to the assistant.</p>
-<p>The status bar measures itself as you work: one figure for a keystroke to reach the editor, another for an edit to reach the page, each with its typical and worst times.</p>
+<p>Type in any chapter and the page changes. Nothing needs saving. The pages follow your cursor: click somewhere in your text, or move with the arrow keys, and the preview scrolls to that place, with a brief ripple to show you where. While you’re typing, it follows quietly, without the ripple, so the page doesn’t flash at you.</p>
+<p>Click a word on a page and its source opens, selected, with the line level with where you clicked, so your eye doesn’t have to move to find it. Select text on a page and the same words are selected in your text, ready to <a href="comments.html">comment on</a> or send to the assistant.</p>
+<p>Typst comes inside Foreword, so the preview works with nothing else installed.</p>
 
 <h2>Mistakes, without a blank page</h2>
-<p>A mistake gets a red underline where it is, with Typst’s message on hover, and the status bar counts it (“1 error”; click to go to it). The pages keep showing the last version that typeset, so you can still see the chapter while you fix it, and the preview header says <em>error in source (showing last good render)</em>. Typst’s messages are terse. <span class="ui">Ask the assistant to fix it</span> in the status bar, or <span class="ui">Fix This Error with the Assistant</span> on the right-click menu, explains it in plain words and fixes it.</p>
+<p>A mistake in the markup gets a red underline where it is, with Typst’s message when you rest the pointer on it, and the status bar counts it (“1 error”; click to go to it). Meanwhile the pages keep showing the last version that worked, so you can still see the chapter while you fix it. Typst’s messages are terse. <span class="ui">Ask the assistant to fix it</span> in the status bar, or <span class="ui">Fix This Error with the Assistant</span> on the right-click menu, explains the mistake in plain words and fixes it.</p>
 <figure class="small">
   <img src="../images/f/preview-error.webp" width="2560" height="880" alt="A stray # before lawyer in chapter 1 of Jekyll and Hyde, underlined in red, with Typst's message on hover: unknown variable: lawyer. The preview header says error in source (showing last good render), and the page stays up.">
-  <figcaption>The error where it is. The pages stay as they were until it’s fixed.</figcaption>
+  <figcaption>The mistake, where it is. The pages stay as they were until it’s fixed.</figcaption>
 </figure>
 
 <h2>Just this chapter, for a long book</h2>
-<p>Typst typesets the whole book on every change. For a few hundred pages that’s quick. For a 743-page book, a keystroke took about half a second to reach the page, and one to five seconds when it pushed text onto another page. Almost all of that was the typesetting, not the drawing.</p>
-<div class="numbers">
-  <div><b>550 ms</b><span>a keystroke to the page, whole 743-page book</span></div>
-  <div><b>68 ms</b><span>the same keystroke with only its chapter shown (45 pages)</span></div>
-  <div><b>0.6 s</b><span>to move the preview on to the next chapter</span></div>
-</div>
-<p>So the preview can show just the chapter you’re in: <strong>Chapter</strong> in the Book | Chapter | Cover switch above it, or Settings ▸ General ▸ Preview ▸ Shows. Open another chapter and the preview moves there.</p>
+<p>Every change sets the whole book again. For a few hundred pages that’s quick. For a very long book, say 700 pages, the preview starts to trail behind your typing. So it can show just the chapter you’re in: choose <strong>Chapter</strong> above the preview, or in Settings ▸ General ▸ Preview ▸ Shows, and it keeps up as you type. Open another chapter and the preview moves to it.</p>
 <figure>
   <div class="pair">
     <img src="../images/f/preview-book.webp" width="1300" height="690" alt="Chapter 4 of Calculus Made Easy in the whole book: page 15, where the reference reads as explained above (page 5).">
     <img src="../images/f/preview-chapter.webp" width="1300" height="690" alt="The same page with only chapter 4 shown: numbered page 1, with the reference to chapter 2 shown in grey as (smallness), and the running head still 4 Simplest Cases.">
   </div>
-  <figcaption>Calculus Made Easy, chapter 4: in the whole book (left) and alone (right). Alone, it’s still chapter 4, but its pages start at 1, and the reference into chapter 2 shows in grey instead of a page number.</figcaption>
+  <figcaption>Calculus Made Easy, chapter 4: in the whole book (left) and on its own (right). On its own it’s still chapter 4, but its pages start at 1, and the reference to chapter 2 shows in grey instead of a page number.</figcaption>
 </figure>
-<p>How it works matters, because a chapter usually can’t be typeset on its own. It relies on the main file’s page setup, show rules, fonts and counters. Copying those into a separate preview file goes stale the first time you change the main file. Foreword doesn’t copy anything. It typesets the main file itself, with every other chapter’s <code>include</code> taken out, so the book’s setup applies exactly as written. In each removed chapter’s place it steps the heading counter once for each numbered heading that chapter had, so chapter 4 is still chapter 4. A reference to a label in a removed chapter shows in grey, with the heading’s words, instead of stopping the preview with an error.</p>
-
-<h2>Memory, on a long book</h2>
-<p>Coming back to a long book after a while, the preview used to start again at page 1. The cause was in macOS’s log: WebKit had closed the preview for using too much memory, 11 times in 27 hours on a 739-page book. Tinymist’s renderer drew every page you’d scrolled past into an image at three pixels per point, and kept them all, about 10 MB a page.</p>
-<div class="numbers">
-  <div><b>8 GB</b><span>the preview after reading through a 739-page book, every page kept</span></div>
-  <div><b>528 MB</b><span>the same, keeping only the pages near the ones on screen</span></div>
-</div>
-<p>Now the preview keeps the pages near the ones on screen drawn and lets the rest go, and draws them again as you scroll to them. It also remembers your place, so if it ever does reload, it comes back to where you were. To keep every page drawn instead, there’s Settings ▸ General ▸ Preview ▸ Pages kept drawn.</p>
-
-<h2>How it’s made</h2>
-<p>One <a href="https://github.com/Myriad-Dreamin/tinymist">Tinymist</a> process per window does the typesetting; it’s the language server behind Typst’s VS Code extension. Every change in the editor goes to it at once, unsaved. It redraws only the pages in view, as SVG. The preview is a separate web view with its own process, laid over its pane, so a slow redraw can never hold up a keystroke in the editor. Tinymist comes inside Foreword, so the preview works with nothing else installed.</p>
-<div class="numbers">
-  <div><b>113 ms</b><span>an edit to the page, on a 491-page book (typical)</span></div>
-  <div><b>8 ms</b><span>a keystroke to the editor’s screen, same book</span></div>
-</div>
+<p>The chapter is set with your book’s own design, so apart from the page numbers it looks as it will in the book. Nothing is copied or changed in your files to do it.</p>
+<p>On a long book the preview also lets go of pages far from where you are, and draws them again as you scroll back, so it doesn’t run out of memory after you’ve read through the whole thing. If it ever has to reload, it comes back to where you were.</p>
 
 <h2>Export</h2>
-<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it asks first: run them, then export, so a PDF never goes out with stale output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one. The <strong>Cover</strong> view is the <a href="printing.html">print cover</a>, with guides.</p>
+<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it offers to run them first, so a PDF never goes out with old output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one. The <strong>Cover</strong> view above the preview shows the <a href="printing.html">print cover</a>, with its guides.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
     <li>With one chapter shown, page numbers and references to other chapters are only right in the whole book.</li>
-    <li>Jumping from text to page only works where the source maps to text on the page; some lines of code and maths don’t.</li>
-    <li>The preview is a separate native view, so it hides while a dialog is open.</li>
-    <li>Error messages are Typst’s own; the plain-words version comes from the assistant when you ask.</li>
+    <li>Clicking a page finds the words behind it, but not every line of code or maths can be found that way.</li>
+    <li>The preview hides while a dialog is open.</li>
+    <li>Error messages are Typst’s own. The plain-words version comes from the assistant, when you ask.</li>
   </ul>
 </div>

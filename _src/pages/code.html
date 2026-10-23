@@ -1,8 +1,8 @@
 <!--
 title: Code that runs
 heading: Code that runs
-lede: In a programming book, the output under an example has to be what the code really prints. Foreword runs the examples and sets their real output beneath them. Give an example the output you expect, and it becomes a test, marked ✓ or ✗ in the book itself.
-description: How runnable code examples work in Foreword: #run in the book, real output set beneath it, expected output as a test, stale output marked in the preview, and examples re-run after the assistant changes them.
+lede: In a programming book, the output under an example has to be what the code really prints. Foreword runs the examples and sets their real output beneath them. Give an example the output you expect, and the book itself shows ✓ or ✗.
+description: How runnable code examples work in Foreword: #run in the book, real output set beneath it, expected output checked, out-of-date output marked as you type, and examples run again after the assistant changes them.
 image: images/f/code-fail.webp
 -->
 <figure class="lead">
@@ -16,32 +16,32 @@ image: images/f/code-fail.webp
 #run("hello", ```python
 print("Hello, writer.")
 ```, expect: "Hello, writer.")</code></pre>
-<p>The book shows the code, then a panel with what it printed. With <code>expect:</code>, the panel says <strong>Output ✓</strong> when they match. When they don’t, it’s red: <strong>Output (✗ expected “Hello, writer.”)</strong>. Change the code and the panel turns amber, <em>out of date</em>, as you type, before anything runs. A failed run shows its exit code and what it printed to stderr.</p>
+<p>The book shows the code, then a panel with what it printed. With <code>expect:</code>, the panel says <strong>Output ✓</strong> when they match. When they don’t, it’s red: <strong>Output (✗ expected “Hello, writer.”)</strong>. Change the code and the panel turns amber, <em>out of date</em>, as you type, before anything runs. If an example fails, the book shows the error it printed.</p>
 <figure class="small">
   <img src="../images/f/code-fail.webp" width="1500" height="700" alt="An example whose output no longer matches: the Run lens says wrong output, and the page shows the output in red with expected Hello, writer.">
   <figcaption>Change the code so the output no longer matches, run it, and the book says so.</figcaption>
 </figure>
 
 <h2>Running them</h2>
-<p>Above each example in the editor is a lens: <span class="ui">▶ Run hello</span>, with its state: ✓ ok, ⚠ out of date, ✗ failed, ✗ wrong output. The <strong>Code examples</strong> view lists them all by chapter, with <span class="ui">Run all</span>, or <span class="ui">Run 3 not up to date</span>. Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell are supported, with whatever interpreter you have installed.</p>
-<p>Each example runs as its own process, in the book’s folder, so <code>open("texts/opening.txt")</code> finds the book’s files. Input is closed, it’s stopped after 30 seconds (and everything it started with it), and output is capped at 256 KB. Nothing runs while you type. Examples run when you click, before you export (if any are out of date, Export PDF asks), and after the assistant changes one.</p>
-<p>The first time, Foreword asks: “Run the code examples in Counting Words? They run on your Mac with your permissions, so they can read and change your files. Only run code you trust.” Until you allow it, nothing runs.</p>
+<p>Above each example in the editor is <span class="ui">▶ Run hello</span>, with how it stands: ✓ ok, ⚠ out of date, ✗ failed, ✗ wrong output. The <strong>Code examples</strong> view lists them all by chapter, with <span class="ui">Run all</span>, or <span class="ui">Run 3 not up to date</span>. Python, JavaScript, R, Julia, Ruby, Lua, Perl and shell scripts work, with whichever you have installed.</p>
+<p>Each example runs on its own, in the book’s folder, so it can open the book’s files (a text to analyse, say). One that runs for more than 30 seconds is stopped. Nothing runs while you type. Examples run when you click, before you export (Export PDF offers to, if any are out of date), and after the assistant changes one.</p>
+<p>The first time, Foreword asks: “Run the code examples in Counting Words? They run on your Mac with your permissions, so they can read and change your files. Only run code you trust.” Until you say yes, nothing runs.</p>
 
-<h2>Where the output lives</h2>
-<p>In <code>code-output/outputs.json</code>, in the book’s folder, saved with the code that produced it. That makes it part of the book: <code>typst compile</code> and <code>make</code> work without Foreword, and print the same output. It’s also how “out of date” works without running anything: <code>code.typ</code>, the small Typst file that defines <code>#run</code>, compares each example’s code with the code that was stored with its output. If they differ, the panel turns amber, even in a plain <code>typst compile</code>.</p>
+<h2>The output is part of the book</h2>
+<p>The output is saved in the book’s folder, with the code that produced it. So the book prints the same output anywhere, even for someone building it without Foreword, and still shows which examples are out of date.</p>
 
 <h2>With the assistant</h2>
-<p>The assistant writes and edits examples, but it never runs them and never touches <code>outputs.json</code>. After its turn, Foreword re-runs any example it changed and says how that went: “Ran 3 changed code examples: all fine.” Or, when one fails, “1 code example failed: fib: expected "55", got "54" (chapters/02-functions.typ:41)”, with <span class="ui">Ask the assistant to fix them</span>. In a test, a bug planted in a Fibonacci function came back exactly like that, the button had it fixed, and the re-run was clean.</p>
+<p>The assistant writes and edits examples, but it never runs them, and never writes their output itself. After it finishes, Foreword runs any example it changed and tells you how that went: “Ran 3 changed code examples: all fine.” Or, when one fails, “1 code example failed: fib: expected "55", got "54" (chapters/02-functions.typ:41)”, with <span class="ui">Ask the assistant to fix them</span>.</p>
 
 <h2>Why</h2>
-<p>In a technical book, the output printed under an example is a claim, and it goes stale the first time you change the code and forget to paste the new output in. Readers find these. Here the output can’t drift from the code without the book showing it.</p>
+<p>In a technical book, the output printed under an example is a claim, and it goes stale the first time you change the code and forget to paste the new output in. Readers notice. Here the output can’t drift from the code without the book showing it.</p>
 <p>The sample <em>Counting Words</em> is a short book about measuring prose with Python. It has 33 examples, 30 of them checked, analysing the opening of <em>Pride and Prejudice</em>.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>No sandbox: examples run with your permissions, which is why it asks first.</li>
-    <li>Examples don’t share state; each is a fresh process. No input, no plots or images.</li>
-    <li>The check is an exact match on what was printed, after trimming spaces.</li>
+    <li>Examples run with your own permissions on your Mac, not walled off, which is why it asks first.</li>
+    <li>Each example starts fresh, so one can’t use what another set up. No typed input, and no plots or pictures.</li>
+    <li>The check is an exact match on what was printed, ignoring spaces at either end.</li>
   </ul>
 </div>

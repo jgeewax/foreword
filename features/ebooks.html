@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>E-books · Foreword</title>
-<meta name="description" content="How Foreword exports EPUB: reflowing text through Typst&#x27;s own HTML export, or fixed layout with every page as typeset; how it picks between them, what it says didn&#x27;t carry over, and how the files are checked.">
+<meta name="description" content="How Foreword exports EPUB: text that reflows to fit any screen, or every page as typeset; how it picks between them for your book, and what it tells you didn&#x27;t carry over.">
 <meta property="og:title" content="E-books · Foreword">
-<meta property="og:description" content="How Foreword exports EPUB: reflowing text through Typst&#x27;s own HTML export, or fixed layout with every page as typeset; how it picks between them, what it says didn&#x27;t carry over, and how the files are checked.">
+<meta property="og:description" content="How Foreword exports EPUB: text that reflows to fit any screen, or every page as typeset; how it picks between them for your book, and what it tells you didn&#x27;t carry over.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/epub-done.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -25,7 +25,7 @@
       <div class="menu">
         <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
         <div class="menu-panel">
-          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html" aria-current="page"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html" aria-current="page"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
         </div>
       </div>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
@@ -37,40 +37,39 @@
   <div class="doc-head">
     <div class="crumbs"><a href="./">Features</a><span>Publishing</span></div>
     <h1>E-books</h1>
-    <p class="lede">Book ▸ Export EPUB… makes one file for Apple Books, Kobo, Google Play and Kindle. There are two kinds of EPUB, and they suit different books: reflowing text, which fits any screen, or every page exactly as typeset. Foreword picks for each book, says why, and lists what didn’t carry over.</p>
+    <p class="lede">Book ▸ Export EPUB… makes one file for Apple Books, Kobo, Google Play and Kindle. There are two kinds of e-book, and they suit different books: text that reflows to fit any screen, or every page exactly as typeset. Foreword picks the right one for your book, says why, and tells you what didn’t carry over.</p>
   </div>
   <article class="doc">
 <figure class="lead">
   <img src="../images/f/epub-done.webp" width="1436" height="708" alt="The Export EPUB dialog after exporting Jekyll and Hyde: made as reflowing text in 11 parts, because it's mostly text, and a list of what didn't carry over: centred lines, page breaks, the page size and margins, space set by hand.">
-  <figcaption>Jekyll and Hyde as reflowing text: why it chose that, and what an e-reader lays out itself.</figcaption>
+  <figcaption>Jekyll and Hyde as reflowing text: why it chose that, and what an e-reader lays out for itself.</figcaption>
 </figure>
 
 <h2 id="two-kinds-of-e-book">Two kinds of e-book</h2>
 <dl class="facts">
-  <dt>Reflowing text</dt><dd>The reader sets the type size, and the text flows to fit a phone or a tablet. It can be searched and read aloud. Page breaks, centring and space set by hand are left to the reader. For prose.</dd>
-  <dt>Fixed layout</dt><dd>Every page exactly as typeset. Fine on a tablet, small on a phone, and it can’t be searched or read aloud. For books whose layout is the point.</dd>
+  <dt>Reflowing text</dt><dd>The reader chooses the type size, and the text flows to fit a phone or a tablet. It can be searched and read aloud. Page breaks, centring and spacing you set by hand are left to the e-reader. For prose.</dd>
+  <dt>Fixed layout</dt><dd>Every page exactly as typeset. Fine on a tablet, small on a phone, and it can’t be searched or read aloud. For books where the layout is the point.</dd>
 </dl>
-<p><strong>Best for this book</strong> picks: fixed layout for a picture book, a paper, or a book with maths on most pages; reflowing text for the rest. The rules are plain. A book with a <code>story.typ</code>, or picture-book spreads, is a picture book. One with a bibliography and no chapters is a paper. A book with at least 30 equations, and roughly one for every three paragraphs or more, is a maths book. If reflowing fails for any reason, it says why and makes fixed layout instead.</p>
-<p>In the samples: Jekyll and Hyde (11 parts), The Elements of Style and Counting Words reflow. Calculus Made Easy (558 pieces of maths to 174 paragraphs), Luca’s Wonderful Brain and Attention Is All You Need come out fixed.</p>
+<p><strong>Best for this book</strong> picks fixed layout for a picture book, a paper, or a book with maths on most pages, and reflowing text for everything else. If a book can’t be reflowed for any reason, it says why and makes fixed layout instead.</p>
+<p>Among the samples, Jekyll and Hyde, The Elements of Style and Counting Words reflow. Calculus Made Easy, Luca’s Wonderful Brain and Attention Is All You Need come out fixed.</p>
 
-<h2 id="how-reflowing-works">How reflowing works</h2>
-<p>Typst can write HTML itself, so Foreword uses that rather than a converter of its own. Before the book’s own rules it adds a few: maths, grids and figures are drawn as pictures (SVG), and a page reference, which means nothing in a book without pages, is dropped. It marks where each chapter begins so the book can be split into parts. All of this happens in a temporary copy of the book made of links, so nothing is written into your book and History never sees it.</p>
-<p>Then it tidies what Typst wrote into what an EPUB requires: XHTML, unique IDs in every picture (Typst reuses them, which e-readers reject), links rewritten between parts, and a chapter heading your book draws by hand (“CHAPTER 1” and a title in two paragraphs) turned into a real heading, so the e-reader’s contents work.</p>
-<p>What Typst couldn’t carry over, it says in its warnings. Foreword puts those into words: “centred and right-aligned lines”, “page breaks (each chapter still starts on a new page)”, “the page size and margins (each reader sets its own)”, “space set by hand”.</p>
+<h2 id="what-reflowing-changes">What reflowing changes</h2>
+<p>An e-reader lays out the text itself, so some of what you set on the page can’t come with it. Foreword tells you what, in plain words: “centred and right-aligned lines”, “page breaks (each chapter still starts on a new page)”, “the page size and margins (each reader sets its own)”, “space set by hand”.</p>
+<p>Maths, figures, and anything laid out in a grid are kept as pictures, so they look as they do on the page. A reference like “see page 12” is dropped, since an e-book has no fixed pages. Each chapter becomes its own part, so the e-reader’s table of contents works, even if your chapter openings are set by hand. None of this changes your book.</p>
 
-<h2 id="how-fixed-layout-works">How fixed layout works</h2>
-<p>Every page becomes an SVG, each in a page of the EPUB at the book’s own size. The first page is the cover. The contents come from the PDF’s outline.</p>
+<h2 id="fixed-layout">Fixed layout</h2>
+<p>Every page of the book becomes a page of the e-book, at the book’s own size. The first page is the cover, and the table of contents comes from your chapters’ headings.</p>
 
-<h2 id="checked">Checked</h2>
-<p>Every sample, exported every way, passes <a href="https://www.w3.org/publishing/epubcheck/">epubcheck</a> 5.4, the standard EPUB validator, with no errors and no warnings. A book gets the same ID every time it’s exported, so a new export replaces the old one in a reader’s library instead of appearing twice. Kindle takes EPUB now (Send to Kindle and KDP), so there’s no MOBI: Amazon stopped taking it.</p>
+<h2 id="ready-for-the-stores">Ready for the stores</h2>
+<p>Every sample, exported both ways, passes epubcheck, the standard check for EPUB files, with no errors or warnings. Your book keeps the same identity every time you export it, so a new export replaces the old one in a reader’s library instead of appearing twice. Kindle takes EPUB now, through Send to Kindle and KDP, so there’s no separate Kindle file to make.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>A reflowing EPUB has no cover image yet. Fixed layout uses the first page.</li>
-    <li>Maths is pictures, not MathML or text.</li>
-    <li>Typst’s HTML export is still marked incomplete by Typst, so some layouts won’t reflow and come out fixed.</li>
-    <li>It’s been checked with epubcheck and in WebKit at a phone’s width, not on every e-reader.</li>
+    <li>A reflowing e-book has no cover picture yet. Fixed layout uses the first page.</li>
+    <li>Maths is pictures, not text.</li>
+    <li>Typst’s support for reflowing text is still new, so some layouts can’t reflow, and come out fixed.</li>
+    <li>It’s been checked with epubcheck and at a phone’s width, not on every e-reader.</li>
   </ul>
 </div>
   </article>

@@ -15,13 +15,13 @@ PAGES = ROOT / '_src' / 'pages'
 
 GROUPS = [
     ('Writing', [
-        ('editor', 'The editor', 'VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.'),
-        ('preview', 'Live preview', 'The typeset pages beside the text, redrawn from what you’ve typed, saved or not.'),
+        ('editor', 'The editor', 'Where you write: search the whole book, a table of contents, chapters by number.'),
+        ('preview', 'Live preview', 'The typeset pages beside your text, changing as you type.'),
         ('templates', 'Templates and samples', 'Novels, textbooks, picture books and papers, at the sizes printers use.'),
     ]),
     ('The assistant', [
-        ('assistant', 'The assistant', 'It edits the book itself and says what it did, in the book’s terms.'),
-        ('permissions', 'Permissions', 'Each command explained before it runs. Each “always” is a rule you can read and remove.'),
+        ('assistant', 'The assistant', 'It edits your chapters, says what it did, and marks every line it changed.'),
+        ('permissions', 'Permissions', 'You decide what it may do without asking, and can take back any “always”.'),
         ('style-guide', 'Style guide', 'One file of rules that every request follows, written with you.'),
         ('comments', 'Comments and Fix all', 'Mark a chapter up like an editor, then hand every comment over at once.'),
         ('assistants', 'Choosing an assistant', 'Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.'),
@@ -206,13 +206,13 @@ def build_page(i, slug, title):
 
 
 def build_index():
-    page = head('Features · Foreword', 'What Foreword does, one feature to a page: how each works, step by step, and why it works that way.', '../')
+    page = head('Features · Foreword', 'What Foreword does, one feature to a page: what each does for your book, how to use it, and what it doesn’t do yet.', '../')
     page += top_bar('../', 'index')
     page += '''
 <main class="wrap">
   <div class="doc-head">
     <h1>Features</h1>
-    <p class="lede">One page for each part of Foreword: what it does, step by step, why it works the way it does, and what it doesn’t do yet. The pictures are the app, as it is today.</p>
+    <p class="lede">One page for each part of Foreword: what it does for your book, how to use it, and what it doesn’t do yet. The pictures are the app, as it is today.</p>
   </div>
 '''
     for name, items in GROUPS:

@@ -1,43 +1,40 @@
 <!--
 title: Choosing an assistant
 heading: Bring the assistant you already use
-lede: The assistant is a program on your Mac, signed in with your own account: OpenCode, Claude Code, Codex, Gemini CLI or Antigravity. Foreword runs it, and wraps it in its own modes, instructions, permissions and tools, so each one behaves like a writing assistant, not a coding one. There’s no new subscription.
-description: The five assistants Foreword works with (OpenCode, Claude Code, Codex, Gemini CLI, Antigravity), how it talks to each, how to sign in, choose a model and effort, or switch by asking, and what Foreword adds on top of every one.
+lede: Foreword doesn’t come with an AI of its own. It works with one you may already pay for (OpenCode, Claude Code, Codex, Gemini CLI or Antigravity), signed in with your own account, and turns it from a coding assistant into a writing one. There’s no new subscription.
+description: The five assistants Foreword works with (OpenCode, Claude Code, Codex, Gemini CLI, Antigravity): what each needs, how to sign in, choose a model and effort, or switch by asking, and what Foreword changes so each one behaves like a writing assistant.
 image: images/f/assistants-settings.webp
 -->
 <figure class="lead">
   <img src="../images/f/assistants-settings.webp" width="2000" height="1400" alt="Settings, Assistant: five cards (OpenCode, Claude Code, Gemini CLI, Codex, Antigravity), each with its maker, the account it uses and whether it's installed and signed in, and below them the chosen one's panel.">
-  <figcaption>Settings ▸ Assistant. Each card says what the assistant runs on and whether it’s ready.</figcaption>
+  <figcaption>Settings ▸ Assistant. Each card says whose it is, what account it uses, and whether it’s ready.</figcaption>
 </figure>
 
 <h2>The five</h2>
 <dl class="facts">
-  <dt>OpenCode</dt><dd>Open source. Runs any model you’ve set up in it: OpenAI, Anthropic, Google, or one on your Mac. It comes inside Foreword, so it works with nothing else installed (it still needs a model to talk to).</dd>
+  <dt>OpenCode</dt><dd>Open source. Works with any AI you’ve set it up for: OpenAI’s, Anthropic’s, Google’s, or one that runs on your Mac. It comes inside Foreword, so there’s nothing else to install, but it still needs an AI to talk to.</dd>
   <dt>Claude Code</dt><dd>Anthropic’s. Claude, with your Claude plan or an API key.</dd>
   <dt>Codex</dt><dd>OpenAI’s. Its models, with your ChatGPT plan or an API key.</dd>
-  <dt>Gemini CLI</dt><dd>Google’s. Gemini, with a paid API key or a Gemini Code Assist work account. It stopped taking personal Google logins in June 2026.</dd>
-  <dt>Antigravity</dt><dd>Google’s newer one: Gemini and more, with your Google account, a Gemini API key or Gemini Enterprise. Settings downloads Google’s connector for it (113 MB), and keeps it only if both programs are signed by Google.</dd>
+  <dt>Gemini CLI</dt><dd>Google’s. Gemini, with a paid API key or a Gemini Code Assist work account. It stopped taking personal Google accounts in June 2026.</dd>
+  <dt>Antigravity</dt><dd>Google’s newer one: Gemini and more, with your Google account, a Gemini API key or Gemini Enterprise. Settings downloads what it needs from Google the first time.</dd>
 </dl>
-<p>Settings ▸ Assistant shows each one’s state without starting anything: <em>Installed · 2.0.20</em>, <em>Signed in with ChatGPT</em>, <em>Not signed in</em>, <em>Needs Node.js</em>. Foreword reads that from where each program keeps it, for example <code>claude auth status</code> or Codex’s <code>auth.json</code>. To sign in, <span class="ui">Sign in in Terminal</span> opens Terminal with the right command already running (<code>claude auth login</code>, <code>codex login</code>, …) and a note saying what to do. Come back to Foreword and the assistant restarts on its own.</p>
+<p>Settings ▸ Assistant shows where each one stands: <em>Installed</em>, <em>Signed in with ChatGPT</em>, <em>Not signed in</em>, <em>Needs Node.js</em>. To sign in, <span class="ui">Sign in in Terminal</span> opens Terminal with the sign-in already started, and a note saying what to do. Come back to Foreword when you’re done and the assistant starts up on its own.</p>
+<p>Whichever you choose, everything else on these pages works the same way: tasks, modes, questions, permissions, the account of what it did.</p>
 
-<h2>How Foreword talks to them</h2>
-<p>OpenCode runs as a local server: Foreword starts <code>opencode serve</code> on a free port on your Mac, with a password made fresh each time, and talks to it over HTTP.</p>
-<p>The other four are spoken to over the <a href="https://agentclientprotocol.com">Agent Client Protocol</a> (ACP), the protocol the Zed editor made for this and JetBrains’ IDEs also use. Foreword chose it because in ACP the assistant asks the app before it acts, which is exactly what Foreword’s permission cards need. Each runs through its connector: <code>claude-agent-acp</code>, <code>codex-acp</code>, <code>gemini --acp</code>, and Google’s <code>antigravity-acp</code>. The versions are pinned, so a connector update can’t break the conversation without warning.</p>
-<p>Both paths look the same from the chat. Tasks, queued messages, Stop and Resume work the same whichever assistant you choose.</p>
-
-<h2>What Foreword adds to every one</h2>
+<h2>What Foreword changes</h2>
+<p>These assistants are built for writing software, and left to themselves they behave that way: they try to build the book, write scripts, and report their work as a programmer would. Foreword gives each one:</p>
 <ul>
-  <li><strong>Instructions for a book, not a codebase.</strong> One sentence per line. Never compile (the preview does that). Read files with the read tool, not <code>sed</code> or <code>head</code>. Say what changed in one to three sentences. Write maths as Typst maths. Don’t write scripts or build tooling.</li>
-  <li><strong>The book’s <a href="style-guide.html">style guide</a></strong>, in every conversation.</li>
-  <li><strong>Its own <a href="assistant.html#five-modes">modes</a></strong>: Write, Ask, Discuss, Options and Figures, enforced by Foreword’s rules, not the assistant’s own modes.</li>
-  <li><strong>One question panel</strong> for all five, whatever their own way of asking.</li>
-  <li><strong>Every step in words</strong>, whichever tool the assistant used.</li>
-  <li><strong><a href="permissions.html">Permissions</a></strong> that are Foreword’s, not each assistant’s.</li>
-  <li><strong>Seven tools of Foreword’s own</strong>, served to the assistant over MCP on your Mac only: read the settings, change them, list models, set the model, switch assistant, set the mode, open Settings.</li>
+  <li><strong>Instructions for a book, not a codebase.</strong> One sentence per line. Leave the typesetting to the preview. Say what changed in one to three sentences. Write maths as Typst maths. Don’t build tools around the book.</li>
+  <li><strong>Your book’s <a href="style-guide.html">style guide</a></strong>, in every conversation.</li>
+  <li><strong>Foreword’s own <a href="assistant.html#five-modes">modes</a></strong>: Write, Ask, Discuss, Options and Figures, enforced by Foreword.</li>
+  <li><strong>The same question panel</strong> for all five, however each one likes to ask.</li>
+  <li><strong>Every step in words</strong> about your book.</li>
+  <li><strong>Your <a href="permissions.html">permissions</a></strong>, kept by Foreword, the same for every assistant.</li>
+  <li><strong>A way to change Foreword’s settings</strong>, its model or which assistant it is, when you ask it to.</li>
 </ul>
 
 <h2>Model and effort</h2>
-<p>Under the message box: the assistant, the model, and how hard it thinks. Effort matters as much as the model for speed and quality, so it gets its own menu, with a meter for each level. Claude Code has Default, Low, Medium, High, Extra high and Max. Codex has its reasoning-effort levels, and OpenCode a model’s variants. The level is kept per model. Every reply’s byline records the model and effort that turn actually ran with: “Claude Code · Sonnet 5.5 · low effort”.</p>
+<p>Under the message box: the assistant, the model, and how hard it thinks. Effort is how long the model thinks before it answers. More is slower, and usually better on hard requests. It matters about as much as the choice of model, so it has its own menu. Claude Code has Default, Low, Medium, High, Extra high and Max. Codex and OpenCode have their own levels. Foreword remembers the level for each model, and every reply says which model and effort it was written with: “Claude Code · Sonnet 5.5 · low effort”.</p>
 <figure class="small">
   <img src="../images/f/assistants-effort.webp" width="1100" height="700" alt="The effort menu open above the message box: How hard the model thinks before it answers, with Default, Low, Medium, High, Extra high and Max, each with a bar meter.">
   <figcaption>Effort, beside the model. More is slower.</figcaption>
@@ -45,18 +42,17 @@ image: images/f/assistants-settings.webp
 <p><code>/model sonnet</code>, <code>/effort high</code> and <code>/assistant codex</code> do the same from the message box.</p>
 
 <h2>Or ask for it</h2>
-<p>“Switch me to Claude Code with its default model, on high effort.” The assistant has Foreword’s tools for this. Under the default permissions it asks you first, then the switch happens when its reply ends, so the turn isn’t cut off. The new conversation opens with a line saying what happened: “Claude Code is the writing assistant now (model Default, effort High), as you asked. This is a new conversation: your last one is kept with Codex, to carry on if you switch back.”</p>
+<p>“Switch me to Claude Code with its default model, on high effort.” Unless you’ve said otherwise, it asks you first, then makes the switch when its reply is finished. The new conversation opens with a line saying what happened: “Claude Code is the writing assistant now (model Default, effort High), as you asked. This is a new conversation: your last one is kept with Codex, to carry on if you switch back.”</p>
 
 <h2>Why bring your own</h2>
-<p>You already pay for one of these, and you’ve already chosen it. Foreword shouldn’t sell you another subscription, or tie your book to one company’s models. The assistants also improve every few weeks. Running the one you have means Foreword gets better when it does.</p>
-<p>The same programs are built for writing code, though, and left alone they behave like it: they compile, write scripts, report in diffs, and keep their own permission rules. Everything in the list above is there to make a coding assistant behave like a writing assistant without losing what it’s good at.</p>
+<p>You may already pay for one of these, and have chosen it. Foreword shouldn’t sell you another subscription, or tie your book to one company. These assistants also get better every few weeks, and when yours does, so does Foreword.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>Foreword has no model of its own. The bundled OpenCode still needs a provider key, or a model running on your Mac.</li>
-    <li>One assistant per window at a time. Switching starts a new conversation, and can’t happen mid-turn.</li>
-    <li>Gemini CLI and Antigravity haven’t been tested through a signed-in conversation. Claude Code, Codex and OpenCode have.</li>
-    <li>Claude Code and Codex via <code>npx</code> need Node.js. The first start downloads the connector, which can take a minute.</li>
+    <li>Foreword has no AI of its own. The OpenCode that comes with it still needs an account with an AI company, or a model running on your Mac.</li>
+    <li>One assistant per window at a time. Switching starts a new conversation, and waits for the current reply to finish.</li>
+    <li>Gemini CLI and Antigravity haven’t yet been tested in a real signed-in conversation. Claude Code, Codex and OpenCode have.</li>
+    <li>Claude Code and Codex may need Node.js on your Mac, and Settings says so if it’s missing. The first start can take a minute.</li>
   </ul>
 </div>

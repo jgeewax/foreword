@@ -25,7 +25,7 @@
       <div class="menu">
         <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
         <div class="menu-panel">
-          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html" aria-current="page"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="../features/templates.html" aria-current="page"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
         </div>
       </div>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
@@ -37,12 +37,12 @@
   <div class="doc-head">
     <div class="crumbs"><a href="./">Features</a><span>Writing</span></div>
     <h1>Templates and samples</h1>
-    <p class="lede">New Book starts you with a working Typst book of the kind you’re writing, at a page size printers actually offer: a novel, non-fiction, a textbook, a programming book or a picture book. Papers start from ten journal and conference formats. Or open one of six finished sample books and try everything on that.</p>
+    <p class="lede">New Book starts you with a working book of the kind you’re writing, at a page size printers actually offer: a novel, non-fiction, a textbook, a programming book or a picture book. Papers start from ten journal and conference formats. Or open one of six finished sample books and try everything on that.</p>
   </div>
   <article class="doc">
 <figure class="lead">
   <img src="../images/f/templates-picture.webp" width="2560" height="1600" alt="Luca's Wonderful Brain in the editor: a story-page call with a picture, its words, and three sound words with their positions, sizes and angles, beside the typeset page with the words and sound words set on the watercolour.">
-  <figcaption>A picture book page: the picture, the words, and three sound words placed on it, in Typst.</figcaption>
+  <figcaption>A picture book page: the picture, the words, and three sound words placed on it.</figcaption>
 </figure>
 
 <h2 id="books">Books</h2>
@@ -54,10 +54,10 @@
   <dt>Picture book</dt><dd>A short illustrated story: pictures across the page or a spread, a line or two of words on each, and sound words drawn in.</dd>
   <dt>Blank</dt><dd>A title page and one chapter. Everything else is up to you.</dd>
 </dl>
-<p>Every template is a plain Typst project: <code>main.typ</code>, a <code>style.typ</code> with the design, and chapters, with comments saying what each part does. Nothing in it needs Foreword; <code>typst compile</code> builds it, and there’s a <code>Makefile</code>. Margins scale with the page, so a small paperback isn’t left with a sliver of text in the middle.</p>
+<p>Each one is a complete, ordinary Typst book: a file for the book, one for its design, and one for each chapter, with notes saying what each part does. Nothing in it depends on Foreword, so anyone with Typst can build it. Margins scale with the page, so a small paperback isn’t left with a sliver of text in the middle.</p>
 
 <h2 id="page-sizes">Page sizes</h2>
-<p>Printers list the sizes they bind as “trim sizes”, and the common ones differ by country. New Book groups them by where you’ll print. All 134 combinations of template and size are typeset in Foreword’s tests, with no errors or warnings.</p>
+<p>Printers list the sizes they bind as “trim sizes”, and the usual ones differ from country to country. New Book groups them by where you’ll print.</p>
 <dl class="facts">
   <dt>United States</dt><dd>Mass-market 4.25 × 6.87, 5 × 8, 5.25 × 8, Digest 5.5 × 8.5, Trade 6 × 9, Royal 6.14 × 9.21, Executive 7 × 10, 7.5 × 9.25, 8 × 10, Letter</dd>
   <dt>Picture books</dt><dd>8 × 8 and 8.5 × 8.5 square, 10 × 8 and 11 × 8.5 landscape, 8 × 10 portrait</dd>
@@ -66,17 +66,17 @@
   <dt>Japan</dt><dd>Bunko 文庫, Shinsho 新書, Shiroku-ban 四六判, B6, Kiku-ban 菊判, B5</dd>
   <dt>China and Korea</dt><dd>32开, 大32开, 16开, 大16开; 4·6판, 국판, 신국판, 크라운판, 4·6배판</dd>
 </dl>
-<p>Each template offers the sizes that suit it, and any other size by hand.</p>
+<p>Each template offers the sizes that suit it, and you can type in any other.</p>
 <figure class="small">
   <img src="../images/f/templates-new.webp" width="1300" height="1329" alt="The New book dialog: Books, Research papers and Samples tabs; the six book templates, Novel chosen; and the page size list open, grouped by region, with US Trade 6 by 9 inches chosen.">
   <figcaption>New Book: the kind of book, then a size printers use, grouped by where you’ll print.</figcaption>
 </figure>
 
 <h2 id="papers">Papers</h2>
-<p>IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS and APA 7, each from its package on Typst Universe, downloaded when you create the paper. A note says which free fonts it wants, with the command to install them, and the message box is filled in (not sent) with a request to the assistant to set the title and authors.</p>
+<p>IEEE, ACM, NeurIPS, CVPR, AAAI, ACL, Springer LNCS, arXiv, AMS and APA 7, each from its template on Typst Universe, Typst’s library of templates, downloaded when you create the paper. A note says which free fonts it wants and how to install them, and the message box is filled in (not sent) with a request to the assistant to set your title and authors.</p>
 
 <h2 id="picture-books">Picture books</h2>
-<p>A picture book is pages of pictures with a few words on each. The template gives you that as a few commands:</p>
+<p>A picture book is pages of pictures with a few words on each, and the template keeps a page that simple to write. This is the page in the picture at the top:</p>
 <pre><code>#story-page(
   picture: "illustrations/07-chin.jpg",
   at: top,
@@ -88,7 +88,7 @@
 )[
   Sometimes Luca rubs his chin on you.
 ]</code></pre>
-<p>Words stay clear of the edges and the binding. Pictures reach into the bleed for <a href="printing.html">printing</a>. A spread across two pages has to start on a left-hand page; if one wouldn’t, the book stops with a message telling you to add or remove a page before it, rather than printing it split across a sheet.</p>
+<p>Words stay clear of the edges and the binding, and pictures run past the edge so the printer can trim them (see <a href="printing.html">printing</a>). A spread across two pages has to start on a left-hand page. If one wouldn’t, the book tells you to add or remove a page before it, rather than letting it print split across a sheet.</p>
 
 <h2 id="six-samples">Six samples</h2>
 <p>Each is a finished book of a different kind, so you can try the assistant, the preview and the exports on something real. <span class="ui">Open Sample</span> makes your own copy in <code>Documents/Foreword Samples</code>.</p>
@@ -102,13 +102,13 @@
 </dl>
 
 <h2 id="adding-a-chapter">Adding a chapter</h2>
-<p>File ▸ New Chapter… (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>N</kbd>) asks for a title. It names the file the way your chapters are already named (<code>ch26_tensors.typ</code> beside <code>ch25_…</code>, or <code>11-the-island.typ</code>), copies the chapters’ imports, and adds its <code>include</code> after the last chapter, written the way the others are written, before any back matter.</p>
+<p>File ▸ New Chapter… (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>N</kbd>) asks for a title. It names the new file the way your other chapters are named, and adds the chapter to the book after the last one, before any back matter.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>Paper templates need the internet the first time, to download their package.</li>
-    <li>Sizes outside the US and UK are the commonly quoted ones; check your printer’s exact figure.</li>
+    <li>Paper templates need the internet the first time, to download them.</li>
+    <li>Sizes outside the US and UK are the commonly quoted ones. Check your printer’s exact figure.</li>
   </ul>
 </div>
   </article>

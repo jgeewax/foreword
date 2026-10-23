@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comments and Fix all · Foreword</title>
-<meta name="description" content="How review comments and Fix all work in Foreword: comments beside the text, never in it, anchored to the passage as you edit; the assistant working through every one; and each change checked, kept or undone on its own.">
+<meta name="description" content="How review comments and Fix all work in Foreword: comments beside the text, never in it, that follow their passage as you edit; the assistant working through every one; and each change checked, kept or undone on its own.">
 <meta property="og:title" content="Comments and Fix all · Foreword">
-<meta property="og:description" content="How review comments and Fix all work in Foreword: comments beside the text, never in it, anchored to the passage as you edit; the assistant working through every one; and each change checked, kept or undone on its own.">
+<meta property="og:description" content="How review comments and Fix all work in Foreword: comments beside the text, never in it, that follow their passage as you edit; the assistant working through every one; and each change checked, kept or undone on its own.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/comments-check.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -25,7 +25,7 @@
       <div class="menu">
         <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
         <div class="menu-panel">
-          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>VS Code’s editor, set up for chapters: search the book, Contents, typing that wraps a selection.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside the text, redrawn from what you’ve typed, saved or not.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits the book itself and says what it did, in the book’s terms.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>Each command explained before it runs. Each “always” is a rule you can read and remove.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html" aria-current="page"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+          <div><h4>Writing</h4><a href="../features/editor.html"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html" aria-current="page"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
         </div>
       </div>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
@@ -47,47 +47,46 @@
 
 <h2 id="leaving-a-comment">Leaving a comment</h2>
 <ol class="steps">
-  <li>Select the passage, in the text or in the typeset pages.</li>
-  <li>Click the <span class="ui">Comment</span> bubble that appears beside the selection, or press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>.</li>
+  <li>Select the passage, in your text or on the typeset pages.</li>
+  <li>Click the <span class="ui">Comment</span> bubble that appears beside it, or press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>.</li>
   <li>Type what should change, and press <kbd>⏎</kbd>.</li>
 </ol>
-<p>The passage is highlighted and the comment sits in a card under it, in the editor, where you’ll see it when you come back to that page. A comment can hold Typst maths (“Give the exact value, $1/sqrt(3)$, then the decimal”), drawn as maths. The editor never goes into a separate “review mode”: you can keep writing around your comments, and fix one yourself and press <span class="ui">Resolve</span>.</p>
+<p>The passage is highlighted and the comment sits under it, where you’ll see it when you come back to that page. A comment can hold maths (“Give the exact value, $1/sqrt(3)$, then the decimal”), and shows it as maths. There’s no separate review mode to switch into: you keep writing around your comments, and when you fix one yourself, press <span class="ui">Resolve</span>.</p>
 <figure class="small">
   <img src="../images/f/comments-open.webp" width="2560" height="1600" alt="Three comments on Jekyll and Hyde's first chapter, each as a card under its highlighted passage, and the Review view on the left listing them by chapter with Fix all 3 with the assistant.">
   <figcaption>Three comments on chapter 1, in place and in the Review view.</figcaption>
 </figure>
 
 <h2 id="fix-all">Fix all</h2>
-<p>The Review view lists every open comment, grouped by chapter, with a button at the top: <span class="ui">Fix all 3 with the assistant</span> (or <code>/fix</code> in the message box). It switches to Write mode and sends one message with every comment: where it is, the passage it’s on, and what you said. The instruction is plain:</p>
+<p>The Review view lists every open comment, chapter by chapter, with a button at the top: <span class="ui">Fix all 3 with the assistant</span> (or type <code>/fix</code> in the message box). The assistant gets every comment, with the passage it’s on, and this instruction:</p>
 <blockquote><p>For each one, make the change it asks for in that passage, in the book’s voice and style guide, and change nothing else. If a comment can’t or shouldn’t be done, leave the text and say why.</p></blockquote>
-<p>The assistant ends its reply with a line per comment saying whether it changed it or declined it, and why. Foreword reads those lines, hides them from the chat, and puts each verdict on its comment. A note in the chat sums it up: “Review: 2 changed (check them in the editor or the Review tab: keep or undo); 1 declined (the reason is on the comment).”</p>
+<p>When it’s finished, each comment shows what happened to it: changed, or declined and why. A note in the chat sums it up: “Review: 2 changed (check them in the editor or the Review tab: keep or undo); 1 declined (the reason is on the comment).”</p>
 
 <h2 id="checking-each-change">Checking each change</h2>
-<p>A comment the assistant changed moves to <strong>To check</strong>, and its card says <strong>Changed — check it</strong>, with the assistant’s note and the passage’s change, word by word.</p>
+<p>A comment the assistant acted on moves to <strong>To check</strong>, and its card says <strong>Changed — check it</strong>, with the assistant’s note and the change to the passage, word by word.</p>
 <ul>
   <li><span class="ui">Keep</span> resolves the comment.</li>
-  <li><span class="ui">Undo change</span> puts the passage back as it was and opens the comment again. If you’ve edited the passage since, it won’t guess: it says so, and History has the earlier text.</li>
+  <li><span class="ui">Undo change</span> puts the passage back as it was and opens the comment again. If you’ve edited the passage since, it won’t guess: it tells you, and History has the earlier text.</li>
   <li>A comment it declined stays open, with its reason: “✦ Declined: the next sentence depends on it.” You can argue back, or fix it yourself.</li>
 </ul>
-<p>This is the part that matters. An early version sent all the comments in one message and marked them resolved on the assistant’s word. You couldn’t see what it did for each one, keep one change and undo another, or hear why it skipped one. Each comment now gets its own result, its own diff, and its own undo.</p>
+<p>This is the part that matters. You never have to take the assistant’s word that a comment was dealt with. Each one has its own change to read, and its own undo, so you can keep five changes and throw out the sixth.</p>
 
 <h2 id="comments-stay-beside-the-text">Comments stay beside the text</h2>
-<p>Comments are kept in <code>.foreword/review.json</code> in the book’s folder, never in the chapters, so the source and the typeset book stay clean, and comments travel with the book. Each one remembers the exact words it’s on, a little text either side, and roughly which line. As you edit, Foreword finds the passage again, choosing the place whose surrounding text matches best. Cards move down as lines are added above them. A short quote, say a single word, needs its surroundings to match too, so a comment on one “however” never jumps to another.</p>
+<p>Comments are kept in the book’s folder but never in your chapters, so neither your text nor the printed book carries them, and they go wherever the book goes. Each one follows its passage as you edit around it, and a comment on one “however” never jumps to another.</p>
 
 <dl class="facts">
   <dt>Add a comment</dt><dd><kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>, the <span class="ui">Comment</span> bubble, or right-click ▸ Add Comment…</dd>
-  <dt>See them all</dt><dd>The Review view (the speech bubble in the activity bar)</dd>
-  <dt>Fix them</dt><dd><span class="ui">Fix all</span>, <span class="ui">Fix with assistant</span> on one card, Assistant ▸ Fix Review Comments, or <code>/fix</code></dd>
-  <dt>Where they live</dt><dd><code>.foreword/review.json</code>, in the book’s folder</dd>
+  <dt>See them all</dt><dd>The Review view (the speech bubble down the left of the window)</dd>
+  <dt>Fix them</dt><dd><span class="ui">Fix all</span>, <span class="ui">Fix with assistant</span> on one comment, Assistant ▸ Fix Review Comments, or <code>/fix</code></dd>
 </dl>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>The change is made in the file when the assistant makes it. You check it afterwards: it isn’t held back as a suggestion until you accept it.</li>
-    <li>Rewrite the words a comment is on and it loses its place: it shows “text changed” in the list, and leaves the editor.</li>
-    <li>A card shows the change at its passage. If the assistant changed something elsewhere for a comment, History shows that.</li>
-    <li>Comments don’t have replies or threads yet.</li>
+    <li>The assistant’s change goes into your text when it makes it, and you check it afterwards. It isn’t held back as a suggestion for you to accept.</li>
+    <li>Rewrite the words a comment is on and it loses its place: it shows “text changed” in the list, and leaves the page.</li>
+    <li>A comment shows the change made at its passage. If the assistant changed something elsewhere for it, History shows that.</li>
+    <li>Comments don’t have replies yet.</li>
   </ul>
 </div>
   </article>

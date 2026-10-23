@@ -1,8 +1,8 @@
 <!--
 title: The editor
 heading: The editor
-lede: It’s Monaco, the editor inside VS Code, with Typst’s own highlighting and VS Code’s keys. Around it, what a book needs that a code editor doesn’t have: search across every chapter, a table of contents to move by, chapters you can find by number, and a merge that never throws away what you typed.
-description: Foreword's editor: VS Code's editor with Typst's highlighting and keys, typing that wraps a selection, formatting on save, search and replace across the book, Contents, Go to File by chapter number, a colour for each book, and light or dark.
+lede: Where you write. A Typst book is plain text with a little markup, and the editor shows it close to how it will print: headings in bold, emphasis in italic. Around it are the things a long book needs: search across every chapter, a table of contents to move by, and chapters you can find by number. If you’ve used VS Code, it’s the same editor, with the same keys.
+description: Foreword's editor: Typst shown close to how it prints, typing that wraps a selection, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
 image: images/f/editor-search.webp
 -->
 <figure class="lead">
@@ -11,23 +11,23 @@ image: images/f/editor-search.webp
 </figure>
 
 <h2>Writing in it</h2>
-<p>Typst is plain text with a little markup, and the editor shows it. Headings are bold, maths is coloured, <code>_emphasis_</code> is set in italic and <code>*strong*</code> in bold, as they’ll print. <code>// TODO:</code>, <code>FIXME</code> and <code>NOTE</code> comments get a coloured tag and a mark in the scrollbar. The highlighting is Tinymist’s own grammar, the one VS Code’s Typst extension uses, so it matches what you’d see there.</p>
-<p>Select a word and type <code>_</code> and the word is wrapped, <code>_word_</code>, still selected, so another <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes. (Both took some fixing: the Mac’s own Undo was undoing a hidden text field, not the editor.)</p>
+<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way.</p>
+<p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes.</p>
 <figure class="small">
   <img src="../images/f/editor-wrap.webp" width="1500" height="560" alt="The word lovable selected in Jekyll and Hyde and wrapped as _lovable_ by typing an underscore, shown in italic in the editor and on the typeset page beside it.">
   <figcaption>Type <code>_</code> over a word: it’s wrapped, and italic on the page.</figcaption>
 </figure>
-<p>Long lines wrap at the edge of the pane, at a column you choose, or not at all, with rulers wherever you want them (Settings ▸ Editor ▸ Long lines). Text size is separate from the rest of the window.</p>
+<p>Long lines wrap at the edge of the pane, at a column you choose, or not at all, with guide lines wherever you want them (Settings ▸ Editor ▸ Long lines). The text size is separate from the rest of the window.</p>
 
-<h2>Formatting on save</h2>
-<p><kbd>⌘</kbd><kbd>S</kbd> tidies the Typst first: spacing and indentation in code, the <code>&amp;</code> columns of multi-line equations lined up, and a blank line around each heading. Where there are several blank lines in a row it leaves one, and none at the start or end of the file; Typst prints any number of blank lines as one paragraph break, so the page doesn’t change. Raw text and <code>/* comments */</code> keep theirs. Your sentences and where you broke them stay as you wrote them. The cursor stays where it was, and <kbd>⌘</kbd><kbd>Z</kbd> takes out only the formatting. It uses the same formatter and 120-column default as VS Code’s Typst extension, so a book formatted here doesn’t change when you open it there. It’s on by default; turn it off in Settings ▸ Editor, or save once without it from the command palette.</p>
+<h2>Tidied when you save</h2>
+<p><kbd>⌘</kbd><kbd>S</kbd> tidies the markup first: the spacing in code, the columns of multi-line equations lined up, one blank line around each heading, and no runs of blank lines. None of it changes the printed page, and your sentences and where you broke your lines stay as you wrote them. <kbd>⌘</kbd><kbd>Z</kbd> takes out just the tidying. It tidies the way VS Code’s Typst extension does, so a co-author working there won’t see your files change. It’s on to start with; turn it off in Settings ▸ Editor.</p>
 
 <h2>Finding your way</h2>
 <h3>Search the book</h3>
-<p><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd> searches every chapter at once, with options for case, whole words and patterns. Open chapters are searched as they are in the editor, unsaved changes included. Results are grouped under each chapter’s number and title, in reading order, and follow your edits. <span class="ui">Replace All</span> asks first, then saves a version in <a href="history.html">History</a> before it changes anything, so one click takes the whole book back.</p>
+<p><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd> searches every chapter at once, including what you haven’t saved yet. Results are grouped under each chapter’s number and title, in reading order. <span class="ui">Replace All</span> asks first, then saves a version in <a href="history.html">History</a> before it changes anything, so one click takes the whole book back.</p>
 
 <h3>Contents</h3>
-<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit, and opening Contents scrolls it to the middle of the list, so in chapter 17 of a long book you don’t have to look for your place. Click any heading to go there. <span class="ui">Collapse all</span> folds it to just the chapters, and the chapter you’re in stays lit.</p>
+<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit, and Contents opens scrolled to it, so in chapter 17 of a long book you don’t have to hunt for your place. Click any heading to go there. <span class="ui">Collapse all</span> folds it down to just the chapters.</p>
 <div class="pair">
   <figure>
     <img src="../images/f/editor-contents.webp" width="900" height="1200" alt="The Contents view for The Elements of Style: each chapter numbered, with its rules as sections and a word count, and the section the cursor is in lit.">
@@ -40,30 +40,29 @@ image: images/f/editor-search.webp
 </div>
 
 <h3>Chapters by number</h3>
-<p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, and typing <code>4</code> finds it. The numbers come from reading the main file the way Typst does, so they’re right however the book includes its chapters: <code>#include "ch04.typ"</code>, or inside code, as in <code>#book-chapter(include "ch04.typ")</code>. A preface without a numbered heading doesn’t push chapter 1 to 2. Go to File, Contents, Search and the assistant all use the same numbering, so they never disagree.</p>
+<p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, so typing <code>4</code> finds chapter 4, whatever its file is called. The numbers are the book’s own: a preface or prologue without a number doesn’t throw the count off. Contents, Search and the assistant use the same numbers.</p>
 
-<h3>VS Code’s keys</h3>
-<p>The command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) has about 120 commands, each with its shortcut, your recent ones first. Tabs work as they do in VS Code: <kbd>⌘</kbd><kbd>W</kbd>, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>T</kbd> to reopen, <kbd>⌃</kbd><kbd>⇥</kbd> to step through, <kbd>⌃</kbd><kbd>1</kbd>–<kbd>9</kbd>. Under the tabs, a path bar with the chapter’s headings. If your fingers know VS Code, they know this.</p>
+<h3>Keys and commands</h3>
+<p>The command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) lists Foreword’s commands, each with its shortcut, your recent ones first, so you can find a command by typing a word of it. Tabs work as they do in VS Code: <kbd>⌘</kbd><kbd>W</kbd> to close, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>T</kbd> to reopen, <kbd>⌃</kbd><kbd>⇥</kbd> to step through. Under the tabs, a bar shows where you are in the chapter, heading by heading.</p>
 
 <h2>A colour for each book</h2>
-<p>With two books open, every window looks the same. Give each book a colour (Settings ▸ This book ▸ Colour, or <span class="ui">Surprise me</span>) and its title bar, the icons down the side, and the status bar wear it. The shades are worked out the way VS Code’s Peacock extension works them out, value for value, so a book you’ve already coloured in VS Code looks the same here, and wears that colour without being asked.</p>
+<p>With two books open, every window looks the same. Give each book a colour (Settings ▸ This book ▸ Colour, or <span class="ui">Surprise me</span>) and its title bar, the icons down the side, and the status bar take it on. If you’ve already given the book a colour in VS Code with the Peacock extension, Foreword uses the same one.</p>
 <figure class="small">
   <img src="../images/f/editor-colour.webp" width="1500" height="700" alt="A Foreword window with its title bar, activity bar and status bar in the book's teal.">
-  <figcaption>The book’s colour on the title bar, the activity bar and the status bar.</figcaption>
+  <figcaption>The book’s colour on the title bar, the icons down the side and the status bar.</figcaption>
 </figure>
-<p>The dividers between the panes wear it too, as in VS Code: each is a 4 px band in the title bar’s colour, lit as you point at it. A divider takes a press 6 px either side of its band. It used to be a 1 px line, easy to miss, and a press just beside it on the editor’s side also hit the editor’s scrollbar and jumped the text.</p>
 
 <h2>Light or dark</h2>
-<p>Settings ▸ General ▸ Appearance ▸ Theme is <em>As the Mac is</em> (the default), <em>Light</em> or <em>Dark</em>, and the command palette has all three. Before, Foreword was light only when the Mac was set to Light. It sets the whole app’s appearance, so the editor, the chat and the window’s own buttons all follow it, in every window, from the moment it opens.</p>
+<p>Settings ▸ General ▸ Appearance ▸ Theme is <em>As the Mac is</em> (to start with), <em>Light</em> or <em>Dark</em>. It changes the whole window: the editor, the chat and the window’s own buttons.</p>
 
 <h2>For someone new</h2>
-<p>The first time you open a book, a short tour shows you around the window, one part at a time, nine steps in about a minute. Help ▸ Take the Tour runs it again. <em>Typst basics</em>, from the welcome screen, opens beside your book and takes about five minutes. Typst itself is far smaller than LaTeX: headings are <code>=</code>, emphasis is <code>_</code>, and most of the rest the assistant can write for you.</p>
+<p>The first time you open a book, a short tour shows you around the window, one part at a time, nine steps in about a minute. Help ▸ Take the Tour runs it again. <em>Typst basics</em>, from the welcome screen, opens beside your book and takes about five minutes. Typst is far smaller than LaTeX: headings are <code>=</code>, emphasis is <code>_</code>, and most of the rest the assistant can write for you.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>No Typst completions or hover documentation yet, and no spell check.</li>
+    <li>No spell check yet, and no suggestions as you type Typst’s commands.</li>
     <li>Search doesn’t look inside pictures, PDFs or exports.</li>
-    <li>Word counts leave out code, maths and labels, so they’re “about”.</li>
+    <li>Word counts leave out code, maths and labels, so they’re approximate.</li>
   </ul>
 </div>
