@@ -288,6 +288,50 @@ describe('Codex', () => {
     expect(conversationTitle('<foreword-instructions>\nx\n</foreword-instructions>\n\nTighten chapter 2')).toBe('Tighten chapter 2');
     expect(conversationTitle('<typst-studio-instructions>\nx\n</typst-studio-instructions>\n\nAn older task')).toBe('An older task'); // legacy
     expect(conversationTitle('Tighten chapter 2')).toBe('Tighten chapter 2');
+    // Sent as a resource, as Codex lists a conversation it hasn't named.
+    expect(conversationTitle('foreword://instructions <context ref="foreword://instructions"> <foreword-instructions> x </foreword-instructions> </context> Tighten chapter 2')).toBe('Tighten chapter 2');
+    expect(conversationTitle('foreword://instructions\n<context ref="foreword://instructions">\n<foreword-instructions>\n# Foreword: writing assistant…')).toBe('');
+  });
+
+  it('has the instructions as a resource, so it names the conversation from the author’s words; a replay leaves them out', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    let sessionId = '';
+    const update = (u: object) => deliver({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update: u } });
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage) => {
+        deliver = onMessage;
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        if (m.id === undefined || !m.method || m.method === 'session/prompt') return;
+        const reply = m.method === 'initialize' || m.method === 'session/new' ? codex.find((r) => r.id === m.id && r.result) : { jsonrpc: '2.0', id: m.id, result: {} };
+        queueMicrotask(() => {
+          if (m.method === 'session/load') {
+            // As Codex replays it: the resource as its link and a context tag, then the author's words.
+            update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: `foreword://instructions\n<context ref="foreword://instructions">\n<foreword-instructions>\nYou are writing a Typst book.\n</foreword-instructions>\n</context>` } });
+            update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'Tighten chapter 2' } });
+            update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Done.' } });
+          }
+          deliver({ ...reply, id: m.id });
+        });
+      },
+      stop: async () => {},
+    };
+    const adapter = new AcpAdapter(ROOT, 'codex', transport);
+    await adapter.start();
+    sessionId = await adapter.createSession(null, {});
+    await adapter.setInstructions(sessionId, 'book', 'You are writing a Typst book.');
+    await adapter.send(sessionId, 'Tighten chapter 2', []);
+    expect(sent.at(-1).params.prompt).toEqual([
+      { type: 'resource', resource: { uri: 'foreword://instructions', mimeType: 'text/markdown', text: '<foreword-instructions>\nYou are writing a Typst book.\n</foreword-instructions>' } },
+      { type: 'text', text: 'Tighten chapter 2' },
+    ]);
+
+    sessionId = 'codex-earlier';
+    const replayed = await adapter.sessionContext(sessionId);
+    expect(replayed.map((m: any) => (m.type === 'user' ? m.text : m.type))).toEqual(['Tighten chapter 2', 'assistant']);
   });
 
   it('a model’s levels of effort: read for the model chosen, set after the model, only those it has', async () => {

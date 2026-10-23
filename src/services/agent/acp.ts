@@ -7,7 +7,7 @@
 // it asks the author (form elicitations), and messages queued while a turn runs.
 import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
-import { appTool, conversationTitle, decide, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
+import { appTool, conversationTitle, decide, INSTRUCTIONS_URI, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
 import { formatAuthorEdits } from './author-edits';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
@@ -41,10 +41,17 @@ const AUTH_REQUIRED = -32000;
 /** The assistant couldn't start because it isn't signed in. */
 export const isSignedOut = (e: unknown) => e instanceof AcpError && e.code === AUTH_REQUIRED;
 
-/** Instructions go before the author's message, inside these, and are taken out again when a conversation is replayed. */
+/**
+ * Instructions go before the author's message, inside these, and are taken
+ * out again when a conversation is replayed. Codex has them as a resource
+ * instead: it names a conversation from the first message's text, cut at
+ * 4,000 characters, which were all instructions ("Typst book editing
+ * assistant", every time). A resource reaches the model but not the namer.
+ */
 const INSTRUCTIONS_OPEN = '<foreword-instructions>';
 const INSTRUCTIONS_CLOSE = '</foreword-instructions>';
-export const stripInstructions = (text: string) => text.replace(new RegExp(`^${INSTRUCTIONS_OPEN}[\\s\\S]*?${INSTRUCTIONS_CLOSE}\\s*`), '');
+export const stripInstructions = (text: string) =>
+  text.replace(new RegExp(`^(?:${INSTRUCTIONS_URI}\\s*<context ref="${INSTRUCTIONS_URI}">\\s*)?${INSTRUCTIONS_OPEN}[\\s\\S]*?${INSTRUCTIONS_CLOSE}(?:\\s*</context>)?\\s*`), '');
 
 type Pending = { resolve: (v: any) => void; reject: (e: Error) => void };
 
@@ -535,13 +542,18 @@ export class AcpAdapter implements AgentAdapter {
     // A slash command must come first, so the instructions wait for the next message.
     const instructions = command ? s.sentInstructions : [...s.instructions.values()].join('\n\n');
     const changed = instructions !== s.sentInstructions;
-    const full = changed && instructions ? `${INSTRUCTIONS_OPEN}\n${instructions}\n${INSTRUCTIONS_CLOSE}\n\n${text}` : text;
+    const block = changed && instructions ? `${INSTRUCTIONS_OPEN}\n${instructions}\n${INSTRUCTIONS_CLOSE}` : '';
+    const prompt = !block
+      ? [{ type: 'text', text }]
+      : this.kind === 'codex'
+        ? [{ type: 'resource', resource: { uri: INSTRUCTIONS_URI, mimeType: 'text/markdown', text: block } }, { type: 'text', text }]
+        : [{ type: 'text', text: `${block}\n\n${text}` }];
     s.sentInstructions = instructions;
     s.turn++;
     if (record) s.transcript.user(`${s.id}:u${s.turn}`, text);
     s.running = true;
     this.emit({ type: 'turn-started', sessionId: s.id });
-    this.request('session/prompt', { sessionId: s.id, prompt: [{ type: 'text', text: full }] }).then(
+    this.request('session/prompt', { sessionId: s.id, prompt }).then(
       (res) => {
         const reason = res?.stopReason;
         if (reason === 'end_turn') this.finish(s, 'succeeded');

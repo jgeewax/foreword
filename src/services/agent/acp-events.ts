@@ -55,13 +55,18 @@ function unquote(command: string | undefined): string | undefined {
   }
 }
 
+/** The instructions as a resource (Codex has them so, see AcpAdapter.prompt); it shows one as its link, then the text in a context tag. */
+export const INSTRUCTIONS_URI = 'foreword://instructions';
+const INSTRUCTIONS_RESOURCE = new RegExp(`^${INSTRUCTIONS_URI}\\s*<context ref="${INSTRUCTIONS_URI}">\\s*`);
+
 /** A conversation's title, unless it's only the start of the instructions the app sent first (Codex names a conversation by its first message). */
 export function conversationTitle(title: string): string {
+  const t = title.replace(INSTRUCTIONS_RESOURCE, '');
   // Conversations from before the rename open with the legacy tag.
   for (const tag of ['foreword-instructions', 'typst-studio-instructions' /* legacy */]) {
-    if (!title.startsWith(`<${tag}>`)) continue;
-    const end = title.indexOf(`</${tag}>`);
-    return end < 0 ? '' : title.slice(end + `</${tag}>`.length).trim();
+    if (!t.startsWith(`<${tag}>`)) continue;
+    const end = t.indexOf(`</${tag}>`);
+    return end < 0 ? '' : t.slice(end + `</${tag}>`.length).replace(/^\s*<\/context>/, '').trim();
   }
   return title;
 }
