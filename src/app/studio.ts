@@ -5,6 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { isPicture, tildePath } from '../lib/paths';
+import type { SourceRef } from '../lib/source-links';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type MergeQuestion } from '../editor/documents';
 import { definitions, toMonacoRange, uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
@@ -2265,6 +2266,17 @@ export class Studio {
     editor.revealRangeInCenterIfOutsideViewport(new monaco.Range(read.from, 1, to, 1));
   }
 
+  /**
+   * From the chat: a place a reply points to (`one.typ:42`), with the cursor
+   * there, or its lines selected when it names more than one (`one.typ:42-48`);
+   * or the file, as from Files (a picture or PDF in Preview).
+   */
+  async openRef({ path, line, column, endLine }: SourceRef) {
+    if (!line || isPicture(path) || /\.pdf$/i.test(path)) return this.openFile(path);
+    if (endLine) return this.showRead({ path, from: line, to: endLine });
+    await this.openAt(path, line, column);
+  }
+
   /** The assistant's changes to a file, from History's agent versions (the most recent ones). */
   async loadAiEdits(path: string) {
     if (this.state.history.status !== 'ready') return;
@@ -2511,9 +2523,9 @@ export class Studio {
   }
 
   /** Open a file with the cursor on a line (1-based). */
-  async openAt(path: string, line: number) {
+  async openAt(path: string, line: number, column = 1) {
     await this.openFile(path);
-    this.editor?.setPosition({ lineNumber: line, column: 1 });
+    this.editor?.setPosition({ lineNumber: line, column });
     this.editor?.revealLineInCenter(line);
     this.editor?.focus();
   }

@@ -3566,6 +3566,36 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   again and got only the Ask turn; passing through Ask to Discuss started
   nothing.
 
+### Places in a reply are links
+
+- **Asked for:** "when there are line references in the ai chatbox, make them
+  links that are clickable to the source in the editor"
+- **What counts:** a book file with a line, as assistants write it:
+  `chapters/one.typ:42`, `:42:7`, `:42-48`, `#L42`, `#L42-L48`, "one.typ,
+  line 42", "one.typ (lines 42–48)", "lines 3–5 of one.typ"; the line may be
+  in the words around a `code` name ("`one.typ` (line 9)"). A name alone is a
+  link only in `code` or as a Markdown link's address, since prose mentions
+  main.typ all the time. Code blocks are left alone.
+- **Only the book's files:** a name is looked up among the workspace's files
+  (src/lib/source-links.ts), never guessed from its shape: from the book's
+  folder, as a whole or ~ path under it, or by the end of its path when that
+  ends one file's path only (`two.typ` in chapters/ and drafts/ is no link).
+  So "10:30" or "v1.2:3" never are, and a name with spaces works. The scan
+  starts from each line number and looks back for a name, so a long file list
+  costs nothing per character.
+- **Where it goes:** one line puts the cursor there (and its column, if
+  given); several select them, as a read's row in the trace does (showRead).
+  A name alone opens the file as Files does (a picture or PDF in Preview).
+  Every reply, comment and question in the chat gets this (Markdown.tsx);
+  dragging across a link's words selects them without following it.
+- **Asking for the form:** the instructions now ask for `path:line` (or
+  `path:42-48`) when pointing to a place, so all assistants write one the
+  chat knows.
+- Verified: unit tests (source-links.test.ts); in a scratch instance (its own
+  worktree and port) with a reply mocked into the chat, each of seven links
+  went to its place (line, column, range selected, the SVG in its tab), a
+  selected link didn't open, and Enter on a focused one did.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

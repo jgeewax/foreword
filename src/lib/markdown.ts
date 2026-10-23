@@ -6,6 +6,8 @@
 // degrades to plain text; a code block or equation still being written is
 // `open`.
 
+import type { SourceRef } from './source-links';
+
 export type Inline =
   | { t: 'text'; v: string }
   | { t: 'strong'; c: Inline[] }
@@ -13,6 +15,8 @@ export type Inline =
   | { t: 'code'; v: string }
   | { t: 'math'; v: string }
   | { t: 'link'; c: Inline[]; href: string }
+  /** A place in the book the reply points to (linkInlines; never parsed). */
+  | { t: 'ref'; c: Inline[]; to: SourceRef }
   | { t: 'br' };
 
 export type Block =
