@@ -1036,6 +1036,10 @@ button.link.quiet { color: var(--muted); }
 .mode-text { display: flex; flex-direction: column; gap: 1px; flex: 1; }
 .mode-name { font-weight: 600; }
 .mode-description { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+/* What the mode runs on: its assistant, model and effort, as last used in it. */
+.mode-setup { margin-top: 2px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.85; }
+.mode-popover .model-footer { white-space: normal; }
+.mode-popover .model-footer .muted { line-height: 1.35; }
 .carry-out-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
 /* The assistant menu, beside the model: its mark (and name, when there's room); opens upward. */
 .assistant-menu { flex: none; }

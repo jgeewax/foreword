@@ -62,6 +62,8 @@ import { referencesTo, removeIncludes, resolveRef, updateReferences } from './re
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
+import { chatSoFar, readModeSetups, setupLine, type ModeSetup, type ModeSetups } from './mode-setups';
+import { EARLIER_CHIP } from '../services/agent/message-context';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
@@ -336,6 +338,8 @@ export type StudioState = {
     selectionDismissed: string | null;
     /** Write (default), Ask, Discuss (think it through first), Options (three versions to pick from) or Figures. */
     mode: AgentMode;
+    /** The assistant, model and effort each mode was last used with (mode-setups.ts; kept on this Mac). */
+    modeSetups: ModeSetups;
     /** This book's conversations (tasks), newest first. */
     tasks: TaskSummary[];
     /** Input tokens of the latest call: how full the context window is. */
@@ -474,6 +478,7 @@ const initialState: StudioState = {
     selection: null,
     selectionDismissed: null,
     mode: 'write',
+    modeSetups: readModeSetups(readJson('studio.modeSetups')),
     tasks: [],
     contextTokens: null,
     compacting: false,
@@ -530,6 +535,10 @@ const LAST_WORKSPACE = 'studio.lastWorkspace';
 const MODEL_KEY = 'studio.model';
 /** The effort chosen for each model (effortKey → level). */
 const EFFORTS_KEY = 'studio.efforts';
+/** What each mode runs on (mode-setups.ts), for every window: each reads it when it needs it. */
+const MODE_SETUPS_KEY = 'studio.modeSetups';
+/** How long ⇧Tab may rest on a mode before its assistant, model and effort come in (ms). */
+const SETUP_DELAY = 350;
 const ZOOM_KEY = 'studio.zoom';
 const RECENT_KEY = 'studio.recentWorkspaces';
 export const NEW_BOOK_PARENT = 'studio.newBookParent';
@@ -930,6 +939,10 @@ export class Studio {
     if (zoom && zoom !== 1) await this.setZoom(zoom, { persist: false }).catch(() => {});
     // The settings file wins over this machine's cached copy; edits made elsewhere apply on return.
     await this.loadConfig();
+    // Another window changed what a mode runs on: the mode menu says so here too.
+    window.addEventListener('storage', (e) => {
+      if (e.key === MODE_SETUPS_KEY) this.setAgent({ modeSetups: readModeSetups(readJson(MODE_SETUPS_KEY)) });
+    });
     window.addEventListener('focus', () => {
       void this.loadConfig();
       // Commits made in a terminal or another app while this window was in the background.
@@ -1042,6 +1055,10 @@ export class Studio {
     void this.scanTodos();
     void this.loadReview();
     void this.startTypst();
+    // The mode's own assistant, if it has one (mode-setups.ts).
+    this.forgetThread();
+    const own = this.setupFor(this.state.agent.mode)?.assistant;
+    if (own && own !== this.state.settings.assistant) this.updateSettings({ assistant: own }, { restart: false });
     void this.startAgent();
 
     const saved = readJson<{ tabs: string[]; active: string | null }>(tabsKey(info.root));
@@ -3417,6 +3434,7 @@ export class Studio {
       if (this.agent !== agent) return;
       this.setAgent({ status: 'ready', signingIn: false });
       await this.loadModels();
+      await this.resumeCarried(agent);
       void this.loadTasks();
       await this.afterToolSwitch();
     } catch (e) {
@@ -3509,21 +3527,25 @@ export class Studio {
     if (!this.agent) return;
     try {
       const [models, serverDefault] = await Promise.all([this.agent.listModels(), this.agent.defaultModel()]);
-      const saved = readJson<ModelRef>(MODEL_KEY);
+      // The mode's model, if it was picked with this assistant; else the one picked last.
+      const setup = this.setupFor(this.state.agent.mode);
+      const saved = (setup?.assistant === this.agentKind ? setup.model : null) ?? readJson<ModelRef>(MODEL_KEY);
       // Only an active session pins the model; otherwise re-choose as the list fills in.
       const current = this.state.agent.sessionId ? this.state.agent.model : null;
       const chosen = chooseModel(models, { current, saved, serverDefault });
       this.setAgent({ models, model: chosen ? { providerID: chosen.providerID, id: chosen.id } : null });
-      void this.refreshEfforts();
       const missingSaved = !!saved && !models.some((m) => m.providerID === saved.providerID && m.id === saved.id);
       const missingPreferred = !models.some((m) => PREFERRED_PROVIDERS.includes(m.providerID));
       if ((missingSaved || missingPreferred) && attempt < 8) setTimeout(() => void this.loadModels(attempt + 1), 1500);
+      // The effort too before it's started (a mode's handover sends at once): a new conversation starts at it.
+      await this.refreshEfforts();
     } catch (e) {
       this.setAgent({ error: `Couldn't list models: ${errorMessage(e)}` });
     }
   }
 
-  async selectModel(model: ModelRef) {
+  /** The model for this conversation; `remember`: the author's choice, kept for this mode (else the mode's own, brought back). */
+  async selectModel(model: ModelRef, { remember = true } = {}) {
     const { sessionId, models } = this.state.agent;
     const info = models.find((m) => m.providerID === model.providerID && m.id === model.id);
     if (info && !info.supportsTools) {
@@ -3537,14 +3559,19 @@ export class Studio {
     }
     try {
       if (sessionId && this.agent) await this.agent.switchModel(sessionId, model);
-      writeJson(MODEL_KEY, model);
-      const recentModels = pushRecent(this.state.agent.recentModels, model);
-      writeJson('studio.recentModels', recentModels);
-      this.setAgent({ model: { providerID: model.providerID, id: model.id }, recentModels });
+      if (remember) {
+        writeJson(MODEL_KEY, model);
+        const recentModels = pushRecent(this.state.agent.recentModels, model);
+        writeJson('studio.recentModels', recentModels);
+        this.setAgent({ recentModels });
+      }
+      this.setAgent({ model: { providerID: model.providerID, id: model.id } });
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Model not changed: ${errorMessage(e)}` });
+      remember = false;
     }
     await this.refreshEfforts();
+    if (remember) this.rememberSetup();
   }
 
   /**
@@ -3561,7 +3588,10 @@ export class Studio {
     const now = this.state.agent;
     if (this.agent !== agent || now.sessionId !== sessionId || !now.model || effortKey(now.model) !== effortKey(model)) return;
     if (!efforts) return this.setAgent({ efforts: [], effort: null });
-    const chosen = readJson<Record<string, string>>(EFFORTS_KEY)?.[effortKey(model)];
+    // The mode's effort with its model; else the one last chosen for the model.
+    const setup = this.setupFor(now.mode);
+    const own = setup?.model && setup.effort && effortKey(setup.model) === effortKey(model) ? setup.effort : null;
+    const chosen = own ?? readJson<Record<string, string>>(EFFORTS_KEY)?.[effortKey(model)];
     let effort = efforts.current;
     if (chosen && chosen !== effort && efforts.options.some((o) => o.value === chosen)) {
       if (!sessionId) effort = chosen;
@@ -3570,7 +3600,7 @@ export class Studio {
     this.setAgent({ efforts: efforts.options, effort });
   }
 
-  /** The chat's effort menu, or /effort: from the next message on, and remembered for this model. */
+  /** The chat's effort menu, or /effort: from the next message on, and remembered for this model and this mode. */
   async selectEffort(value: string) {
     const { model, sessionId, efforts } = this.state.agent;
     const option = efforts.find((o) => o.value === value);
@@ -3579,6 +3609,7 @@ export class Studio {
       if (sessionId && this.agent) await this.agent.switchEffort(sessionId, model, value);
       writeJson(EFFORTS_KEY, { ...readJson<Record<string, string>>(EFFORTS_KEY), [effortKey(model)]: value });
       this.setAgent({ effort: value });
+      this.rememberSetup();
       return true;
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Effort not changed: ${errorMessage(e)}` });
@@ -3586,22 +3617,194 @@ export class Studio {
     }
   }
 
-  /** Switch between Write, Ask, Discuss, Options and Figures (applies to the current conversation). */
+  /**
+   * Switch between Write, Ask, Discuss, Options and Figures (applies to the
+   * current conversation), and to the assistant, model and effort the mode was
+   * last used with, once the author rests on it (mode-setups.ts).
+   */
   async setMode(mode: AgentMode) {
     const previous = this.state.agent.mode;
-    if (mode === previous) return;
+    if (mode === previous) return this.setupReady();
+    this.keepSetup(previous);
     this.setAgent({ mode });
-    const { sessionId } = this.state.agent;
-    if (!sessionId || !this.agent) return;
+    // Another assistant's mode: the chat goes over to it (handOverTo), which takes the mode with it.
+    const elsewhere = this.setupFor(mode)?.assistant;
+    const leaving = !!elsewhere && elsewhere !== this.state.settings.assistant && !this.assistantBusy;
+    if (!leaving && !(await this.modeToSession(previous))) return;
+    await this.settleSetup();
+  }
+
+  /** The mode, for the conversation shown: what it may do, and its instructions; false if it couldn't (back to `previous`). */
+  private async modeToSession(previous: AgentMode | null): Promise<boolean> {
+    const { sessionId, mode } = this.state.agent;
+    if (!sessionId || !this.agent) return true;
     const config = modeConfig(mode);
     try {
       await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId));
       if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
+      return true;
     } catch (e) {
-      this.setAgent({ mode: previous });
+      if (previous) this.setAgent({ mode: previous });
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't switch to ${config.label} mode: ${errorMessage(e)}` });
+      return false;
+    }
+  }
+
+  // ---- each mode's assistant, model and effort (mode-setups.ts) ----------------------------
+
+  private setupTimer: number | undefined;
+  private setupWaiting: (() => void)[] = [];
+  private setupChain: Promise<void> = Promise.resolve();
+
+  /** Every window's (another may have changed one since this one started). */
+  private setupFor(mode: AgentMode): ModeSetup | undefined {
+    return readModeSetups(readJson(MODE_SETUPS_KEY))[mode];
+  }
+
+  private saveSetup(mode: AgentMode, setup: ModeSetup) {
+    const modeSetups = { ...readModeSetups(readJson(MODE_SETUPS_KEY)), [mode]: setup };
+    writeJson(MODE_SETUPS_KEY, modeSetups);
+    this.setAgent({ modeSetups });
+  }
+
+  /** What's in use now, as the mode's (the author chose it there); not while an assistant is still starting. */
+  private rememberSetup(mode = this.state.agent.mode) {
+    const a = this.state.agent;
+    if (a.status !== 'ready' || !a.model || this.agentKind !== this.state.settings.assistant) return;
+    const model = a.model;
+    const effort = a.efforts.find((o) => o.value === a.effort);
+    this.saveSetup(mode, {
+      assistant: this.state.settings.assistant,
+      model,
+      effort: a.effort,
+      modelName: a.models.find((m) => m.providerID === model.providerID && m.id === model.id)?.name ?? model.id,
+      ...(effort ? { effortName: effort.name } : {}),
+    });
+  }
+
+  /** A mode not used yet keeps what's in use (the mode left, or the one chosen); so does one whose assistant was chosen without a model. */
+  private keepSetup(mode: AgentMode) {
+    const setup = this.setupFor(mode);
+    if (!setup || (!setup.model && setup.assistant === this.state.settings.assistant)) this.rememberSetup(mode);
+  }
+
+  /** The mode's setup, once ⇧Tab rests on a mode: it passes through others on the way, each maybe another program to start. */
+  private settleSetup(delay = SETUP_DELAY): Promise<void> {
+    window.clearTimeout(this.setupTimer);
+    return new Promise((resolve) => {
+      this.setupWaiting.push(resolve);
+      this.setupTimer = window.setTimeout(() => {
+        this.setupTimer = undefined;
+        const waiting = this.setupWaiting.splice(0);
+        this.setupChain = this.setupChain
+          .then(() => this.applyModeSetup())
+          .catch((e) => console.warn('mode setup', e))
+          .finally(() => waiting.forEach((w) => w()));
+      }, delay);
+    });
+  }
+
+  /** Before a message goes: the mode's setup now, if it's waiting. */
+  private setupReady(): Promise<void> {
+    return this.setupTimer !== undefined ? this.settleSetup(0) : this.setupChain;
+  }
+
+  /** The mode's assistant, model and effort, brought back; a mode not used yet keeps what's in use. */
+  private async applyModeSetup() {
+    const { mode } = this.state.agent;
+    const setup = this.setupFor(mode);
+    if (!setup) return this.keepSetup(mode);
+    if (!this.state.workspace) return;
+    if (setup.assistant !== this.state.settings.assistant) return this.handOverTo(setup.assistant);
+    // Still starting: it takes the mode's model and effort when it's ready (loadModels).
+    const { model, models, status } = this.state.agent;
+    if (status !== 'ready') return;
+    const want = setup.model;
+    const listed = want && models.some((m) => m.supportsTools && m.providerID === want.providerID && m.id === want.id);
+    if (want && listed && (want.providerID !== model?.providerID || want.id !== model?.id)) await this.selectModel(want, { remember: false });
+    else await this.refreshEfforts();
+  }
+
+  /**
+   * The chat shown, across assistants: each one's conversation in it, and the
+   * last item it has seen. A mode set to another assistant hands the chat over
+   * (handOverTo); what that one hasn't seen goes with the next message.
+   */
+  private thread = new Map<AssistantId, { sessionId: string | null; seen: string | null }>();
+  /** The turns after `after` (null: all of them) go with the next message. */
+  private handover: { after: string | null } | null = null;
+  /** The conversation to open again once the assistant handed over to has started. */
+  private resumeOnStart: string | null = null;
+
+  /** A new chat (or another conversation shown): nothing to hand over. */
+  private forgetThread() {
+    this.thread.clear();
+    this.handover = null;
+    this.resumeOnStart = null;
+  }
+
+  /**
+   * The mode is set to another assistant: it takes the chat over. Its own
+   * conversation in this chat opens again (or a new one starts once the author
+   * writes), and the turns it hasn't seen go with the next message. Not while a
+   * conversation is at work: switching would stop it.
+   */
+  private async handOverTo(next: AssistantId) {
+    const from = this.state.settings.assistant;
+    const label = modeConfig(this.state.agent.mode).label;
+    if (this.assistantBusy) {
+      this.toast(`${label} is set to ${ASSISTANT_NAMES[next]}, but ${ASSISTANT_NAMES[from]} is at work, so ${label} stays with it this time.`);
+      await this.modeToSession(null);
+      return;
+    }
+    const a = this.state.agent;
+    const turns = a.items.some((it) => it.kind === 'user' || it.kind === 'assistant');
+    // The one left has seen all of the chat, unless what it was to be given hasn't gone yet.
+    this.thread.set(from, { sessionId: a.sessionId, seen: this.handover ? (this.thread.get(from)?.seen ?? null) : (a.items.at(-1)?.id ?? null) });
+    const there = this.thread.get(next);
+    this.handover = turns ? { after: there?.seen ?? null } : null;
+    this.resumeOnStart = there?.sessionId ?? null;
+    this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, contextTokens: null, queued: [], activity: null, stopped: false } }));
+    this.setAiReads([]);
+    this.updateSettings({ assistant: next }, { restart: false });
+    await this.restartAgent();
+    const now = this.state.agent;
+    if (!turns || this.state.settings.assistant !== next || now.status !== 'ready') return;
+    const setup = this.setupFor(now.mode);
+    const who = setup ? setupLine(setup) : ASSISTANT_NAMES[next];
+    const told = this.handover && chatSoFar(now.items, this.handover.after) !== null;
+    this.pushItem({
+      kind: 'notice',
+      id: uid('n'),
+      tone: 'info',
+      text: `${label} mode, with ${who}: ${now.sessionId ? 'back in its conversation' : 'a new conversation'}${told ? `, and ${now.sessionId ? 'what was said since' : 'the chat so far'} goes with your next message` : ''}.`,
+    });
+  }
+
+  /** Started for a mode that handed the chat over: its conversation in the chat, opened again (if it can't be, a new one gets all of the chat). */
+  private async resumeCarried(agent: AgentAdapter) {
+    const sessionId = this.resumeOnStart;
+    this.resumeOnStart = null;
+    if (!sessionId) return;
+    try {
+      const messages = await agent.sessionContext(sessionId);
+      if (this.agent !== agent || this.state.agent.sessionId) return;
+      const root = this.state.workspace?.root ?? '';
+      this.setAgent({ sessionId, title: this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title ?? null, contextTokens: contextTokens(messages) });
+      this.setAiReads(readsFromContext(messages, root));
+      // The mode, its permissions and instructions, and its model and effort.
+      const config = modeConfig(this.state.agent.mode);
+      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId)).catch(() => {});
+      await this.applyInstructions(sessionId);
+      if (!config.instructions) await agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
+      const { model } = this.state.agent;
+      if (model) await agent.switchModel(sessionId, model).catch(() => {});
+      await this.refreshEfforts();
+    } catch (e) {
+      console.warn('handover: the conversation did not open again', e);
+      if (this.state.agent.items.some((it) => it.kind === 'user' || it.kind === 'assistant')) this.handover = { after: null };
     }
   }
 
@@ -3644,6 +3847,7 @@ export class Studio {
   newSession() {
     // A conversation still at work carries on in the background.
     this.stashCurrent();
+    this.forgetThread();
     this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
     this.setAiReads([]);
     void this.refreshEfforts();
@@ -3817,6 +4021,7 @@ export class Studio {
         agent.pendingPermissions(sessionId).catch(() => []),
       ]);
       this.stashCurrent();
+      this.forgetThread();
       const task = this.state.agent.tasks.find((t) => t.sessionId === sessionId);
       const root = this.state.workspace?.root ?? '';
       const bg = this.state.agent.background[sessionId];
@@ -4019,6 +4224,8 @@ export class Studio {
   }
 
   async send(text: string, { delivery = 'queue' as Delivery } = {}): Promise<boolean> {
+    // The mode just chosen: its assistant, model and effort first.
+    await this.setupReady();
     const { agent, docs } = this;
     const state = this.state.agent;
     if (!agent || state.status !== 'ready' || !text.trim()) return false;
@@ -4030,6 +4237,9 @@ export class Studio {
     // Options replace a passage: use the editor's cursor when nothing is selected or attached.
     if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
     const attachments = this.outgoingAttachments();
+    // Handed over from another assistant: the turns this one hasn't seen go too.
+    const handover = this.handover;
+    const earlier = handover ? chatSoFar(state.items, handover.after, this.state.workspace?.root) : null;
     // The message shows at once; saving, the History version and the request follow.
     const userId = uid('u');
     this.setAgent((a) => ({
@@ -4037,7 +4247,7 @@ export class Studio {
       stopped: false,
       attachments: [],
       activity: { phase: 'sending', since: Date.now() },
-      items: [...a.items, { kind: 'user', id: userId, text, attachments: attachments.map((x) => x.label), at: Date.now(), by: this.turnBy() }],
+      items: [...a.items, { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(earlier ? [EARLIER_CHIP] : [])], at: Date.now(), by: this.turnBy() }],
     }));
     const unsend = (why: string) => {
       this.setAgent((a) => ({ running: false, attachments, items: a.items.filter((it) => it.id !== userId) }));
@@ -4063,6 +4273,7 @@ export class Studio {
         stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
       })),
       ...(edits.length ? [{ authorEdits: edits }] : []),
+      ...(earlier ? [{ earlier }] : []),
     ];
     const target = attachments[0]?.selection;
     this.optionsTurn =
@@ -4087,6 +4298,7 @@ export class Studio {
       // A brief that goes with this message, out of sight (the style guide's draft).
       if (this.pendingBrief) await agent.setInstructions(sessionId, this.pendingBrief.key, this.pendingBrief.text);
       await agent.send(sessionId, text, context);
+      if (this.handover === handover) this.handover = null;
       return true;
     } catch (e) {
       return unsend(`Message not sent: ${errorMessage(e)}`);
@@ -4758,7 +4970,8 @@ export class Studio {
     this.events.emit('focus-editor');
   }
 
-  updateSettings(patch: Partial<AppSettings>, { write = true } = {}) {
+  /** `restart`: another assistant starts at once, with a new conversation (else its caller starts it). */
+  updateSettings(patch: Partial<AppSettings>, { write = true, restart = true } = {}) {
     const before = this.state.settings;
     const settings = { ...before, ...patch };
     saveSettings(settings);
@@ -4769,7 +4982,7 @@ export class Studio {
     if (settings.previewScope !== before.previewScope && this.state.workspace && this.state.previewTarget === 'book') void this.restartTypst();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
     else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
-    if (settings.assistant !== before.assistant && this.state.workspace) {
+    if (settings.assistant !== before.assistant && this.state.workspace && restart) {
       // Another program's conversations: start a new one with it.
       this.newSession();
       void this.restartAgent();
@@ -4789,6 +5002,8 @@ export class Studio {
       this.toast(`The assistant is working: stop it, or let it finish, then switch to ${ASSISTANT_NAMES[id]}.`, 'error');
       return false;
     }
+    // This mode's assistant from now on, with its own model until one is picked.
+    this.saveSetup(this.state.agent.mode, { assistant: id, model: null, effort: null });
     this.updateSettings({ assistant: id });
     return true;
   }
@@ -5055,7 +5270,9 @@ export class Studio {
         return;
       }
       this.config = { text, raw: parsed.raw };
-      this.updateSettings(parsed.settings, { write: false });
+      // A mode with its own assistant keeps it: the file has the one another window's mode switched to.
+      const own = this.setupFor(this.state.agent.mode) ? { assistant: this.state.settings.assistant } : {};
+      this.updateSettings({ ...parsed.settings, ...own }, { write: false });
       if (parsed.zoom && Math.abs(parsed.zoom - this.state.zoom) > 0.001) await this.setZoom(parsed.zoom, { persist: false, write: false });
     } catch (e) {
       console.warn('settings file: read failed', e);

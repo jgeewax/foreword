@@ -2,6 +2,7 @@ import { ASSISTANT_NAMES } from '../app/settings';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { pendingQuestion, studio, type QuestionItem } from '../app/studio';
+import { setupLine } from '../app/mode-setups';
 import { useStore } from '../lib/store';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
@@ -357,10 +358,11 @@ function QuestionPanel({ item }: { item: QuestionItem }) {
   );
 }
 
-/** The mode menu: compact trigger, opens upward with a description per mode. ⇧Tab cycles. */
+/** The mode menu: compact trigger, opens upward with a description per mode, and what each runs on. ⇧Tab cycles. */
 function ModeMenu() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const running = useStore(studio.store, (s) => s.agent.running);
+  const setups = useStore(studio.store, (s) => s.agent.modeSetups);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = modeConfig(mode);
@@ -395,6 +397,7 @@ function ModeMenu() {
         <div className="mode-popover" role="menu">
           {AGENT_MODES.map((m) => {
             const c = modeConfig(m);
+            const setup = setups[m];
             return (
               <button
                 key={m}
@@ -410,13 +413,14 @@ function ModeMenu() {
                 <span className="mode-text">
                   <span className="mode-name">{c.label}</span>
                   <span className="mode-description">{c.description}</span>
+                  {setup && <span className="mode-setup">{setupLine(setup)}</span>}
                 </span>
                 <span className="model-check">{m === mode ? '✓' : ''}</span>
               </button>
             );
           })}
           <div className="model-footer">
-            <span className="muted">⇧Tab in the message box switches mode</span>
+            <span className="muted">⇧Tab in the message box switches mode. Each mode keeps the assistant, model and effort last used in it.</span>
           </div>
         </div>
       )}

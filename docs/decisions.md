@@ -3475,6 +3475,57 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   said "Explain this passage · in plain words" with its chip); the same
   conversation opened again from the assistant's record.
 
+### Each mode keeps its own assistant, model and effort
+
+- **Asked for:** "diff modes should be able to be anchored to specific
+  providers/models/effort levels. e.g., maybe ask uses opus 5.5 via claude
+  code medium, but figures uses gpt6 astra extra high. every time i change
+  the settings for a mode, it should be sticky for that mode."
+- **Sticky, not configured:** there's no settings page for it. Each mode keeps
+  the assistant, model and effort last chosen in it (`studio.modeSetups`,
+  src/app/mode-setups.ts), and choosing the mode brings them back. A mode not
+  used yet takes what's in use when it's first chosen (and the mode left
+  keeps what it had). Picking a model, an effort or an assistant (the menus,
+  /model, /effort, /assistant, the assistant's own settings tools) changes
+  the current mode's only; the per-model effort memory is still the fallback
+  for a model new to the mode. The mode menu shows each mode's under its
+  description ("Claude Code · Opus 5.5 · Medium"), from names kept with it,
+  since another assistant's models aren't listed while this one runs.
+- **Another assistant mid-conversation: the chat carries over.** One
+  assistant program runs at a time and a conversation lives in it, so a mode
+  set to another assistant starts that one while the chat stays in view. Of
+  carrying over, a fresh conversation, or waiting for the next one, the author
+  chose carrying over. The next message takes the turns that assistant hasn't
+  seen (`chatSoFar`: the author's words, each reply under its assistant's
+  name, a bracketed line of what it did; the latest ~40,000 characters). They
+  go after the message, like a selection, so Codex still names the task after
+  what was asked, and tasks.ts takes them out again when the conversation is
+  replayed (the chip: *The chat so far*). Going back to an assistant opens its
+  own conversation in this chat again (session/load for ACP), and it gets only
+  the turns since. One that can't be opened again gets all of it in a new
+  one. New, a task from the list, Done and an explicit assistant switch start
+  a new chat, as before.
+- **⇧Tab rests first:** cycling passes through modes that may each be another
+  program, so a mode's setup applies 350 ms after the last switch, and a
+  message sent sooner waits for it. Not while a conversation is at work (in
+  the background too): switching program would stop it, so the mode stays on
+  the running assistant, with a toast. The model list's effort is now awaited
+  at start, so a message sent straight after a handover ("Write it") starts
+  its conversation at the mode's effort; before, the first turn could run at
+  the assistant's default.
+- **Windows:** the setups are every window's (localStorage, read when
+  needed), but which assistant runs is each window's own mode's. The settings
+  file's `assistant` is whichever one a window switched to last, so on focus
+  a window whose mode has a setup keeps its own. A book opens with its mode's
+  assistant.
+- Verified: unit tests (mode-setups.test.ts); the `mode-setups` self-test in
+  a scratch instance (its own worktree and port), with Write on Claude Code's
+  Haiku at low and Ask on Codex's 6 Luna at low. Each mode came back with its
+  own; a codeword given to Claude in Write was known to Codex in Ask (in its
+  own conversation, at low); back in Write, Claude's own conversation opened
+  again and got only the Ask turn; passing through Ask to Discuss started
+  nothing.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

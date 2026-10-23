@@ -7,6 +7,7 @@ import { readLabel, readOf, type AiRead } from './ai-marks';
 import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
+import { EARLIER_CHIP, EARLIER_INTRO } from '../services/agent/message-context';
 import { questionFromTool, splitQuestions } from '../services/agent/questions';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
@@ -43,14 +44,17 @@ export type TaskRecord = { sessionId: string; status: 'open' | 'done'; doneAt?: 
 
 export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null };
 
-/** The context Foreword appends to a message: selections (editor/selection.ts) and the author's edits (agent/author-edits.ts). */
-const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${AUTHOR_EDITS_INTRO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})[\\s\\S]*$`);
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The context Foreword appends to a message: selections (editor/selection.ts), the author's edits (agent/author-edits.ts) and another assistant's turns (mode-setups.ts). */
+const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)})[\\s\\S]*$`);
 
 /** User message text as the author typed it, plus the labels of what was attached. */
 export function splitUserText(text: string): { text: string; attachments: string[] } {
   const attachments = [
     ...[...text.matchAll(/<selection path="([^"]+)" start="(\d+):\d+" end="(\d+):\d+">/g)].map(([, path, a, b]) => (a === b ? `${path}:${a}` : `${path}:${a}–${b}`)),
     ...[...text.matchAll(/<author-edit path="([^"]+)" lines="(\d+)(?:–(\d+)| \(removed\))">/g)].map(([, path, a, b]) => `${AUTHOR_EDIT_CHIP} ${path}:${b && b !== a ? `${a}–${b}` : a}`),
+    ...(text.includes(`\n\n${EARLIER_INTRO}`) ? [EARLIER_CHIP] : []),
   ];
   return { text: text.replace(CONTEXT_TAIL, ''), attachments };
 }

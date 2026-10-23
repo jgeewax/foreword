@@ -1,9 +1,8 @@
 // OpenCode 2.x adapter. Talks to the app-managed `opencode serve` through the
 // Rust bridge (agent.rs). API shapes verified against the server's own
 // /openapi.json (OpenCode 2.0.20); the npm SDK (1.x) targets the older API.
-import { formatSelectionContext } from '../../editor/selection';
-import { formatAuthorEdits } from './author-edits';
 import { Channel, ipc } from '../../lib/ipc';
+import { messageText } from './message-context';
 import { mapOpenCodeEvent, toFormRequest } from './opencode-events';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { effortKey, effortOption } from './models';
@@ -158,7 +157,7 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   async send(sessionId: string, message: string, context: Parameters<AgentAdapter['send']>[2], delivery?: Delivery) {
-    const text = [message, ...context.map((c) => ('authorEdits' in c ? formatAuthorEdits(c.authorEdits) : formatSelectionContext(c.selection, c.stale)))].join('\n\n');
+    const text = messageText(message, context);
     const res = await call('POST', `/api/session/${sessionId}/prompt`, delivery ? { text, delivery } : { text });
     return (res.data?.id as string | undefined) ?? null;
   }

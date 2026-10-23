@@ -4,8 +4,12 @@ import type { AgentPermissions, PermissionRule } from './permissions';
 import type { AuthorEdit } from './author-edits';
 import type { SourceSelection } from '../../editor/selection';
 
-/** What goes with a message besides its text: a selection, or the author's changes to the assistant's text. */
-export type MessageContext = { selection: SourceSelection; stale: boolean } | { authorEdits: AuthorEdit[] };
+/**
+ * What goes with a message besides its text: a selection, the author's changes
+ * to the assistant's text, or the turns of the conversation another assistant
+ * had (app/mode-setups.ts).
+ */
+export type MessageContext = { selection: SourceSelection; stale: boolean } | { authorEdits: AuthorEdit[] } | { earlier: string };
 
 export type ModelRef = { providerID: string; id: string };
 

@@ -7166,10 +7166,120 @@ async function modeSuggestChecks() {
   return out;
 }
 
+/**
+ * Each mode's assistant, model and effort (mode-setups.ts): Write on Claude
+ * Code's Haiku at low effort, Ask on Codex. Each comes back with its mode; a
+ * conversation goes over to the other assistant and back, each told only what
+ * it missed; ⇧Tab passing through a mode starts nothing. Nothing is edited
+ * (Ask can't, and Write is asked not to). Scratch book only.
+ */
+async function modeSetupChecks() {
+  const out: Record<string, unknown> = {};
+  const keys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups'];
+  const saved = keys.map((k) => [k, localStorage.getItem(k)] as const);
+  const savedAssistant = studio.state.settings.assistant;
+  const waited: string[] = [];
+  // That assistant's own models (an ACP one's are its own: providerID), and their efforts.
+  const ready = (assistant: string) =>
+    waitFor(() => {
+      const a = studio.state.agent;
+      return studio.state.settings.assistant === assistant && a.status === 'ready' && a.models.length > 0 && a.models.every((m) => m.providerID === assistant) && a.model && a.efforts.length > 0;
+    }, 180000, `${assistant} ready`);
+  const now = () => ({ assistant: studio.state.settings.assistant, model: studio.state.agent.model?.id ?? null, effort: studio.state.agent.effort });
+  const lastNotice = () => (studio.state.agent.items.filter((i) => i.kind === 'notice').at(-1) as { text?: string } | undefined)?.text ?? null;
+  const lastChips = () => (studio.state.agent.items.filter((i) => i.kind === 'user').at(-1) as { attachments?: string[] } | undefined)?.attachments ?? [];
+  /** The last message the assistant got in this conversation, as it got it (the ACP transcript keeps what went with it). */
+  const lastSent = async () => {
+    const messages = (await studio.agent!.sessionContext(studio.state.agent.sessionId!)) as { type: string; text?: string }[];
+    return messages.filter((m) => m.type === 'user').at(-1)?.text ?? '';
+  };
+  /** Where the conversation's effort really is, as the assistant has it. */
+  const sessionEffort = async () => (await studio.agent!.efforts(studio.state.agent.sessionId, studio.state.agent.model!))?.current ?? null;
+  try {
+    localStorage.removeItem('studio.modeSetups');
+    studio.newSession();
+    await studio.setMode('write');
+    if (studio.state.settings.assistant !== 'claude') studio.switchAssistant('claude');
+    await ready('claude');
+    const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+    if (haiku) await studio.selectModel(haiku);
+    if (studio.state.agent.efforts.some((e) => e.value === 'low')) await studio.selectEffort('low');
+    out.write = now();
+
+    // Ask, not used yet: it keeps what's in use, until Codex is chosen for it.
+    await studio.setMode('ask');
+    out.askFirst = studio.state.agent.modeSetups.ask ?? null;
+    studio.switchAssistant('codex');
+    await ready('codex');
+    const small = studio.state.agent.models.find((m) => /luna|mini/i.test(`${m.id} ${m.name}`));
+    if (small) await studio.selectModel(small);
+    const effort = studio.state.agent.efforts.find((e) => e.value === 'low') ?? studio.state.agent.efforts[0];
+    if (effort) await studio.selectEffort(effort.value);
+    out.ask = now();
+
+    // Back to Write: Claude Code's Haiku at low, again.
+    await studio.setMode('write');
+    await ready('claude');
+    out.writeAgain = now();
+    out.setups = studio.state.agent.modeSetups;
+
+    // A turn with Claude Code; then Ask, with Codex, hears what was said.
+    await settleTurn('Remember this codeword for later: PINEAPPLE. Reply with just “OK”. Don’t read or change any files.', waited);
+    const claudeSession = studio.state.agent.sessionId;
+    await studio.setMode('ask');
+    await ready('codex');
+    out.askAgain = { ...now(), notice: lastNotice() };
+    const askReply = await settleTurn('What codeword did I give you earlier in this conversation? Answer with just the word.', waited);
+    out.askTurn = { reply: askReply.slice(0, 300), knew: /PINEAPPLE/i.test(askReply), chips: lastChips(), ownConversation: !!studio.state.agent.sessionId && studio.state.agent.sessionId !== claudeSession, effortInSession: await sessionEffort() };
+
+    // Back to Write: Claude Code's own conversation, told only of the Ask turn.
+    await studio.setMode('write');
+    await ready('claude');
+    out.back = { ...now(), resumed: studio.state.agent.sessionId === claudeSession, notice: lastNotice() };
+    const backReply = await settleTurn('In one short sentence: what did I just ask the other assistant, and what did it answer? Don’t read or change any files.', waited);
+    const sent = await lastSent();
+    out.backTurn = {
+      reply: backReply.slice(0, 400),
+      knew: /PINEAPPLE/i.test(backReply),
+      chips: lastChips(),
+      sentTheAskTurn: sent.includes('What codeword did I give you'),
+      sentItsOwnTurnAgain: sent.includes('Remember this codeword'),
+      effortInSession: await sessionEffort(),
+    };
+
+    // ⇧Tab passing through Ask (Codex) to Discuss (not used yet): nothing restarts.
+    const agentBefore = studio.agent;
+    const passing = studio.setMode('ask');
+    await studio.setMode('discuss');
+    await passing;
+    out.passThrough = { ...now(), sameProgram: studio.agent === agentBefore, discuss: studio.state.agent.modeSetups.discuss ?? null };
+
+    // The mode menu says what each mode runs on.
+    const still = document.createElement('style');
+    still.textContent = '*{animation:none!important;transition:none!important}';
+    document.head.append(still);
+    document.querySelector<HTMLButtonElement>('.mode-trigger')?.click();
+    await sleep(300);
+    out.menu = {
+      lines: [...document.querySelectorAll('.mode-option')].map((o) => `${o.querySelector('.mode-name')?.textContent}: ${o.querySelector('.mode-setup')?.textContent ?? '—'}`),
+      shot: await snap('mode-menu'),
+    };
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    still.remove();
+    out.waited = waited;
+  } finally {
+    for (const [k, v] of saved) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    studio.newSession();
+    await studio.setMode('write');
+    if (studio.state.settings.assistant !== savedAssistant) studio.updateSettings({ assistant: savedAssistant }, { write: false });
+  }
+  return out;
+}
+
 /** `checks` with Claude Code's Haiku (cheap); the assistant, its model and the settings go back after. */
 async function withClaude(checks: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
   const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
-  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups'].map((k) => [k, localStorage.getItem(k)] as const);
   try {
     studio.updateSettings({ assistant: 'claude' }, { write: false });
     await sleep(500);
@@ -8542,6 +8652,11 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('claude-modes')) {
         log('ask and discuss modes, Claude Code');
         result.claudeModes = await withClaude(async () => ({ ask: await askModeChecks(), discuss: await discussModeChecks() }));
+      }
+      // Each mode's own assistant, model and effort: Claude Code and Codex.
+      if (want('mode-setups')) {
+        log('mode setups, Claude Code and Codex');
+        result.modeSetups = await modeSetupChecks();
       }
       if (want('edits')) {
         log('edit policy');

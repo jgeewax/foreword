@@ -5,10 +5,9 @@
 // instructions (sent with the next message when they change), its permission
 // rules (the agent asks; the rules answer, or the author does), the questions
 // it asks the author (form elicitations), and messages queued while a turn runs.
-import { formatSelectionContext } from '../../editor/selection';
 import { Channel, ipc } from '../../lib/ipc';
 import { appTool, conversationTitle, decide, INSTRUCTIONS_URI, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
-import { formatAuthorEdits } from './author-edits';
+import { messageText } from './message-context';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
 import { effortOption } from './models';
@@ -488,7 +487,7 @@ export class AcpAdapter implements AgentAdapter {
 
   async send(sessionId: string, message: string, context: MessageContext[], delivery?: Delivery) {
     const s = this.session(sessionId);
-    const text = [message, ...context.map((c) => ('authorEdits' in c ? formatAuthorEdits(c.authorEdits) : formatSelectionContext(c.selection, c.stale)))].join('\n\n');
+    const text = messageText(message, context);
     if (!s.running) {
       await this.prompt(s, text);
       return null;
