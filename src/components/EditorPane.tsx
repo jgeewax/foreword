@@ -247,7 +247,7 @@ export function EditorPane() {
       tagTimer = window.setTimeout(paintTags, 120);
     });
     paintTags();
-    // Resting the pointer on a TODO comment: ask the assistant to do it, mark it done, or see the others.
+    // The cursor on a TODO comment, or the pointer resting on one: ask the assistant to do it, mark it done, or see the others.
     const offTodoHover = attachTodoHover(editor);
     // The headings, for the path bar (the cursor's own line comes from the store).
     const readOutline = () => {
