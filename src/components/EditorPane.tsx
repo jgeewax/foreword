@@ -11,7 +11,7 @@ import { commentTags, type TagKind } from '../editor/comment-tags';
 import { removable, todoAt } from '../app/todos';
 import { attachTodoHover } from './TodoHover';
 import { attachSelectionBar } from './SelectionBar';
-import { attachProofing, proofEntries } from './ProofingHover';
+import { attachProofing, languageEntries, proofEntries } from './ProofingHover';
 import { headings, type Heading } from '../editor/outline';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
@@ -156,6 +156,7 @@ export function EditorPane() {
         hasSelection && ready && { label: 'Three Options to Pick From…', action: () => studio.events.emit('selection-card', 'options') },
         hasSelection && ready && { label: 'Ask About This…', action: () => studio.events.emit('selection-card', 'ask') },
         hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
+        hasSelection && !!path?.endsWith('.typ') && { label: 'Set Language', items: languageEntries() },
         'separator',
         'cut',
         'copy',

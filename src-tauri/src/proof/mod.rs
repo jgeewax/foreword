@@ -5,6 +5,8 @@
 //! so only the edited one is checked again.
 mod code;
 mod english;
+#[cfg(target_os = "macos")]
+mod mac;
 mod typst;
 mod units;
 mod words;
@@ -249,7 +251,10 @@ fn check(english: &mut English, cache: &Mutex<Cache>, user: &Words, book_words: 
     let mut dialects: HashMap<&'static str, Vec<String>> = HashMap::new();
     for unit in units_of(path, text, &book, options) {
         let dialect = english::dialect(&unit.lang, &book);
-        if unit.check != Check::Code && !unit.lang.is_english() {
+        // Another language: the Mac's own spell checker, if it has the language.
+        let other = unit.check != Check::Code && !unit.lang.is_english();
+        let mac_lang = if other { system_language(&unit.lang) } else { None };
+        if other && mac_lang.is_none() {
             unchecked.insert(unit.lang.to_string());
             continue;
         }
@@ -259,8 +264,9 @@ fn check(english: &mut English, cache: &Mutex<Cache>, user: &Words, book_words: 
         let found = match cached {
             Some(f) => f,
             None => {
-                let f = Arc::new(match unit.check {
-                    Check::Code => code_found(english, &unit, dialect),
+                let f = Arc::new(match (&unit.check, &mac_lang) {
+                    (Check::Code, _) => code_found(english, &unit, dialect),
+                    (_, Some(lang)) => system_found(&unit, lang),
                     _ => english.check(&unit.text, dialect, prose && all, unit.check == Check::Markdown, &rules),
                 });
                 cache.lock().unwrap().put(key, f.clone());
@@ -283,6 +289,10 @@ fn check(english: &mut English, cache: &Mutex<Cache>, user: &Words, book_words: 
             let mut fixes = f.fixes.clone();
             if f.kind == Kind::Spelling {
                 if user.knows(word) || book_words.knows(word) {
+                    continue;
+                }
+                // English the Mac knows: a term Harper's dictionary lacks, or a word the author taught it.
+                if matches!(f.rule.as_str(), "SpellCheck" | "CodeSpelling") && unit.lang.is_english() && system_knows(word, dialect) {
                     continue;
                 }
                 if f.rule == "SpellCheck" {
@@ -375,6 +385,42 @@ fn plausible(unit: &Unit, f: &Found, word: &str, options: &Options) -> bool {
     true
 }
 
+/// Whether the Mac's English dictionary (in the dialect) knows a word Harper doesn't.
+fn system_knows(word: &str, dialect: harper_core::Dialect) -> bool {
+    #[cfg(target_os = "macos")]
+    return mac::knows(word, &english::dialect_tag(dialect).replace('-', "_").replace("en_US", "en"));
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (word, dialect);
+        false
+    }
+}
+
+/// The Mac's name for a language it can check ("fr", "pt_BR").
+fn system_language(lang: &Lang) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    return mac::language(lang);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = lang;
+        None
+    }
+}
+
+/// Misspellings in a unit in another language, from the Mac's spell checker.
+fn system_found(unit: &Unit, lang: &str) -> Vec<Found> {
+    #[cfg(target_os = "macos")]
+    return mac::misspelled(&unit.text, lang)
+        .into_iter()
+        .map(|(start, end, fixes)| Found { start, end, kind: Kind::Spelling, rule: "MacSpelling".into(), message: String::new(), fixes, name: None })
+        .collect();
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (unit, lang);
+        Vec::new()
+    }
+}
+
 /// A unit of code's unknown words, with spellings for each in its own case.
 fn code_found(english: &English, unit: &Unit, dialect: harper_core::Dialect) -> Vec<Found> {
     let tag = unit.code.as_deref().unwrap_or("");
@@ -452,6 +498,20 @@ pub async fn proof_words(app: tauri::AppHandle, state: Win, scope: String) -> Cm
     with_words(&app.state::<ProofState>(), &state, &scope, |file, _| Ok(file.get().list.clone()))
 }
 
+/// Open the author's own list in their text editor (TextEdit unless they chose another).
+#[tauri::command]
+pub async fn proof_words_open(app: tauri::AppHandle) -> CmdResult<()> {
+    let path = app.state::<ProofState>().user.lock().unwrap().path.clone();
+    if !path.is_file() {
+        words::write_atomic(&path, &format!("{USER_HEADER}\n"))?;
+    }
+    let status = std::process::Command::new("/usr/bin/open").arg("-t").arg(&path).status()?;
+    if !status.success() {
+        return Err(CmdError::Io("couldn't open the dictionary".into()));
+    }
+    Ok(())
+}
+
 /// Add words to a list and take others out; every window checks again.
 #[tauri::command]
 pub async fn proof_words_edit(app: tauri::AppHandle, state: Win, scope: String, add: Vec<String>, remove: Vec<String>) -> CmdResult<Vec<String>> {
@@ -514,6 +574,7 @@ fn normalize(p: &Path) -> String {
 pub struct Rule {
     pub name: String,
     pub description: String,
+    /// On unless the author says: Harper's choice, or Foreword's for books (BOOK_RULES).
     pub default: bool,
 }
 
@@ -524,7 +585,14 @@ pub async fn proof_rules(app: tauri::AppHandle) -> CmdResult<Vec<Rule>> {
         let proof = app.state::<ProofState>();
         let mut engine = proof.scan.lock().unwrap();
         let english = engine.get_or_insert_with(English::default);
-        english.rules().into_iter().map(|(name, description, default)| Rule { name, description, default }).collect()
+        english
+            .rules()
+            .into_iter()
+            .map(|(name, description, harper)| {
+                let default = BOOK_RULES.iter().find(|(r, _)| *r == name).map_or(harper, |(_, on)| *on);
+                Rule { name, description, default }
+            })
+            .collect()
     })
     .await
     .map_err(|e| CmdError::Io(e.to_string()))
@@ -598,11 +666,18 @@ mod tests {
     }
 
     #[test]
-    fn other_languages_are_left_unchecked_not_red() {
+    fn other_languages_are_spelled_by_the_mac_or_left_unchecked() {
         let mut english = English::default();
-        let r = check(&mut english, &Mutex::default(), &Words::default(), &Words::default(), "a.typ", "#set text(lang: \"fr\")\nCeci est une phrase.", &options());
+        let r = check(&mut english, &Mutex::default(), &Words::default(), &Words::default(), "a.typ", "Hello.\n\n#set text(lang: \"fr\")\nCeci est une phrse.", &options());
+        if system_language(&Lang::parse("fr").unwrap()).is_some() {
+            assert_eq!(r.issues.iter().map(|i| (i.word.as_str(), i.lang.as_str())).collect::<Vec<_>>(), [("phrse", "fr")]);
+            assert!(r.issues[0].fixes.contains(&"phrase".to_string()));
+            assert!(r.unchecked.is_empty());
+        }
+        // A language the Mac has no dictionary for: not checked, never all red.
+        let r = check(&mut english, &Mutex::default(), &Words::default(), &Words::default(), "a.typ", "#set text(lang: \"tlh\")\nnuqneH qaStaH.", &options());
         assert!(r.issues.is_empty(), "{:?}", r.issues);
-        assert_eq!(r.unchecked, ["fr"]);
+        assert_eq!(r.unchecked, ["tlh"]);
     }
 
     #[test]

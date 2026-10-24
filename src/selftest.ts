@@ -4850,6 +4850,44 @@ async function proofingChecks() {
     await sleep(300);
     out.afterTabSwitch = shown().includes('spelling:teh');
     out.statusBar = [...document.querySelectorAll('.statusbar .indicator')].map((e) => e.textContent).find((t) => /spelling|grammar/.test(t ?? '')) ?? null;
+
+    // Another language: the Mac's own dictionary for French, marked as Typst marks it.
+    const french = 'Une phrse en français.';
+    const at = model.getPositionAt(offsetOf('This is an test'));
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(at, at), text: `${french}\n\n` }]);
+    const start = model.getPositionAt(offsetOf(french));
+    editor.setSelection(monaco.Range.fromPositions(start, model.getPositionAt(offsetOf(french) + french.length)));
+    studio.proofing.setLanguage('fr');
+    out.marked = model.getLineContent(start.lineNumber);
+    editor.setPosition(model.getFullModelRange().getEndPosition());
+    await waitFor(() => studio.proofing.list(path).some((f) => f.issue.word === 'phrse'), 10000, 'the French misspelling');
+    const phrse = studio.proofing.list(path).find((f) => f.issue.word === 'phrse')!;
+    out.french = { lang: phrse.issue.lang, fixes: phrse.issue.fixes.slice(0, 4), rule: phrse.issue.rule };
+
+    // The Spelling view: the whole book, words the dictionary doesn't know first.
+    studio.revealSidebar('spelling');
+    await waitFor(() => studio.state.proofing.book?.status === 'done', 30000, 'the book checked');
+    await sleep(300);
+    out.view = {
+      files: studio.state.proofing.book?.total,
+      words: [...document.querySelectorAll('.spelling-word .spelling-word-text')].slice(0, 6).map((e) => e.textContent),
+      grammar: document.querySelectorAll('.spelling-issue').length,
+    };
+    out.viewSnapshot = await snap('proofing-view');
+    studio.revealSidebar('files');
+
+    // Settings: the switches for every book, this book's dictionary with the word learned.
+    studio.openSettings('spelling');
+    await sleep(400);
+    out.settings = [...document.querySelectorAll('.settings .settings-switch-label')].map((e) => e.textContent).slice(0, 4);
+    out.settingsSnapshot = await snap('proofing-settings');
+    studio.closeSettings();
+    await sleep(250);
+    studio.openSettings('book-spelling');
+    await waitFor(() => document.querySelector('.settings .word-chip'), 5000, 'the book dictionary');
+    out.bookWords = [...document.querySelectorAll('.settings .word-chip')].map((e) => e.textContent);
+    studio.closeSettings();
+    await sleep(250);
   } finally {
     studio.store.set((s) => ({ settings: { ...s.settings, checkSpelling: settings.checkSpelling, checkGrammar: settings.checkGrammar, checkStyle: settings.checkStyle, checkCode: settings.checkCode } }));
     menuRecorder.record = undefined;

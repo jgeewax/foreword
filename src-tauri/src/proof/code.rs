@@ -113,12 +113,19 @@ pub fn unknown(text: &str, tag: &str, knows: &dyn Fn(&str) -> bool) -> Vec<Piece
         }
         for (a, b) in pieces(name) {
             let piece = &name[a..b];
-            if piece.chars().count() >= 4 && !known(piece) {
+            if piece.chars().count() >= 4 && !known(piece) && !compound(piece, &known) {
                 out.push(Piece { start: start + a, end: start + b, name: name.to_string() });
             }
         }
     }
     out
+}
+
+/// Two words run together, as names often are (`chaptergoals`, `longexample`): each of four letters
+/// or more (shorter ones let typos through: "speling" isn't "spel" and "ing"), and known.
+fn compound(piece: &str, known: &dyn Fn(&str) -> bool) -> bool {
+    let chars: Vec<(usize, char)> = piece.char_indices().collect();
+    chars.len() >= 8 && (4..=chars.len() - 4).any(|i| known(&piece[..chars[i].0]) && known(&piece[chars[i].0..]))
 }
 
 /// Runs of letters, digits, `_` and apostrophes between letters.
@@ -198,7 +205,7 @@ mod tests {
     use super::*;
 
     fn english(w: &str) -> bool {
-        ["time", "zone", "this", "test", "comment", "result", "value", "data", "compute", "hello", "world", "import", "return", "input", "print", "urls", "user", "name", "array"].contains(&w.to_lowercase().as_str())
+        ["time", "zone", "warning", "box", "chapter", "goals", "this", "test", "comment", "result", "value", "data", "compute", "hello", "world", "import", "return", "input", "print", "urls", "user", "name", "array"].contains(&w.to_lowercase().as_str())
     }
 
     fn words(text: &str, tag: &str) -> Vec<String> {
@@ -220,6 +227,12 @@ mod tests {
         assert_eq!(words("# this is a tset", "py"), ["tset"]);
         // With no tag, every language's words count.
         assert!(words("numpy.array", "").is_empty());
+    }
+
+    #[test]
+    fn two_words_run_together_are_a_name() {
+        assert!(words("#let chaptergoals(body) = 1", "typst").is_empty());
+        assert_eq!(words("tmiezone = 1", "py"), ["tmiezone"]);
     }
 
     #[test]

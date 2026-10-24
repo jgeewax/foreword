@@ -53,6 +53,7 @@ pub const COMMANDS: &[&str] = &[
     "show-tasks",
     "show-git",
     "show-in-preview",
+    "show-spelling",
     "zoom-in",
     "zoom-out",
     "zoom-reset",
@@ -159,7 +160,9 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             // ⌘; as in Pages and TextEdit ("Check Document Now").
             &item("next-spelling", "Next Spelling or Grammar Mistake", Some("CmdOrCtrl+;"))?,
-            &item("prev-spelling", "Previous Spelling or Grammar Mistake", Some("CmdOrCtrl+Shift+;"))?,
+            &item("prev-spelling", "Previous Spelling or Grammar Mistake", None)?,
+            // ⌘: as in Pages ("Show Spelling and Grammar"): the book's, in the Spelling view.
+            &item("show-spelling", "Show Spelling and Grammar", Some("CmdOrCtrl+Shift+;"))?,
             &sep()?,
             &item("add-comment", "Add Comment…", Some("CmdOrCtrl+Alt+M"))?,
         ],

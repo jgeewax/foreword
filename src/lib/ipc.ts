@@ -224,6 +224,8 @@ export const ipc = {
   /** The words spell checking accepts: the book's (.foreword/dictionary.txt) or the author's (~/.foreword/dictionary.txt). */
   proofWords: (scope: WordScope) => invoke<string[]>('proof_words', { scope }),
   proofWordsEdit: (scope: WordScope, add: string[], remove: string[]) => invoke<string[]>('proof_words_edit', { scope, add, remove }),
+  /** The author's own dictionary in their text editor. */
+  proofWordsOpen: () => invoke<void>('proof_words_open'),
   /** Harper's grammar and style rules, for Settings. */
   proofRules: () => invoke<ProofRule[]>('proof_rules'),
   /** The language the book's Typst sets ("en-GB"), found from its main file through what it imports. */

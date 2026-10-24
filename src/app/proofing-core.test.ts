@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProofIssue } from '../lib/ipc';
 import {
   bookLanguage,
+  checkable,
   countIssues,
   countsLabel,
   fixLabel,
@@ -68,6 +69,7 @@ describe('menus', () => {
     expect(fixLabel({ word: 'is', name: null }, '')).toBe('Remove “is”');
     expect(issueMessage(issue({ rule: 'CodeSpelling', word: 'tmie', name: 'tmie_zone' }))).toBe('“tmie” in tmie_zone isn’t in the dictionary.');
     expect(issueMessage(issue({ kind: 'grammar', rule: 'AnA', message: 'Use `a` here.' }))).toBe('Use “a” here.');
+    expect(issueMessage(issue({ rule: 'MacSpelling', word: 'phrse', lang: 'fr' }))).toBe('“phrse” isn’t in the French dictionary.');
   });
 
   it('writes rule names in words', () => {
@@ -103,6 +105,16 @@ describe('languages', () => {
   it('names languages', () => {
     expect(languageName('fr')).toBe('French');
     expect(languageName('en-GB')).toBe('British English');
+  });
+});
+
+describe('checkable', () => {
+  it('checks prose files, and code files when code is checked', () => {
+    expect(checkable('ch1.typ', false)).toBe(true);
+    expect(checkable('WRITING_STYLE.md', false)).toBe(true);
+    expect(checkable('fig.py', false)).toBe(false);
+    expect(checkable('fig.py', true)).toBe(true);
+    expect(checkable('refs.bib', true)).toBe(false);
   });
 });
 

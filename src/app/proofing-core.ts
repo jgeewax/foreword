@@ -32,6 +32,13 @@ export function countsLabel(c: IssueCounts | undefined): string {
     .join(' · ');
 }
 
+/** Files spelling checks (proof/mod.rs units_of): prose, and code files when code is checked. */
+export function checkable(path: string, code: boolean): boolean {
+  const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase();
+  if (['typ', 'md', 'markdown', 'txt'].includes(ext)) return true;
+  return code && ['py', 'js', 'mjs', 'ts', 'jsx', 'tsx', 'rs', 'go', 'c', 'h', 'cpp', 'hpp', 'cc', 'cs', 'dart', 'rb', 'lua', 'hs', 'php', 'html', 'css', 'tex', 'sh', 'java', 'kt', 'swift', 'jl', 'r', 'scala', 'sql'].includes(ext);
+}
+
 /** BCP 47-ish tag: "en", "en-GB", "pt-BR". */
 export const LANGUAGE_TAG = /^[a-z]{2,3}(-[A-Z]{2})?$/;
 
@@ -100,8 +107,10 @@ export function fixLabel(issue: Pick<ProofIssue, 'word' | 'name'>, fix: string):
 }
 
 /** What a hover or menu says about a mistake. */
-export function issueMessage(issue: Pick<ProofIssue, 'kind' | 'word' | 'name' | 'message' | 'rule'>): string {
+export function issueMessage(issue: Pick<ProofIssue, 'kind' | 'word' | 'name' | 'message' | 'rule'> & { lang?: string }): string {
   if (issue.kind === 'spelling' && issue.rule === 'SpellCheck') return `“${issue.word}” isn’t in the dictionary.`;
+  // Another language, from the Mac's own dictionaries: which one.
+  if (issue.kind === 'spelling' && issue.rule === 'MacSpelling') return `“${issue.word}” isn’t in the ${languageName(issue.lang ?? '')} dictionary.`;
   if (issue.kind === 'spelling' && issue.name) return `“${issue.word}” in ${issue.name} isn’t in the dictionary.`;
   return plainMessage(issue.message);
 }

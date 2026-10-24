@@ -7,19 +7,30 @@
 import { errorMessage, ipc, type DialectHint, type ProofIssue, type ProofOptions, type WordScope } from '../lib/ipc';
 import type { Doc, Documents } from '../editor/documents';
 import { monaco } from '../editor/monaco';
-import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, nextIssue, type IssueCounts } from './proofing-core';
+import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, nextIssue, wrapLanguage, type IssueCounts } from './proofing-core';
 
 /** A moment after the last keystroke, as the other marks wait (EditorPane's 300 ms, the TODO scan's 400). */
 export const CHECK_DELAY_MS = 400;
+
+/** The whole book's mistakes, for the Spelling view: checked file by file behind the editor's own checks. */
+export type BookCheck = {
+  status: 'checking' | 'done';
+  done: number;
+  total: number;
+  /** Each file's mistakes, offsets in its text (the editor's, for an open file). */
+  files: Record<string, ProofIssue[]>;
+};
 
 export type ProofingState = {
   /** Each open file's mistakes, by kind (the status bar). */
   counts: Record<string, IssueCounts>;
   /** Languages in a file that aren't checked. */
   unchecked: Record<string, string[]>;
+  /** The Spelling view's, once it's been opened. */
+  book: BookCheck | null;
 };
 
-export const initialProofing: ProofingState = { counts: {}, unchecked: {} };
+export const initialProofing: ProofingState = { counts: {}, unchecked: {}, book: null };
 
 export type ProofingHost = {
   docs(): Documents | null;
@@ -32,6 +43,11 @@ export type ProofingHost = {
   disableRule(rule: string, scope: WordScope): void;
   /** A file's words are spelled as in another English: perhaps check the book as that. */
   dialect(hint: DialectHint): void;
+  /** The book's files to check (chapters, notes, code files). */
+  bookFiles(): string[];
+  get(): ProofingState;
+  /** Open a file with `start..end` (UTF-16 offsets) selected. */
+  openAt(path: string, start: number, end: number): Promise<void>;
 };
 
 /** A mistake shown, and its squiggle (which follows the text as it's edited). */
@@ -92,7 +108,7 @@ export class Proofing {
       const unchecked = { ...s.unchecked };
       delete counts[path];
       delete unchecked[path];
-      return { counts, unchecked };
+      return { ...s, counts, unchecked };
     });
   }
 
@@ -160,9 +176,10 @@ export class Proofing {
     f.timer = window.setTimeout(() => void this.check(path), delay);
   }
 
-  /** Check every open file again (a word learned, a setting changed). */
+  /** Check every open file again (a word learned, a setting changed), and the book's view. */
   recheckAll() {
     for (const doc of this.host.docs()?.all() ?? []) this.schedule(doc.path, 0);
+    if (this.host.get().book) void this.checkBook();
   }
 
   async check(path: string) {
@@ -191,7 +208,72 @@ export class Proofing {
     f.issues = issues;
     f.version = version;
     this.paint(path);
-    this.host.set((s) => ({ counts: { ...s.counts, [path]: countIssues(issues) }, unchecked: { ...s.unchecked, [path]: unchecked } }));
+    this.host.set((s) => ({
+      ...s,
+      counts: { ...s.counts, [path]: countIssues(issues) },
+      unchecked: { ...s.unchecked, [path]: unchecked },
+      // The book's view follows the editor's own checks.
+      book: s.book && { ...s.book, files: { ...s.book.files, [path]: issues } },
+    }));
+  }
+
+  /** Bumped to stop a book check (the book closed, a new one started). */
+  private bookRun = 0;
+
+  /** The Spelling view: every file of the book checked, one after another, behind the editor's checks. */
+  async checkBook() {
+    const options = this.host.options();
+    const files = this.host.bookFiles();
+    const run = ++this.bookRun;
+    if (!options) return this.host.set((s) => ({ ...s, book: { status: 'done', done: 0, total: 0, files: {} } }));
+    const previous = this.host.get().book?.files ?? {};
+    this.host.set((s) => ({ ...s, book: { status: 'checking', done: 0, total: files.length, files: Object.fromEntries(Object.entries(previous).filter(([p]) => files.includes(p))) } }));
+    let batch: Record<string, ProofIssue[]> = {};
+    const flush = (done: number) => {
+      const add = batch;
+      batch = {};
+      this.host.set((s) => ({ ...s, book: s.book && { ...s.book, done, files: { ...s.book.files, ...add } } }));
+    };
+    for (const [i, path] of files.entries()) {
+      if (run !== this.bookRun) return;
+      const open = this.host.docs()?.get(path);
+      const f = this.files.get(path);
+      if (open && f && f.version === open.model.getVersionId()) batch[path] = f.issues;
+      else {
+        try {
+          // Open: its text as edited; else Rust reads it from disk.
+          const res = await ipc.proofCheck(path, 0, open ? open.model.getValue() : null, { ...options, ignored: [...this.ignored] }, true);
+          batch[path] = res.issues;
+        } catch (e) {
+          this.host.log(`spelling: book check: ${path}: ${errorMessage(e)}`);
+        }
+      }
+      if (i % 4 === 3 || i === files.length - 1) flush(i + 1);
+    }
+    if (run === this.bookRun) this.host.set((s) => ({ ...s, book: s.book && { ...s.book, status: 'done', done: files.length } }));
+  }
+
+  /** Files saved or changed on disk: the book's view checks them again. */
+  async bookChanged(paths: string[]) {
+    const options = this.host.options();
+    if (!this.host.get().book || !options) return;
+    const files = new Set(this.host.bookFiles());
+    for (const path of paths) {
+      if (!files.has(path) || this.subscriptions.has(path)) continue;
+      const res = await ipc.proofCheck(path, 0, null, { ...options, ignored: [...this.ignored] }, true).catch(() => null);
+      if (res) this.host.set((s) => ({ ...s, book: s.book && { ...s.book, files: { ...s.book.files, [path]: res.issues } } }));
+    }
+  }
+
+  stopBook() {
+    this.bookRun++;
+    this.host.set((s) => ({ ...s, book: null }));
+  }
+
+  /** The view's click: the mistake selected in its file, with its suggestions. */
+  async go(path: string, issue: ProofIssue) {
+    await this.host.openAt(path, issue.start, issue.end);
+    this.host.editor()?.trigger('proofing', 'editor.action.showHover', { focus: false });
   }
 
   /**
@@ -270,6 +352,7 @@ export class Proofing {
 
   /** Take mistakes away at once (ignored, a word learned), before the next check. */
   private drop(which: (i: ProofIssue) => boolean) {
+    this.host.set((s) => ({ ...s, book: s.book && { ...s.book, files: Object.fromEntries(Object.entries(s.book.files).map(([p, list]) => [p, list.filter((i) => !which(i))])) } }));
     for (const [path, f] of this.files) {
       const model = this.host.docs()?.get(path)?.model;
       const gone = f.shown.filter((s) => which(s.issue));
@@ -293,6 +376,18 @@ export class Proofing {
     await ipc.proofWordsEdit(scope, [word], []);
     this.drop((i) => i.kind === 'spelling' && i.word === word);
     this.recheckAll();
+  }
+
+  /** Set Language: the editor's selection marked as another language, as Typst writes it (one undo step). */
+  setLanguage(tag: string) {
+    const editor = this.host.editor();
+    const model = editor?.getModel();
+    const sel = editor?.getSelection();
+    if (!editor || !model || !sel || sel.isEmpty()) return;
+    editor.pushUndoStop();
+    editor.executeEdits('proofing', [{ range: sel, text: wrapLanguage(model.getValueInRange(sel), tag) }]);
+    editor.pushUndoStop();
+    editor.focus();
   }
 
   disableRule(found: Found, scope: WordScope) {
@@ -335,5 +430,6 @@ export class Proofing {
 
   dispose() {
     for (const path of [...this.subscriptions.keys()]) this.closed(path);
+    this.stopBook();
   }
 }

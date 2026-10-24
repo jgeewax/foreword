@@ -3,7 +3,7 @@
 // right-click menu (as TextEdit puts them), and ⌘. for the same fixes. Only
 // for the editor's own file: a diff's copy of a file gets none of it.
 import type { Found } from '../app/proofing';
-import { fixLabel, issueMessage, ISSUE_TITLE, proofMenu, type ProofAction } from '../app/proofing-core';
+import { fixLabel, issueMessage, ISSUE_TITLE, languageName, LANGUAGES, proofMenu, type ProofAction } from '../app/proofing-core';
 import { studio } from '../app/studio';
 import type { MenuEntry } from '../lib/context-menu';
 import { monaco } from '../editor/monaco';
@@ -58,6 +58,11 @@ export function proofEntries(model: monaco.editor.ITextModel, position: monaco.I
     ...proofMenu(found.issue).map((e): MenuEntry => (e === 'separator' ? e : { label: e.label, enabled: !!e.action, action: () => e.action && act(found, e.action) })),
     'separator',
   ];
+}
+
+/** Set Language's submenu: the selection marked as French, say (`#text(lang: "fr")[…]`), for checking and typesetting. */
+export function languageEntries(): MenuEntry[] {
+  return LANGUAGES.map((tag) => ({ label: languageName(tag), action: () => studio.proofing.setLanguage(tag) }));
 }
 
 /** The hover, ⌘. and the links' command, for this editor. Returns their cleanup. */

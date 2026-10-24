@@ -8,6 +8,7 @@ import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
 import { TodoPanel } from './TodoPanel';
+import { SpellingPanel } from './SpellingPanel';
 import { ReviewPanel } from './ReviewPanel';
 import { SourceControlPanel } from './SourceControlPanel';
 import { HistoryPanel } from './HistoryPanel';
@@ -140,7 +141,7 @@ function SourceControlActions() {
   );
 }
 
-export type View = 'files' | 'contents' | 'search' | 'history' | 'tasks' | 'code' | 'todos' | 'review' | 'git';
+export type View = 'files' | 'contents' | 'search' | 'spelling' | 'history' | 'tasks' | 'code' | 'todos' | 'review' | 'git';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
 function useViews() {
@@ -227,6 +228,12 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
     { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. Right-click one to rename it, add a chapter, and more.' } },
     { id: 'contents', icon: 'contents', label: 'Contents', tip: { name: 'Contents', about: 'The book’s chapters in order, numbered as the book numbers them, with their sections and about how long each is. Click one to go there.' } },
     { id: 'search', icon: 'search', label: 'Search the book', tip: { name: 'Search', keys: '⇧⌘F', about: 'Find words, or a pattern, in every chapter at once, and replace them all.' } },
+    {
+      id: 'spelling',
+      icon: 'spelling',
+      label: 'Spelling and grammar in the book',
+      tip: { name: 'Spelling', keys: '⇧⌘;', about: 'Spelling and grammar across the book: the words the dictionary doesn’t know, the most frequent first (add a character’s name once), then grammar by chapter.' },
+    },
     ...(hasReview
       ? [
           {
@@ -330,6 +337,8 @@ function ViewHeader({ view }: { view: View }) {
         ? 'Contents'
       : view === 'search'
         ? 'Search'
+      : view === 'spelling'
+        ? 'Spelling'
       : view === 'history'
         ? 'History'
       : view === 'tasks'
@@ -367,6 +376,8 @@ function ViewBody({ view }: { view: View }) {
     <ContentsPanel />
   ) : view === 'search' ? (
     <SearchPanel />
+  ) : view === 'spelling' ? (
+    <SpellingPanel />
   ) : view === 'history' ? (
     <HistoryPanel />
   ) : view === 'tasks' ? (
@@ -387,7 +398,7 @@ function useSidebarView(): View {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
   const { hasCode, todoCount, hasReview, hasGit } = useViews();
   const available =
-    sidebar === 'files' || sidebar === 'contents' || sidebar === 'search' || sidebar === 'history' || sidebar === 'tasks' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+    sidebar === 'files' || sidebar === 'contents' || sidebar === 'search' || sidebar === 'spelling' || sidebar === 'history' || sidebar === 'tasks' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
   return available ? sidebar : 'files';
 }
 

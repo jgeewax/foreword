@@ -13,6 +13,7 @@ import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { CommandRules } from './CommandRules';
 import { AssistantPage } from './AssistantSettings';
 import { BookFilesPage } from './BookFilesSettings';
+import { BookSpellingPage, SpellingPage } from './SpellingSettings';
 import { Choice, ColorChoice, SwitchRow, TypedSetting } from './SettingControls';
 import { ToolPicker } from './ToolPicker';
 import { DownloadProgress, InstallSteps, RELEASES } from './UpdateDialog';
@@ -178,7 +179,7 @@ const PAGE_KEY = 'studio.settingsPage';
 function readPage(): Page {
   try {
     const p = localStorage.getItem(PAGE_KEY);
-    return p === 'general' || p === 'editor' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-assistant' || p === 'book-color' ? p : 'general';
+    return p === 'general' || p === 'editor' || p === 'spelling' || p === 'assistant' || p === 'permissions' || p === 'tools' || p === 'book' || p === 'book-spelling' || p === 'book-assistant' || p === 'book-color' ? p : 'general';
   } catch {
     return 'general';
   }
@@ -698,12 +699,14 @@ export function SettingsDialog() {
   const pages: { id: Page; label: string; icon: IconName; scope: 'app' | 'book' }[] = [
     { id: 'general', label: 'General', icon: 'settings', scope: 'app' },
     { id: 'editor', label: 'Editor', icon: 'edit', scope: 'app' },
+    { id: 'spelling', label: 'Spelling & Grammar', icon: 'check', scope: 'app' },
     { id: 'assistant', label: 'Assistant', icon: 'sparkle', scope: 'app' },
     { id: 'permissions', label: 'Permissions', icon: 'shield', scope: 'app' },
     { id: 'tools', label: 'Tools', icon: 'code', scope: 'app' },
     ...(ws
       ? [
           { id: 'book' as const, label: 'Files', icon: 'book' as const, scope: 'book' as const },
+          { id: 'book-spelling' as const, label: 'Spelling', icon: 'check' as const, scope: 'book' as const },
           { id: 'book-assistant' as const, label: 'Assistant', icon: 'sparkle' as const, scope: 'book' as const },
           { id: 'book-color' as const, label: 'Colour', icon: 'palette' as const, scope: 'book' as const },
         ]
@@ -770,7 +773,7 @@ export function SettingsDialog() {
   }, [query]);
 
   const pageContent = (id: Page) =>
-    ({ general: <GeneralPage />, editor: <EditorPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage goToAssistant={() => (setQuery(''), setPage('assistant'))} />, book: <BookFilesPage />, 'book-assistant': <BookAssistantPage />, 'book-color': <BookColorPage /> })[id];
+    ({ general: <GeneralPage />, editor: <EditorPage />, spelling: <SpellingPage />, 'book-spelling': <BookSpellingPage />, assistant: <AssistantPage />, permissions: <PermissionsPage />, tools: <ToolsPage goToAssistant={() => (setQuery(''), setPage('assistant'))} />, book: <BookFilesPage />, 'book-assistant': <BookAssistantPage />, 'book-color': <BookColorPage /> })[id];
   const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (

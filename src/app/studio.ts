@@ -44,7 +44,7 @@ import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { initialProofing, Proofing, type ProofingState } from './proofing';
-import { bookLanguage, languageName, PROOFING_KEYS, proofOptions } from './proofing-core';
+import { bookLanguage, checkable, languageName, PROOFING_KEYS, proofOptions } from './proofing-core';
 import { History, initialHistory, type HistoryState } from './history';
 import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
@@ -281,7 +281,7 @@ function tourSeen(): boolean {
 /** VS Code's settings for the book's folder, where Peacock keeps its colour. */
 const VSCODE_SETTINGS = '.vscode/settings.json';
 
-export type SettingsPage = 'general' | 'editor' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-assistant' | 'book-color';
+export type SettingsPage = 'general' | 'editor' | 'spelling' | 'assistant' | 'permissions' | 'tools' | 'book' | 'book-spelling' | 'book-assistant' | 'book-color';
 export type NewBookTab = 'book' | 'paper' | 'sample';
 
 /** How the style guide is being written: from the chapters, again from them, from the author's answers, or changed as they ask. */
@@ -494,7 +494,7 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'contents' | 'search' | 'history' | 'tasks' | 'code' | 'todos' | 'review' | 'git';
+  sidebar: 'files' | 'contents' | 'search' | 'spelling' | 'history' | 'tasks' | 'code' | 'todos' | 'review' | 'git';
   /** Each Typst file's headings and about how many words it has (the Contents view). */
   contents: Record<string, FileContents>;
   /** The Search view: what's searched for, how, and what it found. */
@@ -789,6 +789,17 @@ export class Studio {
       else this.updateSettings({ proofRules: { ...this.state.settings.proofRules, [rule]: false } });
     },
     dialect: (hint) => this.offerDialect(hint),
+    bookFiles: () => this.searchFiles().filter((p) => checkable(p, this.state.settings.checkCode)),
+    get: () => this.state.proofing,
+    openAt: async (path, start, end) => {
+      await this.openFile(path);
+      const model = this.editor?.getModel();
+      if (!model || this.state.active !== path) return;
+      const range = monaco.Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end));
+      this.editor!.setSelection(range);
+      this.editor!.revealRangeInCenterIfOutsideViewport(range);
+      this.editor!.focus();
+    },
   });
   /** Books offered another English this session (offerDialect). */
   private dialectOffered = new Set<string>();
@@ -977,6 +988,7 @@ export class Studio {
     'show-tasks': () => this.showTasks(),
     'show-git': () => this.revealSidebar('git'),
     'show-in-preview': () => this.syncPreviewToCursor(),
+    'show-spelling': () => this.revealSidebar('spelling'),
     'zoom-in': () => this.zoom('in', 'menu'),
     'zoom-out': () => this.zoom('out', 'menu'),
     'zoom-reset': () => this.zoom('reset', 'menu'),
@@ -2873,6 +2885,7 @@ export class Studio {
     this.previewOpened = false;
     this.docs?.dispose();
     this.docs = null;
+    this.proofing.stopBook();
     this.agent = null;
     this.diagnostics.clear();
     this.typstDiagnostics.clear();
@@ -2924,6 +2937,8 @@ export class Studio {
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
         if (batch.includes(VSCODE_SETTINGS)) void this.loadPeacockColor();
         if (this.state.search.query) this.scheduleSearch(300);
+        // The Spelling view's files, as they are now on disk.
+        void this.proofing.bookChanged(batch);
       });
       this.history.scheduleSave();
       this.scheduleGitRefresh();

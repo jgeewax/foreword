@@ -116,6 +116,8 @@ const PATHS: Record<string, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
   minus: <path d="M5 12h14" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  // Lines of text with a misspelling's wavy line under them (the Spelling view).
+  spelling: <path d="M5 6.5h14M5 10.5h9M4 16.5c1.3-1.4 2.7-1.4 4 0s2.7 1.4 4 0 2.7-1.4 4 0 2.7 1.4 4 0" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   pin: (
     <>

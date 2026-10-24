@@ -164,7 +164,7 @@ impl WordFile {
     }
 }
 
-fn write_atomic(path: &Path, text: &str) -> CmdResult<()> {
+pub fn write_atomic(path: &Path, text: &str) -> CmdResult<()> {
     use std::io::Write;
     let dir = path.parent().ok_or_else(|| crate::error::CmdError::Invalid("no folder".into()))?;
     fs::create_dir_all(dir)?;

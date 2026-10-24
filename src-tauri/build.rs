@@ -50,6 +50,7 @@ fn main() {
             "proof_words_edit",
             "proof_rules",
             "proof_language",
+            "proof_words_open",
             "typst_start",
             "typst_send",
             "typst_stop",
