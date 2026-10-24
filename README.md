@@ -16,7 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.6:** formulas in the chat set in your book's own notation · Options shows each version as it would print · a button's message shows what you asked for, not the brief behind it · light or dark, whatever the Mac is set to · dividers you can grab, in the title bar's colour
+**New in 0.7:** a bar under what you select: Revise, Options, Explain, Comment, Ask in chat · the lines a reply points to are links to the editor · <kbd>⌘</kbd>-click a name or a file's name to go to it, as in VS Code · each mode keeps its own assistant and model · rest the pointer on a TODO to have it done
 
 <br>
 
@@ -73,7 +73,7 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 
 ### An AI assistant, in an editor made for writing
 
-AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text, ask about it or ask for a change, and it edits the book itself, then tells you what it did in a sentence or two. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands, and the formulas and Typst in its replies are drawn as your book sets them, in the book's own notation.
+AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text and a bar under it offers **Revise**, **Options** and **Explain**, or ask about it in the chat. It edits the book itself, then tells you what it did in a sentence or two, and a line it points to is a link to that line. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands, and the formulas and Typst in its replies are drawn as your book sets them, in the book's own notation.
 
 It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Ask** answers questions in the chat and changes nothing. **Discuss** thinks a direction through with you before anything is written: it says what it would do, and argues back. **Options** gives you three versions of a passage to pick from, as text or set as they'd print. When another mode would suit what you asked, it says so and offers it, with what it would do either way. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking: before a command runs, it says what the command does, and an “always” is a rule you can read and take back.
 
@@ -114,7 +114,7 @@ Comments sit beside the text, never in it.
 <td width="50%" valign="top">
 
 1. **Talk the chapter through.** Weigh it up with the assistant first, in Discuss. Nothing changes until you're ready.
-2. **Comment as you read.** Select a passage, in the text or the pages, and press <kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>.
+2. **Comment as you read.** Select a passage, in the text or the pages, and press **Comment** under it, or <kbd>⌥</kbd><kbd>⌘</kbd><kbd>M</kbd>.
 3. **Fix them all.** One click, *Fix all with the assistant*, hands every open comment over.
 4. **Check each change.** See it before and after, then **Keep** it or **Undo change**.
 
@@ -168,7 +168,7 @@ The assistant is a program on your Mac, signed in with your own account, so ther
 | **Antigravity** | Google | Your Google account, a Gemini API key or Gemini Enterprise | Agent Client Protocol, through Google's connector (Settings downloads it) |
 | **Gemini CLI** | Google | A paid Gemini API key or a Gemini Code Assist work account | Agent Client Protocol |
 
-Each conversation is its own task, and several can run at once. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Foreword's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
+Each conversation is its own task, and several can run at once. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box, and each mode keeps its own: Discuss with one, Write with another. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Foreword's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
 
 ## Everything else a book needs
 
@@ -181,7 +181,7 @@ Each conversation is its own task, and several can run at once. Choose the model
 - **Find anything.** Search every chapter at once and replace across the book (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd>), see the whole book in Contents (each chapter with its sections and how many words), and go to a chapter by its number or name (<kbd>⌘</kbd><kbd>P</kbd>).
 - **A window that's the book's own.** Give each book a colour, as VS Code's Peacock does for a folder, and its title bar, sidebar icons, status bar and the dividers between the panes wear it. A book that already has a Peacock colour keeps it. Light or dark is your choice too, whatever the Mac is set to.
 - **New to Typst?** Typst is plain text with a little markup. *Typst basics* opens beside your book and takes about five minutes; the assistant answers the rest. New to Foreword? A short tour shows you around the window the first time you open a book (Help ▸ Take the Tour, any time).
-- **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code (type `_` or `*` over a word to wrap it), formatting on save, wrapping at a column with rulers, and a window for each book.
+- **Familiar keys.** A command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>), Go to File (<kbd>⌘</kbd><kbd>P</kbd>), tabs and shortcuts as in VS Code (type `_` or `*` over a word to wrap it, <kbd>⌘</kbd>-click a name to go to where it's defined, or a file's name to open it), formatting on save, wrapping at a column with rulers, and a window for each book. Rest the pointer on a `// TODO` and the assistant can do it for you.
 
 ## Download
 

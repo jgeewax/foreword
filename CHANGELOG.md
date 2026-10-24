@@ -2,6 +2,27 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.7.0 · 24 October 2026
+
+### The assistant
+
+- **A bar under what you select: Revise, Options, Explain, Comment, Ask in chat.** Select a passage, in the text or in the pages, and a bar comes up under it, each button in the colour of what it does. **Revise** and **Options** open a box to say how, with the usual requests a click away: Tighten, Proofread, Clearer, Simpler words, Expand, and Match my style guide when the book has one. A note under the passage follows the request, *Revising…* with Stop, then *Revised −11 words* with Undo and Show change, the words it changed. **Explain** puts the passage in plain words and changes nothing, **Comment** leaves a comment, and **Ask in chat** (⌘I) takes the passage to the chat with the cursor in the box. Over a Typst error, **Fix error** comes first. The bar sits under the end of the selection, so it never covers what you're reading, and it takes the place of the Comment bubble.
+- **Places in a reply are links to the editor.** When the assistant points to a line, as `chapters/one.typ:42` or "one.typ, lines 42–48", a click puts the cursor on that line, or selects the lines. A file's name written as `code` opens the file. Only the book's own files are links, so "10:30" never is.
+- **Each mode keeps its own assistant, model and effort.** Discuss with Claude Code and Write with Codex, say: choosing a mode brings back what you last used in it, and the mode menu shows each one's. When the chat moves to another assistant this way, it's given the turns it hasn't seen.
+- **Foreword's icon and name** sit over the assistant's welcome in a new chat.
+
+### The editor
+
+- **⌘-click a name to go to where it's defined, as in VS Code.** Hold ⌘ over `#key-idea`, or anything else the book defines, and it's underlined as a link, with its definition and the comments above it under the pointer. ⌘-click opens its file at the definition. Typst's own functions, like `#figure`, are part of Typst, so they aren't links.
+- **⌘-click a file's name to open it.** The same goes for a name in quotes: `#include "chapters/one.typ"`, `image("figures/map.png")`, a bibliography. With ⌘ held it's underlined, and the pointer shows how the file starts. A Typst file opens in its tab; a picture or PDF opens in Preview. Pictures open in Preview from Files too, where before they couldn't be opened.
+- **Rest the pointer on a TODO for what you can do with it.** Over a `// TODO` or `FIXME` comment, or a `#todo`, a small bar offers *Ask the assistant to do it* (*to fix it* for a FIXME), *Done*, and *All 12 TODOs* when there are others. Right-clicking the line offers the first two.
+- **⌘Z takes back Done on its own.** Before, it took back the TODO along with what you'd typed just before. The same goes for every change Foreword makes to an open file, like a review comment put back.
+
+### Fixes
+
+- Codex named nearly every task "Typst book editing assistant", after Foreword's instructions. It names them after what you asked now, like "Clarify Typst eigenvector derivation".
+- New task (the button, ⌘T or `/new`) and Done left the cursor nowhere. They put it in the message box now, ready to type.
+
 ## 0.6.0 · 23 October 2026
 
 ### The assistant
