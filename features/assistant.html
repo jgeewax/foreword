@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The assistant · Foreword</title>
-<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.">
+<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, three versions to pick from, and questions you answer in a panel.">
 <meta property="og:title" content="The assistant · Foreword">
-<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.">
+<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, three versions to pick from, and questions you answer in a panel.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/assistant-trace.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -118,7 +118,7 @@
 <p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> moves from one to the next. Each mode keeps its own <a href="assistants.html#model-and-effort">assistant, model and effort</a>, so you can discuss with one and write with another.</p>
 <dl class="facts">
   <dt>Write</dt><dd>Writes and edits the book.</dd>
-  <dt>Ask</dt><dd>Answers questions about the book, in the chat, and changes nothing. After an answer, <span class="ui">Go ahead</span> switches to Write and makes the change you talked about.</dd>
+  <dt>Ask</dt><dd>Answers questions about the book, as <a href="#answers-you-can-check">a card you can check</a>, and changes nothing itself. After an answer, <span class="ui">Go ahead</span> switches to Write and makes the change you talked about.</dd>
   <dt>Discuss</dt><dd>Thinks a direction through with you: two or three real options, what each costs, and which it would pick. It argues against a weaker idea, and points to your own lines. It changes nothing until you press <span class="ui">Write it</span>, and then it says what you agreed before it writes.</dd>
   <dt>Options</dt><dd>Three versions of the selected passage to choose from. You put one in.</dd>
   <dt>Figures</dt><dd>Diagrams, charts, illustrations and tables, drawn in Typst, so they appear in the preview.</dd>
@@ -128,6 +128,19 @@
   <figcaption>The mode menu. Each mode says what it can and can’t do.</figcaption>
 </figure>
 <p>In Ask, Discuss and Options, “changes nothing” is enforced by Foreword, not left to the assistant’s good behaviour: any attempt to change a file is refused.</p>
+
+<h3 id="answers-you-can-check">Answers you can check</h3>
+<p>In Ask, every answer comes as a card. It starts with your question given back as the assistant understood it, so you see at once whether it took you right, and <span class="ui">Not quite?</span> lets you say it again. When a question could mean two things, it answers the likelier one and offers the other, with <span class="ui">Answer that instead</span>. Then the answer, in a sentence or two, and how sure it is: certain, fairly sure or a guess, with what it checked.</p>
+<figure class="small">
+  <img src="../images/f/assistant-ask-card.webp" width="1176" height="1550" alt="A question about Jekyll and Hyde in Ask mode: where does utterson first hear the name hyde? Claude Code's answer card. You asked: In which passage of the book does Mr. Utterson first hear the name Hyde?, with Not quite?. How it found out: searched 1 time, read 1 passage, 11 s. Answer: In Chapter 1, on the Sunday walk with Mr. Enfield; Utterson asks the name of the man who trampled the child, and Enfield tells him: a man of the name of Hyde. Fairly sure, with what it checked. Where in the book: a map of Story of the Door, 145 lines, with two pins near line 110, then the two places quoted from the chapter: Utterson asks the name, lines 107 to 111, and Utterson's reaction, line 113: Hm, said Mr. Utterson. Then Why, its reasoning.">
+  <figcaption>“Where does Utterson first hear the name Hyde?” The question as it understood it, the answer, and the two places in chapter 1 that show it, quoted from the book and pinned on the chapter.</figcaption>
+</figure>
+<p>Each place it points to is quoted from your own text, and pinned on a map of the chapter; click one to go there. Its reasoning follows, then what it would change, word by word: <span class="ui">Make this change</span> makes it in your text (<kbd>⌘</kbd><kbd>Z</kbd> undoes it), and <span class="ui">Go ahead</span> makes them all. Under the card, a follow-up or two to ask next, one click each.</p>
+<p>When numbers compare, such as how often a name comes up in each chapter, the assistant can draw them as a chart, with the ones it means in colour.</p>
+<figure class="small">
+  <img src="../images/f/assistant-ask-chart.webp" width="1176" height="1180" alt="Asked which chapters talk about Dr Lanyon the most, the card gives the question back, then answers: Chapter 6, Remarkable Incident of Dr. Lanyon, by a wide margin (12 mentions), then Chapter 9, Lanyon's own narrative (8), and Chapter 2 (6). Fairly sure: it counted the name per chapter, which counts mentions, not how much of the page he occupies. Two figures, 12 mentions in chapter 6 and 4 in chapter 10, and a bar chart of mentions of Lanyon by chapter: chapters 6 and 9 in teal, then 2, 10, 3 and 8 in grey.">
+  <figcaption>“Which chapters talk about Dr Lanyon the most?” Counted chapter by chapter, and drawn.</figcaption>
+</figure>
 
 <h3>When another mode would suit</h3>
 <p>Ask “should the exercises stay in their own chapter at the end, or should each chapter end with its own?” in Write, and there’s nothing to write yet. It’s a question of direction. So the assistant says so, and under its reply asks <strong>How should it go on?</strong>, offering two ways forward in a sentence each: Discuss (“Weigh a single closing exercises chapter against exercises at the end of each chapter, and recommend one. Nothing changes.”) or Write (“Move the exercises to the end of each chapter, splitting chapter VII up.”). One click picks. It offers this at most once a reply, and never offers again a mode you’ve turned down in this task.</p>
