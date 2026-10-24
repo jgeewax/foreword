@@ -2297,6 +2297,47 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   `#import "/code.typ"` opens code.typ. `#key-idea` still goes to style.typ at
   129:6.
 
+### ⌘-click a reference to open its label
+
+- **Asked for by the author:** ⌘ held over `@ch:matrices-as-functions` underlines
+  it like a link, and ⌘-click opens where the label is, "or I have no way to
+  link myself around". It has to work with the preview showing the whole book
+  or one chapter.
+- **Tinymist alone wasn't enough.** It finds a reference's label in the
+  document it last typeset. The chapter preview typesets one chapter, so a
+  reference to another chapter was no link. And Tinymist answers only once
+  it's done typesetting: 19.6 s after the preview started on the 745-page
+  linear algebra book, and again after each edit. So a reference goes to its
+  label as the book's files have it now (`labelLinksAt`), before Tinymist is
+  asked. It looks in this file first, then in the main file and everything it
+  includes, however deep (`bookTexts`, open buffers as they are). Comments,
+  raw blocks and maths don't count (`prose`, which now blanks them and keeps
+  every offset). A label given to a call (`#ref(<x>)`) is a reference, not a
+  label. It answers in ~20 ms on that book in both modes. When the label isn't
+  in the book's text, Tinymist still answers: a citation goes to its entry in
+  the `.bib` (the chapter preview keeps the bibliography), and so does a label
+  made by code or in an imported file.
+- **What's a reference:** `@name`, without its `[supplement]` or a final "." or
+  ":" (as Typst reads it), or `<name>` given to a call. A `\@` is no
+  reference. Monaco asks only over a word, so ⌘ over the `-` in a name shows
+  nothing, as over `../` in a path.
+- **The label under the pointer** shows what it's on (`labelPreview`): a
+  heading's line; for a label alone on its line, the heading above; a figure,
+  table or block from where its brackets open; an equation from its opening
+  `$`. 7 lines at most. Tinymist's labels get the same preview.
+- **The label scan was slow in WebKit:** `LABEL`'s lookbehind (`(?<![(,:]\s*)`)
+  took 495 ms over the book's 1.7 M characters; the same match without it takes
+  3 ms. It now captures what's before the label and skips arguments. The
+  chapter preview's text, which runs the same scan, went from ~600 ms to ~95 ms
+  to build. A file without the literal `<name>` isn't scanned at all.
+- Checked in a scratch build on a copy of the linear algebra book, in both
+  modes. With real AppKit events, ⌘ over `@ch:matrices-as-functions` in ch05
+  underlines all of it and shows "= Matrices as functions <ch:…>". ⌘-click
+  opens ch06 at 3:25. `@tab:ch5_sales_matrix` shows the table and jumps to
+  43:3. `@sec:ch2-linear-combinations` opens ch02 at 35:24. A plain word is no
+  link. On the sample book, `@axler2015` and `@strang2016` open refs.bib at
+  their entries in both modes.
+
 ### The editor's text size
 
 - **The author found the writing too big next to the controls.** The editor

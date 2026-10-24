@@ -10,7 +10,7 @@ import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type MergeQuestion } from '../editor/documents';
 import { definitions, toMonacoRange, uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
-import { definitionPreview, filePreview } from '../editor/definition-preview';
+import { definitionPreview, filePreview, labelPreview } from '../editor/definition-preview';
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
 import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
@@ -39,6 +39,7 @@ import { parseConfig, serializeConfig } from './config';
 import { chapterNumber, describeTool, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
 import { chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
 import { scanIncludes } from './includes';
+import { labelPlaces, referenceAt } from './labels';
 import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
@@ -2647,11 +2648,12 @@ export class Studio {
   /**
    * Go to Definition (⌘-click; ⌘ alone underlines): a file the path under the
    * pointer names (fileLinkAt), or where Tinymist says the name there is
-   * defined, when that's in the book: a #let in the style file, a label.
-   * Built-ins like #figure are defined in Typst itself, and a package's files
-   * aren't the book's, so they're not links. A definition's file is opened
-   * (without a tab) as it's found, so the editor can show the definition under
-   * the pointer.
+   * defined, when that's in the book: a #let in the style file, a label, a
+   * citation's entry in the bibliography. Built-ins like #figure are defined in
+   * Typst itself, and a package's files aren't the book's, so they're not
+   * links. A reference goes to its label in the book's text first
+   * (labelLinksAt). A definition's file is opened (without a tab) as it's
+   * found, so the editor can show the definition under the pointer.
    */
   async definitionsAt(model: monaco.editor.ITextModel, position: monaco.IPosition): Promise<monaco.languages.LocationLink[]> {
     const docs = this.docs;
@@ -2660,7 +2662,8 @@ export class Studio {
     if (!docs || !root || !doc) return [];
     const file = await this.fileLinkAt(doc.path, model, position);
     if (file) return [file];
-    if (!doc.lspOpen) return [];
+    const labels = await this.labelLinksAt(doc.path, model, position);
+    if (labels.length || !doc.lspOpen) return labels;
     const found = await this.typst.definition(doc.uri, { line: position.lineNumber - 1, character: position.column - 1 }).catch(() => null);
     const links: monaco.languages.LocationLink[] = [];
     for (const d of definitions(found)) {
@@ -2669,10 +2672,41 @@ export class Studio {
       if (!target) continue;
       // Tinymist's range is the name alone; the editor shows the range's text under the pointer.
       const lines = target.model.getLinesContent();
-      const { from, to } = definitionPreview(lines, d.nameRange.start.line);
+      const { start } = d.nameRange;
+      const { from, to } = lines[start.line]?.[start.character] === '<' ? labelPreview(lines, start.line, start.character) : definitionPreview(lines, start.line);
       const range = new monaco.Range(from + 1, 1, to + 1, (lines[to]?.length ?? 0) + 1);
       const originSelectionRange = d.originRange && toMonacoRange(d.originRange);
       links.push({ uri: target.model.uri, range, targetSelectionRange: toMonacoRange(d.nameRange), originSelectionRange });
+    }
+    return links;
+  }
+
+  /**
+   * The label that a reference under the pointer names (`@fig-1`,
+   * `#ref(<fig-1>)`), found in the text of the book's files, this one first.
+   * Tinymist only knows the labels in what it last typeset, which in the
+   * chapter preview is one chapter, and only answers once it's done: 20 s
+   * after the preview starts on a 750-page book. A citation, or a label made
+   * by code or in an imported file, is left to it.
+   */
+  private async labelLinksAt(from: string, model: monaco.editor.ITextModel, position: monaco.IPosition): Promise<monaco.languages.LocationLink[]> {
+    const ref = referenceAt(model.getLineContent(position.lineNumber), position.column - 1);
+    if (!ref) return [];
+    const book = await this.bookTexts();
+    const originSelectionRange = new monaco.Range(position.lineNumber, ref.start + 1, position.lineNumber, ref.end + 1);
+    const links: monaco.languages.LocationLink[] = [];
+    for (const path of [from, ...(book?.files ?? []).filter((f) => f !== from)]) {
+      const text = path === from ? model.getValue() : book?.read(path);
+      if (!text || !labelPlaces(text, ref.name).length) continue;
+      const target = path === from ? model : (await this.docs?.open(path).catch(() => null))?.model;
+      if (!target) continue;
+      const lines = target.getLinesContent();
+      for (const place of labelPlaces(target.getValue(), ref.name)) {
+        const start = target.getPositionAt(place.start);
+        const { from: top, to } = labelPreview(lines, start.lineNumber - 1, start.column - 1);
+        const range = new monaco.Range(top + 1, 1, to + 1, lines[to].length + 1);
+        links.push({ uri: target.uri, range, targetSelectionRange: monaco.Range.fromPositions(start, target.getPositionAt(place.end)), originSelectionRange });
+      }
     }
     return links;
   }
@@ -3420,7 +3454,7 @@ export class Studio {
   }
 
   /** The main file and the files it includes (however deep), as they are now, open buffers included. */
-  private async bookTexts(): Promise<{ main: string; chapters: string[]; read: (path: string) => string | null } | null> {
+  private async bookTexts(): Promise<{ main: string; chapters: string[]; files: string[]; read: (path: string) => string | null } | null> {
     const entry = this.state.workspace?.entry;
     const main = entry ? await this.currentText(entry) : null;
     if (!entry || main == null) return null;
@@ -3435,7 +3469,7 @@ export class Studio {
     };
     const chapters = mainIncludes(main, entry, root).map((x) => x.file);
     await Promise.all(chapters.map(load));
-    return { main, chapters, read: (path) => texts.get(path) ?? null };
+    return { main, chapters, files: [...texts.keys()], read: (path) => texts.get(path) ?? null };
   }
 
   /**

@@ -18,6 +18,41 @@ export function definitionPreview(lines: readonly string[], line: number, max = 
 }
 
 /**
+ * The lines (0-based, inclusive) to show for a label (`<fig-1>`, starting at
+ * `column` of `line`): what it's put on. A heading is its line; a figure or a
+ * block that closes before the label goes back to where it opens, and an
+ * equation to its opening `$`. A label alone on its line is put on what's
+ * above it. Only the first `max` lines of a longer one.
+ */
+export function labelPreview(lines: readonly string[], line: number, column: number, max = 7): { from: number; to: number } {
+  let before = (lines[line] ?? '').slice(0, column);
+  let from = line;
+  if (!before.trim()) {
+    while (from > 0 && !lines[from - 1].trim()) from--;
+    if (from > 0) before = lines[--from];
+  }
+  let depth = netBrackets(before);
+  if (depth < 0) {
+    while (from > 0 && depth < 0) depth += netBrackets(lines[--from]);
+  } else if (dollars(before) % 2) {
+    // `$ … $ <eq-1>` over several lines.
+    for (let n = 1; from > 0 && n % 2; ) n += dollars(lines[--from]);
+  }
+  return { from, to: Math.min(line, from + max - 1) };
+}
+
+/** The `$`s on a line that aren't escaped or in a `//` comment. */
+function dollars(text: string): number {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\\') i++;
+    else if (text[i] === '/' && text[i + 1] === '/') break;
+    else if (text[i] === '$') n++;
+  }
+  return n;
+}
+
+/**
  * The lines (0-based, inclusive) to show for a whole file, named by its path
  * (`#include "chapters/one.typ"`): from its first heading near the top, or its
  * first line with text when it has none, `max` lines at most.

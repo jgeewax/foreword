@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { definitionPreview, filePreview } from './definition-preview';
+import { definitionPreview, filePreview, labelPreview } from './definition-preview';
 
 const STYLE = `#let accent = rgb("#1f4e79")
 
@@ -60,6 +60,56 @@ describe('definitionPreview', () => {
   it('keeps no more than `max` lines of doc comments', () => {
     const lines = ['/// one', '/// two', '/// three', '#let x = 1'];
     expect(definitionPreview(lines, 3, 3)).toEqual({ from: 1, to: 3 });
+  });
+});
+
+describe('labelPreview', () => {
+  const CHAPTER = `= Vectors <ch-vectors>
+
+== Why vectors matter
+<sec-why>
+
+#figure(
+  image("square.svg"),
+  caption: [A square.],
+) <fig-square>
+
+$ A = P D P^(-1). $ <eq-diag>
+
+$
+  p(lambda) = det(A - lambda I)
+$ <eq-charpoly>
+
+#code[
+  print("(")
+] <lst-print>`.split('\n');
+  const label = (name: string) => {
+    const line = CHAPTER.findIndex((l) => l.includes(`<${name}>`));
+    return labelPreview(CHAPTER, line, CHAPTER[line].indexOf(`<${name}>`));
+  };
+  const line = (text: string) => CHAPTER.findIndex((l) => l.includes(text));
+
+  it("shows a heading's line", () => {
+    expect(label('ch-vectors')).toEqual({ from: 0, to: 0 });
+  });
+
+  it('shows the heading above a label alone on its line', () => {
+    expect(label('sec-why')).toEqual({ from: line('== Why'), to: line('<sec-why>') });
+  });
+
+  it('shows a figure from where it opens', () => {
+    expect(label('fig-square')).toEqual({ from: line('#figure('), to: line('<fig-square>') });
+    expect(label('lst-print')).toEqual({ from: line('#code['), to: line('<lst-print>') });
+  });
+
+  it('shows an equation from its opening $', () => {
+    expect(label('eq-diag')).toEqual({ from: line('<eq-diag>'), to: line('<eq-diag>') });
+    expect(label('eq-charpoly')).toEqual({ from: line('<eq-charpoly>') - 2, to: line('<eq-charpoly>') });
+  });
+
+  it('shows the first `max` lines of a long one', () => {
+    const at = line('<fig-square>');
+    expect(labelPreview(CHAPTER, at, CHAPTER[at].indexOf('<'), 2)).toEqual({ from: line('#figure('), to: line('#figure(') + 1 });
   });
 });
 

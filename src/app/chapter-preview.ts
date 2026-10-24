@@ -5,6 +5,7 @@
 // contents), so the chapter looks as it does in the book. Pure; studio.ts
 // sends the text to Tinymist as the preview's main file.
 import { scanIncludes } from './includes';
+import { labelsPut, prose } from './labels';
 import { resolveRef } from './references';
 
 /**
@@ -44,48 +45,13 @@ export function chapterOf(path: string, chapters: string[], read: ReadText, root
   return chapters.find((c) => includeTree(c, read, root).includes(path)) ?? null;
 }
 
-// A label put on something; one written as an argument (`#ref(<x>, form: "page")`, `link(<x>)`) refers to it instead.
-const LABEL = /(?<![(,:]\s*)<([\p{L}_][\p{L}\p{N}_:.-]*)>/gu;
 const HEADING_LABEL = /^\s*=+\s+(.+?)\s*<([\p{L}_][\p{L}\p{N}_:.-]*)>\s*$/gmu;
-
-/**
- * Text without comments, raw blocks and maths, where nothing is a heading or a
- * label (an equation's lines often start with "="). Maths is blanked, its
- * line breaks kept.
- */
-function prose(text: string): string {
-  const s = text
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-  let out = '';
-  let math = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === '\\' && s[i + 1] !== undefined && s[i + 1] !== '\n') {
-      out += math ? '  ' : c + s[i + 1];
-      i++;
-    } else if (c === '`' && !math) {
-      // Inline raw text, which may hold a "$".
-      const end = s.indexOf('`', i + 1);
-      const raw = end < 0 ? '' : s.slice(i, end + 1);
-      if (raw && !raw.includes('\n')) {
-        out += raw;
-        i = end;
-      } else out += c;
-    } else if (c === '$') {
-      math = !math;
-      out += ' ';
-    } else out += math && c !== '\n' ? ' ' : c;
-  }
-  return out;
-}
 
 /** The labels a text puts on things, each with its heading's words when it labels a heading (null otherwise). */
 function labelsIn(text: string): Map<string, string | null> {
   const out = new Map<string, string | null>();
   const s = prose(text);
-  for (const m of s.matchAll(LABEL)) out.set(m[1], null);
+  for (const l of labelsPut(s)) out.set(l.name, null);
   for (const m of s.matchAll(HEADING_LABEL)) out.set(m[2], m[1].replace(/[*_`$#\\]/g, '').replace(/\s+/g, ' ').trim() || null);
   return out;
 }
