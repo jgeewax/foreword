@@ -99,8 +99,12 @@ const JUMP_SCRIPT: &str = r#"
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
   // Where a click lands, before Tinymist's own handler sends it to the
   // source: the app puts the source it jumps to level with it in the editor.
+  // And the words clicked: a reference the preview sets in red is found by
+  // them (Tinymist doesn't jump for it, as a show rule made its words).
   window.addEventListener('click', (e) => {
-    try { window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'click', y: e.clientY } }); } catch (_) {}
+    const run = e.target && e.target.closest ? e.target.closest('.typst-text') : null;
+    const text = run ? String(run.textContent || '').slice(0, 200) : '';
+    try { window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: 'click', y: e.clientY, text } }); } catch (_) {}
   }, true);
 })();
 "#;

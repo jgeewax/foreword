@@ -285,6 +285,107 @@ async function chapterPreviewChecks() {
 }
 
 /**
+ * A reference that goes nowhere (broken-refs.ts): typed into a chapter, it
+ * doesn't stop the preview, which sets it in red and goes on following the
+ * typing; the editor marks it; a click on it in the preview goes to it; the
+ * chapter preview takes it too. Types and undoes, never saves.
+ */
+async function brokenRefChecks() {
+  const out: Record<string, unknown> = {};
+  const s = studio as unknown as { entryText: string; previewKeys: string[]; refList: { path: string; name: string }[] };
+  const ws = studio.state.workspace!;
+  const before = studio.state.settings.previewScope;
+  const ready = (what: string) => waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
+  // The marks in the preview's pages on screen: how many show the reference, and the words of the one that does.
+  const marks = async (tag: string, name: string) =>
+    previewState(tag, (t) => `(() => {
+      const runs = [...document.querySelectorAll('.typst-text')].filter((r) => (r.textContent || '').includes(${JSON.stringify(`@${name}`)}));
+      window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: ${JSON.stringify(t)}, count: runs.length, text: runs[0] ? runs[0].textContent : null, fill: runs[0] ? getComputedStyle(runs[0]).fill : null } });
+    })();`);
+  const markers = (model: monaco.editor.ITextModel) => monaco.editor.getModelMarkers({ resource: model.uri }).map((m) => ({ line: m.startLineNumber, column: m.startColumn, end: m.endColumn, source: m.source, message: m.message }));
+  try {
+    if (before !== 'book') {
+      await studio.showInPreview('book');
+      await sleep(1000);
+    }
+    await ready('the whole book');
+    out.start = { errors: studio.state.problems.errors, refs: s.refList.length, keys: s.previewKeys, guarded: s.entryText.startsWith("// Foreword's preview of") };
+
+    const chapters = studio.state.names.chapters.filter((c) => chapterNumber(c, studio.state.names) != null);
+    const chapter = chapters[Math.floor(chapters.length / 2)] ?? ws.entry!;
+    await studio.openFile(chapter);
+    const editor = studio.editor!;
+    const model = editor.getModel()!;
+    const original = model.getValue();
+    const line = model.getLinesContent().findIndex((l) => /^[A-Z][a-z]/.test(l) && l.length > 40) + 1;
+    editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+    editor.focus();
+    await sleep(1500);
+
+    // Typed: Typst would stop at it; the preview goes on, with it in red.
+    log('broken ref: typed');
+    studio.perf.editToPreview.clear();
+    const pagesBefore = studio.state.compile.pages;
+    for (const text of [' See @', 'foreword-nope', '-zz.']) {
+      editor.trigger('selftest', 'type', { text });
+      await sleep(1500);
+    }
+    await waitFor(() => s.refList.some((p) => p.name === 'foreword-nope-zz'), 10000, 'the reference found');
+    await sleep(1500);
+    out.typed = { status: studio.state.compile.status, pages: studio.state.compile.pages, pagesBefore, errors: studio.state.problems.errors, previewUpdates: summary(studio.perf.editToPreview) };
+    out.markers = markers(model);
+    out.inPreview = await marks('broken-ref-marks', 'foreword-nope-zz');
+    out.snapshot = await ipc.previewSnapshot('broken-ref').catch(errorMessage);
+    out.editorSnapshot = await snap('broken-ref-editor');
+
+    // Typing goes on past it, and the preview follows.
+    studio.perf.editToPreview.clear();
+    for (let i = 0; i < 4; i++) {
+      editor.trigger('selftest', 'type', { text: ' x' });
+      await sleep(1500);
+    }
+    out.typingAfter = { status: studio.state.compile.status, previewUpdates: summary(studio.perf.editToPreview) };
+
+    // A click on it in the preview: the editor selects the reference.
+    log('broken ref: click');
+    editor.setPosition({ lineNumber: 1, column: 1 });
+    await ipc.previewEval(`(() => {
+      const t = [...document.querySelectorAll('.typst-text')].find((r) => (r.textContent || '').includes('@foreword-nope-zz'));
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      t.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+    })();`);
+    await sleep(2000);
+    const sel = editor.getSelection()!;
+    out.click = { file: studio.state.active, line: sel.startLineNumber, text: model.getValueInRange(sel), clicked: (studio as unknown as { previewClick: { text: string } | null }).previewClick?.text ?? null };
+
+    // Fixed (undone): no mark, no error.
+    for (let i = 0; i < 50 && model.getValue() !== original && model.canUndo(); i++) await model.undo();
+    await waitFor(() => !s.refList.some((p) => p.name === 'foreword-nope-zz'), 10000, 'the reference gone');
+    await sleep(1500);
+    out.undone = { same: model.getValue() === original, errors: studio.state.problems.errors, markers: markers(model).length, status: studio.state.compile.status };
+
+    // One chapter alone: the guard goes before the main file's first line.
+    if (chapters.length > 1) {
+      log('broken ref: chapter preview');
+      await studio.showInPreview('chapter');
+      await sleep(1000);
+      await ready('one chapter');
+      editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+      editor.trigger('selftest', 'type', { text: ' And @foreword-nope-chapter.' });
+      await waitFor(() => s.refList.some((p) => p.name === 'foreword-nope-chapter'), 10000, 'the reference found');
+      await sleep(3000);
+      out.chapterPreview = { status: studio.state.compile.status, chapter: studio.state.previewChapter, guarded: s.entryText.startsWith('#show ref:'), inPreview: await marks('broken-ref-chapter', 'foreword-nope-chapter') };
+      for (let i = 0; i < 50 && model.getValue() !== original && model.canUndo(); i++) await model.undo();
+      await sleep(1000);
+    }
+  } finally {
+    if (studio.state.settings.previewScope !== before) await studio.showInPreview(before);
+  }
+  return out;
+}
+
+/**
  * Project settings (TODO #5): .foreword.json from the Settings UI. Writes
  * files, so only with FOREWORD_SELFTEST_EDITS=1 on a scratch book that has
  * an alt.typ entry and a .foreword.json with an unknown "custom" key.
@@ -8766,6 +8867,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
     if (only?.includes('chapterpreview')) result.chapterpreview = await chapterPreviewChecks();
+    if (only?.includes('brokenref')) result.brokenref = await brokenRefChecks();
     if (only?.includes('epub')) result.epub = await epubChecks(outDir);
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
     if (only?.includes('stylerevise')) result.stylerevise = await styleReviseChecks();

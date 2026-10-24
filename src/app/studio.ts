@@ -52,6 +52,7 @@ import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printC
 import { shouldStartTour, TOUR_SEEN_KEY, TOUR_STEPS } from './tour';
 import { replaceText, searchPattern, searchText, SEARCHABLE, type FileMatches, type SearchMatch, type SearchOptions } from './book-search';
 import { fileContents, type FileContents } from './contents';
+import { bookPreviewText, inRefGuard, RefIndex, refDiagnostic, refGuard, type RefProblem } from './broken-refs';
 import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
@@ -768,10 +769,12 @@ export class Studio {
   private turnMessage = '';
 
   private viewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>();
+  /** What the editor marks in each file: Tinymist's errors and warnings (typstDiagnostics), and the references that go nowhere (refProblems). */
   private diagnostics = new Map<string, LspDiagnostic[]>();
+  private typstDiagnostics = new Map<string, LspDiagnostic[]>();
   private previewBounds: Bounds | null = null;
-  /** The last click in the preview: its height there (the preview's px) and when, for the jump it makes. */
-  private previewClick: { y: number; at: number } | null = null;
+  /** The last click in the preview: its height there (the preview's px), the words clicked, and when, for the jump it makes. */
+  private previewClick: { y: number; text: string; at: number } | null = null;
   private previewVisible = true;
   private previewOpened = false;
   private pendingDisk = new Set<string>();
@@ -861,11 +864,14 @@ export class Studio {
     void getCurrentWebview().listen<string>('menu', (e) => void this.menuCommand(e.payload));
     // The update is the app's: any window's check, download or install shows in all of them.
     void listen<UpdateState>('update', (e) => this.store.set({ update: e.payload }));
-    void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; selection?: string; page?: number; offset?: number }>('preview:report', (e) => {
+    void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; text?: string; selection?: string; page?: number; offset?: number }>('preview:report', (e) => {
       if (e.payload?.tag === 'loaded') this.configurePreview({ place: true });
       if (e.payload?.tag === 'place') this.rememberPreviewPlace(e.payload);
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
-      if (e.payload?.tag === 'click') this.previewClick = { y: e.payload.y ?? 0, at: performance.now() };
+      if (e.payload?.tag === 'click') {
+        this.previewClick = { y: e.payload.y ?? 0, text: e.payload.text ?? '', at: performance.now() };
+        void this.revealClickedRef();
+      }
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');
       if (e.payload?.tag === 'selection') void this.previewSelection(e.payload as { text: string; end?: boolean });
     });
@@ -1075,6 +1081,8 @@ export class Studio {
         }
         // A chapter shown alone is the main file with the others left out: it follows the main file's changes.
         if (p === this.state.workspace?.entry) this.scheduleChapterPreview();
+        // Its labels and references (or a bibliography's keys): which references go nowhere.
+        if (p.endsWith('.typ') || this.refs.hasBibliography(p)) this.scheduleRefs(p);
       },
       onDirtyChange: (p, dirty) => {
         this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } }));
@@ -1107,6 +1115,8 @@ export class Studio {
     this.aiEdits.clear();
     this.aiReads = [];
     void this.refreshNames();
+    // Before the preview starts (it waits for the bibliographies' keys).
+    void this.updateRefs();
     void this.history.start(this.historyExcludes()).then(() => this.refreshAiEdits());
     void this.git.refresh();
     void this.code.scan();
@@ -2795,6 +2805,10 @@ export class Studio {
     this.docs = null;
     this.agent = null;
     this.diagnostics.clear();
+    this.typstDiagnostics.clear();
+    this.refs = new RefIndex();
+    this.refList = [];
+    this.refProblems.clear();
     this.viewStates.clear();
     this.store.set({
       workspace: null,
@@ -2835,6 +2849,7 @@ export class Studio {
         void this.code.scan();
         void this.scanTodos();
         void this.refreshNames(batch);
+        void this.updateRefs(batch);
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
         if (batch.includes(VSCODE_SETTINGS)) void this.loadPeacockColor();
         if (this.state.search.query) this.scheduleSearch(300);
@@ -2865,6 +2880,9 @@ export class Studio {
       this.toast(`Can't open ${path}: ${errorMessage(e)}`, 'error');
       return;
     }
+    // What was found in it before it opened (Tinymist reports on files that aren't).
+    const marks = this.diagnostics.get(path);
+    if (marks) this.docs.setDiagnostics(path, marks);
     this.store.set((s) => ({ tabs: s.tabs.includes(path) ? s.tabs : [...s.tabs, path] }));
     if (activate) this.activate(path);
     this.persistTabs();
@@ -3159,10 +3177,14 @@ export class Studio {
   }
 
   /** Preview → source: a click on rendered content selects the source that produced it. */
-  private async revealSource(jump: SourceJump) {
+  private async revealSource(jump: SourceJump): Promise<void> {
     const root = this.state.workspace?.root;
     if (!root || !jump.start || !jump.end || !jump.filepath.startsWith(root + '/')) return;
-    const path = this.asWritten(jump.filepath.slice(root.length + 1))!;
+    const shown = jump.filepath.slice(root.length + 1);
+    // Words the guard made (refGuard) aren't the book's: a click on them goes to the reference (revealClickedRef).
+    const entry = this.state.workspace?.entry;
+    if (entry && shown === chapterPreviewPath(entry) && inRefGuard(this.entryText, this.previewKeys, jump.start[0], jump.start[1])) return;
+    const path = this.asWritten(shown)!;
     this.suppressSyncUntil = performance.now() + 600;
     clearTimeout(this.syncTimer);
     await this.openFile(path);
@@ -3300,9 +3322,25 @@ export class Studio {
     const root = this.state.workspace?.root;
     const path = root ? this.asWritten(uriToRelative(uri, root)) : null;
     if (!path) return;
-    if (list.length) this.diagnostics.set(path, list);
-    else this.diagnostics.delete(path);
-    this.docs?.setDiagnostics(path, list);
+    if (list.length) this.typstDiagnostics.set(path, list);
+    else this.typstDiagnostics.delete(path);
+    this.publishDiagnostics([path]);
+  }
+
+  /** The editor's marks in files, and the status bar's counts: Tinymist's errors and warnings, with the references that go nowhere. */
+  private publishDiagnostics(paths: Iterable<string>) {
+    const covers = (d: LspDiagnostic, at: { line: number; character: number }) =>
+      (d.range.start.line < at.line || (d.range.start.line === at.line && d.range.start.character <= at.character)) &&
+      (d.range.end.line > at.line || (d.range.end.line === at.line && d.range.end.character >= at.character));
+    for (const path of paths) {
+      const typst = this.typstDiagnostics.get(path) ?? [];
+      // Where Tinymist has its own error for one, that's enough.
+      const refs = (this.refProblems.get(path) ?? []).filter((r) => !typst.some((d) => d.severity === 1 && covers(d, r.range.start)));
+      const list = [...typst, ...refs];
+      if (list.length) this.diagnostics.set(path, list);
+      else this.diagnostics.delete(path);
+      this.docs?.setDiagnostics(path, list);
+    }
     let errors = 0;
     let warnings = 0;
     for (const ds of this.diagnostics.values()) {
@@ -3326,6 +3364,9 @@ export class Studio {
     this.store.set({ preview: { status: 'starting' } });
     // The cover is its own document: preview it instead of the book on request.
     if (this.state.previewTarget === 'cover' && !ws.files.includes(COVER_PREVIEW)) this.store.set({ previewTarget: 'book' });
+    // The book's citations, for the guard against references that go nowhere (refGuard): known before it's first typeset.
+    await this.refRun;
+    this.previewKeys = this.refs.citationKeys(ws.entry);
     // Or one chapter of the book alone (Settings ▸ General ▸ Preview), when the book has chapters to leave out.
     const chapter =
       this.state.previewTarget === 'book' && this.state.settings.previewScope === 'chapter'
@@ -3333,10 +3374,18 @@ export class Studio {
             .then(async (c) => c && (await ipc.previewChapterFile(c.path), c))
             .catch(() => null)
         : null;
-    this.chapterText = chapter?.text ?? '';
+    // The whole book: the main file, included after the guard by a file beside it (bookPreviewText).
+    const book =
+      this.state.previewTarget === 'book' && !chapter
+        ? await ipc.previewChapterFile(chapterPreviewPath(ws.entry)).then(
+            () => ({ path: chapterPreviewPath(ws.entry!), text: bookPreviewText(ws.entry!, this.previewKeys) }),
+            () => null,
+          )
+        : null;
+    this.entryText = chapter?.text ?? book?.text ?? '';
     this.store.set({ previewChapter: chapter?.chapter ?? null });
     if (chapter) writeJson(previewChapterKey(ws.root), chapter.chapter);
-    const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : (chapter?.path ?? ws.entry);
+    const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : (chapter?.path ?? book?.path ?? ws.entry);
     try {
       const project = this.state.project.settings;
       const { previewUrl } = await this.typst.start(ws.root, entry, {
@@ -3344,7 +3393,7 @@ export class Studio {
         fontPaths: absoluteFontPaths(project, ws.root),
         // The book's root; the cover's files live outside it, in .foreword/.
         rootPath: this.state.previewTarget === 'cover' ? ws.root : `${ws.root}/${this.typstRoot()}`.replace(/\/$/, ''),
-        entryText: chapter?.text,
+        entryText: chapter?.text ?? book?.text,
       });
       this.docs?.syncLsp();
       this.store.set({ preview: { status: 'starting', url: previewUrl } });
@@ -3429,9 +3478,9 @@ export class Studio {
     await ipc.previewClose().catch(() => {});
     this.previewOpened = false;
     // The next Tinymist reports its own problems; another file (the cover, a chapter alone) may have none of these.
-    for (const path of this.diagnostics.keys()) this.docs?.setDiagnostics(path, []);
-    this.diagnostics.clear();
-    this.store.set({ problems: { errors: 0, warnings: 0 } });
+    const paths = [...this.typstDiagnostics.keys()];
+    this.typstDiagnostics.clear();
+    this.publishDiagnostics(paths);
     await this.startTypst();
   }
 
@@ -3485,13 +3534,16 @@ export class Studio {
     const active = this.state.active ? chapterOf(this.state.active, book.chapters, book.read, root) : null;
     const first = book.chapters.find((c) => chapterNumber(c, this.state.names) != null) ?? book.chapters[0];
     const chapter = [active, this.state.previewChapter, readJson<string>(previewChapterKey(ws.root)), first].find((c): c is string => !!c && book.chapters.includes(c))!;
-    return { path: chapterPreviewPath(ws.entry), chapter, text: chapterPreviewText(book.main, ws.entry, chapter, book.read, root) };
+    // The guard on its first line, before the main file's: its lines stay where they are.
+    return { path: chapterPreviewPath(ws.entry), chapter, text: refGuard(this.previewKeys) + chapterPreviewText(book.main, ws.entry, chapter, book.read, root) };
   }
 
   /**
    * The chapter preview's file is the main file line for line (chapterPreviewText):
    * Tinymist's errors and jumps in it are the main file's (`asWritten`), and a
-   * place in the main file is found in it (`asShown`).
+   * place in the main file is found in it (`asShown`). The whole book's preview
+   * has the same file, which includes the main file (bookPreviewText), so it
+   * has nothing of its own to map but the guard (see revealSource).
    */
   private asWritten<T extends string | null>(path: T): T {
     const entry = this.state.workspace?.entry;
@@ -3503,8 +3555,10 @@ export class Studio {
     return entry && path === entry && this.chapterPreview ? chapterPreviewPath(entry) : path;
   }
 
-  /** The text Tinymist has for the chapter preview's main file. */
-  private chapterText = '';
+  /** The text Tinymist has for the preview's main file: the chapter preview's, or the book's (bookPreviewText). */
+  private entryText = '';
+  /** The citation keys the preview's guard leaves to Typst (refGuard). */
+  private previewKeys: string[] = [];
   private chapterTimer: number | undefined;
   private chapterRun: Promise<void> = Promise.resolve();
 
@@ -3524,7 +3578,7 @@ export class Studio {
     if (!this.chapterPreview || !this.typst.running) return;
     const next = await this.chapterPreviewFile().catch(() => null);
     if (!next || !this.chapterPreview) return;
-    if (next.text !== this.chapterText && this.typst.setEntryText(next.text)) this.chapterText = next.text;
+    if (next.text !== this.entryText && this.typst.setEntryText(next.text)) this.entryText = next.text;
     if (next.chapter === this.state.previewChapter) return;
     this.store.set({ previewChapter: next.chapter });
     writeJson(previewChapterKey(this.state.workspace!.root), next.chapter);
@@ -3544,6 +3598,92 @@ export class Studio {
       const off = this.typst.on('compile', (s) => void (s.status !== 'compiling' && done()));
       const timer = window.setTimeout(done, timeoutMs);
     });
+  }
+
+  // ---- references that go nowhere (broken-refs.ts) -------------------------------------
+
+  /** The labels and references in the book's Typst files, and its bibliographies' keys. */
+  private refs = new RefIndex();
+  /** The book's references that go nowhere, in reading order, and as the editor marks them, by file. */
+  private refList: RefProblem[] = [];
+  private refProblems = new Map<string, LspDiagnostic[]>();
+  private refPending = new Set<string>();
+  private refTimer: number | undefined;
+  private refRun: Promise<void> = Promise.resolve();
+
+  /** A file changed in the editor: read it again a moment after typing stops. */
+  private scheduleRefs(path: string) {
+    this.refPending.add(path);
+    clearTimeout(this.refTimer);
+    this.refTimer = window.setTimeout(() => {
+      const paths = [...this.refPending];
+      this.refPending.clear();
+      void this.updateRefs(paths);
+    }, 400);
+  }
+
+  /** Read the book's labels and references again: in `paths`, or in every Typst file (and the bibliographies they name). */
+  private updateRefs(paths?: string[]): Promise<void> {
+    return (this.refRun = this.refRun.then(() => this.readRefs(paths)).catch((e) => console.error('reading references failed', e)));
+  }
+
+  private async readRefs(paths?: string[]) {
+    const ws = this.state.workspace;
+    if (!ws?.entry) return;
+    const root = this.typstRoot();
+    if (!paths || this.refs.root !== root) {
+      this.refs = new RefIndex(root);
+      paths = ws.files.filter((f) => f.endsWith('.typ'));
+    }
+    const read = (list: string[]) => Promise.all(list.map(async (path) => [path, await this.currentText(path)] as const));
+    for (const [path, text] of await read(paths.filter((p) => p.endsWith('.typ')))) this.refs.setFile(path, text);
+    // The bibliographies the book names now (any, if it names one some other way): new ones, and the ones that changed.
+    const { files, unknown } = this.refs.bibliographyFiles(ws.entry);
+    const bibliographies = (unknown ? ws.files.filter((f) => /\.(?:bib|ya?ml)$/i.test(f)) : files).filter((f) => !this.refs.hasBibliography(f) || paths.includes(f));
+    for (const [path, text] of await read(bibliographies)) this.refs.setBibliography(path, text);
+    if (this.state.workspace?.root !== ws.root) return;
+    this.showRefProblems();
+    this.refreshPreviewKeys();
+  }
+
+  /** Mark the references that go nowhere in the editor (and count them with the errors). */
+  private showRefProblems() {
+    const entry = this.state.workspace?.entry;
+    this.refList = entry ? this.refs.problems(entry) : [];
+    const next = new Map<string, LspDiagnostic[]>();
+    for (const p of this.refList) next.set(p.path, [...(next.get(p.path) ?? []), refDiagnostic(p)]);
+    const paths = new Set([...this.refProblems.keys(), ...next.keys()]);
+    this.refProblems = next;
+    this.publishDiagnostics(paths);
+  }
+
+  /** The bibliographies' keys changed: the preview's guard gets them (refGuard), and Tinymist sets the book again. */
+  private refreshPreviewKeys() {
+    const entry = this.state.workspace?.entry;
+    if (!entry || this.state.previewTarget !== 'book' || !this.typst.running) return;
+    const keys = this.refs.citationKeys(entry);
+    if (keys.join('\n') === this.previewKeys.join('\n')) return;
+    this.previewKeys = keys;
+    if (this.chapterPreview) return this.scheduleChapterPreview(0);
+    const text = bookPreviewText(entry, keys);
+    if (text !== this.entryText && this.typst.setEntryText(text)) this.entryText = text;
+  }
+
+  /**
+   * A click in the preview on a reference it sets in red (`@intro`): Tinymist
+   * doesn't jump for it, since the guard made its words, so it's found by them
+   * and selected in the editor. The one nearest the cursor, else in the
+   * chapter shown, else the book's first with that label.
+   */
+  private async revealClickedRef() {
+    const root = this.state.workspace?.root;
+    const words = this.previewClick?.text.trim() ?? '';
+    const named = this.refList.filter((p) => !p.link && words === `@${p.name}`);
+    if (!root || !named.length) return;
+    const { active, cursor, previewChapter } = this.state;
+    const near = (p: RefProblem) => Math.abs(p.line + 1 - (cursor?.line ?? 0));
+    const ref = named.filter((p) => p.path === active).sort((a, b) => near(a) - near(b))[0] ?? named.find((p) => p.path === previewChapter) ?? named[0];
+    await this.revealSource({ filepath: `${root}/${ref.path}`, start: [ref.line, ref.character], end: [ref.endLine, ref.endCharacter] });
   }
 
   private publishPerf() {
@@ -5787,6 +5927,25 @@ export class Studio {
       );
       if (answer === 'Cancel') return;
       if (answer === 'Yes' || answer === 'Run them, then export') await this.code.runAll({ onlyStale: true });
+    }
+    // A reference that goes nowhere stops Typst (only the preview sets it in red).
+    const broken = this.refList;
+    if (broken.length) {
+      const list = broken.slice(0, 8).map((p) => `${p.link ? `<${p.name}>` : `@${p.name}`} in ${p.path.slice(p.path.lastIndexOf('/') + 1)}, line ${p.line + 1}`);
+      const answer = await message(
+        `${broken.length === 1 ? 'A reference goes' : `${broken.length} references go`} nowhere, so Typst will stop at ${broken.length === 1 ? 'it' : 'them'}:\n\n${list.join('\n')}${broken.length > 8 ? '\n…' : ''}`,
+        { title: 'References', kind: 'warning', buttons: { yes: 'Show me', no: 'Export anyway', cancel: 'Cancel' } },
+      );
+      if (answer === 'Cancel') return;
+      if (answer === 'Yes' || answer === 'Show me') {
+        const [p] = broken;
+        await this.openFile(p.path);
+        const range = new monaco.Range(p.line + 1, p.character + 1, p.endLine + 1, p.endCharacter + 1);
+        this.editor?.setSelection(range);
+        this.editor?.revealRangeInCenterIfOutsideViewport(range);
+        this.editor?.focus();
+        return;
+      }
     }
     // Where to save it: the Save dialog, starting where this book was last saved.
     const target = await this.pickExportPath(await this.defaultExportPath());

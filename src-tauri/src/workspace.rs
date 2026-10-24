@@ -78,10 +78,11 @@ fn is_internal(rel: &str) -> bool {
         || rel.rsplit('/').next() == Some(CHAPTER_PREVIEW)
 }
 
-/// The chapter preview's file, beside the book's main file (CHAPTER_PREVIEW_NAME
-/// in src/app/chapter-preview.ts).
+/// The preview's main file, beside the book's (CHAPTER_PREVIEW_NAME in
+/// src/app/chapter-preview.ts): the book after a guard against references that
+/// go nowhere, or one chapter alone.
 pub const CHAPTER_PREVIEW: &str = ".foreword-chapter.typ";
-const CHAPTER_PREVIEW_STUB: &str = "// Foreword's chapter preview. Foreword gives Tinymist its text while the\n// preview shows one chapter; this file only has to be here. Safe to delete.\n";
+const CHAPTER_PREVIEW_STUB: &str = "// Foreword's preview. Foreword gives Tinymist this file's text (the book, or\n// one chapter of it); this file only has to be here. Safe to delete.\n";
 
 /// Make the chapter preview's file at `rel` (a stub, if it isn't there), and
 /// keep it out of git: in the info/exclude of the repository the book is in,
@@ -816,7 +817,7 @@ mod tests {
         assert!(
             fs::read_to_string(root.join("src/.foreword-chapter.typ"))
                 .unwrap()
-                .starts_with("// Foreword's chapter preview")
+                .starts_with("// Foreword's preview.")
         );
         // Not written over, and the exclude line added once.
         fs::write(root.join("src/.foreword-chapter.typ"), "kept").unwrap();

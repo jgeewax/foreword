@@ -3790,6 +3790,61 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   place. "Even shorter, please." with the cursor 16 lines away was about the
   same sentence, and its option went in place.
 
+### References that go nowhere don't stop the preview (2026-10-24)
+
+- **Asked for:** "bad references (@BROKEN) in the .typ file kills the
+  rendering. everything just halts and i cant do previews anymore… can we make
+  it so that invalid references are handled and we can show that theres a bad
+  reference (red underline or red highlight of the @ text?) while still
+  continuing to preview the rest of the chapter/book?"
+- **Why it halted.** A reference to a label nothing has is an error in Typst
+  (`label <x> does not exist in the document`), so the book doesn't compile and
+  Tinymist's preview keeps its last good pages. Typing a reference does that on
+  every keystroke until the label is whole (`@ch:mat…`). A label on two things
+  and `link(<x>)` to a missing one stop it the same way.
+- **The preview's main file is always Foreword's now** (`.foreword-chapter.typ`,
+  the chapter preview's): for the whole book, a show-rule line (`refGuard`,
+  broken-refs.ts) then `#include "main.typ"` (`bookPreviewText`); for one
+  chapter, the same line before the main file's first line, so its lines stay
+  put. A ref whose `element` is none and isn't a citation is set as `@label` in
+  red on a pale red ground (in a box, so it doesn't break). A link to a label
+  that isn't on exactly one thing shows its words that way. Typst gives no
+  element for a citation either, so the bibliographies' keys are in the rule.
+  Since a change to the rule sets the whole book again, it only changes with
+  those keys. The rule comes before the book's own `show ref` rules, so they
+  run first; one that hands the ref back (the linear-algebra book's `book-ref`)
+  still gets it caught. Included, the main file is still read as itself, so its
+  errors and jumps are its own. Its `set document` works from an include, and
+  the pages come out the same.
+- **The editor marks each one** with the errors, since Typst no longer says
+  where they are: "There's no `<x>` in the book, so this reference goes nowhere.
+  Did you mean @ch:vectors? Until it's fixed, the preview shows it in red, and
+  the book won't export." It counts in the status bar, the next-error step,
+  Fix with assistant and print's checks. `RefIndex` reads the book's files the
+  way Typst does (as includes.ts): a reference in a comment, raw text, maths or
+  a code string isn't one, and `jj@example.com` is (it says to put a `\` before
+  the @). To avoid marking good references, a label counts as there if any
+  .typ file in the folder puts it on something, if a code string could name it
+  (a function that labels what it's given), if `label("fig-" + …)` could make
+  it, or (i-figured) if `@fig:x` has an `<x>`. Each file is read again 400 ms
+  after typing stops, and on disk changes. A click on a red reference in the
+  preview selects it in the text: Tinymist doesn't jump for words a show rule
+  made, so the click report carries the words clicked (preview.rs).
+- **Export PDF** still exports the main file itself: a reference that goes
+  nowhere should stop a real PDF, not print in red. It asks first (Show me /
+  Export anyway). The main file isn't the file Tinymist pins now, so the first
+  export in a session typesets it again: 5.2 s on the 745-page book, against
+  0.35 s before. Later exports take 0.35 s again.
+- Verified: unit tests (broken-refs.test.ts); every sample, both fixtures and
+  the 745-page book have no references marked (its 480 references; reading its
+  48 files takes 40 ms, checking them 0.5 ms). Self-test `brokenref` on the
+  sample book and on a copy of the 745-page book: with `@foreword-nope-zz`
+  typed, the book still compiles (745 pages), the preview follows each keystroke
+  (405 ms there, 38 ms on the sample), shows the reference in red, the editor
+  marks it and counts 1 error, a click on it in the preview selects it, undoing
+  clears both, and the chapter preview does the same. Citations still typeset
+  as [1].
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
