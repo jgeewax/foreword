@@ -783,7 +783,8 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
   .starter-emblem::before { background: radial-gradient(closest-side, rgba(74, 143, 240, 0.28), rgba(74, 143, 240, 0.1) 60%, transparent); }
 }
 @keyframes starter-glow { 50% { opacity: 0.6; transform: scale(0.9); } }
-.starter-wordmark { margin-bottom: 6px; font: 600 10.5px/1 var(--serif); letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+/* Set like the About dialog's name: the UI font, bold, a touch tight. */
+.starter-wordmark { margin-bottom: 8px; font-size: 16px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; color: var(--fg); }
 .starter-hero h3 { margin: 0; font: 500 22px/1.2 var(--serif); letter-spacing: -0.01em; }
 .starter-hero p { max-width: 260px; margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: balance; }
 .starter-group { display: flex; flex-direction: column; gap: 1px; }
