@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countWords, fileContents, headingAt, wordsLabel } from './contents';
+import { countWords, fileContents, headingAt, listedHeadings, wordsLabel } from './contents';
 
 describe('the book’s contents', () => {
   it('counts the words of the prose, not the code around it', () => {
@@ -27,6 +27,18 @@ describe('the book’s contents', () => {
     expect(headingAt(c.headings, 7)?.title).toBe('Part A');
     expect(headingAt(c.headings, 1)?.title).toBe('One');
     expect(headingAt([], 3)).toBeNull();
+  });
+
+  it('lights the listed row a subsection is in', () => {
+    const c = fileContents('= One\n\n== Part A\n\n=== Deeper\n\nText.\n\n== Part B\n');
+    const lit = (main: boolean, open: boolean, line: number) => headingAt(listedHeadings(c, main, open), line)?.title;
+    // A chapter lists its title and its sections, not their subsections.
+    expect(lit(false, true, 7)).toBe('Part A');
+    expect(lit(false, true, 9)).toBe('Part B');
+    expect(lit(false, false, 7)).toBe('One');
+    // The main file lists its own sections only while they're open.
+    expect(lit(true, true, 7)).toBe('Part A');
+    expect(lit(true, false, 7)).toBe('One');
   });
 
   it('says about how many words', () => {

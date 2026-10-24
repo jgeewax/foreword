@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { headingAt, wordsLabel, type FileContents } from '../app/contents';
+import { headingAt, listedHeadings, sections, wordsLabel } from '../app/contents';
 import { studio } from '../app/studio';
 import { chapterNumber } from '../app/tool-labels';
 import type { Heading } from '../editor/outline';
@@ -18,20 +18,24 @@ function useBook() {
   return { names, contents, files };
 }
 
-/** What a fold hides: the main file's second-level headings, or a chapter's sections under its title. */
-function sections(c: FileContents, main: boolean): Heading[] {
-  return main ? c.headings.filter((h) => h.level === 2) : c.headings.slice(1).filter((h) => h.level <= 2);
-}
-
-/** Scrolls the list so its lit row is in the middle, once per opening, and only while it shows. */
-function reveal(list: HTMLElement | null, done: { current: boolean }) {
-  if (!list || done.current || !list.clientWidth || !list.clientHeight) return;
-  done.current = true;
+/**
+ * Brings the lit row into sight if it's out of it: its chapter's row near the
+ * top, so the chapter's sections show under it, or the lit row in the middle
+ * when the chapter is too long for both. False while the list doesn't show.
+ */
+function reveal(list: HTMLElement | null): boolean {
+  if (!list || !list.clientWidth || !list.clientHeight) return false;
   const lit = list.querySelector<HTMLElement>('.contents-row.here');
-  if (!lit) return;
+  if (!lit) return true;
   const box = list.getBoundingClientRect();
   const row = lit.getBoundingClientRect();
-  list.scrollTop += row.top - box.top - (box.height - row.height) / 2;
+  if (row.top >= box.top && row.bottom <= box.bottom) return true;
+  const head = (lit.closest('.contents-chapter')?.querySelector<HTMLElement>('.contents-row.chapter') ?? lit).getBoundingClientRect();
+  // A row of what comes before stays above the chapter.
+  let by = head.top - box.top - head.height;
+  if (row.bottom - by > box.bottom) by = row.top - box.top - (box.height - row.height) / 2;
+  list.scrollTop += by;
+  return true;
 }
 
 /** The Contents title bar's action: fold every chapter to just its title, or open them all again. */
@@ -64,14 +68,18 @@ export function ContentsPanel() {
   const active = useStore(studio.store, (s) => s.active);
   const cursorLine = useStore(studio.store, (s) => s.cursor?.line ?? 1);
   const folded = useStore(folds, (s) => s.folded);
-  // Opened (the view picked, or the sidebar shown again), the list scrolls to
-  // the place the cursor is under, once the cursor's chapter is in it.
+  // Opened (the view picked, or the sidebar shown again), and when another
+  // file comes to the front, the list scrolls to the place the cursor is
+  // under, once the cursor's chapter is in it. Otherwise it stays put.
   const panel = useRef<HTMLDivElement>(null);
-  const revealed = useRef(false);
+  // The file the list last scrolled for; undefined: not since it opened.
+  const shownFor = useRef<string | null | undefined>(undefined);
   const ready = useRef(false);
   ready.current = files.length > 0 && (!active || !(active === names.entry || names.chapters.includes(active)) || !!contents[active]);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   useLayoutEffect(() => {
-    if (ready.current) reveal(panel.current, revealed);
+    if (ready.current && shownFor.current !== active && reveal(panel.current)) shownFor.current = active;
   });
   const listed = files.length > 0;
   useEffect(() => {
@@ -79,14 +87,15 @@ export function ContentsPanel() {
     if (!el) return;
     // A collapsed sidebar keeps the list mounted: showing it again is opening it.
     const watch = new ResizeObserver(() => {
-      if (!el.clientWidth || !el.clientHeight) revealed.current = false;
-      else if (ready.current) reveal(el, revealed);
+      if (!el.clientWidth || !el.clientHeight) shownFor.current = undefined;
+      else if (ready.current && shownFor.current !== activeRef.current && reveal(el)) shownFor.current = activeRef.current;
     });
     watch.observe(el);
     return () => watch.disconnect();
   }, [listed]);
   if (!files.length) return <div className="history-empty muted">{names.entry ? 'Reading the chapters…' : 'This book has no main file, so no chapters in order yet.'}</div>;
-  const here = active && contents[active] ? headingAt(contents[active].headings, cursorLine) : null;
+  // Lit: the row the cursor is under, a chapter's section when it's in a subsection the list doesn't show.
+  const here = active && contents[active] ? headingAt(listedHeadings(contents[active], active === names.entry, !folded.has(active)), cursorLine) : null;
   const total = files.reduce((n, f) => n + contents[f].words, 0);
   // The chapters the book numbers, not its title page or preface; every included file if it numbers none.
   const included = files.filter((f) => f !== names.entry);
@@ -113,7 +122,7 @@ export function ContentsPanel() {
         const main = path === names.entry;
         const open = !folded.has(path);
         // The main file's own headings stand alone (a preface, an appendix); a chapter is its first heading, sections under it.
-        if (main) return c.headings.filter((h) => h.level === 1 || (h.level === 2 && open)).map((h) => row(path, h, h.title, h.level === 1 ? 0 : 1));
+        if (main) return listedHeadings(c, true, open).map((h) => row(path, h, h.title, h.level === 1 ? 0 : 1));
         const first = c.headings[0];
         const n = chapterNumber(path, names);
         const title = names.titles[path] ?? first?.title ?? path.slice(path.lastIndexOf('/') + 1);

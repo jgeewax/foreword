@@ -5057,6 +5057,10 @@ async function contentsChecks() {
   await sleep(300);
   studio.events.emit('toggle-pane', 'explorer');
   out.revealedAgain = await seen();
+  // Another file brought to the front while it shows: the list scrolls to that one.
+  const first = studio.state.names.chapters[0];
+  await studio.openAt(first, studio.state.contents[first].headings.at(-1)!.line);
+  out.followed = await seen();
   short.remove();
   studio.showSidebar(sidebar);
   return out;
