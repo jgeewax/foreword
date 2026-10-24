@@ -2,7 +2,7 @@
 title: The editor
 heading: The editor
 lede: Where you write. A Typst book is plain text with a little markup, and the editor shows it close to how it will print: headings in bold, emphasis in italic. Around it are the things a long book needs: search across every chapter, a table of contents to move by, and chapters you can find by number. If you’ve used VS Code, it’s the same editor, with the same keys.
-description: Foreword's editor: Typst shown close to how it prints, typing that wraps a selection, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
+description: Foreword's editor: Typst shown close to how it prints, typing that wraps a selection, ⌘-click to where a name is defined or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
 image: images/f/editor-search.webp
 -->
 <figure class="lead">
@@ -11,8 +11,8 @@ image: images/f/editor-search.webp
 </figure>
 
 <h2>Writing in it</h2>
-<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way.</p>
-<p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes.</p>
+<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way. Rest the pointer on a TODO and a small bar offers <span class="ui">Ask the assistant to do it</span>, <span class="ui">Done</span>, which takes the note out, and <span class="ui">All 12 TODOs</span>, the To do list.</p>
+<p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes. A change Foreword makes for you, like taking out a TODO, is a step of its own.</p>
 <figure class="small">
   <img src="../images/f/editor-wrap.webp" width="1500" height="560" alt="The word lovable selected in Jekyll and Hyde and wrapped as _lovable_ by typing an underscore, shown in italic in the editor and on the typeset page beside it.">
   <figcaption>Type <code>_</code> over a word: it’s wrapped, and italic on the page.</figcaption>
@@ -38,6 +38,9 @@ image: images/f/editor-search.webp
     <figcaption>Go to File lists chapters by number and title. The Prologue and Answers aren’t numbered, as in the book.</figcaption>
   </figure>
 </div>
+
+<h3>⌘-click to go there</h3>
+<p>As in VS Code, hold <kbd>⌘</kbd> over a name your book defines, like <code>#key-idea</code>, and it’s underlined as a link, with its definition and the comments above it under the pointer. <kbd>⌘</kbd>-click opens its file at the definition. A file’s name in quotes works the same way: <code>#include "chapters/one.typ"</code> opens the chapter, and <code>image("figures/map.png")</code> opens the picture in Preview. Typst’s own functions, like <code>#figure</code>, are part of Typst, so there’s nowhere to go.</p>
 
 <h3>Chapters by number</h3>
 <p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, so typing <code>4</code> finds chapter 4, whatever its file is called. The numbers are the book’s own: a preface or prologue without a number doesn’t throw the count off. Contents, Search and the assistant use the same numbers.</p>

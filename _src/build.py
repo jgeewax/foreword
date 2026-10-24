@@ -192,7 +192,7 @@ def build_page(i, slug, title):
   </article>
   <nav class="doc-next">{"".join(nav)}</nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.6.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.7.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="{DOWNLOAD}">{APPLE} Download for Mac</a>
   </div>
 </main>
@@ -221,7 +221,7 @@ def build_index():
             page += f'      <a class="card" href="{slug}.html">{icon(slug)}<h3>{title}</h3><p>{blurb}</p></a>\n'
         page += '    </div>\n  </section>\n'
     page += f'''  <div class="doc-cta" style="margin-top: 90px">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.6.0</span>, macOS 13 or later.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.7.0</span>, macOS 13 or later.</p>
     <a class="button" data-download href="{DOWNLOAD}">{APPLE} Download for Mac</a>
   </div>
 </main>

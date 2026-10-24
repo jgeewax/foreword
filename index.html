@@ -38,7 +38,7 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <a class="pill" href="https://github.com/jgeewax/foreword/blob/main/CHANGELOG.md"><b>New in 0.6</b><span>Formulas in your book's notation, options as they'd print, and more</span></a>
+      <a class="pill" href="https://github.com/jgeewax/foreword/blob/main/CHANGELOG.md"><b>New in 0.7</b><span>A bar under what you select, replies that link to your lines, and more</span></a>
       <h1>Write in plain text. <em>Watch it become a book.</em></h1>
       <p class="lede">Foreword is a Mac app for writing books, papers and picture books in Typst. The typeset pages update beside your words as you type, and a writing assistant reads, explains and edits with you, showing every change it makes.</p>
       <div class="cta">
@@ -51,7 +51,7 @@
           View on GitHub
         </a>
       </div>
-      <p class="fine"><span data-version>Version 0.6.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
+      <p class="fine"><span data-version>Version 0.7.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
     </div>
     <figure class="shot">
       <picture>
@@ -106,11 +106,12 @@
       <div class="copy">
         <span class="eyebrow">A writing assistant</span>
         <h2>An assistant that edits, and shows its work</h2>
-        <p>Select a passage and ask about it, or ask for a change. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves, in plain sentences, never shell commands.</p>
+        <p>Select a passage and a bar under it offers Revise, Options and Explain, or ask about it in the chat. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves, in plain sentences, never shell commands.</p>
         <a class="more-link" href="features/assistant.html">How the assistant works</a>
       </div>
       <ul>
         <li>Lines it changed are marked until you rewrite them.</li>
+        <li>A line it points to in a reply is a link to that line.</li>
         <li>Ask answers in the chat and changes nothing; Discuss weighs a direction with you, and argues back.</li>
         <li>When another mode would suit what you asked, it offers it, saying what it would do.</li>
         <li>Options gives three versions of a passage to pick from, as text or set as they'd print.</li>
@@ -221,7 +222,7 @@
         <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg>
           <h3>Familiar keys</h3>
-          <p>A command palette, Go to File, tabs and shortcuts as in VS Code (type * over a word to wrap it), formatting on save, wrapping at a column with rulers, and a window for each book.</p>
+          <p>A command palette, Go to File, tabs and shortcuts as in VS Code (type * over a word to wrap it, ⌘-click a name to go to where it's defined), formatting on save, wrapping at a column with rulers, and a window for each book.</p>
         </a>
         <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
@@ -251,7 +252,7 @@
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg>
         Download for Mac
       </a>
-      <p class="fine"><span data-version>Version 0.6.0</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
+      <p class="fine"><span data-version>Version 0.7.0</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
       <details class="source">
         <summary>Or build it from source</summary>
         <pre>brew install rust node tinymist

@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The editor · Foreword</title>
-<meta name="description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
+<meta name="description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, ⌘-click to where a name is defined or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
 <meta property="og:title" content="The editor · Foreword">
-<meta property="og:description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
+<meta property="og:description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, ⌘-click to where a name is defined or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/editor-search.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -46,8 +46,8 @@
 </figure>
 
 <h2 id="writing-in-it">Writing in it</h2>
-<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way.</p>
-<p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes.</p>
+<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way. Rest the pointer on a TODO and a small bar offers <span class="ui">Ask the assistant to do it</span>, <span class="ui">Done</span>, which takes the note out, and <span class="ui">All 12 TODOs</span>, the To do list.</p>
+<p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes. A change Foreword makes for you, like taking out a TODO, is a step of its own.</p>
 <figure class="small">
   <img src="../images/f/editor-wrap.webp" width="2480" height="560" alt="The word lovable selected in Jekyll and Hyde and wrapped as _lovable_ by typing an underscore, shown in italic in the editor and on the typeset page beside it.">
   <figcaption>Type <code>_</code> over a word: it’s wrapped, and italic on the page.</figcaption>
@@ -73,6 +73,9 @@
     <figcaption>Go to File lists chapters by number and title. The Prologue and Answers aren’t numbered, as in the book.</figcaption>
   </figure>
 </div>
+
+<h3>⌘-click to go there</h3>
+<p>As in VS Code, hold <kbd>⌘</kbd> over a name your book defines, like <code>#key-idea</code>, and it’s underlined as a link, with its definition and the comments above it under the pointer. <kbd>⌘</kbd>-click opens its file at the definition. A file’s name in quotes works the same way: <code>#include "chapters/one.typ"</code> opens the chapter, and <code>image("figures/map.png")</code> opens the picture in Preview. Typst’s own functions, like <code>#figure</code>, are part of Typst, so there’s nowhere to go.</p>
 
 <h3>Chapters by number</h3>
 <p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, so typing <code>4</code> finds chapter 4, whatever its file is called. The numbers are the book’s own: a preface or prologue without a number doesn’t throw the count off. Contents, Search and the assistant use the same numbers.</p>
@@ -104,7 +107,7 @@
   </article>
   <nav class="doc-next"><a href="./"><small>← All features</small><b>Features</b></a><a class="next" href="preview.html"><small>Next →</small><b>Live preview</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.6.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.7.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>

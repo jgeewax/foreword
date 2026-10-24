@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The assistant · Foreword</title>
-<meta name="description" content="How Foreword&#x27;s writing assistant works: one task at a time, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.">
+<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Explain, Comment, Ask in chat), one task at a time, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.">
 <meta property="og:title" content="The assistant · Foreword">
-<meta property="og:description" content="How Foreword&#x27;s writing assistant works: one task at a time, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.">
+<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Explain, Comment, Ask in chat), one task at a time, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/assistant-trace.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -65,6 +65,7 @@
   <li>Changed Foreword’s settings · text size 15 px, rulers at 100</li>
 </ul>
 <p>Each step has a coloured dot: blue for reading, violet for changing, grey for thinking, amber when it needs you, red when something went wrong. A change says where it was and how many words it touched (“line 6 +2 −7 words”). <span class="ui">Show change</span> opens it word by word, with the words it cut struck through and the words it wrote in their place. From there, <span class="ui">Show in editor</span> takes you to it, and <span class="ui">Undo this edit</span> takes it out (and <kbd>⌘</kbd><kbd>Z</kbd> in the editor puts it back).</p>
+<p>When a reply points to a place in the book, like <code>chapters/one.typ:42</code> or “one.typ, lines 42–48”, it’s a link: a click puts the cursor on that line in the editor, or selects the lines. Only the book’s own files are links, so “10:30” never is.</p>
 <p>Under the reply is how long it took, and <span class="ui">Saved in History</span>, which opens the version History kept. Below the conversation, <strong>Changed in this task</strong> lists each file it has touched so far.</p>
 <p>Many requests start from a button rather than from you typing: <span class="ui">Write it</span>, <span class="ui">Fix This Error</span>, <span class="ui">Explain This</span>, <span class="ui">Fix all</span>. A button sends the assistant a full set of instructions, but the chat shows only what you asked for, in a line (“Explain this passage · in plain words”), so a one-click request doesn’t look like a page you wrote.</p>
 
@@ -74,7 +75,27 @@
 <p>You’ll notice the assistant writes one sentence per line. Typst joins the lines of a paragraph, so the printed book looks exactly the same, and each mark, change and comment covers a sentence rather than a whole paragraph.</p>
 <p>It works the other way too. If you rewrite a sentence the assistant wrote, your next message tells it what you changed. Otherwise, asked to look at that passage again, it would remember its own version, and could quietly put it back.</p>
 
-<h2 id="pointing-at-a-passage">Pointing at a passage</h2>
+<h2 id="a-bar-under-what-you-select">A bar under what you select</h2>
+<p>Select a passage, in your text or on the typeset pages, and a bar comes up under it, each button in the colour of what it does.</p>
+<figure class="small">
+  <img src="../images/f/assistant-selection-bar.webp" width="1520" height="736" alt="Three sentences of Jekyll and Hyde's first chapter selected in the editor, and under them a bar: Revise, Options, Explain, Comment, and Ask in chat with its shortcut, Command-I.">
+  <figcaption>Select a passage and the bar comes up under it.</figcaption>
+</figure>
+<dl class="facts">
+  <dt>Revise</dt><dd>Changes the passage in place. Say how, or pick one of the usual requests: Tighten, Proofread, Clearer, Simpler words, Expand, and Match my style guide when the book has one.</dd>
+  <dt>Options</dt><dd><a href="#three-versions-options">Three versions</a> to pick from, with Shorter, Plainer and More vivid a click away.</dd>
+  <dt>Explain</dt><dd>Puts the passage in plain words, in the chat, and changes nothing.</dd>
+  <dt>Comment</dt><dd>Leaves a <a href="comments.html">comment</a> on it, to come back to.</dd>
+  <dt>Ask in chat</dt><dd>Takes the passage to the chat, with the cursor in the message box, for anything else (<kbd>⌘</kbd><kbd>I</kbd>).</dd>
+</dl>
+<p>Over a Typst error, <span class="ui">Fix error</span> comes first. The bar sits under the end of the selection, so it never covers what you’re reading, and in a narrow editor all but the first button show just their icons.</p>
+<p>A note under the passage follows a Revise. While the assistant works it says <span class="ui">Revising…</span>, with Stop, and the passage is marked in violet. Then it says how much changed (“Revised −11 words”), with <span class="ui">Undo</span>, which puts the passage back in one step, and <span class="ui">Show change</span>, the words it changed. Revise switches the chat to Write, and Options to Options. If a reply is still running, the request waits for it, with <span class="ui">Send now</span> and <span class="ui">Cancel</span>.</p>
+<figure>
+  <img src="../images/f/assistant-revise.webp" width="2560" height="1559" alt="The same three sentences after Revise ▸ Tighten, marked in violet, with a note under them: Revised −3 words, Undo, Hide change, and the words it changed: to be, whom and they struck out, and put in their place. In the chat beside it: Revise this passage, Tighten it: fewer words, the same meaning; Claude Code read and edited the chapter, and its reply links to chapters/01-story-of-the-door.typ:13–15.">
+  <figcaption>Revise ▸ Tighten on the same passage. The note under it says what changed, and the line the reply points to is a link.</figcaption>
+</figure>
+
+<h3>Pointing at a passage in the chat</h3>
 <p>Whatever you’ve selected goes with your next message. It shows above the box as a quote, named by its place in the book (“Story of the Door · lines 5–8”). <kbd>⌘</kbd><kbd>I</kbd> pins it, so it stays while you select something else. You can select on the typeset pages too, and Foreword finds the same words in your text.</p>
 
 <h2 id="formulas-as-your-book-sets-them">Formulas, as your book sets them</h2>
@@ -85,7 +106,7 @@
 </figure>
 
 <h2 id="five-modes">Five modes</h2>
-<p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> moves from one to the next.</p>
+<p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> moves from one to the next. Each mode keeps its own <a href="assistants.html#model-and-effort">assistant, model and effort</a>, so you can discuss with one and write with another.</p>
 <dl class="facts">
   <dt>Write</dt><dd>Writes and edits the book.</dd>
   <dt>Ask</dt><dd>Answers questions about the book, in the chat, and changes nothing. After an answer, <span class="ui">Go ahead</span> switches to Write and makes the change you talked about.</dd>
@@ -151,7 +172,7 @@
   </article>
   <nav class="doc-next"><a href="templates.html"><small>← Previous</small><b>Templates and samples</b></a><a class="next" href="permissions.html"><small>Next →</small><b>Permissions</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.6.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.7.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>
