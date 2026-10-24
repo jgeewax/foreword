@@ -6,6 +6,7 @@
 use std::{
     path::{Path, PathBuf},
     process::Output,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::Serialize;
@@ -29,6 +30,11 @@ const BASE_EXCLUDES: &[&str] = &[
     "*.foreword.tmp",
     crate::workspace::CHAPTER_PREVIEW,
 ];
+
+/// The history repo is packed (`git gc`) at most this often.
+const CLEAN_EVERY_SECS: u64 = 24 * 60 * 60;
+/// In the history repo: when it was last packed, in Unix seconds.
+const CLEANED_MARK: &str = "foreword-cleaned";
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -228,7 +234,53 @@ pub async fn history_snapshot(
     allow_empty: bool,
 ) -> CmdResult<Option<Version>> {
     let _guard = state.history.lock().await;
-    snapshot(&repo(&app, &state).await?, &kind, &label, allow_empty).await
+    let r = repo(&app, &state).await?;
+    let version = snapshot(&r, &kind, &label, allow_empty).await;
+    clean_if_due(&state, r);
+    version
+}
+
+/// Pack the history repo if it hasn't been in a day. Until then every version
+/// is whole loose files: Git's own packing waits for ~6,700 of them, weeks of
+/// saves for a book (a week of one book's: 14 MB loose, 1.5 MB packed). Runs
+/// in the background under the window's history lock, so never alongside a
+/// snapshot.
+fn clean_if_due(state: &Win, r: Repo) {
+    if !cleaning_due(&r.git_dir, unix_now()) {
+        return;
+    }
+    let state = state.state.clone();
+    tauri::async_runtime::spawn(async move {
+        let _guard = state.history.lock().await;
+        // Another snapshot's cleanup may have run while this one waited.
+        if !cleaning_due(&r.git_dir, unix_now()) {
+            return;
+        }
+        if let Err(e) = clean(&r).await {
+            crate::logs::push("history", format!("couldn't clean up history: {e}"));
+        }
+    });
+}
+
+async fn clean(r: &Repo) -> CmdResult<()> {
+    // Marked first, so a failing gc is tried again tomorrow, not after every save.
+    std::fs::write(r.git_dir.join(CLEANED_MARK), unix_now().to_string())?;
+    git_ok(&r.git_dir, &r.root, &["gc", "--quiet"]).await?;
+    Ok(())
+}
+
+/// Whether a day has passed since the last cleanup, or there's been none.
+fn cleaning_due(git_dir: &Path, now: u64) -> bool {
+    let last = std::fs::read_to_string(git_dir.join(CLEANED_MARK))
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok());
+    !matches!(last, Some(at) if at <= now && now - at < CLEAN_EVERY_SECS)
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 async fn has_head(r: &Repo) -> CmdResult<bool> {
@@ -622,6 +674,20 @@ mod tests {
         );
         let main = list_for(&r, 10, Some(":(literal)main.typ")).await.unwrap();
         assert_eq!((main[0].kind.as_str(), main[0].files), ("agent", 1));
+
+        // Cleaning up packs every version, keeps them all, and isn't due again for a day.
+        let now = unix_now();
+        assert!(cleaning_due(&r.git_dir, now));
+        clean(&r).await.unwrap();
+        let counts = git_ok(&r.git_dir, &r.root, &["count-objects", "-v"])
+            .await
+            .unwrap();
+        assert!(counts.lines().any(|l| l == "count: 0"), "{counts}");
+        assert!(counts.lines().any(|l| l == "packs: 1"), "{counts}");
+        assert_eq!(list(&r, 10).await.unwrap().len(), 4);
+        assert!(!cleaning_due(&r.git_dir, now));
+        assert!(!cleaning_due(&r.git_dir, now + CLEAN_EVERY_SECS - 60));
+        assert!(cleaning_due(&r.git_dir, now + CLEAN_EVERY_SECS + 60));
         std::fs::remove_dir_all(&base).ok();
     }
 

@@ -882,6 +882,14 @@ section), the page starts at the window's top and the offset is measured.
     Trash is a later option.
 - No pruning yet: history grows with the book (text compresses well). Moving
   the book folder starts a new history (the key is its path).
+- **Packed once a day.** Git's own automatic packing waits for ~6,700 loose
+  objects, which is weeks of saves, and until then each version is stored as
+  whole files. One book's week came to 14 MB loose and 1.5 MB packed.
+  - After a snapshot, if the `foreword-cleaned` mark in the history repo is a
+    day old (or missing), `git gc --quiet` runs in the background under the
+    window's history lock, so never alongside a snapshot.
+  - The mark is written before gc runs, so a failing gc is retried the next
+    day, not after every save; failures go to the app's log.
 
 - **History explains itself** (an author asked where it's kept, whether it's
   Git, and whether they could go back and see the changes). The panel's line
