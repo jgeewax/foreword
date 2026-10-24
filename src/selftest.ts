@@ -1,3 +1,4 @@
+import { setTheme as setAppTheme } from '@tauri-apps/api/app';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 
 /** Events sent to this window (each window has its own). */
@@ -1367,6 +1368,279 @@ async function optionsDoneChecks() {
   await ipc.fsWrite(file, original, await ipc.fsHash(file));
   await studio.reloadFromDisk(file);
   studio.store.set((s) => ({ agent: { ...s.agent, mode: 'write' } }));
+  return out;
+}
+
+/**
+ * Options, the passage followed: a picked option goes in where its passage is
+ * now, wherever the cursor is, whatever else is selected, and whatever is
+ * written before, after or right beside it; picking again and ⌘Z; the
+ * author's own changes to it, or its deletion, ask first (Replace mine anyway,
+ * which won't overwrite anything newer than it showed, New options for it as
+ * it is, Put it where it was, Cancel); a follow-up with nothing selected is
+ * about the same passage, and a second reply about it takes over from the
+ * first; a queued message's reply gets its own passage. Replies are made up
+ * (through the agent event handler), so no model is needed. Never saves;
+ * undoes everything. Scratch book only.
+ */
+async function optionsPassageChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const s = studio as any;
+  const SID = 'selftest-passage';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const diskBefore = await ipc.fsHash(file);
+  const saved = { mode: studio.state.agent.mode, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items };
+  const sentence = 'The eigenvalues of $A$ are the roots of its characteristic polynomial';
+  const line = model.getLinesContent().indexOf(sentence) + 1;
+  const OPTIONS = ['Eigenvalues are roots.', 'The roots of the characteristic polynomial of $A$ are its eigenvalues.', "Each root of $A$'s characteristic polynomial is an eigenvalue."];
+  const reply = (tag: string) => OPTIONS.map((t, i) => `### Option ${i + 1}: ${tag} ${i + 1}\n\`\`\`typst\n${t}\n\`\`\`\nVersion ${i + 1}.`).join('\n\n');
+  const edit = (r: monaco.IRange, text: string) => editor.executeEdits('selftest', [{ range: r, text }]);
+  const offsetRange = (start: number, end: number) => monaco.Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end));
+  const find = (t: string) => offsetRange(model.getValue().indexOf(t), model.getValue().indexOf(t) + t.length);
+  const replies = () => [...document.querySelectorAll('.options-reply')];
+  const use = async (r: number, n: number) => {
+    replies()[r]?.querySelectorAll('.option-card')[n]?.querySelector<HTMLButtonElement>('.option-actions button')?.click();
+    await sleep(300);
+  };
+  const conflict = (r: number) => {
+    const c = replies()[r]?.querySelector('.option-conflict');
+    return c
+      ? {
+          says: c.querySelector('.option-conflict-head')?.textContent,
+          buttons: [...c.querySelectorAll('button')].map((b) => b.textContent),
+          cut: [...c.querySelectorAll('.diff-text del')].map((e) => e.textContent),
+          put: [...c.querySelectorAll('.diff-text ins')].map((e) => e.textContent),
+        }
+      : null;
+  };
+  const press = async (r: number, label: string) => {
+    [...(replies()[r]?.querySelectorAll<HTMLButtonElement>('.option-conflict button') ?? [])].find((b) => b.textContent === label)?.click();
+    await sleep(300);
+  };
+  const states = () => studio.state.agent.items.filter((i) => i.kind === 'assistant' && i.options).map((i: any) => ({ applied: i.options.applied, passage: i.options.passage, conflict: i.options.conflict?.kind ?? null }));
+  // As send does: what the message is about (the selection, or else the passage last asked about), followed from then on, and the reply.
+  let n = 0;
+  const ask = async (select: monaco.IRange | null) => {
+    n++;
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
+    if (select) {
+      editor.setSelection(select, 'mouse');
+      await studio.attachSelection({ focus: false });
+    } else await s.attachForOptions();
+    const a = studio.state.agent.attachments[0];
+    s.optionsTurn = s.turnAsItIs(s.optionsTurnFor(a));
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [], items: [...st.agent.items, { kind: 'user', id: `u${n}`, text: 'Shorter', attachments: a ? [a.label] : [], at: Date.now() }] } }));
+    s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: `m${n}`, ordinal: 0, text: reply(`Reply ${n}`) });
+    await sleep(250);
+    return { label: a?.label, passage: a?.passage ?? null, sent: a?.selection.selectedText };
+  };
+  try {
+    studio.store.set((st) => ({ agent: { ...st.agent, sessionId: SID, running: false, mode: 'options', items: [], attachments: [], queued: [] } }));
+    studio.events.emit('show-agent-pane');
+    await sleep(200);
+    out.asked = { ...(await ask(new monaco.Range(line, 1, line, sentence.length + 1))), replies: replies().length };
+
+    // Elsewhere: the cursor, another selection, lines added above, words typed right before and right after it.
+    edit(new monaco.Range(1, 1, 1, 1), '// added above\n');
+    edit(new monaco.Range(line + 1, sentence.length + 1, line + 1, sentence.length + 1), ' (typed after)');
+    edit(new monaco.Range(line + 1, 1, line + 1, 1), 'Indeed, ');
+    editor.setSelection(new monaco.Range(3, 1, 3, 5), 'mouse');
+    const around = (t: string) => `Indeed, ${t} (typed after)`;
+    const lineNow = () => model.getLineContent(line + 1);
+    await use(0, 1);
+    out.movedAndTypedAround = { line: lineNow(), ok: lineNow() === around(OPTIONS[1]), addedAbove: model.getLineContent(1), states: states(), button: replies()[0]?.querySelectorAll('.option-card')[1]?.querySelector('button')?.textContent };
+    await use(0, 2);
+    out.instead = { ok: lineNow() === around(OPTIONS[2]) };
+    // ⌘Z twice: the original back (the range then covers only part of it), then a shorter one over all of it.
+    editor.trigger('selftest', 'undo', null);
+    await sleep(100);
+    const once = lineNow();
+    editor.trigger('selftest', 'undo', null);
+    await sleep(100);
+    out.undone = { ok: lineNow() === around(sentence), once, twice: lineNow() };
+    await use(0, 0);
+    out.afterUndo = { line: lineNow(), ok: lineNow() === around(OPTIONS[0]) };
+
+    // The author changes it: picking asks first, and changes nothing.
+    edit(find('roots.'), 'zeros.');
+    const authors = model.getValue();
+    await use(0, 1);
+    out.changed = { unchanged: model.getValue() === authors, conflict: conflict(0), states: states() };
+    // Photographed in dark and light (this window only: nothing's saved), still and drawn (a window behind others doesn't animate or paint).
+    const still = document.createElement('style');
+    still.textContent = '*{animation:none!important;transition:none!important}';
+    document.head.append(still);
+    replies()[0]?.querySelector('.option-conflict')?.scrollIntoView({ block: 'center' });
+    for (const theme of ['dark', 'light'] as const) {
+      await setAppTheme(theme);
+      await sleep(400);
+      editor.render(true);
+      out[`snapshot-${theme}`] = await snap(`options-conflict-${theme}`);
+    }
+    await setAppTheme(null);
+    still.remove();
+    // Changed again before Replace mine anyway: shown again, not overwritten.
+    edit(find('zeros.'), 'the zeros.');
+    const authors2 = model.getValue();
+    await press(0, 'Replace mine anyway');
+    out.changedAgain = { unchanged: model.getValue() === authors2, conflict: conflict(0) };
+    await press(0, 'Replace mine anyway');
+    out.replacedAnyway = { ok: lineNow() === around(OPTIONS[1]), conflict: conflict(0), states: states() };
+    editor.trigger('selftest', 'undo', null);
+    await sleep(100);
+    out.undoBringsMineBack = { ok: model.getValue() === authors2 };
+    await use(0, 2);
+    await press(0, 'Cancel');
+    out.cancelled = { unchanged: model.getValue() === authors2, conflict: conflict(0) };
+
+    // New options for it as it is: sent in Options mode with the passage as the author has it.
+    await use(0, 2);
+    const send = studio.send;
+    const sent: { text: string; attachments: typeof studio.state.agent.attachments }[] = [];
+    studio.send = async (text: string) => {
+      sent.push({ text, attachments: studio.state.agent.attachments });
+      return true;
+    };
+    try {
+      await press(0, 'New options for it as it is');
+    } finally {
+      studio.send = send;
+    }
+    out.askedAgain = { text: sent[0]?.text, passage: sent[0]?.attachments[0]?.passage === states()[0].passage, selection: sent[0]?.attachments[0]?.selection.selectedText, conflict: conflict(0) };
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
+
+    // A follow-up with the cursor elsewhere and nothing selected: about the same passage, as it is now.
+    editor.setPosition({ lineNumber: 3, column: 1 });
+    out.followUp = await ask(null);
+    // The first turn folds under the second: opened, so both replies' options are there to pick.
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.turn-folded')) b.click();
+    await sleep(200);
+    out.followUp = { ...(out.followUp as object), samePassage: (out.followUp as any).passage === states()[0].passage, replies: replies().length };
+    await use(1, 0);
+    out.secondReply = { ok: lineNow() === around(OPTIONS[0]), states: states() };
+    // The first reply's option over the second's: the assistant's words both, so no asking.
+    await use(0, 2);
+    out.firstAgain = { ok: lineNow() === around(OPTIONS[2]), states: states() };
+
+    // Deleted: put it back where it was.
+    edit(find(OPTIONS[2]), '');
+    await use(0, 1);
+    out.deleted = { conflict: conflict(0), line: lineNow() };
+    await press(0, 'Put it where it was');
+    out.putBack = { ok: lineNow() === around(OPTIONS[1]), states: states() };
+
+    // From another file's tab: its file comes forward, and it goes in there.
+    await studio.openFile('chapters/ch1-vectors.typ');
+    await use(0, 0);
+    out.fromAnotherTab = { active: studio.state.active, ok: model.getLineContent(line + 1) === around(OPTIONS[0]) };
+
+    // A message queued in Options mode: its reply is about its own passage, given when it's handed over.
+    const before = states().length;
+    const other = model.getLinesContent().findIndex((l) => l.startsWith('The two eigenvectors are orthogonal')) + 1;
+    const otherRange = new monaco.Range(other, 1, other, model.getLineMaxColumn(other));
+    editor.setSelection(otherRange, 'mouse');
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
+    await studio.attachSelection({ focus: false });
+    const turn = s.optionsTurnFor(studio.state.agent.attachments[0]);
+    s.queuedOptions.set('inbox-1', turn);
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [], queued: [{ id: 'inbox-1', text: 'Plainer', attachments: [], delivery: 'queue', sending: false }] } }));
+    s.queuedDelivered('inbox-1');
+    s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: 'mq', ordinal: 0, text: reply('Queued') });
+    await sleep(200);
+    const q = studio.state.agent.items.filter((i) => i.kind === 'assistant' && i.options).at(-1) as any;
+    out.queued = { replies: states().length - before, ownPassage: q?.options.passage === turn.passage && turn.passage !== states()[0].passage, target: q?.options.target?.start?.line === otherRange.startLineNumber };
+  } finally {
+    for (let i = 0; i < 40 && model.getValue() !== original && model.canUndo(); i++) editor.trigger('selftest', 'undo', null);
+    await sleep(300);
+    out.restored = { buffer: model.getValue() === original, diskUnchanged: (await ipc.fsHash(file)) === diskBefore };
+    s.optionsTurn = null;
+    studio.store.set((st) => ({ agent: { ...st.agent, mode: saved.mode, sessionId: saved.sessionId, items: saved.items, attachments: [], queued: [] } }));
+  }
+  return out;
+}
+
+/**
+ * Options with a real assistant (Claude Code on Haiku), as the author hit it:
+ * Options from the selection bar on a sentence; while the reply is written,
+ * they click elsewhere, select other words and add a line above; Use this
+ * puts the option in place of the sentence, not at the cursor. Then a
+ * follow-up typed in the chat with nothing selected is about the same
+ * sentence, as it is now. Sending saves the open files, so the chapter is put
+ * back on disk at the end: scratch book only.
+ */
+async function optionsLiveChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions, mode: studio.state.agent.mode };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.modeSetups'].map((k) => [k, localStorage.getItem(k)] as const);
+  const original = (await ipc.fsRead(file)).text;
+  try {
+    studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { status: studio.state.agent.status, error: studio.state.agent.error };
+    const haiku = studio.state.agent.models.find((m) => /haiku/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (haiku) await studio.selectModel(haiku);
+    out.model = studio.state.agent.model?.id;
+    studio.newSession();
+    await studio.openFile(file);
+    const editor = studio.editor!;
+    const model = editor.getModel()!;
+    const sentence = 'The eigenvalues of $A$ are the roots of its characteristic polynomial';
+    const line = model.getLinesContent().indexOf(sentence) + 1;
+    editor.setSelection(new monaco.Range(line, 1, line, sentence.length + 1), 'mouse');
+    const sending = studio.sendFromBar('options', 'Shorter');
+    await waitFor(() => studio.state.agent.running, 30000, 'the reply to start').catch(() => {});
+    // Meanwhile, elsewhere.
+    editor.setSelection(new monaco.Range(3, 5, 3, 8), 'mouse');
+    editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// added while it wrote\n' }]);
+    editor.setPosition({ lineNumber: 30, column: 1 });
+    await sending;
+    await waitFor(() => !studio.state.agent.running, 180000, 'the options').catch(() => {});
+    await sleep(500);
+    const replyOf = () => [...studio.state.agent.items].reverse().find((i) => i.kind === 'assistant' && i.options) as any;
+    const first = replyOf();
+    const options = first ? parseOptions(first.text).options : [];
+    out.first = { mode: studio.state.agent.mode, options: options.map((o) => o.text), target: first?.options?.target?.start, passage: first?.options?.passage };
+    const lastReply = () => [...document.querySelectorAll('.options-reply')].at(-1);
+    const use = async (n: number) => {
+      lastReply()?.querySelectorAll('.option-card')[n]?.querySelector<HTMLButtonElement>('.option-actions button')?.click();
+      await sleep(400);
+    };
+    await use(0);
+    out.used = {
+      inPlace: model.getLineContent(line + 1) === options[0]?.text,
+      lineAbove: model.getLineContent(1),
+      cursorLineUntouched: model.getLineContent(31) === original.split('\n')[29],
+      selectedWordsUntouched: model.getLineContent(4) === original.split('\n')[2],
+      sentenceGone: !model.getValue().includes(sentence),
+    };
+    // A follow-up, nothing selected, the cursor far away.
+    editor.setPosition({ lineNumber: 30, column: 1 });
+    await sleep(300);
+    await studio.send('Even shorter, please.');
+    await sleep(1000);
+    await waitFor(() => !studio.state.agent.running, 180000, 'the second options').catch(() => {});
+    await sleep(500);
+    const user = [...studio.state.agent.items].reverse().find((i) => i.kind === 'user') as { attachments: string[] } | undefined;
+    const second = replyOf();
+    const options2 = second && second !== first ? parseOptions(second.text).options : [];
+    out.followUp = { attachments: user?.attachments, samePassage: !!second && second !== first && second.options.passage === first?.options?.passage, options: options2.map((o) => o.text) };
+    await use(1);
+    out.followUpUsed = { inPlace: !!options2[1]?.text && model.getLineContent(line + 1) === options2[1].text, firstNoLongerInUse: (studio.state.agent.items.find((i) => i.id === first?.id) as any)?.options?.applied ?? null };
+  } finally {
+    await ipc.fsWrite(file, original, await ipc.fsHash(file));
+    await studio.reloadFromDisk(file);
+    studio.newSession();
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    studio.store.set((s) => ({ agent: { ...s.agent, mode: saved.mode } }));
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  out.restored = { disk: (await ipc.fsRead(file)).text === original };
   return out;
 }
 
@@ -8514,6 +8788,8 @@ export async function runSelftest(launch: LaunchOptions) {
       still.remove();
     }
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
+    if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
+    if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);

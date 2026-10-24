@@ -40,6 +40,10 @@ export const revisePrompt = (instruction: string) =>
 /** "Options" on a selection (the selection bar), sent in Options mode: three versions to pick from. */
 export const optionsPrompt = (instruction: string) => `Three options for the selected passage: ${instruction.trim()}`;
 
+/** "New options for it as it is", when the author changed a passage after asking for options: the passage goes with it as it is now. */
+export const OPTIONS_AGAIN_PROMPT =
+  "I've changed the passage since you wrote those options; the selection is the passage as it is now. Write three new options for it, for what I asked before, starting from my version.";
+
 /** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
 export const askPrompt = (question: string) => `About the selected passage: ${question.trim()}`;
 
@@ -110,6 +114,7 @@ const READERS: ((text: string) => StockAction | null)[] = [
     const m = OPTIONS_SELECTION.exec(text);
     return m ? { verb: 'Three options for this passage', rows: [{ text: m[1] }], tone: 'other', icon: 'check', mode: 'options' } : null;
   },
+  (text) => (text === OPTIONS_AGAIN_PROMPT ? { verb: 'New options for this passage', note: 'as I’ve changed it', tone: 'other', icon: 'check', mode: 'options' } : null),
   (text) => {
     const m = ASK_SELECTION.exec(text);
     return m ? { verb: 'Ask about this passage', rows: [{ text: m[1] }], tone: 'look', icon: 'help', mode: 'ask' } : null;

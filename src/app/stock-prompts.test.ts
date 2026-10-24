@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
+import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, OPTIONS_AGAIN_PROMPT, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
 import { addressPrompt, makeComment } from './review';
 import { todoPrompt } from './todos';
 import { modeChoiceMessage, modeConfig } from '../services/agent/modes';
@@ -35,6 +35,7 @@ describe('what a button asked for, read back from its message', () => {
     expect(stockAction(revisePrompt('Tighten it: fewer words, the same meaning'))).toMatchObject({ verb: 'Revise this passage', rows: [{ text: 'Tighten it: fewer words, the same meaning' }], tone: 'change' });
     expect(stockAction(revisePrompt('  Keep his voice.\n'))?.rows).toEqual([{ text: 'Keep his voice.' }]);
     expect(stockAction(optionsPrompt('More vivid'))).toMatchObject({ verb: 'Three options for this passage', rows: [{ text: 'More vivid' }], mode: 'options' });
+    expect(stockAction(OPTIONS_AGAIN_PROMPT)).toMatchObject({ verb: 'New options for this passage', note: 'as I’ve changed it', mode: 'options' });
     expect(stockAction(askPrompt('Why is everything after it bold?'))).toMatchObject({ verb: 'Ask about this passage', rows: [{ text: 'Why is everything after it bold?' }], tone: 'look', mode: 'ask' });
     expect(stockAction('Revise the selected passage: shorter')).toBeNull();
   });

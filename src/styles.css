@@ -385,6 +385,14 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .option-preview-note { font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
 .option-note { margin-top: 5px; font-size: 12px; color: var(--muted); }
 .option-actions { display: flex; gap: 6px; margin-top: 7px; }
+/* An option that couldn't simply go in: the passage changed (the author's changes shown), was deleted, or can't be found. */
+.option-conflict { margin-top: 7px; padding: 6px 8px 7px; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border)); border-radius: 6px; background: var(--warn-bg); font-size: 12px; }
+.option-conflict-head { display: flex; gap: 6px; align-items: flex-start; }
+.option-conflict-head > svg { flex: none; margin-top: 1px; color: var(--warn); }
+.option-conflict .diff-text { margin-top: 6px; padding: 6px 8px; max-height: 160px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; }
+.option-conflict .option-actions { flex-wrap: wrap; }
+.option-conflict button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
+.option-conflict button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 10%, var(--bg)); }
 .md .md-link { color: var(--accent); text-decoration: underline; cursor: help; }
 .md-ref { color: var(--accent); cursor: pointer; border-radius: 3px; }
 .md-ref:hover { text-decoration: underline; }

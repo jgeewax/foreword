@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { activityWords, clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix, waitingTip, workerName } from '../app/activity';
 import { ASSISTANT_NAMES } from '../app/settings';
-import { studio, type Activity, type ChatItem, type QuestionItem, type TurnBy } from '../app/studio';
+import { studio, type Activity, type ChatItem, type OptionConflict, type QuestionItem, type TurnBy } from '../app/studio';
 import { withoutAddressed } from '../app/review';
 import { actionText, messageLine, stockAction, type StockAction } from '../app/stock-prompts';
 import { withoutMarker } from '../app/tasks';
@@ -539,7 +539,7 @@ function lastOptionsView(): OptionsView {
 
 function OptionsReply({ item }: { item: AssistantItem }) {
   const parsed = useMemo(() => parseOptions(item.text), [item.text]);
-  const { target, applied } = item.options!;
+  const { target, applied, conflict } = item.options!;
   const [view, setView] = useState<OptionsView>(lastOptionsView);
   if (!parsed.options.some((o) => o.text != null)) {
     return (
@@ -624,10 +624,57 @@ function OptionsReply({ item }: { item: AssistantItem }) {
               Copy
             </button>
           </div>
+          {conflict?.index === i && <OptionConflictNote id={item.id} conflict={conflict} />}
         </div>
       ))}
       {/* Once one is in use: was that it? */}
       {applied != null && item.taskCheck === 'ask' && <TaskCheck id={item.id} question={`Option ${parsed.options[applied]?.n ?? applied + 1} is in. Is this task done?`} />}
+    </div>
+  );
+}
+
+/**
+ * An option that couldn't simply go in, under it: the author changed the
+ * passage since asking (their changes shown, to replace anyway or ask again
+ * from their version), deleted it (put it back where it was), or it can't be
+ * found (copy it instead).
+ */
+function OptionConflictNote({ id, conflict }: { id: string; conflict: OptionConflict }) {
+  const { index, kind, was, now } = conflict;
+  const pieces = useMemo(() => (kind === 'changed' ? trimPieces(wordPieces(was, now), 12) : []), [kind, was, now]);
+  return (
+    <div className="option-conflict" role="alert">
+      <div className="option-conflict-head">
+        <Icon name="warning" size={14} />
+        <span>
+          {kind === 'changed'
+            ? 'You’ve changed this passage since asking. Your changes:'
+            : kind === 'deleted'
+              ? 'This passage has been deleted since you asked.'
+              : 'This passage can’t be found any more: its file was closed and the passage changed, or its words are in the file more than once. Copy the option instead, or select the passage and ask again.'}
+        </span>
+      </div>
+      {kind === 'changed' && <DiffText pieces={pieces} prose={looksLikeProse(`${was} ${now}`)} />}
+      <div className="option-actions">
+        {kind === 'changed' && (
+          <>
+            <button className="primary" title="Three new options, written from your version of the passage" onClick={() => void studio.optionsAgain(id)}>
+              New options for it as it is
+            </button>
+            <button className="danger" title="Your changes to the passage are lost (⌘Z brings them back)" onClick={() => void studio.applyOption(id, index, { anyway: true })}>
+              Replace mine anyway
+            </button>
+          </>
+        )}
+        {kind === 'deleted' && (
+          <button className="primary" title="Put this option where the passage was (⌘Z to undo)" onClick={() => void studio.applyOption(id, index, { anyway: true })}>
+            Put it where it was
+          </button>
+        )}
+        <button title="Leave the passage as it is" onClick={() => studio.dismissOptionConflict(id)}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

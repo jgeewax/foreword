@@ -3678,6 +3678,77 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   mode, the question in the box); Add to chat (stayed in Write); the card
   opened on Ask from the command's event; tab switching.
 
+### Options follow their passage (2026-10-24)
+
+- **Asked for:** "if i click 'use this' from the options agent, but ive since
+  moved my cursor, it looks like it injects the text in the wrong place
+  (where my cursor is now)… it needs to be resilient to cursors moving
+  around, selections changing, and even text being added earlier or later, or
+  changing the text that we asked for options about. if it cannot safely
+  apply an option, we need to either allow the user to dangerously apply it…
+  or ask them if they want to re-evaluate."
+- **Why it went wrong.** The target was a stored line/column plus its text,
+  found again at that position or as the file's only match. A cursor-only
+  target (text "") always "matched" at its old position. Worse, `send` in
+  Options mode with nothing selected attached the *cursor*, so a follow-up
+  ("shorter") typed after clicking elsewhere aimed its options at wherever the
+  cursor was then. A queued Options message set no target at all: its reply
+  reused the running turn's.
+- **The passage is followed** (`OptionPassage` in studio.ts) from the moment
+  the message goes, by two decorations in its file's model:
+  AlwaysGrowsWhenTypingAtEdges (*outer*) and NeverGrowsWhenTypingAtEdges
+  (*inner*). Neither alone works (checked against Monaco's
+  `nodeAcceptEdit`). With only inner, an edit at the passage's end leaves
+  the end of what's typed outside it ("zeros." → "the zeros." tracked as
+  "…the ze"), and an undo over a shorter option leaves it covering only part
+  of the original. With only outer, words typed beside the passage become
+  part of it. So outer catches every change and holds the passage exactly
+  after an undo or a whole replacement, while inner holds it when the author
+  writes right beside it. `locatePassage` (option-passage.ts, tested) takes
+  whichever holds one of *ours*. If neither does, outer's text is the
+  author's change, or it's deleted when empty. If the file was closed
+  meanwhile, it's found by its words, at its last place or where they occur
+  once (else "lost").
+- **Safe means ours:** the passage as this reply was asked about, or any
+  option put in it by any reply about it (the passage's `put`). Those are the
+  assistant's words, so swapping them never loses the author's. That covers
+  picking again, ⌘Z then picking, and an earlier reply's option over a later
+  one's. Replies about the same passage share it (follow-ups, New options,
+  or the same range selected again). Picking from one clears "In use" on the
+  others.
+- **Not safe asks, on the option's card** (`OptionsState.conflict`): the
+  author's changes as a word diff from the closest of ours (`closestOurs`),
+  then **New options for it as it is** (primary; sends
+  `OPTIONS_AGAIN_PROMPT` in Options mode with the passage attached as it is,
+  which becomes that reply's base), **Replace mine anyway** (red; replaces
+  outer, one undo step), and Cancel. Replace mine anyway only overwrites
+  what the card showed. If the passage changed again since, the card shows
+  the new diff instead. A deleted passage offers **Put it where it was**. A
+  lost one says to copy the option or select the passage again.
+- **Follow-ups and queued messages.** In Options mode with nothing selected
+  or attached, the message carries the passage the latest options were about,
+  as it is now (`attachForOptions`), and only falls back to the cursor when
+  there's none. A queued Options message gets its own passage, handed to the
+  reply when it's delivered (`queuedOptions`, `queuedDelivered`). The
+  turn's target is re-read after the save that sending does, since format on
+  save can change the passage. Passages nothing refers to any more are let
+  go at the next send (`prunePassages`).
+- Verified: unit tests (option-passage.test.ts, stock-prompts.test.ts);
+  self-test `optionspassage` (no model; replies made up through the agent
+  event handler). It covered: cursor, selection, lines above and words right
+  before and after; picking again; ⌘Z twice then picking; a changed passage
+  (diff, unchanged buffer), changed again before Replace mine anyway (shown
+  again, not overwritten), then replaced and ⌘Z; Cancel; New options (the
+  author's version sent, same passage); a follow-up with the cursor
+  elsewhere; a second reply taking over and the first picking again without
+  asking; deleted, then Put it where it was; picking from another file's
+  tab; a queued message's own passage; the card in light and dark.
+  `optionslive` covered the same with Claude Code (Haiku): Options from the
+  selection bar, then while it wrote the cursor moved, other words were
+  selected and a line was added above. Use this replaced the sentence in
+  place. "Even shorter, please." with the cursor 16 lines away was about the
+  same sentence, and its option went in place.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

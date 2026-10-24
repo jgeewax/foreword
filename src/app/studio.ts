@@ -72,6 +72,7 @@ import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../service
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
 import { parseOptions } from '../services/agent/options-mode';
+import { closestOurs, locatePassage, type PassageAt } from './option-passage';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, STYLE_REVISE_PLACEHOLDER, styleDraftBrief, styleInstructions, styleInterviewBrief, styleReviseBrief, styleReviseMessage, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
@@ -83,7 +84,7 @@ import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import { BAR_MODE, barMessage, type BarKind } from './selection-bar';
-import { fixErrorPrompt, mergePrompt, messageLine, stockTitle } from './stock-prompts';
+import { fixErrorPrompt, mergePrompt, messageLine, OPTIONS_AGAIN_PROMPT, stockTitle } from './stock-prompts';
 import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
@@ -236,7 +237,8 @@ export function pendingQuestion(a: { items: ChatItem[]; running: boolean }): Que
   return q ?? null;
 }
 
-export type Attachment = { id: string; label: string; selection: SourceSelection };
+/** `passage`: an Options passage, as it is now (a follow-up about it, or new options for it). */
+export type Attachment = { id: string; label: string; selection: SourceSelection; passage?: string };
 
 /** Identifies a selection for "leave it out" (same place and same text). */
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
@@ -289,9 +291,53 @@ export type PromptRequest = { title: string; label: string; value: string; place
 export type OptionTarget = { path: string; start: { line: number; column: number }; end: { line: number; column: number }; text: string };
 /**
  * An Options-mode reply: where a picked option goes (null: nothing to replace,
- * copy only), the passage as originally selected, and the option in use.
+ * copy only), the passage as it was asked about, and the option in use.
+ * `passage`: the passage followed through edits (Studio's, shared by the
+ * replies about it); `conflict`: why the option last picked didn't go in.
  */
-export type OptionsState = { target: OptionTarget | null; original: OptionTarget | null; applied: number | null };
+export type OptionsState = { target: OptionTarget | null; original: OptionTarget | null; applied: number | null; passage?: string; conflict?: OptionConflict | null };
+/**
+ * An option that couldn't simply go in, and the card asks what to do: the
+ * author changed the passage since it was asked about (`was`, the version it
+ * comes from, and `now`), deleted it, or it can't be found.
+ */
+export type OptionConflict = { index: number; kind: 'changed' | 'deleted' | 'lost'; was: string; now: string };
+
+/** An Options turn: the passage as it was asked about, and the passage followed (null: nothing to replace). */
+type OptionsTurn = { target: OptionTarget | null; passage: string | null };
+
+/**
+ * A passage Options replies are about, followed while its file is open, so
+ * moving the cursor, selecting something else or writing before or after it
+ * never moves it: two decorations over it, one that grows with typing at its
+ * edges and one that doesn't (option-passage.ts says why both).
+ */
+type OptionPassage = {
+  path: string;
+  model: monaco.editor.ITextModel | null;
+  /** The one that grows, and the one that doesn't. */
+  decorations: [string, string] | null;
+  /** Where it was last seen, for when its file was closed meanwhile. */
+  last: OptionTarget;
+  /** The options put in it so far, by any reply about it, the latest last: the assistant's words, not the author's. */
+  put: string[];
+};
+
+/** What follows an Options passage, unseen: grown by typing at its edges, and not. */
+const PASSAGE_DECORATIONS: monaco.editor.IModelDecorationOptions[] = [
+  { stickiness: monaco.editor.TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges },
+  { stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
+];
+
+const offsetsRange = (model: monaco.editor.ITextModel, start: number, end: number) => monaco.Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end));
+
+/** A range of `model` as an Options target: where it is, and what it holds. */
+const targetIn = (path: string, model: monaco.editor.ITextModel, r: monaco.IRange): OptionTarget => ({
+  path,
+  start: { line: r.startLineNumber, column: r.startColumn },
+  end: { line: r.endLineNumber, column: r.endColumn },
+  text: model.getValueInRange(r),
+});
 
 export type Stat = { p50: number | null; p95: number | null; n: number };
 
@@ -740,7 +786,11 @@ export class Studio {
   private toolCalls = new Map<string, { name: string; input?: unknown }>();
   private styleGuideText: string | null = null;
   /** Options mode: the passage the current turn's options replace. */
-  private optionsTurn: { target: OptionTarget | null } | null = null;
+  private optionsTurn: OptionsTurn | null = null;
+  /** The same for each message queued in Options mode, until it's handed to the conversation. */
+  private queuedOptions = new Map<string, OptionsTurn | null>();
+  /** Options passages, followed through edits (OptionsState's `passage`). */
+  private passages = new Map<string, OptionPassage>();
   private syncTimer: number | undefined;
   /** Cursor moves caused by a preview click must not bounce back to the preview. */
   private suppressSyncUntil = 0;
@@ -4359,9 +4409,12 @@ export class Studio {
     // A reply's questions, passed over: the author wrote something else instead.
     const passedOver = (it: ChatItem): it is QuestionItem => it.kind === 'question' && it.via === 'message' && it.state === 'pending';
     if (state.items.some(passedOver)) this.setAgent((a) => ({ items: a.items.map((it) => (passedOver(it) ? { ...it, state: 'dismissed' as const } : it)) }));
-    // Options replace a passage: use the editor's cursor when nothing is selected or attached.
-    if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachSelection({ focus: false });
+    // Options replace a passage: the one selected or attached; else, a follow-up, the one the last options were about; else the cursor.
+    this.prunePassages();
+    if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachForOptions();
     const attachments = this.outgoingAttachments();
+    // Followed from now on, so nothing the author does meanwhile moves it.
+    const optionsTurn = state.mode === 'options' ? this.optionsTurnFor(attachments[0]) : null;
     // Handed over from another assistant: the turns this one hasn't seen go too.
     const handover = this.handover;
     const earlier = handover ? chatSoFar(state.items, handover.after, this.state.workspace?.root) : null;
@@ -4400,11 +4453,7 @@ export class Studio {
       ...(edits.length ? [{ authorEdits: edits }] : []),
       ...(earlier ? [{ earlier }] : []),
     ];
-    const target = attachments[0]?.selection;
-    this.optionsTurn =
-      state.mode === 'options'
-        ? { target: target ? { path: target.relativePath, start: target.start, end: target.end, text: target.selectedText } : null }
-        : null;
+    this.optionsTurn = optionsTurn && this.turnAsItIs(optionsTurn);
     try {
       let sessionId = this.state.agent.sessionId;
       if (!sessionId) {
@@ -4509,7 +4558,11 @@ export class Studio {
     const { agent, docs } = this;
     const sessionId = this.state.agent.sessionId;
     if (!agent || !sessionId) return false;
+    // Its own passage in Options mode, as send's; its reply gets it once it's handed over (queuedDelivered).
+    const options = this.state.agent.mode === 'options';
+    if (options && !this.outgoingAttachments().length) await this.attachForOptions();
     const attachments = this.outgoingAttachments();
+    const optionsTurn = options ? this.optionsTurnFor(attachments[0]) : null;
     const tempId = uid('q');
     this.setAgent((a) => ({ attachments: [], queued: [...a.queued, { id: tempId, text, attachments: attachments.map((x) => x.label), delivery, sending: true }] }));
     const failures = (await docs?.saveAll()) ?? [];
@@ -4520,6 +4573,7 @@ export class Studio {
     try {
       if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
       const inboxId = (await agent.send(sessionId, text, context, delivery)) ?? tempId;
+      this.queuedOptions.set(inboxId, optionsTurn && this.turnAsItIs(optionsTurn));
       this.setAgent((a) => ({ queued: a.queued.map((q) => (q.id === tempId ? { ...q, id: inboxId, sending: false } : q)) }));
       if (this.deliveredEarly.delete(inboxId)) this.queuedDelivered(inboxId);
       return true;
@@ -4540,6 +4594,11 @@ export class Studio {
       return;
     }
     this.turnMessage = messageLine(q.text);
+    // What it's about: the replies from here on answer it.
+    if (this.queuedOptions.has(inboxId)) {
+      this.optionsTurn = this.queuedOptions.get(inboxId)!;
+      this.queuedOptions.delete(inboxId);
+    }
     this.setAgent((a) => ({
       queued: a.queued.filter((m) => m.id !== inboxId),
       items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, at: Date.now(), by: this.turnBy() }],
@@ -4572,6 +4631,7 @@ export class Studio {
       return;
     }
     this.setAgent((a) => ({ queued: a.queued.filter((m) => m.id !== id) }));
+    this.queuedOptions.delete(id);
     if (edit) this.events.emit('fill-composer', q.text);
   }
 
@@ -4645,58 +4705,201 @@ export class Studio {
   }
 
   private newOptionsState(): { options?: OptionsState } {
-    const target = this.optionsTurn?.target ?? null;
-    return this.optionsTurn ? { options: { target, original: target, applied: null } } : {};
+    const turn = this.optionsTurn;
+    return turn ? { options: { target: turn.target, original: turn.target, applied: null, ...(turn.passage ? { passage: turn.passage } : {}) } } : {};
+  }
+
+  // ---- the passage Options replies are about ------------------------------------------
+  // Followed by decorations from the moment the message goes (option-passage.ts):
+  // the cursor, another selection, or writing before or after it never move it.
+
+  /** What a message in Options mode is about: the passage it carries, one already followed there, or a new one. */
+  private optionsTurnFor(a: Attachment | undefined): OptionsTurn {
+    if (!a) return { target: null, passage: null };
+    const now = a.passage ? this.passageTarget(a.passage) : null;
+    if (now) return { target: now, passage: a.passage! };
+    const s = a.selection;
+    const target: OptionTarget = { path: s.relativePath, start: s.start, end: s.end, text: s.selectedText };
+    return { target, passage: this.followPassage(target) };
+  }
+
+  /** The turn's passage as it is once its files are saved (formatting on save can change it). */
+  private turnAsItIs(turn: OptionsTurn): OptionsTurn {
+    const now = turn.passage ? this.passageTarget(turn.passage) : null;
+    return now ? { ...turn, target: now } : turn;
+  }
+
+  /** Follow `target` in its file from now on: the passage already followed there, or a new one. */
+  private followPassage(target: OptionTarget): string {
+    const model = this.docs?.get(target.path)?.model;
+    if (!model) {
+      const id = uid('p');
+      this.passages.set(id, { path: target.path, model: null, decorations: null, last: target, put: [] });
+      return id;
+    }
+    const range = this.rangeFor(model, target);
+    const same = [...this.passages].find(([, p]) => p.model === model && p.decorations?.some((d) => model.getDecorationRange(d)?.equalsRange(range)));
+    const id = same?.[0] ?? uid('p');
+    const p = same?.[1] ?? { path: target.path, model: null, decorations: null, last: target, put: [] };
+    p.last = target;
+    this.passages.set(id, p);
+    this.refollow(p, model, range);
+    return id;
+  }
+
+  /** Where `t` is: as captured if its words are still there, else where they're found; else as captured (then it's not ours, and picking asks first). */
+  private rangeFor(model: monaco.editor.ITextModel, t: OptionTarget): monaco.Range {
+    const at = model.validateRange(new monaco.Range(t.start.line, t.start.column, t.end.line, t.end.column));
+    if (model.getValueInRange(at) === t.text) return at;
+    const found = locatePassage(model.getValue(), null, [t.text], model.getOffsetAt(at.getStartPosition()));
+    return found.kind === 'ours' ? offsetsRange(model, found.start, found.end) : at;
+  }
+
+  /** The decorations that follow `p`, over `range` in `model` (its file reopened: new ones there). */
+  private refollow(p: OptionPassage, model: monaco.editor.ITextModel, range: monaco.IRange) {
+    const old = p.model === model && p.decorations ? p.decorations : [];
+    const [outer, inner] = model.deltaDecorations(old, PASSAGE_DECORATIONS.map((options) => ({ range, options })));
+    p.decorations = [outer, inner];
+    p.model = model;
+  }
+
+  /** Where the passage is in `model` and whether it's safe to replace, given what it may hold (`ours`). */
+  private locateIn(p: OptionPassage, model: monaco.editor.ITextModel, ours: string[]): PassageAt {
+    const [outer, inner] = (p.model === model && p.decorations ? p.decorations : []).map((d) => model.getDecorationRange(d));
+    const span = (r: monaco.Range) => ({ start: model.getOffsetAt(r.getStartPosition()), end: model.getOffsetAt(r.getEndPosition()) });
+    const tracked = outer && inner ? { outer: span(outer), inner: span(inner) } : null;
+    const at = locatePassage(model.getValue(), tracked, ours, tracked ? null : model.getOffsetAt(model.validatePosition({ lineNumber: p.last.start.line, column: p.last.start.column })));
+    if (!tracked && at.kind === 'ours') this.refollow(p, model, offsetsRange(model, at.start, at.end));
+    return at;
+  }
+
+  /** The passage as it stands, whatever it holds (null: deleted, or not to be found). */
+  private passageTarget(id: string): OptionTarget | null {
+    const p = this.passages.get(id);
+    const model = p && this.docs?.get(p.path)?.model;
+    if (!p || !model) return null;
+    const at = this.locateIn(p, model, [...p.put].reverse().concat(p.last.text));
+    const range = at.kind === 'ours' || at.kind === 'changed' ? offsetsRange(model, at.start, at.end) : null;
+    return range && targetIn(p.path, model, range);
+  }
+
+  /** A follow-up in Options mode with nothing selected or attached: the passage the last options were about, as it is now; else the cursor. */
+  private async attachForOptions() {
+    const reply = [...this.state.agent.items].reverse().find((it) => it.kind === 'assistant' && it.options);
+    const id = reply?.kind === 'assistant' ? reply.options?.passage : undefined;
+    const sel = id ? await this.passageSelection(id) : null;
+    if (!id || !sel) return this.attachSelection({ focus: false });
+    const label = selectionLabel(sel);
+    this.setAgent((a) => ({ attachments: [...a.attachments.filter((x) => x.label !== label), { id: uid('a'), label, selection: sel, passage: id }] }));
+  }
+
+  /** The passage as it stands, as a selection to send with a message. */
+  private async passageSelection(id: string): Promise<SourceSelection | null> {
+    const p = this.passages.get(id);
+    const model = p && this.docs?.get(p.path)?.model;
+    const now = model ? this.passageTarget(id) : null;
+    if (!p || !model || !now) return null;
+    return captureSelection(p.path, model, { startLineNumber: now.start.line, startColumn: now.start.column, endLineNumber: now.end.line, endColumn: now.end.column });
+  }
+
+  /** Let go of the passages no reply, turn or queued message is about any more. */
+  private prunePassages() {
+    const used = new Set<string>();
+    for (const it of this.state.agent.items) if (it.kind === 'assistant' && it.options?.passage) used.add(it.options.passage);
+    for (const turn of [this.optionsTurn, ...this.queuedOptions.values()]) if (turn?.passage) used.add(turn.passage);
+    for (const [id, p] of this.passages) {
+      if (used.has(id)) continue;
+      if (p.model && p.decorations && !p.model.isDisposed()) p.model.deltaDecorations(p.decorations, []);
+      this.passages.delete(id);
+    }
   }
 
   /**
    * Put option `index` of an Options reply in place of its passage: an ordinary
-   * editor edit (undoable, unsaved until the author saves). Picking another
-   * option afterwards replaces the one in use (or the original passage, if the
-   * author undid it). If the text moved, it's found again only when that's
-   * unambiguous; otherwise nothing changes.
+   * editor edit (undoable, unsaved until the author saves). The passage is
+   * followed through edits, so it goes in where the passage is now, wherever
+   * the cursor is. It goes in only over what's safe to replace: the passage as
+   * asked about, or an option put in it (by this reply or another about it,
+   * undone or not). If the author has changed the passage meanwhile, or deleted
+   * it, the card asks first (`conflict`); `anyway` is its answer: replace what
+   * the card showed (not anything changed since), or put it back where it was.
    */
-  async applyOption(itemId: string, index: number) {
+  async applyOption(itemId: string, index: number, { anyway = false } = {}) {
     const item = this.state.agent.items.find((i) => i.id === itemId);
     if (item?.kind !== 'assistant' || !item.options?.target) return;
     const option = parseOptions(item.text).options[index];
     if (option?.text == null || !option.complete) return;
-    const { target, original } = item.options;
+    const opts = item.options;
+    const target = item.options.target;
+    const asked = opts.original ?? target;
+    const id = opts.passage && this.passages.has(opts.passage) ? opts.passage : this.followPassage(asked);
+    const p = this.passages.get(id)!;
     const fail = (why: string) => this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Option ${option.n} not applied: ${why}` });
     try {
-      await this.openFile(target.path);
+      await this.openFile(p.path);
     } catch (e) {
       return fail(errorMessage(e));
     }
     const editor = this.editor;
     const model = editor?.getModel();
-    if (!editor || !model || this.state.active !== target.path) return fail(`couldn't open ${target.path}.`);
-    const locate = (t: OptionTarget | null): monaco.Range | null => {
-      if (!t) return null;
-      const at = new monaco.Range(t.start.line, t.start.column, t.end.line, t.end.column);
-      if (model.validateRange(at).equalsRange(at) && model.getValueInRange(at) === t.text) return at;
-      const matches = t.text ? model.findMatches(t.text, false, false, true, null, false, 2) : [];
-      return matches.length === 1 ? matches[0].range : null;
-    };
-    const range = locate(target) ?? locate(original);
-    if (!range) return fail('the passage has changed since you asked. Select it and ask again, or copy the option.');
+    if (!editor || !model || this.state.active !== p.path || model !== this.docs?.get(p.path)?.model) return fail(`couldn't open ${p.path}.`);
+    // Safe to replace: the options put in it (the latest first), and the passage as this reply was asked about.
+    const ours = [...p.put].reverse().concat(target.text, asked.text);
+    const at = this.locateIn(p, model, ours);
+    const shown = opts.conflict?.index === index ? opts.conflict : null;
+    let range: monaco.Range;
+    if (at.kind === 'ours') range = offsetsRange(model, at.start, at.end);
+    else if (anyway && at.kind === 'changed' && shown?.kind === 'changed' && shown.now === at.now) range = offsetsRange(model, at.start, at.end);
+    else if (anyway && at.kind === 'deleted' && shown?.kind === 'deleted') range = offsetsRange(model, at.at, at.at);
+    else {
+      const conflict: OptionConflict =
+        at.kind === 'changed' ? { index, kind: 'changed', was: closestOurs(at.now, ours), now: at.now } : { index, kind: at.kind, was: ours[0], now: '' };
+      this.updateItem(itemId, (it) => (it.kind === 'assistant' && it.options ? { ...it, options: { ...it.options, passage: id, conflict } } : it));
+      return;
+    }
     const start = range.getStartPosition();
     editor.pushUndoStop();
     editor.executeEdits('agent-option', [{ range, text: option.text, forceMoveMarkers: true }]);
     editor.pushUndoStop();
     const end = model.getPositionAt(model.getOffsetAt(start) + option.text.length);
-    editor.setSelection(monaco.Range.fromPositions(start, end));
-    editor.revealRangeInCenterIfOutsideViewport(monaco.Range.fromPositions(start, end));
-    const applied: OptionTarget = {
-      path: target.path,
-      start: { line: start.lineNumber, column: start.column },
-      end: { line: end.lineNumber, column: end.column },
-      text: model.getValueInRange(monaco.Range.fromPositions(start, end)),
-    };
+    const put = monaco.Range.fromPositions(start, end);
+    editor.setSelection(put);
+    editor.revealRangeInCenterIfOutsideViewport(put);
+    const applied = targetIn(p.path, model, put);
+    this.refollow(p, model, put);
+    p.last = applied;
+    p.put = [...p.put.filter((t) => t !== applied.text), applied.text];
+    // Every reply about the passage: this is where their options go now, and only this one is in use.
     // Picked one: is that the task done? (Asked once; "Not yet" isn't asked again for this reply.)
-    this.updateItem(itemId, (it) =>
-      it.kind === 'assistant' && it.options ? { ...it, options: { ...it.options, target: applied, applied: index }, taskCheck: it.taskCheck === 'dismissed' ? 'dismissed' : 'ask' } : it,
-    );
+    this.setAgent((a) => ({
+      items: a.items.map((it) => {
+        if (it.kind !== 'assistant' || !it.options || (it.id !== itemId && it.options.passage !== id)) return it;
+        const options = { ...it.options, passage: id, target: applied, conflict: null, applied: it.id === itemId ? index : null };
+        return it.id === itemId ? { ...it, options, taskCheck: it.taskCheck === 'dismissed' ? 'dismissed' : 'ask' } : { ...it, options };
+      }),
+    }));
+  }
+
+  /** The card's Cancel: the option stays out, the passage as it is. */
+  dismissOptionConflict(itemId: string) {
+    this.updateItem(itemId, (it) => (it.kind === 'assistant' && it.options ? { ...it, options: { ...it.options, conflict: null } } : it));
+  }
+
+  /** "New options for it as it is": the passage, as the author has changed it, asked about again in Options mode. */
+  async optionsAgain(itemId: string) {
+    const item = this.state.agent.items.find((i) => i.id === itemId);
+    const id = item?.kind === 'assistant' ? item.options?.passage : undefined;
+    const sel = id ? await this.passageSelection(id) : null;
+    if (!id || !sel) return this.toast('The passage can’t be found any more: select it and ask again.', 'error');
+    this.dismissOptionConflict(itemId);
+    // A reply running in another mode finishes first, as from the selection bar.
+    if (this.state.agent.mode !== 'options') {
+      await this.untilIdle();
+      await this.setMode('options');
+    }
+    if (this.state.agent.mode !== 'options') return;
+    this.setAgent({ attachments: [{ id: uid('a'), label: selectionLabel(sel), selection: sel, passage: id }] });
+    await this.send(OPTIONS_AGAIN_PROMPT);
   }
 
   private agentError(message: string) {
