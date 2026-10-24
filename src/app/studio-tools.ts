@@ -93,6 +93,11 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   markAiReads: { about: 'Mark the lines the assistant read in this conversation.', values: 'true, false', schema: { type: 'boolean' } },
   aiEditColor: { about: 'The colour of the marks for lines the assistant changed.', values: '#rrggbb', schema: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
   aiReadColor: { about: 'The colour of the marks for lines the assistant read.', values: '#rrggbb', schema: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' } },
+  checkSpelling: { about: 'Check spelling as the author types (red squiggles).', values: 'true, false', schema: { type: 'boolean' } },
+  checkGrammar: { about: 'Check grammar with spelling (blue squiggles), in English.', values: 'true, false', schema: { type: 'boolean' } },
+  checkStyle: { about: 'Suggest style too (wordiness, house style), as dotted purple underlines.', values: 'true, false', schema: { type: 'boolean' } },
+  checkCode: { about: 'Check the words in code blocks, inline code, code files and the names a file defines.', values: 'true, false', schema: { type: 'boolean' } },
+  spellingLanguage: { about: 'The language of books whose Typst doesn’t set one ("en-GB"); "" for the Mac’s.', values: 'a language tag such as en-US, en-GB, fr, de, or ""', schema: { type: 'string', pattern: '^([a-z]{2,3}(-[A-Z]{2})?)?$' } },
   checkForUpdates: { about: 'Look for a new version of Foreword when it starts.', values: 'true, false', schema: { type: 'boolean' } },
   zoom: { about: 'The size of the whole window’s text and controls (1 is 100%).', values: ZOOM_STEPS.join(', '), schema: { type: 'number', minimum: ZOOM_STEPS[0], maximum: ZOOM_STEPS[ZOOM_STEPS.length - 1] } },
 };
@@ -109,7 +114,7 @@ const AUTHOR_ONLY: Record<string, string> = {
 const AUTHOR_ONLY_NOTE =
   'What the assistant may do (Settings ▸ Permissions), the commands it may run without asking, and the programs Foreword runs (Settings ▸ Tools) are the author’s to change, in Settings: open_settings opens the page for them.';
 const BOOK_NOTE =
-  'This book’s own settings (its main file, Typst root, output folder, font folders) are in .foreword.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there.';
+  'This book’s own settings (its main file, Typst root, output folder, font folders, the language its spelling is checked in) are in .foreword.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there. The words its spelling check accepts (its characters’ names, its terms) are in .foreword/dictionary.txt, one per line, sorted.';
 
 type Tool = {
   name: string;

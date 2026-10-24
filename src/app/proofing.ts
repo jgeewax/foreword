@@ -7,7 +7,7 @@
 import { errorMessage, ipc, type DialectHint, type ProofIssue, type ProofOptions, type WordScope } from '../lib/ipc';
 import type { Doc, Documents } from '../editor/documents';
 import { monaco } from '../editor/monaco';
-import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, nextIssue, wrapLanguage, type IssueCounts } from './proofing-core';
+import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, nextIssue, ruleTitle, wrapLanguage, type IssueCounts } from './proofing-core';
 
 /** A moment after the last keystroke, as the other marks wait (EditorPane's 300 ms, the TODO scan's 400). */
 export const CHECK_DELAY_MS = 400;
@@ -365,10 +365,13 @@ export class Proofing {
     }
   }
 
-  /** "Ignore": this mistake, in this sentence, for the rest of the session. */
+  /** "Ignore": this mistake, in this sentence, from now on: saved with the book (.foreword/ignored.txt), as Word keeps it in the document. */
   ignore(found: Found) {
-    this.ignored.add(found.issue.key);
-    this.drop((i) => i.key === found.issue.key);
+    const { issue } = found;
+    this.ignored.add(issue.key);
+    this.drop((i) => i.key === issue.key);
+    const what = `${found.path}: ${ruleTitle(issue.rule)}: “${issue.word}”`;
+    void ipc.proofIgnoredEdit([[issue.key, what]], []).catch((e) => this.host.log(`spelling: couldn't save an ignored mistake: ${errorMessage(e)}`));
   }
 
   /** "Add to Dictionary": the book's or the author's; every window checks again (the proofing:words event). */

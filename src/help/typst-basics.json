@@ -120,7 +120,7 @@
       "items": [
         {
           "title": "Red squiggles",
-          "text": "They mark a Typst error. The usual cause is an unclosed *, _ or $, which turns the rest of the paragraph bold, italic or into math: close it, or put a backslash in front if you meant the character itself. Click the error count in the status bar to jump to the problem, or ask the assistant to fix it."
+          "text": "Under a word, a misspelling (blue: a grammar slip): click it, or right-click, for suggestions, or Add to Book Dictionary for a name. Under markup, a Typst error; the hover says which. The usual cause of an error is an unclosed *, _ or $, which turns the rest of the paragraph bold, italic or into math: close it, or put a backslash in front if you meant the character itself. Click the error count in the status bar to jump to the problem, or ask the assistant to fix it."
         },
         {
           "title": "Ask the assistant",

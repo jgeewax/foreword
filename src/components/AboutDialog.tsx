@@ -62,7 +62,7 @@ export function AboutDialog() {
           </button>
         </div>
         <p className="about-fine">
-          Typeset with Typst, through Tinymist. Not made by, or affiliated with, the Typst team.
+          Typeset with Typst, through Tinymist. Not made by, or affiliated with, the Typst team. Spelling and grammar by Harper, macOS and cspell’s word lists.
           <br />© 2026 JJ Geewax
         </p>
       </div>

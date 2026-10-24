@@ -23,9 +23,10 @@ use crate::error::{CmdError, CmdResult};
 use crate::Win;
 use english::{English, Found, Kind, Rules};
 use units::{Check, Lang, Unit, Utf16};
-use words::{WordFile, Words};
+use words::{Ignored, IgnoredFile, WordFile, Words};
 
 const BOOK_WORDS: &str = ".foreword/dictionary.txt";
+const BOOK_IGNORED: &str = ".foreword/ignored.txt";
 const BOOK_HEADER: &str = "# Words spell checking accepts in this book, one per line (Foreword keeps them sorted).";
 const USER_HEADER: &str = "# Words spell checking accepts in every book, one per line (Foreword keeps them sorted).";
 
@@ -175,6 +176,7 @@ pub struct ProofState {
     cache: Mutex<Cache>,
     user: Mutex<WordFile>,
     books: Mutex<HashMap<PathBuf, WordFile>>,
+    ignored: Mutex<HashMap<PathBuf, IgnoredFile>>,
     /// The newest version asked for, by window and file.
     latest: Mutex<HashMap<(String, String), i64>>,
 }
@@ -187,6 +189,7 @@ impl Default for ProofState {
             cache: Mutex::default(),
             user: Mutex::new(WordFile::new(crate::config::config_dir().join("dictionary.txt"))),
             books: Mutex::default(),
+            ignored: Mutex::default(),
             latest: Mutex::default(),
         }
     }
@@ -196,12 +199,24 @@ impl ProofState {
     fn book_words(&self, root: &Path) -> Arc<Words> {
         self.books.lock().unwrap().entry(root.to_path_buf()).or_insert_with(|| WordFile::new(root.join(BOOK_WORDS))).get()
     }
+
+    fn book_ignored(&self, root: &Path) -> Arc<Ignored> {
+        self.ignored.lock().unwrap().entry(root.to_path_buf()).or_insert_with(|| IgnoredFile::new(root.join(BOOK_IGNORED))).get()
+    }
 }
 
 fn hash(parts: impl Hash) -> u64 {
     let mut h = DefaultHasher::new();
     parts.hash(&mut h);
     h.finish()
+}
+
+/// What names a mistake for Ignore: its rule, its words and its sentence, so it
+/// stays ignored through edits elsewhere and across versions (it's saved in the book).
+fn ignore_key(rule: &str, word: &str, sentence: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::new().chain_update(rule).chain_update([0]).chain_update(word).chain_update([0]).chain_update(sentence).finalize();
+    hex::encode(&digest[..8])
 }
 
 /// The units of a file, by its kind.
@@ -239,9 +254,17 @@ fn paragraphs(text: &str, check: Check, lang: &Lang) -> Vec<Unit> {
     out
 }
 
-/// A file's issues: each unit checked (or taken from the cache), then the
-/// author's words, ignores and choices applied, and placed in the file.
+/// `check_ignoring` with nothing ignored, for tests.
+#[cfg(test)]
 fn check(english: &mut English, cache: &Mutex<Cache>, user: &Words, book_words: &Words, path: &str, text: &str, options: &Options) -> Report {
+    check_ignoring(english, cache, user, book_words, &Ignored::default(), path, text, options)
+}
+
+/// A file's issues: each unit checked (or taken from the cache), then the
+/// author's words, the book's ignored mistakes and the author's choices
+/// applied, and placed in the file.
+#[allow(clippy::too_many_arguments)]
+fn check_ignoring(english: &mut English, cache: &Mutex<Cache>, user: &Words, book_words: &Words, ignored: &Ignored, path: &str, text: &str, options: &Options) -> Report {
     let book = Lang::parse(&options.language).unwrap_or_else(Lang::english);
     let utf16 = Utf16::new(text);
     let mut issues = Vec::new();
@@ -309,8 +332,8 @@ fn check(english: &mut English, cache: &Mutex<Cache>, user: &Words, book_words: 
                 fixes.splice(0..0, own);
                 fixes.truncate(6);
             }
-            let issue_key = format!("{:016x}", hash((&f.rule, word, &unit.text)));
-            if options.ignored.contains(&issue_key) {
+            let issue_key = ignore_key(&f.rule, word, &unit.text);
+            if options.ignored.contains(&issue_key) || ignored.has(&issue_key) {
                 continue;
             }
             let Some(place) = unit.place(f.start, f.end) else { continue };
@@ -460,13 +483,14 @@ pub async fn proof_check(app: tauri::AppHandle, state: Win, request: CheckReques
         }
         let user = proof.user.lock().unwrap().get();
         let book = proof.book_words(&root);
+        let ignored = proof.book_ignored(&root);
         let mut engine = if request.scan { proof.scan.lock().unwrap() } else { proof.typing.lock().unwrap() };
         // Typed on while this one waited its turn.
         if stale() {
             return Ok(skipped);
         }
         let english = engine.get_or_insert_with(English::default);
-        let r = check(english, &proof.cache, &user, &book, &request.path, &text, o);
+        let r = check_ignoring(english, &proof.cache, &user, &book, &ignored, &request.path, &text, o);
         Ok(Checked { version: request.version, issues: r.issues, stale: false, unchecked: r.unchecked, dialect: r.dialect })
     })
     .await
@@ -567,6 +591,25 @@ fn normalize(p: &Path) -> String {
         }
     }
     parts.join("/")
+}
+
+/// The book's ignored mistakes: key, and what it was.
+#[tauri::command]
+pub async fn proof_ignored(app: tauri::AppHandle, state: Win) -> CmdResult<Vec<(String, String)>> {
+    Ok(app.state::<ProofState>().book_ignored(&state.root()?).list.clone())
+}
+
+/// Let mistakes be in this book (Ignore), or see them again; every window checks again.
+#[tauri::command]
+pub async fn proof_ignored_edit(app: tauri::AppHandle, state: Win, add: Vec<(String, String)>, remove: Vec<String>) -> CmdResult<Vec<(String, String)>> {
+    let root = state.root()?;
+    let list = {
+        let proof = app.state::<ProofState>();
+        let mut files = proof.ignored.lock().unwrap();
+        files.entry(root.clone()).or_insert_with(|| IgnoredFile::new(root.join(BOOK_IGNORED))).edit(&add, &remove)?.list.clone()
+    };
+    let _ = app.emit("proofing:words", "ignored");
+    Ok(list)
 }
 
 #[derive(Serialize)]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-proof-ignored-edit"
+description = "Enables the proof_ignored_edit command without any pre-configured scope."
+commands.allow = ["proof_ignored_edit"]
+
+[[permission]]
+identifier = "deny-proof-ignored-edit"
+description = "Denies the proof_ignored_edit command without any pre-configured scope."
+commands.deny = ["proof_ignored_edit"]

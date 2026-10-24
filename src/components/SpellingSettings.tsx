@@ -271,6 +271,33 @@ export function SpellingPage() {
   );
 }
 
+/** Mistakes the book lets be (Ignore in the editor), with a way to see each again. */
+function IgnoredList() {
+  const [list, setList] = useState<[string, string][] | null>(null);
+  useEffect(() => {
+    const load = () => void ipc.proofIgnored().then(setList, () => setList([]));
+    load();
+    const off = listen('proofing:words', load);
+    return () => void off.then((f) => f());
+  }, []);
+  if (!list) return null;
+  if (!list.length) return <p className="rule-empty">None. Ignore on a mistake lets it be in this book, saved in .foreword/ignored.txt.</p>;
+  return (
+    <ul className="rule-list">
+      {list.map(([key, what]) => (
+        <li key={key} className="rule-row">
+          <div className="rule-text">
+            <div className="rule-title">{what || key}</div>
+          </div>
+          <button className="link" onClick={() => void ipc.proofIgnoredEdit([], [key]).then(setList)}>
+            See again
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Settings ▸ This book ▸ Spelling: its language, its dictionary, its rules. */
 export function BookSpellingPage() {
   const project = useStore(studio.store, (s) => s.project.settings);
@@ -316,6 +343,10 @@ export function BookSpellingPage() {
       <Section title="Grammar rules">
         <p className="settings-help">Rules this book checks differently from every book (Settings ▸ Spelling & Grammar ▸ Grammar rules).</p>
         <RulesList scope="book" />
+      </Section>
+      <Section title="Ignored">
+        <p className="settings-help">Mistakes you’ve told it to let be, each in its own sentence: the same words elsewhere are still checked.</p>
+        <IgnoredList />
       </Section>
     </>
   );

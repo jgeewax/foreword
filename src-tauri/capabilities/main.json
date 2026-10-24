@@ -62,6 +62,8 @@
     "allow-proof-rules",
     "allow-proof-language",
     "allow-proof-words-open",
+    "allow-proof-ignored",
+    "allow-proof-ignored-edit",
     "allow-typst-start",
     "allow-typst-send",
     "allow-typst-stop",

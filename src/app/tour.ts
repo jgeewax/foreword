@@ -52,7 +52,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: '.statusbar',
     title: 'How the book stands',
-    text: 'Typst errors (click to go to the next one), pages and words, and whether the preview and the assistant are ready.',
+    text: 'Typst errors (click to go to the next one), spelling and grammar in this chapter, pages and words, and whether the preview and the assistant are ready.',
   },
   {
     target: null,

@@ -134,6 +134,76 @@ pub fn distance(a: &str, b: &str, limit: usize) -> Option<usize> {
     (d <= limit).then_some(d)
 }
 
+/// Mistakes a book lets be ("Ignore"): `.foreword/ignored.txt`, a key per line
+/// and, after it, what it was ("AnA: an, in “This is an test.”"), for a reader.
+#[derive(Default, Debug)]
+pub struct Ignored {
+    /// Key, and what it was.
+    pub list: Vec<(String, String)>,
+}
+
+impl Ignored {
+    pub fn parse(text: &str) -> Ignored {
+        let list = text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(|l| match l.split_once(' ') {
+                Some((k, what)) => (k.to_string(), what.trim().to_string()),
+                None => (l.to_string(), String::new()),
+            })
+            .collect();
+        Ignored { list }
+    }
+
+    pub fn has(&self, key: &str) -> bool {
+        self.list.iter().any(|(k, _)| k == key)
+    }
+
+    pub fn render(&self) -> String {
+        let mut out = String::from("# Mistakes this book lets be (Ignore in the editor): a key, then what it was. Delete a line to see it again.\n");
+        for (k, what) in &self.list {
+            out.push_str(&format!("{k} {what}\n"));
+        }
+        out
+    }
+}
+
+/// The book's ignored mistakes on disk, read again when the file changes.
+pub struct IgnoredFile {
+    path: PathBuf,
+    stamp: Option<(SystemTime, u64)>,
+    ignored: Arc<Ignored>,
+}
+
+impl IgnoredFile {
+    pub fn new(path: PathBuf) -> IgnoredFile {
+        IgnoredFile { path, stamp: None, ignored: Arc::default() }
+    }
+
+    pub fn get(&mut self) -> Arc<Ignored> {
+        let stamp = fs::metadata(&self.path).ok().map(|m| (m.modified().unwrap_or(SystemTime::UNIX_EPOCH), m.len()));
+        if stamp != self.stamp {
+            self.ignored = Arc::new(fs::read_to_string(&self.path).map(|t| Ignored::parse(&t)).unwrap_or_default());
+            self.stamp = stamp;
+        }
+        self.ignored.clone()
+    }
+
+    /// Add (key, what it was) and take keys out, and write the file.
+    pub fn edit(&mut self, add: &[(String, String)], remove: &[String]) -> CmdResult<Arc<Ignored>> {
+        let mut list: Vec<(String, String)> = self.get().list.iter().filter(|(k, _)| !remove.contains(k)).cloned().collect();
+        for (k, what) in add {
+            if !list.iter().any(|(x, _)| x == k) && k.chars().all(|c| c.is_ascii_hexdigit()) {
+                list.push((k.clone(), what.replace('\n', " ")));
+            }
+        }
+        write_atomic(&self.path, &Ignored { list }.render())?;
+        self.stamp = None;
+        Ok(self.get())
+    }
+}
+
 /// A word list on disk, read again when the file changes (another window, git, by hand).
 pub struct WordFile {
     pub path: PathBuf,
@@ -208,6 +278,19 @@ mod tests {
         let w = Words::parse("# Mine\nzebra\nApple\n").edited(&["mango".into(), "zebra".into()], &["Apple".into()]);
         assert_eq!(w.render("# default"), "# Mine\nmango\nzebra\n");
         assert_eq!(Words::default().edited(&["b".into(), "A".into()], &[]).render("# default"), "# default\nA\nb\n");
+    }
+
+    #[test]
+    fn ignored_mistakes_are_kept_with_what_they_were() {
+        let dir = std::env::temp_dir().join(format!("foreword-ignored-{}", uuid::Uuid::new_v4().simple()));
+        let mut f = IgnoredFile::new(dir.join(".foreword/ignored.txt"));
+        f.edit(&[("00ff00ff00ff00ff".into(), "AnA: an, in “This is an test.”".into()), ("not hex".into(), "x".into())], &[]).unwrap();
+        let text = fs::read_to_string(dir.join(".foreword/ignored.txt")).unwrap();
+        assert!(text.ends_with("00ff00ff00ff00ff AnA: an, in “This is an test.”\n"), "{text}");
+        assert!(f.get().has("00ff00ff00ff00ff") && f.get().list.len() == 1);
+        f.edit(&[], &["00ff00ff00ff00ff".into()]).unwrap();
+        assert!(f.get().list.is_empty());
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

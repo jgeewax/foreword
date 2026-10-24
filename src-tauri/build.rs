@@ -51,6 +51,8 @@ fn main() {
             "proof_rules",
             "proof_language",
             "proof_words_open",
+            "proof_ignored",
+            "proof_ignored_edit",
             "typst_start",
             "typst_send",
             "typst_stop",

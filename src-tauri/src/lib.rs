@@ -609,6 +609,8 @@ pub fn run() {
             proof::proof_rules,
             proof::proof_language,
             proof::proof_words_open,
+            proof::proof_ignored,
+            proof::proof_ignored_edit,
             lsp::typst_start,
             lsp::typst_send,
             lsp::typst_stop,

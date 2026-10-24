@@ -4772,6 +4772,7 @@ async function proofingChecks() {
   const model = editor.getModel()!;
   const before = model.getAlternativeVersionId();
   const hadWords = (await ipc.fsHash('.foreword/dictionary.txt').catch(() => null)) !== null;
+  const hadIgnored = (await ipc.fsHash('.foreword/ignored.txt').catch(() => null)) !== null;
   const shown = () => studio.proofing.list(path).map((f) => `${f.issue.kind}:${f.issue.word}`);
   const offsetOf = (text: string) => model.getValue().indexOf(text);
   const right = async (offset: number) => {
@@ -4843,6 +4844,13 @@ async function proofingChecks() {
     await sleep(800);
     out.stillLearned = !shown().includes('spelling:Grevlund');
 
+    // Ignore: saved with the book, and not flagged again.
+    out.anMenu = (await right(offsetOf('an test'))).slice(0, 5);
+    action('Ignore')?.();
+    await waitFor(() => !shown().includes('grammar:an'), 5000, 'the ignored mistake gone');
+    await sleep(500);
+    out.ignoredFile = (await ipc.fsRead('.foreword/ignored.txt').catch(() => ({ text: '' }))).text;
+
     // A tab switch keeps them: they're on the model.
     await studio.openFile('chapters/ch2-eigenvalues.typ');
     await sleep(300);
@@ -4893,6 +4901,7 @@ async function proofingChecks() {
     menuRecorder.record = undefined;
     await ipc.proofWordsEdit('book', [], ['Grevlund']).catch(() => {});
     if (!hadWords) await ipc.fsTrash('.foreword/dictionary.txt').catch(() => {});
+    if (!hadIgnored) await ipc.fsTrash('.foreword/ignored.txt').catch(() => {});
     while (model.getAlternativeVersionId() !== before && model.canUndo()) await model.undo();
     await studio.save().catch(() => {});
   }

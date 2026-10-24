@@ -3912,6 +3912,100 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   said "Write · ch. 1 · +1 −1", lit and folded out after a click. `activity`,
   `palette`, `menubar` and `chrome` pass.
 
+### Spelling and grammar, offline (2026-10-24)
+
+- **Asked for:** "we need spell check and grammar check. there must be
+  libraries for this?… i dont want to use LLMs for this -- thats too
+  expensive. we want to stick with what ms.word / google docs does if
+  possible… red squiggly underline for misspellings. blue/green colored
+  squiggles for grammar mistakes (like ms word)", with the book's language,
+  blocks in other languages, math left alone, code's comments and names
+  checked (`tmie_zone` → `time_zone`), and dictionaries for the book and the
+  author. Decided with the author: English gets spelling and grammar, other
+  languages spelling only, no Java (so no LanguageTool); the book's
+  dictionary is `.foreword/dictionary.txt`; inline code is checked as code;
+  style suggestions are off by default.
+- **The libraries.** Harper (`harper-core` =2.13.0, Apache-2.0, Automattic's
+  offline rule-based checker, Rust) for English in its five dialects;
+  typst-syntax =0.15.1 (the bundled Tinymist's Typst) to tell prose from
+  markup; for code, cspell's way (VS Code's Code Spell Checker) with its MIT
+  word lists for 15 languages, compiled in (400 KB,
+  `scripts/fetch-proofing-dictionaries.mjs` pins the commit and checks
+  SHA-256); macOS's own spell checker (NSSpellChecker) for other languages
+  and as a second opinion on Harper's English misspellings. harper-typst
+  wasn't used: it checks every string as prose (`font: "Libertinus Serif"`),
+  ignores `lang` and skips comments and raw blocks.
+- **Measured before building on them (spikes):**
+  - Codebook (tree-sitter for 30 languages, checks names only where defined)
+    was the first choice for code: it builds and works offline from a local
+    dictionary folder, but added 49 MB to a release binary (7.5 MB → 57 MB:
+    OCaml, C#, Swift, Haskell and LaTeX grammars alone are ~22 MB of static
+    libraries, plus a second TLS stack, aws-lc, from its downloader).
+    Harper and typst-syntax together add ~7 MB.
+  - Harper on the 743-page linear algebra book (its test copy, 48 files,
+    1.7 MB): a check after an edit is 2 ms p50, 3 ms p95 (only the edited
+    paragraph is linted; units are cached by their text), the whole book cold
+    in ~10 s, a 100 KB chapter's first check 0.8 s, in the background. In a
+    debug build Harper's crates are optimised (`[profile.dev.package]`), or a
+    chapter's first check takes seconds.
+  - NSSpellChecker: 43 languages on this Mac, works from a worker thread,
+    14 KB of French in 8 ms; its grammar check found nothing in plain
+    mistakes, so other languages get spelling only.
+- **Virtual text.** The walker (proof/typst.rs) builds each paragraph as
+  clean text (`This is *very* good` → "This is very good", `--` → "–",
+  single newlines as spaces, doubled spaces as one) with a map back to the
+  file; math, inline code and references leave a stand-in, "X", and a mistake
+  in the same word as one, or an article before one ("a $z$-axis"), is
+  dropped. A fix is offered only where the flagged text is the file's own in
+  one piece. Footnotes, captions and cells are their own units, so they don't
+  split the sentence around them; another function's content in a sentence
+  (`#term[…]`) is too, with a stand-in; `#index[…]` is checked as words only.
+- **False positives, measured and fixed on the linear algebra book** (with
+  Word's defaults of ignoring UPPERCASE and words with numbers):
+  3,046 spelling flags → 1,185, code 1,120 → 409, a/an 148 → 2, sentence
+  capitals 274 → 127, then 648 distinct unknown words → 229 with the Mac's
+  second opinion (it knows invertible, eigenvector, sigmoid; still flags teh,
+  recieve, seperate). What fixed them: math's `#vect("w")` is a call's
+  argument, not text; library names after a dot (`np.linalg.norm`) aren't the
+  author's unless assigned; comments inside code are code; a letter alone
+  isn't a word; ordinals (n-th) and file extensions (ch02.typ) are let be;
+  list items and text after a displayed equation are fragments, not
+  sentences; and Harper's rules that misfire on careful prose are off for
+  books unless turned on (`BOOK_RULES`: Everyone, CompoundNouns, MassNouns,
+  OrthographicConsistency, OkToOkay, ExpandMemoryShorthands,
+  ExpandTimeShorthands, WrongNegative). What's left is jargon (eigenbasis,
+  Mahalanobis) and code abbreviations: the book's dictionary, a click each
+  from the Spelling view.
+- **British books checked as American** (Jekyll and Hyde, Calculus, the
+  picture book: `lang: "en"` with no region) flag "colour", "theatre". A
+  language without a region takes the Mac's region when it's the same
+  language, and a file with three or more words spelled as in another English
+  offers, once a session, to check the book as that (`.foreword.json`
+  `"language"`).
+- **In the editor.** Squiggles are decorations on each file's model (an
+  editor-owned collection is wiped when the model detaches, so they'd vanish on
+  every tab switch), not markers, so they never count as Typst errors; red and
+  blue are Monaco's own wavy SVG in their own colours. The word being typed
+  isn't flagged until the caret leaves it, as in Word and Docs; squiggles
+  under an edit go at once; nothing is checked mid-IME. The hover, the top of
+  the right-click menu (as TextEdit puts suggestions) and ⌘. offer the fixes,
+  Ignore (saved with the book, `.foreword/ignored.txt`, keyed by rule, words
+  and sentence with SHA-256), Add to Book or My Dictionary
+  (`~/.foreword/dictionary.txt`) and Don't Check for the rule. ⌘; is the next
+  mistake, as in Pages; ⇧⌘; the Spelling view. Hovers are only for the
+  editor's own model, never a diff's. Dictionaries aren't in
+  `PERMISSION_FILES`: the assistant may add words.
+- **Verified:** cargo tests in proof/ (46: the walker's rules, offsets
+  through markup and UTF-16, Harper, code splitting, word lists, the Mac's
+  dictionaries, dialect hints), vitest `src/app/proofing-core.test.ts`, and the
+  `proofing` self-test group (FOREWORD_SELFTEST_EDITS=1): squiggles in their
+  colours, held while typing, hover and menu, a fix and ⌘Z, Add to Book
+  Dictionary writing the file, a tab switch, a French passage marked with Set
+  Language and spelled by the Mac, the Spelling view, both Settings pages.
+- **Later:** language detection for unmarked foreign passages, `// proofing:`
+  comment directives, a language inherited through `#text(lang:, include …)`,
+  `.bib` titles.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
