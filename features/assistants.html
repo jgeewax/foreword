@@ -77,8 +77,12 @@
 </figure>
 <p><code>/model sonnet</code>, <code>/effort high</code> and <code>/assistant codex</code> do the same from the message box.</p>
 
+<h2 id="switch-halfway-through-a-task">Switch halfway through a task</h2>
+<p>Choosing another assistant is like choosing another model: the chat stays where it is, and the task carries on. Start a task with Claude Code, switch to Codex for a second opinion, and your next message goes to Codex with the conversation so far, so it knows what you’ve talked about and what was changed. Switch back, and Claude Code picks up its own conversation, told only what was said since. The chat says which it is: “With Codex now: a new conversation, and the chat so far goes with your next message.”</p>
+<p>Your tasks are all in one list, whichever assistant they were with. Open one, and it carries on with the assistant you’re using now.</p>
+
 <h2 id="or-ask-for-it">Or ask for it</h2>
-<p>“Switch me to Claude Code with its default model, on high effort.” Unless you’ve said otherwise, it asks you first, then makes the switch when its reply is finished. The new conversation opens with a line saying what happened: “Claude Code is the writing assistant now (model Default, effort High), as you asked. This is a new conversation: your last one is kept with Codex, to carry on if you switch back.”</p>
+<p>“Switch me to Claude Code with its default model, on high effort.” Unless you’ve said otherwise, it asks you first, then makes the switch when its reply is finished, and the task carries on. The chat says what happened: “Claude Code is the writing assistant now (model Default, effort High), as you asked, and this task carries on with it: a new conversation, and the chat so far goes with your next message.”</p>
 
 <h2 id="why-bring-your-own">Why bring your own</h2>
 <p>You may already pay for one of these, and have chosen it. Foreword shouldn’t sell you another subscription, or tie your book to one company. These assistants also get better every few weeks, and when yours does, so does Foreword.</p>
@@ -87,7 +91,7 @@
   <h3>What it doesn’t do</h3>
   <ul>
     <li>Foreword has no AI of its own. The OpenCode that comes with it still needs an account with an AI company, or a model running on your Mac.</li>
-    <li>One assistant per window at a time. Switching starts a new conversation, and waits for the current reply to finish.</li>
+    <li>One assistant per window at a time. Switching waits for the current reply to finish.</li>
     <li>Gemini CLI and Antigravity haven’t yet been tested in a real signed-in conversation. Claude Code, Codex and OpenCode have.</li>
     <li>Claude Code and Codex may need Node.js on your Mac, and Settings says so if it’s missing. The first start can take a minute.</li>
   </ul>
