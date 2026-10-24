@@ -2,6 +2,36 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.8.0 · 24 October 2026
+
+### Spelling and grammar
+
+- **Spelling and grammar as you type, as Word does it.** A red squiggle under a misspelling and a blue one under a grammar slip. Click it, or right-click, for suggestions; a fix is one ⌘Z. It's all checked on your Mac: no AI, and nothing is sent anywhere. Your sentences, headings, captions and footnotes are checked; maths, labels and settings aren't. Comments and the names in code are spelled too, so `tmie_zone` suggests `time_zone`. The word you're typing waits until you've finished it. ⌘; goes to the next mistake, and the status bar counts them.
+- **Your book's own words.** *Add to Book Dictionary* keeps a name like Utterson with the book, for everyone who works on it; *Add to My Dictionary* keeps a word for all your books. *Ignore* lasts too, kept with the book, for that one sentence: the same words elsewhere are still checked. Settings ▸ This book ▸ Spelling lists what you've ignored, each with *See again*.
+- **Other languages.** A passage marked as French, say (*Set Language* on the right-click menu), is checked with the Mac's own French dictionary, one of the forty or so it comes with. In English the Mac's dictionary is a second opinion, so a word you've taught your Mac in another app isn't flagged here. A book checked as American but spelled the British way ("colour", "theatre") is offered British English, once.
+- **A Spelling view for the whole book** (Edit ▸ Show Spelling and Grammar, ⇧⌘;). Every word the dictionary doesn't know, listed once with how often it comes up, the most frequent first, so a character's name goes into the book's dictionary in one click. Then the grammar, chapter by chapter. A click goes to the mistake.
+- **Settings ▸ Spelling & Grammar** turns each check on or off, sets the language for books that don't say, skips words in capitals or with numbers in them, and has your dictionary and every grammar rule.
+
+### The assistant
+
+- **A Tasks view in the sidebar**, after History, with an amber badge when a task needs you. Tasks are listed as Needs you, At work, Open and Done (by day, then by month), and each says what's happening, or the mode it ran in and the chapters it changed. A click opens the task in the assistant pane and folds out what it changed, as a version in History does. Search them, show just *This chapter*'s, and mark done the open tasks that haven't moved in two weeks.
+- **Ask about a selection in your own words.** In the bar under a selection, Explain gives way to **Ask**: type what you want to know, or pick one of the usual questions (Explain it, Is it clear?, Check the facts, What's weakest?, Does it fit?, and Against my style guide when the book has one). It's answered in Ask mode, so a question never changes the book. *Ask in chat* is now **Add to chat** (⌘I), and it leaves the mode as it is.
+- **Options stay with their passage.** *Use this* puts an option where the passage is now, even if you've moved the cursor, selected something else, or written above it since you asked. If you've changed the passage itself, the card shows your changes and offers *New options for it as it is*, *Replace mine anyway*, or *Cancel*. A follow-up such as "shorter", with nothing selected, is about the same passage.
+
+### The editor
+
+- **⌘-click a reference to go to what it points to.** Hold ⌘ over `@ch:vectors` and it's underlined as a link, showing the heading, figure or table it points to; ⌘-click opens that chapter at the spot. It works whether the preview shows the whole book or one chapter. A citation opens the bibliography at its entry.
+- **A reference that points nowhere no longer stops the preview.** Mistype `@ch:vectrs` and it shows on the page in red, while the rest of the book carries on typesetting. The editor underlines it and suggests the right one: "Did you mean @ch:vectors?". Click the red reference on the page to find it in your text. Export PDF asks first when a reference points nowhere.
+- **A TODO's bar stays up while the cursor is on its line**, so *Ask the assistant to do it* and *Done* are there as you arrow onto it, not only under the pointer. Escape puts it away.
+
+### The sidebar
+
+- **Contents keeps up with you.** In a subsection, the section it belongs to is lit. Switch to another chapter and the list scrolls to it.
+
+### Fixes
+
+- History takes far less room on your Mac. It now tidies its saved versions away once a day.
+
 ## 0.7.0 · 24 October 2026
 
 ### The assistant
