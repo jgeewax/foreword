@@ -3646,6 +3646,38 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   in chat, Comment, the menu's Revise…, Esc, Fix error shown first over an
   error, a narrow pane, light and dark.
 
+### Ask on the selection bar, in place of Explain (2026-10-24)
+
+- **Asked for:** "when selecting text, i cant ask a question. when i click ask
+  in chat, im still in write mode… instead of 'explain' being a boring simple
+  button that does the same thing every time, let me type in WHAT i want
+  explained?"
+- **Ask is the card's third tab**, after Revise and Options, in Ask mode's
+  teal and `?`: a box ("What do you want to know?"), the usual questions a
+  click away (Explain it, Is it clear?, Check the facts, What's weakest?,
+  Does it fit?, and Against my style guide when the book has one), and
+  Continue in chat. Enter sends it **in Ask mode**, the way Revise goes to
+  Write and Options to Options (a reply running in another mode finishes
+  first), so a question never edits the book. The chat shows "Ask about this
+  passage" with the question; the message is `About the selected passage:
+  <question>` (stock-prompts.ts). The note under the passage says
+  "Answering…" with Stop, the passage dashed in teal rather than the
+  assistant's purple, and goes once the answer is in (the chat is showing).
+  Explain, a fixed message sent in whatever mode the chat was in, is gone;
+  "Explain it" is its preset. Old conversations still show it as before.
+- **"Ask in chat" is now "Add to chat"**, here, in the context menu, the
+  menu bar and the palette ("Add Selection to Chat", ⌘I): it keeps the chat's
+  mode (its tooltip names it), since ⌘I is how you'd ask for an edit too. The
+  name promised Ask mode and didn't give it. The context menu's Explain This
+  became Ask About This…, and the palette's Explain the Selection became Ask
+  About the Selection…; both open the card on Ask.
+- Verified: unit tests (selection-bar.test.ts, stock-prompts.test.ts); in a
+  scratch instance on Jekyll with Claude Code (Sonnet, low): a typed question
+  from the card switched Write to Ask, showed "Answering…" with the teal mark,
+  answered without editing, and the note went; Continue in chat from Ask (Ask
+  mode, the question in the box); Add to chat (stayed in Write); the card
+  opened on Ask from the command's event; tab switching.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

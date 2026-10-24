@@ -681,9 +681,9 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 /*
  * Under a selection (SelectionBar.tsx), drawn as the TODO bar: each action in
  * the colour of what it does (purple changes the book, as the assistant's
- * marks; Options in its mode's green; blue only looks; amber comments). Revise
- * and Options open a card in its place; a request sent from it gets a note
- * under its passage while it waits and works, and when it's done.
+ * marks; Options and Ask in their modes' green and teal; amber comments).
+ * Revise, Options and Ask open a card in its place; a request sent from it gets
+ * a note under its passage while it waits and works, and when it's done.
  */
 /* Room Monaco counts when it moves a widget in from the right edge, so it stops short of the scrollbar. */
 .selection-widget { padding-right: 20px; pointer-events: none; }
@@ -699,7 +699,7 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-btn { --tone: var(--muted); display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px; border: none; border-radius: 5px; background: transparent; }
 .sel-revise { --tone: var(--ai-edit); }
 .sel-options { --tone: var(--good); }
-.sel-explain { --tone: var(--ai-read); }
+.sel-ask { --tone: #1f8fa5; }
 .sel-comment { --tone: #e3a008; }
 .sel-fix { --tone: var(--bad); }
 .sel-btn .icon-svg, .sel-glyph { flex: none; color: var(--tone); stroke-width: 2; }
@@ -712,9 +712,10 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-btn.sel-quiet:hover:not(:disabled) { color: var(--fg); }
 .sel-glyph { font-size: 15px; font-weight: 700; line-height: 1; }
 .sel-sep { flex: none; width: 1px; height: 16px; margin: 0 3px; background: var(--border); }
-/* The card: Revise or Options, a box to say how, the usual ones, and the way to the chat. */
+/* The card: Revise, Options or Ask, a box to say how (or what), the usual ones, and the way to the chat. */
 .selection-card { --tone: var(--ai-edit); width: 470px; display: flex; flex-direction: column; gap: 9px; padding: 8px; border-radius: 10px; white-space: normal; }
 .selection-card.sel-options { --tone: var(--good); }
+.selection-card.sel-ask { --tone: #1f8fa5; }
 .sel-card-head, .sel-card-foot { display: flex; align-items: center; gap: 8px; }
 .sel-tabs { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
 .sel-tab { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 8px; border: none; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; }
@@ -752,8 +753,10 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-words { font: 11px var(--mono); color: var(--muted); }
 .sel-in-chat { padding: 0 4px; }
 .sel-spin { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--tone, var(--muted)) 30%, transparent); border-top-color: var(--tone, var(--muted)); animation: spin 0.8s linear infinite; }
-.monaco-editor .sel-pending { background: color-mix(in srgb, var(--ai-edit) 16%, transparent); border-bottom: 1px dashed var(--ai-edit); animation: sel-pending 1.6s ease-in-out infinite; }
-@keyframes sel-pending { 50% { background: color-mix(in srgb, var(--ai-edit) 6%, transparent); } }
+/* The passage while the assistant works on it: its purple, or Ask's teal for a question (it only looks). */
+.monaco-editor .sel-pending { --pending: var(--ai-edit); background: color-mix(in srgb, var(--pending) 16%, transparent); border-bottom: 1px dashed var(--pending); animation: sel-pending 1.6s ease-in-out infinite; }
+.monaco-editor .sel-pending-ask { --pending: #1f8fa5; }
+@keyframes sel-pending { 50% { background: color-mix(in srgb, var(--pending) 6%, transparent); } }
 /*
  * The chat before its first message (Starter): a welcome in the middle of the
  * pane, under the app's icon and name, things to ask in the colours of what

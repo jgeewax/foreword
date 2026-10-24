@@ -225,7 +225,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &item("new-task", "New Task", Some("CmdOrCtrl+T"))?,
             &item("task-done", "Task Done", Some("CmdOrCtrl+Shift+D"))?,
             &sep()?,
-            &item("ask-selection", "Ask About Selection", Some("CmdOrCtrl+I"))?,
+            &item("ask-selection", "Add Selection to Chat", Some("CmdOrCtrl+I"))?,
             &item("fix-comments", "Fix Review Comments", None)?,
             &item("stop", "Stop", None)?,
             &sep()?,

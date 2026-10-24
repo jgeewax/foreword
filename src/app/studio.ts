@@ -82,7 +82,8 @@ import { commandPermissionRules, ruleKey, rulesUsed, type CommandRule, type Rule
 import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
-import { EXPLAIN_PROMPT, fixErrorPrompt, mergePrompt, messageLine, optionsPrompt, revisePrompt, stockTitle } from './stock-prompts';
+import { BAR_MODE, barMessage, type BarKind } from './selection-bar';
+import { fixErrorPrompt, mergePrompt, messageLine, stockTitle } from './stock-prompts';
 import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
@@ -649,8 +650,8 @@ export class Studio {
     'focus-search': [text: string | null];
     'focus-editor': [];
     'fill-composer': [text: string];
-    /** The selection bar's card, open on Revise or Options (the context menu, the command). */
-    'selection-card': [kind: 'revise' | 'options'];
+    /** The selection bar's card, open on Revise, Options or Ask (the context menu, the command). */
+    'selection-card': [kind: BarKind];
     'find-in-settings': [];
     'show-agent-pane': [];
     /** The assistant pane's list of the book's tasks, opened (View ▸ Assistant Tasks). */
@@ -1607,14 +1608,14 @@ export class Studio {
 
   // ---- selection actions (the selection bar, context menus) ---------------------------
 
-  /** Revise (the selection bar): the passage changed in place, as asked. That changes the book, so it's done in Write mode. */
-  reviseSelection(instruction: string, signal?: AbortSignal): Promise<boolean> {
-    return this.sendAboutSelection('write', revisePrompt(instruction), signal);
-  }
-
-  /** Options (the selection bar): three versions of the selection to pick from, in Options mode. */
-  optionsForSelection(instruction: string, signal?: AbortSignal): Promise<boolean> {
-    return this.sendAboutSelection('options', optionsPrompt(instruction), signal);
+  /**
+   * A request from the selection bar's card, in its mode: Revise changes the
+   * passage in place (that changes the book, so it's done in Write mode),
+   * Options writes three versions to pick from, Ask answers the author's
+   * question about it and changes nothing.
+   */
+  sendFromBar(kind: BarKind, instruction: string, signal?: AbortSignal): Promise<boolean> {
+    return this.sendAboutSelection(BAR_MODE[kind], barMessage(kind, instruction), signal);
   }
 
   /**
@@ -1651,15 +1652,15 @@ export class Studio {
     });
   }
 
-  /** "Ask in chat" (the selection bar's ⌘I): the selection goes with the chat, which shows with the cursor in its message box. */
+  /** "Add to chat" (the selection bar's ⌘I): the selection goes with the chat, in the mode it's in, which shows with the cursor in its message box. */
   async askAboutSelection() {
     this.events.emit('show-agent-pane');
     await this.attachSelection();
   }
 
-  /** The Revise card's "Continue in chat": in Revise's mode or Options', what the author typed goes after what's in the message box. */
-  async continueInChat(kind: 'revise' | 'options', draft: string) {
-    await this.setMode(kind === 'options' ? 'options' : 'write');
+  /** The card's "Continue in chat": in its tab's mode (Ask's for a question), what the author typed goes after what's in the message box. */
+  async continueInChat(kind: BarKind, draft: string) {
+    await this.setMode(BAR_MODE[kind]);
     this.events.emit('show-agent-pane');
     await this.attachSelection({ focus: false });
     const typed = draft.trim();
@@ -1681,14 +1682,6 @@ export class Studio {
         })
       : undefined;
     return path && d ? { path, d } : null;
-  }
-
-  /** Ask for a plain-words explanation of the selection (no changes). */
-  async explainSelection() {
-    this.setAgent({ attachments: [] });
-    await this.attachSelection({ focus: false });
-    this.events.emit('show-agent-pane');
-    await this.send(EXPLAIN_PROMPT);
   }
 
   async closeTabs(paths: string[]) {

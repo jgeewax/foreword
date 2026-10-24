@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
-import { optionsPrompt, revisePrompt } from '../app/stock-prompts';
+import { barMessage, barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
 import { studio } from '../app/studio';
 import { looksLikeProse, trimPieces } from '../app/trace';
 import { monaco } from '../editor/monaco';
@@ -12,6 +11,7 @@ import { Icon } from './icons';
 import { DiffText } from './Trace';
 
 const OPTIONS_GLYPH = modeConfig('options').icon;
+const ASK_GLYPH = modeConfig('ask').icon;
 const NOT_READY = 'The assistant isn’t ready yet';
 const { ABOVE, BELOW } = monaco.editor.ContentWidgetPositionPreference;
 /** The passage a request is about, followed through edits: what the assistant writes at its ends is part of it. */
@@ -19,10 +19,34 @@ const GROWS = monaco.editor.TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges;
 /** Where a selection the author made comes from (Monaco's sources, and the preview's mapping in studio.ts). */
 const AUTHORS = ['mouse', 'keyboard', 'preview'];
 
-type Act = 'revise' | 'options' | 'explain' | 'comment' | 'ask' | 'fix';
+type Act = BarKind | 'comment' | 'chat' | 'fix';
+
+/** Each of the card's tabs: its name, the box's question, the button that sends it, and its note's words while it waits and works. */
+const TABS: Record<BarKind, { label: string; box: string; go: string; dialog: string; waits: string; working: string }> = {
+  revise: { label: 'Revise', box: 'How should it change?', go: 'Revise', dialog: 'Revise the selection', waits: 'Revise waits for the current reply', working: 'Revising…' },
+  options: {
+    label: 'Options',
+    box: 'What should the options try?',
+    go: `Show ${OPTION_COUNT} options`,
+    dialog: 'Options for the selection',
+    waits: 'Options wait for the current reply',
+    working: `Writing ${OPTION_COUNT} options…`,
+  },
+  ask: { label: 'Ask', box: 'What do you want to know?', go: 'Ask', dialog: 'Ask about the selection', waits: 'Your question waits for the current reply', working: 'Answering…' },
+};
+
+/** A tab's mark: Revise the assistant's edit, Options and Ask their modes' glyphs. */
+function KindIcon({ kind, size }: { kind: BarKind; size: number }) {
+  if (kind === 'revise') return <Icon name="edit" size={size} />;
+  return (
+    <span className="sel-glyph" aria-hidden>
+      {kind === 'options' ? OPTIONS_GLYPH : ASK_GLYPH}
+    </span>
+  );
+}
 
 /** The bar under a selection: what you do to a passage, then the chat. In a narrow pane all but the first show only their icons. */
-function Bar({ compact, error, ready, act }: { compact: boolean; error: boolean; ready: boolean; act: (what: Act) => void }) {
+function Bar({ compact, error, ready, chatMode, act }: { compact: boolean; error: boolean; ready: boolean; chatMode: string; act: (what: Act) => void }) {
   const title = (text: string) => (ready ? text : NOT_READY);
   const word = (text: string) => (compact ? null : text);
   const iconOnly = compact ? ' icon-only' : '';
@@ -39,30 +63,28 @@ function Bar({ compact, error, ready, act }: { compact: boolean; error: boolean;
         Revise
       </button>
       <button className={`sel-btn sel-options${iconOnly}`} disabled={!ready} aria-label={compact ? 'Options' : undefined} title={title(`${OPTION_COUNT} versions of it to pick from`)} onClick={() => act('options')}>
-        <span className="sel-glyph" aria-hidden>
-          {OPTIONS_GLYPH}
-        </span>
+        <KindIcon kind="options" size={14} />
         {word('Options')}
       </button>
-      <button className={`sel-btn sel-explain${iconOnly}`} disabled={!ready} aria-label={compact ? 'Explain' : undefined} title={title('Explain it in plain words (changes nothing)')} onClick={() => act('explain')}>
-        <Icon name="bulb" size={14} />
-        {word('Explain')}
+      <button className={`sel-btn sel-ask${iconOnly}`} disabled={!ready} aria-label={compact ? 'Ask' : undefined} title={title('Ask about it: say what you want to know, or pick one of the usual questions (changes nothing)')} onClick={() => act('ask')}>
+        <KindIcon kind="ask" size={14} />
+        {word('Ask')}
       </button>
       <button className={`sel-btn sel-comment${iconOnly}`} aria-label={compact ? 'Comment' : undefined} title="Comment on the selection (⌥⌘M)" onClick={() => act('comment')}>
         <Icon name="comments" size={14} />
         {word('Comment')}
       </button>
       <span className="sel-sep" />
-      <button className={`sel-btn sel-ask${iconOnly}`} aria-label={compact ? 'Ask in chat' : undefined} title="Ask about it in the chat (⌘I)" onClick={() => act('ask')}>
+      <button className={`sel-btn sel-chat${iconOnly}`} aria-label={compact ? 'Add to chat' : undefined} title={`Add it to the chat, to say more in ${chatMode} mode (⌘I)`} onClick={() => act('chat')}>
         <Icon name="sparkle" size={14} />
-        {word('Ask in chat')}
+        {word('Add to chat')}
         {!compact && <kbd>⌘I</kbd>}
       </button>
     </div>
   );
 }
 
-/** Revise or Options, in place of the bar: say how, or pick one of the usual ones; or take it to the chat. */
+/** Revise, Options or Ask, in place of the bar: say how (or what), or pick one of the usual ones; or take it to the chat. */
 function Card(props: {
   kind: BarKind;
   summary: string;
@@ -75,7 +97,7 @@ function Card(props: {
   const { kind, summary, styleGuide, setKind, send, toChat, close } = props;
   const [draft, setDraft] = useState('');
   const input = useRef<HTMLInputElement>(null);
-  const revise = kind === 'revise';
+  const tab = TABS[kind];
   // Once Monaco has drawn it in its place (it's hidden until then).
   useEffect(() => {
     let tries = 0;
@@ -90,9 +112,9 @@ function Card(props: {
   const go = () => draft.trim() && send(kind, draft);
   return (
     <div
-      className={`selection-card ${revise ? 'sel-revise' : 'sel-options'}`}
+      className={`selection-card sel-${kind}`}
       role="dialog"
-      aria-label={revise ? 'Revise the selection' : 'Options for the selection'}
+      aria-label={tab.dialog}
       // The editor's keys stay out of it; Escape closes it.
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -104,16 +126,12 @@ function Card(props: {
     >
       <div className="sel-card-head">
         <div className="sel-tabs" role="tablist">
-          <button role="tab" aria-selected={revise} className="sel-tab sel-revise" onClick={() => setKind('revise')}>
-            <Icon name="edit" size={13} />
-            Revise
-          </button>
-          <button role="tab" aria-selected={!revise} className="sel-tab sel-options" onClick={() => setKind('options')}>
-            <span className="sel-glyph" aria-hidden>
-              {OPTIONS_GLYPH}
-            </span>
-            Options
-          </button>
+          {(Object.keys(TABS) as BarKind[]).map((k) => (
+            <button key={k} role="tab" aria-selected={k === kind} className={`sel-tab sel-${k}`} onClick={() => setKind(k)}>
+              <KindIcon kind={k} size={13} />
+              {TABS[k].label}
+            </button>
+          ))}
         </div>
         <span className="spacer" />
         <span className="sel-card-where">{summary}</span>
@@ -125,8 +143,8 @@ function Card(props: {
         ref={input}
         className="sel-input"
         value={draft}
-        placeholder={revise ? 'How should it change?' : 'What should the options try?'}
-        aria-label={revise ? 'How should it change?' : 'What should the options try?'}
+        placeholder={tab.box}
+        aria-label={tab.box}
         spellCheck={false}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
@@ -150,7 +168,7 @@ function Card(props: {
         <span className="spacer" />
         <span className="sel-hint">esc to close</span>
         <button className="sel-go" disabled={!draft.trim()} onClick={go}>
-          {revise ? 'Revise' : `Show ${OPTION_COUNT} options`}
+          {tab.go}
           <kbd>⏎</kbd>
         </button>
       </div>
@@ -174,6 +192,7 @@ function Note(props: {
 }) {
   const { kind, progress, change, showChange, toggleChange, undo, dismiss, callOff } = props;
   const revise = kind === 'revise';
+  const tab = TABS[kind];
   const chat = () => studio.events.emit('show-agent-pane');
   if (progress.phase === 'queued') {
     // In the assistant's queue (it can read it now), or held back until a reply in another mode ends (no id).
@@ -183,7 +202,7 @@ function Note(props: {
         <span className="sel-note-icon queued">
           <Icon name="history" size={14} />
         </span>
-        <span>{revise ? 'Revise waits for the current reply' : 'Options wait for the current reply'}</span>
+        <span>{tab.waits}</span>
         <span className="sel-sep" />
         {queued && (
           <button className="sel-btn" disabled={progress.sending} title="The assistant reads it at its next step" onClick={() => void studio.steerQueued(progress.id)}>
@@ -198,9 +217,9 @@ function Note(props: {
   }
   if (progress.phase === 'working') {
     return (
-      <div className={`selection-note ${revise ? 'sel-revise' : 'sel-options'}`} role="status">
+      <div className={`selection-note sel-${kind}`} role="status">
         <span className="sel-spin" aria-hidden />
-        <span>{revise ? 'Revising…' : `Writing ${OPTION_COUNT} options…`}</span>
+        <span>{tab.working}</span>
         <button className="sel-btn sel-quiet sel-in-chat" title="Show the chat" onClick={chat}>
           in the chat
         </button>
@@ -279,11 +298,11 @@ const keepFocus = (e: MouseEvent) => {
 };
 
 /**
- * The selection bar: under a selection after a moment, Revise, Options,
- * Explain, Comment and Ask in chat (Fix error first over a Typst error).
- * Revise and Options open a card in its place. A request sent from it gets a
+ * The selection bar: under a selection after a moment, Revise, Options, Ask,
+ * Comment and Add to chat (Fix error first over a Typst error). Revise,
+ * Options and Ask open a card in its place. A request sent from it gets a
  * note under its passage while it waits and works, and when it's done: the
- * words it changed, and Undo. Returns its cleanup.
+ * words it changed, and Undo (an answer is in the chat). Returns its cleanup.
  */
 export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor): () => void {
   // ---- the bar, or its card, under the selection ----
@@ -311,7 +330,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     const ready = studio.state.agent.status === 'ready';
     if (view.kind === 'bar') {
       const sel = selection();
-      return <Bar compact={editor.getLayoutInfo().contentWidth < COMPACT_BELOW} error={!!sel && !!studio.errorIn(sel)} ready={ready} act={act} />;
+      const chatMode = modeConfig(studio.state.agent.mode).label;
+      return <Bar compact={editor.getLayoutInfo().contentWidth < COMPACT_BELOW} error={!!sel && !!studio.errorIn(sel)} ready={ready} chatMode={chatMode} act={act} />;
     }
     const sel = selection();
     const model = editor.getModel();
@@ -330,7 +350,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     flushSync(() => barRoot.render(barNow()));
     editor.layoutContentWidget(barWidget);
   };
-  const keyOfBar = () => `${view?.kind}:${view?.kind === 'card' ? view.tab : ''}:${studio.state.agent.status}:${studio.state.styleGuide.exists}`;
+  const keyOfBar = () => `${view?.kind}:${view?.kind === 'card' ? view.tab : ''}:${studio.state.agent.status}:${studio.state.agent.mode}:${studio.state.styleGuide.exists}`;
   const showBar = (next: typeof view) => {
     clearTimeout(showTimer);
     const sel = selection();
@@ -351,12 +371,11 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     editor.focus();
   }
   function act(what: Act) {
-    if (what === 'revise' || what === 'options') return openCard(what);
+    if (what === 'revise' || what === 'options' || what === 'ask') return openCard(what);
     const sel = selection();
     hideBar();
-    if (what === 'explain') void studio.explainSelection();
-    else if (what === 'comment') void studio.addComment();
-    else if (what === 'ask') void studio.askAboutSelection();
+    if (what === 'comment') void studio.addComment();
+    else if (what === 'chat') void studio.askAboutSelection();
     else if (what === 'fix' && sel) {
       const error = studio.errorIn(sel);
       if (error) void studio.fixProblem(error);
@@ -399,7 +418,9 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     const range = rangeOf(t);
     if (!range || t.pending === pending) return;
     t.pending = pending;
-    const options: monaco.editor.IModelDecorationOptions = { stickiness: GROWS, ...(pending ? { inlineClassName: 'sel-pending' } : {}) };
+    // A question only looks: in Ask's colour, not the assistant's purple for a change.
+    const mark = t.req.kind === 'ask' ? 'sel-pending sel-pending-ask' : 'sel-pending';
+    const options: monaco.editor.IModelDecorationOptions = { stickiness: GROWS, ...(pending ? { inlineClassName: mark } : {}) };
     t.decoration = t.model.deltaDecorations([t.decoration], [{ range, options }])[0];
   };
   function untrack() {
@@ -432,7 +453,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     // Not in the chat yet: held back while a reply runs, or on its way.
     if (progress.phase === 'gone' && t.starting) progress = studio.state.agent.running ? { phase: 'queued', id: '', sending: false } : { phase: 'working' };
     const range = rangeOf(t);
-    if (progress.phase === 'gone' || (progress.phase === 'options' && progress.picked) || !range) return untrack();
+    // Gone, or done with: an option picked, or an answer (it's in the chat).
+    if (progress.phase === 'gone' || (progress.phase === 'options' && progress.picked) || (progress.phase === 'ended' && t.req.kind === 'ask') || !range) return untrack();
     decorate(t, progress.phase === 'queued' || progress.phase === 'working');
     const change = progress.phase === 'ended' ? passageChange(t.original, t.model.getValueInRange(range)) : null;
     const key = JSON.stringify([progress, change?.words, change && t.model.getValueInRange(range), t.showChange]);
@@ -461,7 +483,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     flushSync(() => noteRoot.render(note));
     editor.layoutContentWidget(noteWidget);
   }
-  /** Revise or Options from the card: the passage is followed (a decoration) while the chat works on it. */
+  /** Revise, Options or Ask from the card: the passage is followed (a decoration) while the chat works on it. */
   async function send(kind: BarKind, instruction: string) {
     const sel = selection();
     const model = editor.getModel();
@@ -469,13 +491,13 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     hideBar();
     editor.focus();
     untrack();
-    const req: BarRequest = { kind, message: kind === 'revise' ? revisePrompt(instruction) : optionsPrompt(instruction), since: Date.now() };
+    const req: BarRequest = { kind, message: barMessage(kind, instruction), since: Date.now() };
     const decoration = model.deltaDecorations([], [{ range: sel, options: { stickiness: GROWS } }])[0];
     const t: Tracked = { req, model, decoration, pending: false, original: model.getValueInRange(sel), starting: true, abort: new AbortController(), showChange: false };
     tracked = t;
     renderNote();
     const { signal } = t.abort;
-    const sent = await (kind === 'revise' ? studio.reviseSelection(instruction, signal) : studio.optionsForSelection(instruction, signal));
+    const sent = await studio.sendFromBar(kind, instruction, signal);
     if (tracked !== t) return;
     t.starting = false;
     if (sent) renderNote();
@@ -524,7 +546,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     }
     if (tracked) renderNote(false);
   });
-  // The context menu's Revise… and Options…, and the commands.
+  // The context menu's Revise…, Options… and Ask About This…, and the commands.
   const offCard = studio.events.on('selection-card', (kind) => selection() && openCard(kind));
   return () => {
     clearTimeout(showTimer);

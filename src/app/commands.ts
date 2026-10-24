@@ -217,8 +217,8 @@ export function paletteCommands(studio: Studio): Command[] {
       [
         menu('new-task', 'New Task', { keys: '⌘T', keywords: ['new conversation', 'chat'] }),
         menu('task-done', 'Task Done', { keys: '⇧⌘D', when: () => !!s().agent.sessionId && !s().agent.running }),
-        menu('ask-selection', 'Ask About Selection', { keys: '⌘I', when: file }),
-        { id: 'explain-selection', title: 'Explain the Selection', when: () => selection() && idle(), run: () => studio.explainSelection() },
+        menu('ask-selection', 'Add Selection to Chat', { keys: '⌘I', keywords: ['ask', 'attach'], when: file }),
+        { id: 'ask-about-selection', title: 'Ask About the Selection…', keywords: ['explain', 'question'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'ask') },
         { id: 'revise-selection', title: 'Revise the Selection…', keywords: ['rewrite', 'tighten', 'proofread'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'revise') },
         { id: 'options-for-selection', title: 'Three Options for the Selection…', keywords: ['versions', 'rewrite'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'options') },
         menu('fix-comments', 'Fix Review Comments', { when: () => idle() && s().review.comments.some((c) => c.status === 'open') }),

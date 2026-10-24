@@ -30,7 +30,7 @@ export type StockAction = {
 /** "Fix This Error with the Assistant": the error's line goes with it as the selection. */
 export const fixErrorPrompt = (message: string) => `Typst reports an error here: “${message}”. Explain in a sentence or two, in plain words, what's wrong, then fix it.`;
 
-/** "Explain This" on a selection. */
+/** "Explain This" on a selection, until 0.7 (the selection bar's Ask has Explain it instead): still read back, for conversations from then. */
 export const EXPLAIN_PROMPT = "Explain this passage in plain words, including what any Typst markup in it does. Don't change anything.";
 
 /** "Revise" on a selection (the selection bar): the passage, changed in place as the author asked. */
@@ -39,6 +39,9 @@ export const revisePrompt = (instruction: string) =>
 
 /** "Options" on a selection (the selection bar), sent in Options mode: three versions to pick from. */
 export const optionsPrompt = (instruction: string) => `Three options for the selected passage: ${instruction.trim()}`;
+
+/** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
+export const askPrompt = (question: string) => `About the selected passage: ${question.trim()}`;
 
 /** "Resolve with the assistant" on a passage changed two ways at once: the author's is the selection. */
 export const mergePrompt = (path: string, theirs: string, yours: boolean) => {
@@ -85,6 +88,7 @@ const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
 // Also on one line, as Claude Code names a task after it.
 const REVISE_SELECTION = new RegExp(`^${esc(revisePrompt('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
 const OPTIONS_SELECTION = new RegExp(`^${esc(optionsPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
+const ASK_SELECTION = new RegExp(`^${esc(askPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
 
 /** Each kind of message, read back: what it asked for, or null if it isn't that one. */
 const READERS: ((text: string) => StockAction | null)[] = [
@@ -105,6 +109,10 @@ const READERS: ((text: string) => StockAction | null)[] = [
   (text) => {
     const m = OPTIONS_SELECTION.exec(text);
     return m ? { verb: 'Three options for this passage', rows: [{ text: m[1] }], tone: 'other', icon: 'check', mode: 'options' } : null;
+  },
+  (text) => {
+    const m = ASK_SELECTION.exec(text);
+    return m ? { verb: 'Ask about this passage', rows: [{ text: m[1] }], tone: 'look', icon: 'help', mode: 'ask' } : null;
   },
   (text) => {
     const m = TODO.exec(text);
@@ -205,6 +213,7 @@ const TITLE_OPENINGS: [string, string][] = [
   ['These code examples fail when Foreword runs them:', 'Fix the failing code examples'],
   ['Revise the selected passage: ', 'Revise this passage'],
   ['Three options for the selected passage: ', 'Three options for this passage'],
+  ['About the selected passage: ', 'Ask about this passage'],
 ];
 const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)})[\\s\\S]*$`);
 

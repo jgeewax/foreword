@@ -116,7 +116,7 @@ export function EditorPane() {
     });
     editor.addAction({
       id: 'studio.askAgent',
-      label: 'Ask Agent About Selection',
+      label: 'Add Selection to Chat',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
       run: () => void studio.attachSelection(),
     });
@@ -146,10 +146,10 @@ export function EditorPane() {
         todo && removable(todo.todo) && { label: 'Mark as Done', action: () => void studio.todoDone(todo.todo) },
         mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         'separator',
-        hasSelection && { label: 'Ask the Assistant About This', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
+        hasSelection && { label: 'Add to Chat', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
         hasSelection && ready && { label: 'Revise…', action: () => studio.events.emit('selection-card', 'revise') },
         hasSelection && ready && { label: 'Three Options to Pick From…', action: () => studio.events.emit('selection-card', 'options') },
-        hasSelection && { label: 'Explain This', action: () => void studio.explainSelection() },
+        hasSelection && ready && { label: 'Ask About This…', action: () => studio.events.emit('selection-card', 'ask') },
         hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
         'separator',
         'cut',
@@ -406,7 +406,7 @@ export function EditorPane() {
       clearTimeout(commentTimer);
       commentTimer = window.setTimeout(syncComments, 400);
     });
-    // Under a selection (after a moment): Revise, Options, Explain, Comment and Ask in chat.
+    // Under a selection (after a moment): Revise, Options, Ask, Comment and Add to chat.
     const offSelectionBar = attachSelectionBar(editor);
     editor.addAction({
       id: 'studio.addComment',

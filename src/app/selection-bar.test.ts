@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { barProgress, passageChange, PRESETS, presetsFor, selectionSummary, wordsLabel, type BarRequest } from './selection-bar';
-import { optionsPrompt, revisePrompt } from './stock-prompts';
+import { BAR_MODE, barMessage, barProgress, passageChange, PRESETS, presetsFor, selectionSummary, wordsLabel, type BarRequest } from './selection-bar';
+import { askPrompt, optionsPrompt, revisePrompt } from './stock-prompts';
 import type { ChatItem, QueuedMessage } from './studio';
 
 const revise: BarRequest = { kind: 'revise', message: revisePrompt('Tighten it'), since: 1000 };
 const options: BarRequest = { kind: 'options', message: optionsPrompt('Shorter'), since: 1000 };
+const ask: BarRequest = { kind: 'ask', message: askPrompt('Is it clear?'), since: 1000 };
 const user = (id: string, text: string, at = 2000, ended?: number): ChatItem => ({ kind: 'user', id, text, attachments: [], at, ...(ended ? { ended } : {}) });
 const said = (id: string, text = 'Done.', applied: number | null = null): ChatItem => ({ kind: 'assistant', id, text, done: true, options: { target: null, original: null, applied } });
 const queued = (text: string): QueuedMessage => ({ id: 'q1', text, attachments: [], delivery: 'queue', sending: false });
@@ -32,6 +33,11 @@ describe('how a request from the selection bar is getting on', () => {
     expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', THREE, 2)], queued: [], running: false }, options)).toEqual({ phase: 'options', picked: true });
     expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', 'Which passage?')], queued: [], running: false }, options)).toEqual({ phase: 'ended' });
   });
+
+  it('Ask: answered once its turn is over, even when the answer happens to hold options', () => {
+    expect(barProgress({ items: [user('u1', ask.message)], queued: [], running: true }, ask)).toEqual({ phase: 'working' });
+    expect(barProgress({ items: [user('u1', ask.message, 2000, 9000), said('a1', THREE)], queued: [], running: false }, ask)).toEqual({ phase: 'ended' });
+  });
 });
 
 describe('what a revision did', () => {
@@ -56,5 +62,16 @@ describe('the usual requests', () => {
     expect(presetsFor('revise', false).map((p) => p.label)).toEqual(['Tighten', 'Proofread', 'Clearer', 'Simpler words', 'Expand']);
     expect(presetsFor('revise', true)).toHaveLength(PRESETS.revise.length);
     expect(presetsFor('options', false).map((p) => p.label)).toEqual(['Shorter', 'Plainer', 'More vivid']);
+    expect(presetsFor('ask', false).map((p) => p.label)).not.toContain('Against my style guide');
+    expect(presetsFor('ask', true)).toHaveLength(PRESETS.ask.length);
+  });
+});
+
+describe('what the card sends, and in which mode', () => {
+  it('a question in Ask mode, which changes nothing; a revision in Write; options in Options', () => {
+    expect(barMessage('ask', ' Why is this bold? ')).toBe(askPrompt('Why is this bold?'));
+    expect(barMessage('revise', 'Tighten it')).toBe(revisePrompt('Tighten it'));
+    expect(barMessage('options', 'Shorter')).toBe(optionsPrompt('Shorter'));
+    expect(BAR_MODE).toEqual({ revise: 'write', options: 'options', ask: 'ask' });
   });
 });

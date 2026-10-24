@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionLine, actionText, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
+import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
 import { addressPrompt, makeComment } from './review';
 import { todoPrompt } from './todos';
 import { modeChoiceMessage, modeConfig } from '../services/agent/modes';
@@ -35,6 +35,7 @@ describe('what a button asked for, read back from its message', () => {
     expect(stockAction(revisePrompt('Tighten it: fewer words, the same meaning'))).toMatchObject({ verb: 'Revise this passage', rows: [{ text: 'Tighten it: fewer words, the same meaning' }], tone: 'change' });
     expect(stockAction(revisePrompt('  Keep his voice.\n'))?.rows).toEqual([{ text: 'Keep his voice.' }]);
     expect(stockAction(optionsPrompt('More vivid'))).toMatchObject({ verb: 'Three options for this passage', rows: [{ text: 'More vivid' }], mode: 'options' });
+    expect(stockAction(askPrompt('Why is everything after it bold?'))).toMatchObject({ verb: 'Ask about this passage', rows: [{ text: 'Why is everything after it bold?' }], tone: 'look', mode: 'ask' });
     expect(stockAction('Revise the selected passage: shorter')).toBeNull();
   });
 
@@ -105,6 +106,7 @@ describe('an action in words', () => {
     expect(stockTitle(fixErrorPrompt('unknown variable: vect'))).toBe('Fix this error: “unknown variable: vect”');
     expect(stockTitle(`${revisePrompt('Make it clearer').replace(/\s+/g, ' ')} Selected in the editor: chapters/ch1.typ`)).toBe('Revise this passage: “Make it clearer”');
     expect(stockTitle(`${revisePrompt('x'.repeat(300)).replace(/\s+/g, ' ').slice(0, 255)}…`)).toBe('Revise this passage');
+    expect(stockTitle(`${askPrompt('Is it clear?')} Selected in the editor: chapters/ch1.typ`)).toBe('Ask about this passage: “Is it clear?”');
     expect(stockTitle('Tighten the opening of chapter 2')).toBe('Tighten the opening of chapter 2');
   });
 });
