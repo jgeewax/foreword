@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-task-chat-write"
+description = "Enables the task_chat_write command without any pre-configured scope."
+commands.allow = ["task_chat_write"]
+
+[[permission]]
+identifier = "deny-task-chat-write"
+description = "Denies the task_chat_write command without any pre-configured scope."
+commands.deny = ["task_chat_write"]

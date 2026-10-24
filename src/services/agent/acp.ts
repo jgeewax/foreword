@@ -432,9 +432,10 @@ export class AcpAdapter implements AgentAdapter {
 
   async listSessions(limit = 50) {
     if (!this.caps.agentCapabilities?.sessionCapabilities?.list) {
+      // Started here: Foreword has noted when each last changed (tasks.ts).
       return [...this.sessions.values()]
         .filter((s) => s.transcript.messages.length)
-        .map((s) => ({ id: s.id, title: s.title, updated: Date.now(), tokens: null }))
+        .map((s) => ({ id: s.id, title: s.title, updated: 0, tokens: null }))
         .slice(0, limit);
     }
     const res = await this.request('session/list', { cwd: this.root });
@@ -446,7 +447,11 @@ export class AcpAdapter implements AgentAdapter {
     }));
   }
 
-  /** A conversation's messages: kept since it was opened here, or replayed by the agent (session/load). */
+  /**
+   * A conversation's messages: kept since it was opened here, or replayed by
+   * the agent (session/load). One it can't open again (no session/load) is an
+   * error, so the task's chat goes to a new one instead (studio.ts).
+   */
   async sessionContext(sessionId: string) {
     let s = this.sessions.get(sessionId);
     if (!s && this.caps.agentCapabilities?.loadSession) {
@@ -464,7 +469,8 @@ export class AcpAdapter implements AgentAdapter {
         s.transcript.endTurn();
       }
     }
-    return s ? (s.transcript.messages as any[]) : [];
+    if (!s) throw new AcpError(`${ACP_NAMES[this.kind]} can’t open that conversation again.`);
+    return s.transcript.messages as any[];
   }
 
   async compact(sessionId: string) {

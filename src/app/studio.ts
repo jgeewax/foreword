@@ -66,7 +66,7 @@ import { chapterImports, chapterText, includePath, nextChapterPath, withInclude 
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
-import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withoutMarker, type TaskRecord, type TaskSummary } from './tasks';
+import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
 import { chatSoFar, readModeSetups, setupLine, type ModeSetup, type ModeSetups } from './mode-setups';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
@@ -396,6 +396,9 @@ export type StudioState = {
     /** The model's levels of effort (none: it has no such setting), and the one in use (or for the next conversation). */
     efforts: EffortOption[];
     effort: string | null;
+    /** The task shown (tasks.ts): Foreword's, whichever assistant it's with. */
+    taskId: string | null;
+    /** Its conversation with the assistant running now (null: none yet; the next message starts one). */
     sessionId: string | null;
     title: string | null;
     running: boolean;
@@ -540,6 +543,7 @@ const initialState: StudioState = {
     recentModels: readJson<ModelRef[]>('studio.recentModels') ?? [],
     efforts: [],
     effort: null,
+    taskId: null,
     sessionId: null,
     title: null,
     running: false,
@@ -636,7 +640,9 @@ type PreviewPlace = { page: number; offset: number };
 /** Per book: the chapter the preview last showed alone. */
 const previewChapterKey = (root: string) => `studio.previewChapter:${root}`;
 let seq = 0;
-const uid = (p: string) => `${p}${++seq}`;
+/** This page's, so ids made after a reload never meet a kept chat's (tasks.rs). */
+const PAGE = Date.now().toString(36);
+const uid = (p: string) => `${p}${PAGE}_${++seq}`;
 
 /** Wait until OpenCode reports the session idle (e.g. after compaction), up to a minute. */
 async function waitIdle(agent: AgentAdapter, sessionId: string) {
@@ -917,6 +923,15 @@ export class Studio {
       active = this.state.active;
       this.scheduleChapterPreview(0);
     });
+    // The shown task's chat is kept as it changes (tasks.rs), and as the window goes.
+    let chat: ChatItem[] | null = null;
+    this.store.subscribe(() => {
+      const { taskId, items, running } = this.state.agent;
+      if (!taskId || items === chat) return;
+      chat = items;
+      this.chatTimer ??= window.setTimeout(() => this.keepChat(), running ? 4000 : 800);
+    });
+    window.addEventListener('pagehide', () => this.keepChat());
     this.typst.on('diagnostics', (uri, list) => this.onDiagnostics(uri, list));
     this.typst.on('compile', (s) => {
       const status = s.status === 'compiling' ? 'compiling' : s.status === 'compileSuccess' ? 'ok' : 'error';
@@ -1212,7 +1227,7 @@ export class Studio {
     void this.loadReview();
     void this.startTypst();
     // The mode's own assistant, if it has one (mode-setups.ts).
-    this.forgetThread();
+    this.forgetHandover();
     const own = this.setupFor(this.state.agent.mode)?.assistant;
     if (own && own !== this.state.settings.assistant) this.updateSettings({ assistant: own }, { restart: false });
     void this.startAgent();
@@ -2537,28 +2552,28 @@ export class Studio {
   }
 
   /**
-   * Each conversation's place in History: the version right after its last
-   * turn, and the versions its turns made. In memory: after a restart, edits
-   * are reported from the next turn on.
+   * Each task's place in History: the version right after its last turn, and
+   * the versions its turns made (with any assistant). In memory: after a
+   * restart, edits are reported from the next turn on.
    */
   private turnVersions = new Map<string, { head: string; versions: string[] }>();
 
-  private recordTurn(sessionId: string | null, turn: { head: string | null; created: string | null }) {
-    if (!sessionId || !turn.head) return;
-    const t = this.turnVersions.get(sessionId) ?? { head: turn.head, versions: [] };
+  private recordTurn(taskId: string | null, turn: { head: string | null; created: string | null }) {
+    if (!taskId || !turn.head) return;
+    const t = this.turnVersions.get(taskId) ?? { head: turn.head, versions: [] };
     t.head = turn.head;
     if (turn.created) t.versions.push(turn.created);
-    this.turnVersions.set(sessionId, t);
-    if (turn.created) void this.noteTaskChanges(sessionId, turn.created);
+    this.turnVersions.set(taskId, t);
+    if (turn.created) void this.noteTaskChanges(taskId, turn.created);
   }
 
   /**
-   * The author's changes, since this conversation's last turn, to text the
-   * assistant wrote in it ("you wrote A, the author changed it to A′"), for the
-   * next message. Between turns only the author changes the files.
+   * The author's changes, since this task's last turn, to text the assistant
+   * wrote in it ("you wrote A, the author changed it to A′"), for the next
+   * message. Between turns only the author changes the files.
    */
-  private async authorEditsSince(sessionId: string): Promise<AuthorEdit[]> {
-    const turn = this.turnVersions.get(sessionId);
+  private async authorEditsSince(taskId: string): Promise<AuthorEdit[]> {
+    const turn = this.turnVersions.get(taskId);
     if (!turn?.versions.length || this.state.history.status !== 'ready') return [];
     try {
       const paths = new Set<string>();
@@ -2892,6 +2907,7 @@ export class Studio {
 
   private async closeWorkspace() {
     if (!this.state.workspace) return;
+    this.keepChat();
     this.composerDraft = '';
     this.code.reset();
     this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
@@ -3822,13 +3838,14 @@ export class Studio {
       void this.loadTasks();
       void this.refreshContextSize();
       this.turnEnds();
-      const sessionId = this.state.agent.sessionId;
-      // Its latest reply, for the Tasks view's search.
+      const { sessionId, taskId } = this.state.agent;
+      // Its latest reply, for the Tasks view's search; and the assistant has seen all of the chat.
       const reply = [...this.state.agent.items].reverse().find((it) => it.kind === 'assistant' && it.text.trim());
-      if (sessionId && reply?.kind === 'assistant') this.updateTaskRecord(sessionId, { said: plainLine(answerOf([reply.text])?.answer || withoutAnswerBlocks(withoutMarker(reply.text)), 300) });
+      if (taskId && reply?.kind === 'assistant') this.updateTaskRecord(taskId, { said: plainLine(answerOf([reply.text])?.answer || withoutAnswerBlocks(withoutMarker(reply.text)), 300), updated: Date.now() });
+      this.noteSeen();
       void this.history.afterAgent(this.turnMessage).then((turn) => {
-        this.recordTurn(sessionId, turn);
-        if (turnId && this.state.agent.sessionId === sessionId) this.updateItem(turnId, (it) => (it.kind === 'user' ? { ...it, version: turn.created } : it));
+        this.recordTurn(taskId, turn);
+        if (turnId && this.state.agent.taskId === taskId) this.updateItem(turnId, (it) => (it.kind === 'user' ? { ...it, version: turn.created } : it));
         return this.refreshAiEdits();
       });
       void this.afterStyleDraft(sessionId);
@@ -3886,6 +3903,10 @@ export class Studio {
       await this.resumeCarried(agent);
       void this.loadTasks();
       await this.afterToolSwitch();
+      // A task whose chat only this assistant had.
+      const open = this.openOnStart;
+      this.openOnStart = null;
+      if (open && this.agent === agent) await this.switchTask(open);
     } catch (e) {
       if (this.agent !== agent) return;
       this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e), signingIn: false });
@@ -4089,7 +4110,7 @@ export class Studio {
     if (!sessionId || !this.agent) return true;
     const config = modeConfig(mode);
     try {
-      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId));
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(this.state.agent.taskId));
       if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
       else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
@@ -4176,31 +4197,48 @@ export class Studio {
     else await this.refreshEfforts();
   }
 
-  /**
-   * The chat shown, across assistants: each one's conversation in it, and the
-   * last item it has seen. A mode set to another assistant hands the chat over
-   * (handOverTo); what that one hasn't seen goes with the next message.
-   */
-  private thread = new Map<AssistantId, { sessionId: string | null; seen: string | null }>();
-  /** The turns after `after` (null: all of them) go with the next message. */
+  /** The turns after `after` (null: all of them) go with the next message: the chat came over from another assistant. */
   private handover: { after: string | null } | null = null;
   /** The conversation to open again once the assistant handed over to has started. */
   private resumeOnStart: string | null = null;
+  /** The task to open once the assistant that has its chat has started (switchTask). */
+  private openOnStart: string | null = null;
 
-  /** A new chat (or another conversation shown): nothing to hand over. */
-  private forgetThread() {
-    this.thread.clear();
+  /** A new chat (or another task shown): nothing to hand over. */
+  private forgetHandover() {
     this.handover = null;
     this.resumeOnStart = null;
   }
 
+  /** The shown task's record. */
+  private taskRecord(taskId = this.state.agent.taskId): TaskRecord | undefined {
+    return taskId ? this.taskRecords().find((r) => r.id === taskId) : undefined;
+  }
+
   /**
-   * The mode is set to another assistant: it takes the chat over. Its own
-   * conversation in this chat opens again (or a new one starts once the author
-   * writes), and the turns it hasn't seen go with the next message. Not while a
-   * conversation is at work: switching would stop it.
+   * The assistant running now has seen all of the shown task's chat (a turn
+   * ended, or the author leaves it), unless what it was to be given hasn't
+   * gone yet: what it hasn't seen goes with the message it next gets.
    */
-  private async handOverTo(next: AssistantId) {
+  private noteSeen() {
+    const { taskId, sessionId, items } = this.state.agent;
+    const assistant = this.agentKind;
+    if (!taskId || !sessionId || !assistant || this.handover) return;
+    const seen = items.at(-1)?.id ?? null;
+    this.updateTaskRecord(taskId, (r) => {
+      const t = r.threads?.[assistant];
+      return t?.sessionId === sessionId && t.seen !== seen ? { threads: { ...r.threads, [assistant]: { sessionId, seen } } } : {};
+    });
+  }
+
+  /**
+   * Another assistant takes the chat over, as another model would: a mode set
+   * to it, or the author's switch (`why`). The task stays; that assistant's
+   * own conversation in it opens again (or a new one starts once the author
+   * writes), and the turns it hasn't seen go with the next message. Not while
+   * a conversation is at work: switching would stop it.
+   */
+  private async handOverTo(next: AssistantId, why: 'mode' | 'switch' | 'tool' = 'mode') {
     const from = this.state.settings.assistant;
     const label = modeConfig(this.state.agent.mode).label;
     if (this.assistantBusy) {
@@ -4210,9 +4248,9 @@ export class Studio {
     }
     const a = this.state.agent;
     const turns = a.items.some((it) => it.kind === 'user' || it.kind === 'assistant');
-    // The one left has seen all of the chat, unless what it was to be given hasn't gone yet.
-    this.thread.set(from, { sessionId: a.sessionId, seen: this.handover ? (this.thread.get(from)?.seen ?? null) : (a.items.at(-1)?.id ?? null) });
-    const there = this.thread.get(next);
+    this.noteSeen();
+    this.keepChat();
+    const there = this.taskRecord()?.threads?.[next];
     this.handover = turns ? { after: there?.seen ?? null } : null;
     this.resumeOnStart = there?.sessionId ?? null;
     this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, contextTokens: null, queued: [], activity: null, stopped: false } }));
@@ -4220,19 +4258,20 @@ export class Studio {
     this.updateSettings({ assistant: next }, { restart: false });
     await this.restartAgent();
     const now = this.state.agent;
-    if (!turns || this.state.settings.assistant !== next || now.status !== 'ready') return;
+    if (!turns || why === 'tool' || this.state.settings.assistant !== next || now.status !== 'ready') return;
     const setup = this.setupFor(now.mode);
     const who = setup ? setupLine(setup) : ASSISTANT_NAMES[next];
-    const told = this.handover && chatSoFar(now.items, this.handover.after) !== null;
-    this.pushItem({
-      kind: 'notice',
-      id: uid('n'),
-      tone: 'info',
-      text: `${label} mode, with ${who}: ${now.sessionId ? 'back in its conversation' : 'a new conversation'}${told ? `, and ${now.sessionId ? 'what was said since' : 'the chat so far'} goes with your next message` : ''}.`,
-    });
+    this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${why === 'mode' ? `${label} mode, with ${who}` : `With ${who} now`}: ${this.carryOverWords()}.` });
   }
 
-  /** Started for a mode that handed the chat over: its conversation in the chat, opened again (if it can't be, a new one gets all of the chat). */
+  /** What the assistant just handed over to has of the chat: "a new conversation, and the chat so far goes with your next message". */
+  private carryOverWords() {
+    const { sessionId, items } = this.state.agent;
+    const told = this.handover && chatSoFar(items, this.handover.after) !== null;
+    return `${sessionId ? 'back in its conversation' : 'a new conversation'}${told ? `, and ${sessionId ? 'what was said since' : 'the chat so far'} goes with your next message` : ''}`;
+  }
+
+  /** Started for a chat handed over to it: its conversation in the task, opened again (if it can't be, a new one gets all of the chat). */
   private async resumeCarried(agent: AgentAdapter) {
     const sessionId = this.resumeOnStart;
     this.resumeOnStart = null;
@@ -4241,11 +4280,12 @@ export class Studio {
       const messages = await agent.sessionContext(sessionId);
       if (this.agent !== agent || this.state.agent.sessionId) return;
       const root = this.state.workspace?.root ?? '';
-      this.setAgent({ sessionId, title: this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title ?? null, contextTokens: contextTokens(messages) });
+      const { taskId } = this.state.agent;
+      this.setAgent({ sessionId, title: this.state.agent.tasks.find((t) => t.id === taskId)?.title ?? null, contextTokens: contextTokens(messages) });
       this.setAiReads(readsFromContext(messages, root));
       // The mode, its permissions and instructions, and its model and effort.
       const config = modeConfig(this.state.agent.mode);
-      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId)).catch(() => {});
+      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(taskId)).catch(() => {});
       await this.applyInstructions(sessionId);
       if (!config.instructions) await agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       const { model } = this.state.agent;
@@ -4405,10 +4445,8 @@ export class Studio {
   }
 
   newSession() {
-    // A conversation still at work carries on in the background.
-    this.stashCurrent();
-    this.forgetThread();
-    this.store.set((s) => ({ agent: { ...s.agent, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
+    this.leaveTask();
+    this.store.set((s) => ({ agent: { ...s.agent, taskId: null, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
     this.setAiReads([]);
     void this.refreshEfforts();
   }
@@ -4435,6 +4473,14 @@ export class Studio {
     });
   }
 
+  /** Leaving the shown task: its chat kept as it is, and a conversation still at work carries on in the background. */
+  private leaveTask() {
+    this.keepChat();
+    this.noteSeen();
+    this.stashCurrent();
+    this.forgetHandover();
+  }
+
   /** Leaving the shown conversation: if it's at work or waiting on the author, it's tracked in the background. */
   private stashCurrent() {
     const a = this.state.agent;
@@ -4449,11 +4495,20 @@ export class Studio {
     this.setBackground(a.sessionId, { running: a.running, attention, unread: false, label: activityText(a.activity), since: a.activity?.since ?? Date.now() });
   }
 
-  /** A conversation's title; until OpenCode has named it, its first words. */
-  private taskTitle(sessionId: string) {
-    const title = sessionId === this.state.agent.sessionId ? (this.state.agent.title ?? this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title) : this.state.agent.tasks.find((t) => t.sessionId === sessionId)?.title;
+  /** The task an assistant's conversation is part of (its id, for one from before tasks could change assistant). */
+  private taskOf(sessionId: string): string {
+    const a = this.state.agent;
+    if (sessionId === a.sessionId && a.taskId) return a.taskId;
+    return a.tasks.find((t) => t.sessionId === sessionId)?.id ?? this.taskRecords().find((r) => Object.values(r.threads ?? {}).some((t) => t?.sessionId === sessionId))?.id ?? sessionId;
+  }
+
+  /** A task's title; until its assistant has named it, its first words. */
+  private taskTitle(taskId: string) {
+    const a = this.state.agent;
+    const task = a.tasks.find((t) => t.id === taskId);
+    const title = taskId === a.taskId ? (a.title ?? task?.title) : task?.title;
     if (title && title !== 'Untitled task') return title;
-    const message = sessionId === this.state.agent.sessionId ? this.turnMessage : this.turnMessages.get(sessionId);
+    const message = taskId === a.taskId ? this.turnMessage : task?.sessionId ? this.turnMessages.get(task.sessionId) : undefined;
     const first = (message ?? '').replace(/\s+/g, ' ').trim();
     return first ? (first.length > 48 ? `${first.slice(0, 47)}…` : first) : 'A task';
   }
@@ -4467,7 +4522,8 @@ export class Studio {
     if (!bg && !this.state.agent.tasks.some((t) => t.sessionId === sessionId)) return;
     const base: BackgroundTask = bg ?? { running: false, attention: null, unread: false, label: '', since: Date.now() };
     const set = (patch: Partial<BackgroundTask>) => this.setBackground(sessionId, { ...base, ...patch });
-    const show = { label: 'Show', run: () => void this.switchTask(sessionId) };
+    const taskId = this.taskOf(sessionId);
+    const show = { label: 'Show', run: () => void this.switchTask(taskId) };
     switch (e.type) {
       case 'turn-started':
         if (!base.running) set({ running: true, unread: false, since: Date.now(), label: 'Thinking…', failed: undefined });
@@ -4483,7 +4539,7 @@ export class Studio {
         // Questions in a reply: they wait for the author once the turn ends.
         if (splitQuestions(e.text).fields) {
           set({ attention: 'question' });
-          this.toast(`“${this.taskTitle(sessionId)}” needs you: it has a question.`, 'info', [show]);
+          this.toast(`“${this.taskTitle(taskId)}” needs you: it has a question.`, 'info', [show]);
         }
         break;
       case 'retry-scheduled':
@@ -4506,7 +4562,7 @@ export class Studio {
       case 'form-asked': {
         const attention = e.type === 'form-asked' ? 'question' : 'permission';
         set({ attention });
-        this.toast(`“${this.taskTitle(sessionId)}” needs you: ${attention === 'question' ? 'it has a question' : 'it asks for permission'}.`, 'info', [show]);
+        this.toast(`“${this.taskTitle(taskId)}” needs you: ${attention === 'question' ? 'it has a question' : 'it asks for permission'}.`, 'info', [show]);
         break;
       }
       case 'permission-replied':
@@ -4528,14 +4584,16 @@ export class Studio {
     if (!bg?.running) return;
     this.setBackground(sessionId, { ...bg, running: false, unread: true, label: failed ? `Stopped: ${failed}` : 'Finished', failed });
     this.turnEnds();
-    const title = this.taskTitle(sessionId);
+    const taskId = this.taskOf(sessionId);
+    const title = this.taskTitle(taskId);
+    this.updateTaskRecord(taskId, { updated: Date.now() });
     void this.history.afterAgent(this.turnMessages.get(sessionId) || title).then((turn) => {
-      this.recordTurn(sessionId, turn);
+      this.recordTurn(taskId, turn);
       return this.refreshAiEdits();
     });
     if (this.reviewTurn?.sessionId === sessionId) void this.afterReviewTurn(sessionId);
     void this.loadTasks();
-    this.toast(failed ? `“${title}” stopped: ${failed}` : `“${title}” is done.`, failed ? 'error' : 'info', [{ label: 'Show', run: () => void this.switchTask(sessionId) }]);
+    this.toast(failed ? `“${title}” stopped: ${failed}` : `“${title}” is done.`, failed ? 'error' : 'info', [{ label: 'Show', run: () => void this.switchTask(taskId) }]);
   }
 
   /** Turns can end without an event (a rejected permission): check the running background ones now and then. */
@@ -4549,33 +4607,53 @@ export class Studio {
 
   // ---- tasks (conversations) ----------------------------------------------------------
 
+  private chatTimer: number | undefined;
+
+  /** The shown task's chat, kept as it is now (tasks.rs): whichever assistant runs, the task opens from it. */
+  private keepChat() {
+    window.clearTimeout(this.chatTimer);
+    this.chatTimer = undefined;
+    const { taskId, items, running } = this.state.agent;
+    const key = this.tasksKey();
+    if (!taskId || !this.state.workspace || !items.some((it) => it.kind === 'user')) return;
+    ipc.taskChatWrite(taskId, JSON.stringify({ items, running })).then(
+      () => {
+        if (this.tasksKey() === key && !this.taskRecord(taskId)?.kept) this.updateTaskRecord(taskId, { kept: true });
+      },
+      (e) => console.warn('tasks: keeping the chat', e),
+    );
+  }
+
   private tasksKey() {
     return `studio.tasks:${this.state.workspace?.root ?? ''}`;
   }
 
   private taskRecords(): TaskRecord[] {
-    return readJson<TaskRecord[]>(this.tasksKey()) ?? [];
+    return readTaskRecords(readJson(this.tasksKey()));
   }
 
   /** Change what's remembered of a task, keeping the rest, in the list as well. */
-  private updateTaskRecord(sessionId: string, patch: Partial<TaskRecord> | ((r: TaskRecord) => Partial<TaskRecord>)) {
+  private updateTaskRecord(taskId: string, patch: Partial<TaskRecord> | ((r: TaskRecord) => Partial<TaskRecord>)) {
     const records = this.taskRecords();
-    const old: TaskRecord = records.find((r) => r.sessionId === sessionId) ?? { sessionId, status: 'open' };
-    const next: TaskRecord = { ...old, ...(typeof patch === 'function' ? patch(old) : patch), sessionId };
-    writeJson(this.tasksKey(), [...records.filter((r) => r.sessionId !== sessionId), next].slice(-TASK_RECORDS));
-    this.setAgent((a) => ({ tasks: a.tasks.map((t) => (t.sessionId === sessionId ? { ...t, ...next } : t)) }));
+    const old: TaskRecord = records.find((r) => r.id === taskId) ?? { id: taskId, status: 'open' };
+    const change = typeof patch === 'function' ? patch(old) : patch;
+    if (!Object.keys(change).length) return;
+    const next: TaskRecord = { ...old, ...change, id: taskId };
+    writeJson(this.tasksKey(), [...records.filter((r) => r.id !== taskId), next].slice(-TASK_RECORDS));
+    const assistant = this.state.settings.assistant;
+    this.setAgent((a) => ({ tasks: a.tasks.map((t) => (t.id === taskId ? { ...t, ...next, title: t.title, updated: next.updated ?? t.updated, sessionId: next.threads?.[assistant]?.sessionId ?? t.sessionId } : t)) }));
   }
 
-  private setTaskRecord(sessionId: string, status: TaskRecord['status']) {
-    this.updateTaskRecord(sessionId, { status, doneAt: status === 'done' ? Date.now() : undefined });
+  private setTaskRecord(taskId: string, status: TaskRecord['status']) {
+    this.updateTaskRecord(taskId, { status, doneAt: status === 'done' ? Date.now() : undefined });
   }
 
   /** What a turn's version changed, added to its task's files (for the Tasks view). */
-  private async noteTaskChanges(sessionId: string, version: string) {
+  private async noteTaskChanges(taskId: string, version: string) {
     try {
       const changes = await ipc.historyChanges(null, version);
       if (!changes.length) return;
-      this.updateTaskRecord(sessionId, (r) => {
+      this.updateTaskRecord(taskId, (r) => {
         const files = { ...r.files };
         for (const c of changes) files[c.path] = { added: (files[c.path]?.added ?? 0) + (c.added ?? 0), deleted: (files[c.path]?.deleted ?? 0) + (c.deleted ?? 0), version };
         return { files };
@@ -4585,27 +4663,35 @@ export class Studio {
     }
   }
 
-  /** The book's conversations from the assistant, with what this Mac remembers of each. */
+  /**
+   * The book's tasks (tasks.ts): every one this Mac keeps, whichever
+   * assistant it was with, and the running assistant's own conversations,
+   * which it lists.
+   */
   async loadTasks() {
-    if (!this.agent || this.state.agent.status !== 'ready') return;
-    try {
-      const sessions = await this.agent.listSessions(TASK_LIMIT);
-      const records = new Map(this.taskRecords().map((r) => [r.sessionId, r]));
-      this.setAgent({
-        tasks: sessions.map((s) => {
-          const r = records.get(s.id);
-          return { ...r, sessionId: s.id, title: s.title ? stockTitle(s.title) : 'Untitled task', status: r?.status ?? 'open', updated: s.updated, tokens: s.tokens };
-        }),
-      });
-    } catch (e) {
-      console.warn('tasks: list failed', e);
+    const root = this.state.workspace?.root;
+    if (!root) return;
+    const assistant = this.state.settings.assistant;
+    const agent = this.agent;
+    let listed: ListedConversation[] | null = null;
+    if (agent && this.agentKind === assistant && this.state.agent.status === 'ready') {
+      try {
+        listed = await agent.listSessions(TASK_LIMIT);
+      } catch (e) {
+        console.warn('tasks: list failed', e);
+      }
     }
+    // Another book or assistant meanwhile: its own list says.
+    if (this.state.workspace?.root !== root || this.state.settings.assistant !== assistant) return;
+    const { records, tasks, changed } = mergeTasks(this.taskRecords(), listed, assistant);
+    if (changed) writeJson(this.tasksKey(), records.slice(-TASK_RECORDS));
+    this.setAgent({ tasks: tasks.slice(0, TASK_LIMIT).map((t) => ({ ...t, title: t.title ? stockTitle(t.title) : t.asked ? clip(t.asked, 60) : 'Untitled task' })) });
   }
 
   /** A task from the Tasks view: shown in the assistant pane (brought back if hidden). */
-  async openTask(sessionId: string) {
+  async openTask(taskId: string) {
     this.events.emit('show-agent-pane');
-    await this.switchTask(sessionId);
+    await this.switchTask(taskId);
   }
 
   /** What a task changed in a file: its latest version's change there, side by side (as a file under a version in History). */
@@ -4615,13 +4701,21 @@ export class Studio {
     await this.history.showDiff(version, path);
   }
 
+  /** A task's conversation at work, shown or in the background. */
+  private taskRunning(taskId: string) {
+    const a = this.state.agent;
+    if (taskId === a.taskId && a.running) return true;
+    const sessionId = a.tasks.find((t) => t.id === taskId)?.sessionId;
+    return !!sessionId && !!a.background[sessionId]?.running;
+  }
+
   /** Several tasks done at once (the Tasks view's selection, or its tidy-up): one named version for them all. */
-  async markTasksDone(sessionIds: string[]) {
-    const ids = sessionIds.filter((id) => !(id === this.state.agent.sessionId && this.state.agent.running) && !this.state.agent.background[id]?.running);
+  async markTasksDone(taskIds: string[]) {
+    const ids = taskIds.filter((id) => !this.taskRunning(id));
     if (!ids.length) return;
     if (ids.length === 1) return this.markTaskDone(ids[0]);
     const titles = ids.map((id) => this.taskTitle(id));
-    const shown = ids.includes(this.state.agent.sessionId ?? '');
+    const shown = ids.includes(this.state.agent.taskId ?? '');
     if (shown) {
       const failures = (await this.docs?.saveAll()) ?? [];
       if (failures.length) return this.toast(`Not marked done: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`, 'error');
@@ -4634,36 +4728,69 @@ export class Studio {
     this.toast(`${ids.length} tasks marked done.`, 'info', [{ label: 'Undo', run: () => ids.forEach((id) => this.reopenTask(id)) }]);
   }
 
-  /** Open another conversation: its messages come back from OpenCode. One at work carries on in the background. */
-  async switchTask(sessionId: string) {
+  /**
+   * Open another task: its chat as Foreword kept it, and its conversation with
+   * the assistant running now, opened again. With none (it was with another
+   * assistant), the next message starts one and takes the chat so far, as when
+   * the chat goes over to another assistant. One at work carries on in the
+   * background. A task from before Foreword kept chats opens with the
+   * assistant that has it.
+   */
+  async switchTask(taskId: string) {
     const agent = this.agent;
-    if (!agent || sessionId === this.state.agent.sessionId) return;
+    const assistant = this.agentKind;
+    if (!agent || !assistant || taskId === this.state.agent.taskId) return;
+    const record = this.taskRecord(taskId);
+    // From before tasks could change assistant: its id is this assistant's conversation.
+    const thread = record?.threads ? record.threads[assistant] : { sessionId: taskId, seen: null };
     try {
-      const [messages, active, permissions] = await Promise.all([
-        agent.sessionContext(sessionId),
-        agent.activeSessions().catch(() => new Set<string>()),
-        agent.pendingPermissions(sessionId).catch(() => []),
-      ]);
-      this.stashCurrent();
-      this.forgetThread();
-      const task = this.state.agent.tasks.find((t) => t.sessionId === sessionId);
+      const kept = readKeptChat(await ipc.taskChatRead(taskId).catch(() => null));
+      let sessionId = thread?.sessionId ?? null;
+      let messages: any[] = [];
+      if (sessionId) {
+        try {
+          messages = await agent.sessionContext(sessionId);
+        } catch (e) {
+          // It can't be opened again: a new one gets all of the chat.
+          if (!kept) throw e;
+          console.warn('tasks: the conversation did not open again', e);
+          sessionId = null;
+        }
+      }
+      if (this.agent !== agent) return;
+      if (!kept && !sessionId) {
+        const owner = record?.assistant;
+        if (owner && owner !== assistant) return this.openWith(owner, taskId);
+        return this.toast(`Couldn't open that task: ${ASSISTANT_NAMES[assistant]} doesn't have it.`, 'error');
+      }
+      const [active, permissions] = sessionId ? await Promise.all([agent.activeSessions().catch(() => new Set<string>()), agent.pendingPermissions(sessionId).catch(() => [])]) : [new Set<string>(), []];
+      if (this.agent !== agent) return;
+      this.leaveTask();
+      const task = this.state.agent.tasks.find((t) => t.id === taskId);
       const root = this.state.workspace?.root ?? '';
-      const bg = this.state.agent.background[sessionId];
-      const running = active.has(sessionId);
-      const items: ChatItem[] = itemsFromContext(messages, root);
+      // This assistant had its latest turn: its own record of it, if that went on after the chat was kept.
+      const latest = !record?.assistant || record.assistant === assistant;
+      const theirs = itemsFromContext(messages, root);
+      const items: ChatItem[] = kept ? keptItems(kept.running && sessionId && latest ? withLatestTurn(kept.items, theirs) : kept.items) : theirs;
       for (const p of permissions) items.push({ kind: 'permission', id: p.requestId, action: p.action, resources: p.resources, patches: p.patches, state: 'pending' });
-      this.turnMessage = this.turnMessages.get(sessionId) ?? '';
+      // What this assistant hasn't seen of the chat goes with the next message.
+      const turns = items.some((it) => it.kind === 'user' || it.kind === 'assistant');
+      this.handover = kept && turns && !(sessionId && latest) ? { after: sessionId ? (thread?.seen ?? null) : null } : null;
+      const running = !!sessionId && active.has(sessionId);
+      const bg = sessionId ? this.state.agent.background[sessionId] : undefined;
+      this.turnMessage = (sessionId && this.turnMessages.get(sessionId)) || '';
       // Not setAgent: leaving a running conversation isn't the end of its turn.
       this.store.set((s) => {
         const background = { ...s.agent.background };
-        delete background[sessionId];
+        if (sessionId) delete background[sessionId];
         return {
           agent: {
             ...s.agent,
+            taskId,
             sessionId,
             title: task?.title ?? null,
             items,
-            contextTokens: contextTokens(messages),
+            contextTokens: sessionId ? contextTokens(messages) : null,
             attachments: [],
             queued: [],
             running,
@@ -4673,16 +4800,28 @@ export class Studio {
           },
         };
       });
-      this.setAiReads(readsFromContext(messages, root));
+      this.setAiReads(sessionId ? readsFromContext(messages, root) : []);
+      if (this.handover) this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `With ${ASSISTANT_NAMES[assistant]}: ${this.carryOverWords()}.` });
+      if (!sessionId) return void this.refreshEfforts();
       void this.syncQuestions();
       // Bring the conversation in line with the current mode, permissions and instructions.
       const config = modeConfig(this.state.agent.mode);
-      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(sessionId)).catch(() => {});
+      await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(taskId)).catch(() => {});
       await this.applyInstructions(sessionId);
       void this.refreshEfforts();
     } catch (e) {
       this.toast(`Couldn't open that conversation: ${errorMessage(e)}`, 'error');
     }
+  }
+
+  /** A task only another assistant has the chat of (from before Foreword kept chats): opened with that one. */
+  private openWith(owner: AssistantId, taskId: string) {
+    const name = ASSISTANT_NAMES[owner];
+    if (this.assistantBusy) return this.toast(`That task’s chat is with ${name}: switch once ${ASSISTANT_NAMES[this.state.settings.assistant]} has finished.`, 'error');
+    this.toast(`That task’s chat is with ${name}, so it opens with ${name}.`);
+    this.newSession();
+    this.openOnStart = taskId;
+    this.switchAssistant(owner);
   }
 
   /** How full the current conversation is, from its latest call. */
@@ -4697,20 +4836,20 @@ export class Studio {
 
   /** "Yes, it's done": mark the task finished, save a named version, start a new one. */
   async finishTask() {
-    const { sessionId } = this.state.agent;
-    if (!sessionId || this.state.agent.running) return;
+    const { taskId } = this.state.agent;
+    if (!taskId || this.state.agent.running) return;
     // What's in the editor is part of it (an option picked in Options mode is an unsaved edit): saved first, so the version has it.
     const failures = (await this.docs?.saveAll()) ?? [];
     if (failures.length) {
       this.toast(`Not marked done: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`, 'error');
       return;
     }
-    const title = this.taskTitle(sessionId);
-    this.setTaskRecord(sessionId, 'done');
+    const title = this.taskTitle(taskId);
+    this.setTaskRecord(taskId, 'done');
     await this.history.saveNamed(`Task done: ${title}`).catch(() => {});
     this.newTask();
     await this.loadTasks();
-    this.toast(`Done: ${title}. Ready for the next one.`, 'info', [{ label: 'Open it again', run: () => void this.switchTask(sessionId) }]);
+    this.toast(`Done: ${title}. Ready for the next one.`, 'info', [{ label: 'Open it again', run: () => void this.switchTask(taskId) }]);
   }
 
   /** "Not yet": hide the buttons on that reply. */
@@ -4720,16 +4859,16 @@ export class Studio {
   }
 
   /** Mark any task done (the shown one goes through `finishTask`, which starts the next). */
-  async markTaskDone(sessionId: string) {
-    if (sessionId === this.state.agent.sessionId) return this.finishTask();
-    const title = this.taskTitle(sessionId);
-    this.setTaskRecord(sessionId, 'done');
+  async markTaskDone(taskId: string) {
+    if (taskId === this.state.agent.taskId) return this.finishTask();
+    const title = this.taskTitle(taskId);
+    this.setTaskRecord(taskId, 'done');
     await this.history.saveNamed(`Task done: ${title}`).catch(() => {});
     await this.loadTasks();
   }
 
-  reopenTask(sessionId: string) {
-    this.setTaskRecord(sessionId, 'open');
+  reopenTask(taskId: string) {
+    this.setTaskRecord(taskId, 'open');
     void this.loadTasks();
   }
 
@@ -4744,7 +4883,10 @@ export class Studio {
       await waitIdle(this.agent, sessionId);
       const messages = await this.agent.sessionContext(sessionId);
       const root = this.state.workspace?.root ?? '';
-      this.setAgent({ items: itemsFromContext(messages, root), contextTokens: contextTokens(messages) });
+      // The chat as its assistant has it now, unless another assistant had turns in it: those are only in the chat.
+      const kind = this.agentKind;
+      const mixed = this.state.agent.items.some((it) => it.kind === 'user' && !!it.by && it.by.assistant !== kind);
+      this.setAgent({ ...(mixed ? {} : { items: itemsFromContext(messages, root) }), contextTokens: contextTokens(messages) });
       // Reads summarized away are no longer in the conversation.
       this.setAiReads(readsFromContext(messages, root));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: 'Compacted: the conversation so far was summarized to free up the context window.' });
@@ -4886,13 +5028,13 @@ export class Studio {
     if (failures.length) return unsend(`Not sent: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`);
     this.turnStarts();
     // Sending in a finished task reopens it.
-    if (state.sessionId && state.tasks.find((t) => t.sessionId === state.sessionId)?.status === 'done') this.reopenTask(state.sessionId);
+    if (state.taskId && state.tasks.find((t) => t.id === state.taskId)?.status === 'done') this.reopenTask(state.taskId);
     // Everything up to now is its own version, so the agent's changes can be undone separately.
     await this.history.beforeAgent();
     this.turnMessage = messageLine(text);
     this.turnErrors.clear();
     // What the author changed in the assistant's text since its last turn goes with the message.
-    const edits = state.sessionId ? await this.authorEditsSince(state.sessionId) : [];
+    const edits = state.taskId ? await this.authorEditsSince(state.taskId) : [];
     if (edits.length) this.updateItem(userId, (it) => (it.kind === 'user' ? { ...it, attachments: [...it.attachments, ...edits.map((e) => `${AUTHOR_EDIT_CHIP} ${authorEditLabel(e)}`)] } : it));
     const context: MessageContext[] = [
       ...attachments.map((a) => ({
@@ -4906,15 +5048,20 @@ export class Studio {
     this.optionsTurn = optionsTurn && this.turnAsItIs(optionsTurn);
     try {
       let sessionId = this.state.agent.sessionId;
+      const assistant = this.agentKind ?? this.state.settings.assistant;
       if (!sessionId) {
         const config = modeConfig(this.state.agent.mode);
         sessionId = await agent.createSession(this.state.agent.model, {
           permissions: this.state.settings.permissions,
           readOnly: config.readOnly,
-          rules: this.authorRules(null),
+          rules: this.authorRules(this.state.agent.taskId),
           effort: this.state.agent.effort,
         });
-        this.setAgent({ sessionId });
+        // A new task, named for its first conversation; or this assistant's own conversation in the task shown.
+        const id = sessionId;
+        const taskId = this.state.agent.taskId ?? id;
+        this.setAgent({ sessionId, taskId });
+        this.updateTaskRecord(taskId, (r) => ({ threads: { ...r.threads, [assistant]: { sessionId: id, seen: null } } }));
         await this.applyInstructions(sessionId);
         // Where the conversation's effort really is (a model can start somewhere of its own).
         void this.refreshEfforts();
@@ -4923,10 +5070,11 @@ export class Studio {
       if (this.pendingBrief) await agent.setInstructions(sessionId, this.pendingBrief.key, this.pendingBrief.text);
       await agent.send(sessionId, text, context);
       if (this.handover === handover) this.handover = null;
-      // For the Tasks view: the mode, the goal (the author's first message, as the chat shows it) and how many messages.
+      // For the Tasks view: the mode, the goal (the author's first message, as the chat shows it), how many messages, and who has it now.
       const sent = state.items.filter((it) => it.kind === 'user');
-      this.updateTaskRecord(sessionId, (r) => ({ mode: state.mode, turns: sent.length + 1, asked: r.asked ?? clip(messageLine(sent[0]?.kind === 'user' ? sent[0].text : text), 300) }));
-      if (!sent.length) void this.loadTasks();
+      const taskId = this.state.agent.taskId ?? sessionId;
+      this.updateTaskRecord(taskId, (r) => ({ mode: state.mode, turns: sent.length + 1, asked: r.asked ?? clip(messageLine(sent[0]?.kind === 'user' ? sent[0].text : text), 300), assistant, updated: Date.now() }));
+      if (!sent.length || !this.state.agent.tasks.some((t) => t.id === taskId)) void this.loadTasks();
       return true;
     } catch (e) {
       return unsend(`Message not sent: ${errorMessage(e)}`);
@@ -5117,7 +5265,7 @@ export class Studio {
     this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: 'sending' } : it));
     try {
       // The rules first, so requests it makes meanwhile meet them.
-      const remembered = decision === 'always' && item?.kind === 'permission' ? await this.rememberFor(item, sessionId, remember) : undefined;
+      const remembered = decision === 'always' && item?.kind === 'permission' ? await this.rememberFor(item, this.state.agent.taskId ?? sessionId, remember) : undefined;
       await this.agent.replyPermission(sessionId, requestId, decision);
       this.updateItem(requestId, (it) => (it.kind === 'permission' ? { ...it, state: decision, ...(remembered ? { remembered } : {}) } : it));
       // A yes for one of the settings tools: the tool won't ask again.
@@ -5391,7 +5539,7 @@ export class Studio {
         this.newTask();
         break;
       case 'done':
-        if (!this.state.agent.sessionId) say('There’s no task to finish yet.', 'error');
+        if (!this.state.agent.taskId) say('There’s no task to finish yet.', 'error');
         else await this.finishTask();
         break;
       case 'compact':
@@ -5520,7 +5668,7 @@ export class Studio {
     const agent = this.agent;
     if (!agent || this.answered.has(e.requestId)) return false;
     const foreground = e.sessionId === this.state.agent.sessionId;
-    const rules = sessionRules(this.state.settings.permissions, foreground ? modeConfig(this.state.agent.mode).readOnly : true, this.authorRules(e.sessionId));
+    const rules = sessionRules(this.state.settings.permissions, foreground ? modeConfig(this.state.agent.mode).readOnly : true, this.authorRules(this.taskOf(e.sessionId)));
     if (!onlyLooks(e.action, e.resources, rules)) return false;
     this.answered.add(e.requestId);
     agent.replyPermission(e.sessionId, e.requestId, 'once').catch(() => this.onAgentEvent(e)); // the author answers after all
@@ -5640,7 +5788,7 @@ export class Studio {
         this.pushItem({ kind: 'tool', id: e.callId, name: e.name, summary: '', status: 'running', detail: '', started: Date.now() });
         break;
       case 'tool-called':
-        this.countRuleUse(e.sessionId, e.callId, e.input);
+        this.countRuleUse(this.taskOf(e.sessionId), e.callId, e.input);
         this.toolCalls.set(e.callId, { name: this.toolCalls.get(e.callId)?.name ?? '', input: e.input });
         this.setActivity({ phase: 'tool', label: toolActivity(this.toolCalls.get(e.callId)!.name, e.input, this.state.names) });
         this.updateItem(e.callId, (it) => (it.kind === 'tool' ? { ...it, input: e.input, summary: summarizeToolInput(e.input) } : it));
@@ -5755,7 +5903,7 @@ export class Studio {
     this.events.emit('focus-editor');
   }
 
-  /** `restart`: another assistant starts at once, with a new conversation (else its caller starts it). */
+  /** `restart`: another assistant starts at once, with a new chat (else its caller starts it; the author's switches carry the chat over: switchAssistant). */
   updateSettings(patch: Partial<AppSettings>, { write = true, restart = true } = {}) {
     const before = this.state.settings;
     const settings = { ...before, ...patch };
@@ -5781,8 +5929,12 @@ export class Studio {
     return a.running || Object.values(a.background).some((t) => t.running);
   }
 
-  /** Another program as the writing assistant (Settings, the chat's assistant menu, /assistant): a new conversation with it. */
-  switchAssistant(id: AssistantId): boolean {
+  /**
+   * Another program as the writing assistant (Settings, the chat's assistant
+   * menu, /assistant, the assistant's own tools): the chat carries on with it,
+   * as with another model, and its next message takes the chat so far.
+   */
+  switchAssistant(id: AssistantId, why: 'switch' | 'tool' = 'switch'): boolean {
     if (id === this.state.settings.assistant) return true;
     if (this.assistantBusy) {
       this.toast(`The assistant is working: stop it, or let it finish, then switch to ${ASSISTANT_NAMES[id]}.`, 'error');
@@ -5790,7 +5942,8 @@ export class Studio {
     }
     // This mode's assistant from now on, with its own model until one is picked.
     this.saveSetup(this.state.agent.mode, { assistant: id, model: null, effort: null });
-    this.updateSettings({ assistant: id });
+    if (this.state.workspace) void this.handOverTo(id, why);
+    else this.updateSettings({ assistant: id });
     return true;
   }
 
@@ -5830,11 +5983,11 @@ export class Studio {
 
   // ---- the author's rules (command-rules.ts) ---------------------------------------------
 
-  /** The author's command rules where they apply: every book's, this book's, and the task's (`sessionId`). */
-  commandRules(sessionId: string | null = this.state.agent.sessionId): CommandRule[] {
+  /** The author's command rules where they apply: every book's, this book's, and the task's (`taskId`, whichever assistant it's with). */
+  commandRules(taskId: string | null = this.state.agent.taskId): CommandRule[] {
     const app = this.state.settings;
     const book = this.state.project.settings;
-    const task = sessionId ? this.state.taskRules[sessionId] : undefined;
+    const task = taskId ? this.state.taskRules[taskId] : undefined;
     const rules = (patterns: string[] | undefined, effect: RuleEffect, scope: RuleScope) => (patterns ?? []).map((pattern): CommandRule => ({ pattern, effect, scope }));
     return [
       ...rules(app.alwaysAllow, 'allow', 'all'),
@@ -5846,17 +5999,17 @@ export class Studio {
   }
 
   /** A conversation's rules on top of the kinds of action: the author's commands, and what they allowed for the task. */
-  private authorRules(sessionId: string | null): PermissionRule[] {
-    return [...commandPermissionRules(this.commandRules(sessionId)), ...(sessionId ? (this.state.taskRules[sessionId]?.actions ?? []) : [])];
+  private authorRules(taskId: string | null): PermissionRule[] {
+    return [...commandPermissionRules(this.commandRules(taskId)), ...(taskId ? (this.state.taskRules[taskId]?.actions ?? []) : [])];
   }
 
   /** When a rule was made and how often it's been used. */
-  ruleStat(r: CommandRule, sessionId = this.state.agent.sessionId): RuleStat | undefined {
-    return this.state.ruleStats[this.ruleStatKey(r, sessionId)];
+  ruleStat(r: CommandRule, taskId = this.state.agent.taskId): RuleStat | undefined {
+    return this.state.ruleStats[this.ruleStatKey(r, taskId)];
   }
 
-  private ruleStatKey(r: CommandRule, sessionId: string | null) {
-    return ruleKey(r, r.scope === 'book' ? (this.state.workspace?.root ?? '') : r.scope === 'task' ? (sessionId ?? '') : '');
+  private ruleStatKey(r: CommandRule, taskId: string | null) {
+    return ruleKey(r, r.scope === 'book' ? (this.state.workspace?.root ?? '') : r.scope === 'task' ? (taskId ?? '') : '');
   }
 
   private setRuleStats(update: (stats: Record<string, RuleStat>) => void) {
@@ -5870,8 +6023,8 @@ export class Studio {
     }
   }
 
-  private updateTaskRules(sessionId: string, update: (t: TaskRules) => TaskRules) {
-    this.store.set((s) => ({ taskRules: { ...s.taskRules, [sessionId]: update(s.taskRules[sessionId] ?? { alwaysAllow: [], actions: [] }) } }));
+  private updateTaskRules(taskId: string, update: (t: TaskRules) => TaskRules) {
+    this.store.set((s) => ({ taskRules: { ...s.taskRules, [taskId]: update(s.taskRules[taskId] ?? { alwaysAllow: [], actions: [] }) } }));
   }
 
   /** The conversation's rules, brought up to date (the last change's, awaited by whoever made it). */
@@ -5884,11 +6037,11 @@ export class Studio {
    */
   async rememberCommands(patterns: string[], scope: RuleScope, effect: RuleEffect = 'allow') {
     const key = effect === 'allow' ? 'alwaysAllow' : 'neverAllow';
-    const sessionId = this.state.agent.sessionId;
+    const { taskId } = this.state.agent;
     const add = (list: string[] | undefined) => [...new Set([...(list ?? []), ...patterns])];
     if (scope === 'task') {
-      if (!sessionId || effect !== 'allow') throw new Error('A task’s rules are for commands to allow, in a conversation.');
-      this.updateTaskRules(sessionId, (t) => ({ ...t, alwaysAllow: add(t.alwaysAllow) }));
+      if (!taskId || effect !== 'allow') throw new Error('A task’s rules are for commands to allow, in a conversation.');
+      this.updateTaskRules(taskId, (t) => ({ ...t, alwaysAllow: add(t.alwaysAllow) }));
       this.permissionsApplied = this.applyPermissions({ notice: false });
     } else if (scope === 'book') {
       const errors = await this.updateProjectSettings({ [key]: add(this.state.project.settings[key]) });
@@ -5897,7 +6050,7 @@ export class Studio {
     const now = Date.now();
     this.setRuleStats((stats) => {
       for (const pattern of patterns) {
-        const k = this.ruleStatKey({ pattern, effect, scope }, sessionId);
+        const k = this.ruleStatKey({ pattern, effect, scope }, taskId);
         stats[k] ??= { created: now, uses: 0, last: 0 };
       }
     });
@@ -5907,10 +6060,10 @@ export class Studio {
   /** Take rules back; asking again from the next request. */
   async forgetCommands(patterns: string[], scope: RuleScope, effect: RuleEffect = 'allow') {
     const key = effect === 'allow' ? 'alwaysAllow' : 'neverAllow';
-    const sessionId = this.state.agent.sessionId;
+    const { taskId } = this.state.agent;
     const without = (list: string[] | undefined) => (list ?? []).filter((p) => !patterns.includes(p));
     if (scope === 'task') {
-      if (sessionId) this.updateTaskRules(sessionId, (t) => ({ ...t, alwaysAllow: without(t.alwaysAllow) }));
+      if (taskId) this.updateTaskRules(taskId, (t) => ({ ...t, alwaysAllow: without(t.alwaysAllow) }));
       this.permissionsApplied = this.applyPermissions({ notice: false });
     } else if (scope === 'book') {
       const errors = await this.updateProjectSettings({ [key]: without(this.state.project.settings[key]) });
@@ -5920,13 +6073,13 @@ export class Studio {
   }
 
   /** What "always" keeps for a request: the command rules the card chose, or else this kind of request for the task. */
-  private async rememberFor(item: Extract<ChatItem, { kind: 'permission' }>, sessionId: string, remember?: { patterns: string[]; scope: RuleScope; label: string }): Promise<Remembered> {
+  private async rememberFor(item: Extract<ChatItem, { kind: 'permission' }>, taskId: string, remember?: { patterns: string[]; scope: RuleScope; label: string }): Promise<Remembered> {
     if (remember?.patterns.length) {
       await this.rememberCommands(remember.patterns, remember.scope);
       return { scope: remember.scope, label: remember.label, patterns: remember.patterns, actions: [] };
     }
     const actions = taskAllowance(item.action, item.resources);
-    this.updateTaskRules(sessionId, (t) => ({ ...t, actions: [...t.actions, ...actions] }));
+    this.updateTaskRules(taskId, (t) => ({ ...t, actions: [...t.actions, ...actions] }));
     this.permissionsApplied = this.applyPermissions({ notice: false });
     await this.permissionsApplied;
     return { scope: 'task', label: remember?.label ?? taskAllowanceWords(item.action, item.resources), patterns: [], actions };
@@ -5936,13 +6089,13 @@ export class Studio {
   async forgetRemembered(itemId: string, restore = false) {
     const item = this.state.agent.items.find((it) => it.id === itemId);
     const r = item?.kind === 'permission' ? item.remembered : undefined;
-    const { sessionId } = this.state.agent;
+    const { taskId } = this.state.agent;
     if (!r || !!r.removed === !restore) return;
     try {
       if (r.patterns.length) await (restore ? this.rememberCommands(r.patterns, r.scope) : this.forgetCommands(r.patterns, r.scope));
-      if (r.actions.length && sessionId) {
+      if (r.actions.length && taskId) {
         const same = (a: PermissionRule) => r.actions.some((b) => JSON.stringify(a) === JSON.stringify(b));
-        this.updateTaskRules(sessionId, (t) => ({ ...t, actions: restore ? [...t.actions, ...r.actions] : t.actions.filter((a) => !same(a)) }));
+        this.updateTaskRules(taskId, (t) => ({ ...t, actions: restore ? [...t.actions, ...r.actions] : t.actions.filter((a) => !same(a)) }));
         this.permissionsApplied = this.applyPermissions({ notice: false });
         await this.permissionsApplied;
       }
@@ -5954,9 +6107,9 @@ export class Studio {
 
   /** Requests still waiting that the author's rules now answer (the same command, asked again meanwhile). */
   private answerCovered() {
-    const { sessionId } = this.state.agent;
+    const { sessionId, taskId } = this.state.agent;
     if (!sessionId) return;
-    const rules = sessionRules(this.state.settings.permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(sessionId));
+    const rules = sessionRules(this.state.settings.permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(taskId));
     for (const it of this.state.agent.items) {
       if (it.kind !== 'permission' || it.state !== 'pending' || it.local || decide(it.action, it.resources, rules) !== 'allow') continue;
       this.updateItem(it.id, (x) => (x.kind === 'permission' ? { ...x, byRule: true } : x));
@@ -5981,7 +6134,7 @@ export class Studio {
    */
   commandStatus(command: string): 'looks' | 'allowed' | 'rule' | 'asks' | 'never' {
     const readOnly = modeConfig(this.state.agent.mode).readOnly;
-    const effect = decide('shell', [command], sessionRules(this.state.settings.permissions, readOnly, this.authorRules(this.state.agent.sessionId)));
+    const effect = decide('shell', [command], sessionRules(this.state.settings.permissions, readOnly, this.authorRules(this.state.agent.taskId)));
     if (effect === 'deny') return 'never';
     if (effect === 'ask') return 'asks';
     if (this.rulesThatAllowed(command).length) return 'rule';
@@ -6015,16 +6168,16 @@ export class Studio {
 
   /** Commands it ran: how often each rule let one run. */
   private counted = new Set<string>();
-  private countRuleUse(sessionId: string, callId: string, input: unknown) {
+  private countRuleUse(taskId: string, callId: string, input: unknown) {
     const command = input && typeof input === 'object' ? (input as { command?: unknown }).command : undefined;
     if (typeof command !== 'string' || this.counted.has(callId)) return;
-    const used = rulesUsed(command, this.commandRules(sessionId)).filter((r) => r.effect === 'allow');
+    const used = rulesUsed(command, this.commandRules(taskId)).filter((r) => r.effect === 'allow');
     if (!used.length) return;
     this.counted.add(callId);
     const now = Date.now();
     this.setRuleStats((stats) => {
       for (const r of used) {
-        const k = this.ruleStatKey(r, sessionId);
+        const k = this.ruleStatKey(r, taskId);
         const was = stats[k] ?? { created: 0, uses: 0, last: 0 };
         stats[k] = { ...was, uses: was.uses + 1, last: now };
       }
@@ -6094,11 +6247,11 @@ export class Studio {
   /** Apply the permission settings to the current conversation, and say so in the chat. */
   /** Give the conversation the permissions and rules as they are now; `notice`: say so in the chat (not for a rule the author just made there). */
   private async applyPermissions({ notice = true } = {}) {
-    const { sessionId } = this.state.agent;
+    const { sessionId, taskId } = this.state.agent;
     if (!sessionId || !this.agent) return;
     const permissions = this.state.settings.permissions;
     try {
-      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(sessionId));
+      await this.agent.setPermissions(sessionId, permissions, modeConfig(this.state.agent.mode).readOnly, this.authorRules(taskId));
       if (notice) this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: describePermissions(permissions) });
       // A rule made in Settings, or a kind of action now allowed, answers what's waiting for it.
       this.answerCovered();
@@ -6607,7 +6760,7 @@ export class Studio {
     },
     switchAssistant: (assistant, choice) => {
       this.toolSwitch = { assistant, from: this.state.settings.assistant, choice };
-      if (!this.switchAssistant(assistant)) this.toolSwitch = null;
+      if (!this.switchAssistant(assistant, 'tool')) this.toolSwitch = null;
     },
     chooseModel: async (choice) => {
       const said = await this.chooseFromTools(choice);
@@ -6670,7 +6823,7 @@ export class Studio {
       kind: 'notice',
       id: uid('n'),
       tone: 'info',
-      text: `${ASSISTANT_NAMES[pending.assistant]} is the writing assistant now${now ? ` (${now})` : ''}, as you asked. This is a new conversation: your last one is kept with ${ASSISTANT_NAMES[pending.from]}, to carry on if you switch back.`,
+      text: `${ASSISTANT_NAMES[pending.assistant]} is the writing assistant now${now ? ` (${now})` : ''}, as you asked, and this task carries on with it: ${this.carryOverWords()}.`,
     });
   }
 

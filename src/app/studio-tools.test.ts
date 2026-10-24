@@ -129,7 +129,7 @@ describe('Foreword’s tools, as an MCP server', () => {
 
   it('the assistant, model, effort and mode change when the reply ends', async () => {
     const t = host();
-    expect((await call(t.h, 'switch_assistant', { assistant: 'claude', model: 'default' })).text).toMatch(/When your reply ends, Foreword switches to Claude Code \(model “default”\)\. This conversation stays with OpenCode/);
+    expect((await call(t.h, 'switch_assistant', { assistant: 'claude', model: 'default' })).text).toMatch(/When your reply ends, Foreword switches to Claude Code \(model “default”\), and this task carries on with it: the author's next message goes to Claude Code, with the chat so far\./);
     expect((await call(t.h, 'set_model', { model: 'sonnet', effort: 'high' })).text).toMatch(/switches the model to “sonnet” and sets the effort to “high”/);
     expect((await call(t.h, 'set_mode', { mode: 'discuss' })).text).toBe('When your reply ends, the chat switches to Discuss mode.');
     expect(t.did).toEqual([]);

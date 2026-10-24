@@ -502,10 +502,10 @@ function ContextCard({ selection, live, fromPreview, onKeep, onRemove }: { selec
  * New task turns blue once the conversation is long enough to slow the assistant down.
  */
 function TaskBar() {
-  const blank = useStore(studio.store, (s) => !s.agent.sessionId && !s.agent.items.length);
+  const blank = useStore(studio.store, (s) => !s.agent.taskId && !s.agent.items.length);
   const running = useStore(studio.store, (s) => s.agent.running);
   const replied = useStore(studio.store, (s) => s.agent.items.some((i) => i.kind === 'assistant'));
-  const done = useStore(studio.store, (s) => s.agent.tasks.find((t) => t.sessionId === s.agent.sessionId)?.status === 'done');
+  const done = useStore(studio.store, (s) => s.agent.tasks.find((t) => t.id === s.agent.taskId)?.status === 'done');
   const long = useContextUse().tone !== '';
   // A blank conversation already is a new task, with nothing to finish.
   if (blank) return null;
@@ -1058,7 +1058,7 @@ export function AgentPane() {
           }}
         >
           {agent.items.length === 0 && <Starter />}
-          <Transcript key={agent.sessionId ?? 'new'} />
+          <Transcript key={agent.taskId ?? 'new'} />
         </div>
         {/* The assistant's questions take the message box's place until they're answered or skipped. */}
         {asking ? (

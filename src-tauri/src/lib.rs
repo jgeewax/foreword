@@ -22,6 +22,7 @@ mod proof;
 mod render;
 #[cfg(target_os = "macos")]
 mod snapshot;
+mod tasks;
 mod updater;
 mod workspace;
 
@@ -662,6 +663,8 @@ pub fn run() {
             history::history_list,
             history::history_changes,
             history::history_file,
+            tasks::task_chat_read,
+            tasks::task_chat_write,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Foreword")

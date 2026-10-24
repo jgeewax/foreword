@@ -1,9 +1,15 @@
-// Task-based conversations: each OpenCode session is a task with one goal.
-// The assistant restates the goal first and, when it thinks the goal is met,
-// ends its reply with a marker line; Foreword hides the marker and asks the
-// author to confirm. Finished tasks are remembered per book on this Mac.
+// Task-based conversations: each task is a chat with one goal. The assistant
+// restates the goal first and, when it thinks the goal is met, ends its reply
+// with a marker line; Foreword hides the marker and asks the author to
+// confirm. Finished tasks are remembered per book on this Mac.
+//
+// A task is Foreword's, not an assistant's: it can go from Claude Code to
+// Codex and back as a chat goes from one model to another. Each assistant
+// keeps only its own conversation in it (a thread), so Foreword keeps the
+// chat (tasks.rs) and lists every task, whichever assistant runs.
 
 import { readLabel, readOf, type AiRead } from './ai-marks';
+import type { AssistantId } from './settings';
 import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 import type { AgentMode } from '../services/agent/modes';
@@ -44,17 +50,132 @@ export const AUTHOR_EDIT_CHIP = 'Your edit:';
 /** A file a task changed: lines added and removed over its turns, and its latest version that changed it. */
 export type TaskFile = { added: number; deleted: number; version: string };
 
+/** An assistant's own conversation in a task, and the last item of the chat it has seen (null: not known, so all of it). */
+export type TaskThread = { sessionId: string; seen: string | null };
+
 /**
- * What Foreword remembers of a task on this Mac (the assistant keeps the
- * conversation): done or not, and, from when it started keeping them, the
- * mode of its last turn, the author's first message, its latest reply, how
- * many messages, and the files its turns changed.
+ * What Foreword remembers of a task on this Mac: done or not, and, from when
+ * it started keeping them, the mode of its last turn, the author's first
+ * message, its latest reply, how many messages, and the files its turns
+ * changed; its title, when it last changed, the assistant of its latest turn,
+ * each assistant's conversation in it, and whether its chat is kept.
  */
-export type TaskNotes = { doneAt?: number; mode?: AgentMode; asked?: string; said?: string; turns?: number; files?: Record<string, TaskFile> };
+export type TaskNotes = {
+  doneAt?: number;
+  mode?: AgentMode;
+  asked?: string;
+  said?: string;
+  turns?: number;
+  files?: Record<string, TaskFile>;
+  title?: string;
+  updated?: number;
+  /** The assistant its latest turn was with: the one that has seen all of it. */
+  assistant?: AssistantId;
+  threads?: Partial<Record<AssistantId, TaskThread>>;
+  /** Foreword has its chat (tasks.rs), so any assistant can open it. */
+  kept?: boolean;
+};
 
-export type TaskRecord = { sessionId: string; status: 'open' | 'done' } & TaskNotes;
+/** A task's id is its first conversation's, as before tasks could change assistant: what was noted of them is keyed by it. */
+export type TaskRecord = { id: string; status: 'open' | 'done' } & TaskNotes;
 
-export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null } & TaskNotes;
+/** `sessionId`: its conversation with the assistant running now (null: none yet, and the next message starts one). */
+export type TaskSummary = { id: string; sessionId: string | null; title: string; status: 'open' | 'done'; updated: number; tokens: number | null } & TaskNotes;
+
+/** What's kept of the book's tasks (localStorage); from before, keyed by `sessionId`. */
+export function readTaskRecords(raw: unknown): TaskRecord[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((r): TaskRecord[] => {
+    if (!r || typeof r !== 'object') return [];
+    const { sessionId, ...rest } = r as Partial<TaskRecord> & { sessionId?: unknown };
+    const id = typeof rest.id === 'string' ? rest.id : typeof sessionId === 'string' ? sessionId : null;
+    return id ? [{ ...rest, id, status: rest.status === 'done' ? 'done' : 'open' }] : [];
+  });
+}
+
+/** One of the running assistant's conversations in the book, as it lists them. */
+export type ListedConversation = { id: string; title: string; updated: number; tokens: number | null };
+
+/**
+ * The book's tasks, newest first: every one Foreword keeps, whichever
+ * assistant it was with, and the running assistant's own conversations
+ * (`listed`; null while it isn't running). One it lists that no task has
+ * yet becomes a task (from before Foreword kept them, or started outside
+ * it). A task shows when its chat is kept, when another assistant has it,
+ * or when this one lists it. `changed`: the records to keep again.
+ */
+export function mergeTasks(records: readonly TaskRecord[], listed: readonly ListedConversation[] | null, assistant: AssistantId): { records: TaskRecord[]; tasks: TaskSummary[]; changed: boolean } {
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const taskOf = new Map<string, string>();
+  for (const r of records) {
+    const t = r.threads?.[assistant];
+    if (t) taskOf.set(t.sessionId, r.id);
+  }
+  const shown = new Map<string, ListedConversation>();
+  let changed = false;
+  for (const c of listed ?? []) {
+    const id = taskOf.get(c.id) ?? c.id;
+    if (shown.has(id)) continue;
+    const old = byId.get(id);
+    const r: TaskRecord = old ?? { id, status: 'open' };
+    const next: TaskRecord = {
+      ...r,
+      // The title the task started with, unless it has none.
+      title: c.title && (c.id === id || !r.title) ? c.title : r.title,
+      updated: Math.max(r.updated ?? 0, c.updated),
+      assistant: r.assistant ?? assistant,
+      threads: r.threads?.[assistant] ? r.threads : { ...r.threads, [assistant]: { sessionId: c.id, seen: null } },
+    };
+    if (!old || next.title !== old.title || next.updated !== old.updated || next.assistant !== old.assistant || next.threads !== old.threads) changed = true;
+    byId.set(id, next);
+    shown.set(id, c);
+  }
+  const visible = (r: TaskRecord) => shown.has(r.id) || !!r.kept || (!!r.assistant && (listed === null || r.assistant !== assistant));
+  const tasks = [...byId.values()]
+    .filter(visible)
+    .map((r): TaskSummary => ({ ...r, sessionId: r.threads?.[assistant]?.sessionId ?? null, title: r.title ?? '', updated: r.updated ?? 0, tokens: shown.get(r.id)?.tokens ?? null }))
+    .sort((a, b) => b.updated - a.updated);
+  return { records: [...byId.values()], tasks, changed };
+}
+
+/** A task's chat as Foreword keeps it, and whether a turn was still going when it was kept. */
+export type KeptChat = { items: ChatItem[]; running: boolean };
+
+export function readKeptChat(text: string | null): KeptChat | null {
+  if (!text) return null;
+  try {
+    const v = JSON.parse(text);
+    return Array.isArray(v?.items) ? { items: v.items as ChatItem[], running: !!v.running } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A kept chat as it opens again: what waited on the author then is asked
+ * again by its assistant if it still waits (pendingPermissions, pendingForms),
+ * and nothing is still thinking.
+ */
+export function keptItems(items: readonly ChatItem[]): ChatItem[] {
+  const waiting = (it: ChatItem) => (it.kind === 'permission' || (it.kind === 'question' && it.via !== 'message')) && (it.state === 'pending' || it.state === 'sending');
+  return items.filter((it) => !waiting(it)).map((it) => (it.kind === 'thinking' && !it.done ? { ...it, done: true } : it));
+}
+
+/**
+ * A chat kept while a turn was still going (it went on in the background, or
+ * the window closed): that turn as its assistant has it now, after the
+ * author's last message. As kept, if that message isn't in `theirs`.
+ */
+export function withLatestTurn(kept: readonly ChatItem[], theirs: readonly ChatItem[]): ChatItem[] {
+  const last = kept.map((it) => it.kind).lastIndexOf('user');
+  const said = kept[last]?.kind === 'user' ? kept[last].text.trim() : null;
+  if (said === null) return [...kept];
+  for (let j = theirs.length - 1; j >= 0; j--) {
+    const it = theirs[j];
+    if (it.kind === 'user' && it.text.trim() === said) return [...kept.slice(0, last + 1), ...theirs.slice(j + 1)];
+  }
+  return [...kept];
+}
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

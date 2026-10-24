@@ -7,8 +7,8 @@ import type { BookNames } from './tool-labels';
 const NOW = new Date(2026, 9, 24, 15, 0).getTime();
 const at = (day: number, hour = 12, month = 9, year = 2026) => new Date(year, month, day, hour).getTime();
 
-const idle: LiveSource = { sessionId: null, running: false, activity: '', asking: null, stopped: false, background: {} };
-const task = (sessionId: string, patch: Partial<TaskSummary> = {}): TaskSummary => ({ sessionId, title: sessionId, status: 'open', updated: NOW, tokens: null, ...patch });
+const idle: LiveSource = { taskId: null, running: false, activity: '', asking: null, stopped: false, background: {} };
+const task = (id: string, patch: Partial<TaskSummary> = {}): TaskSummary => ({ id, sessionId: id, title: id, status: 'open', updated: NOW, tokens: null, ...patch });
 
 const names: BookNames = {
   root: '/book',
@@ -20,7 +20,7 @@ const names: BookNames = {
 
 describe('taskLive', () => {
   it('reads the shown conversation from the chat', () => {
-    const shown = { ...idle, sessionId: 'a' };
+    const shown = { ...idle, taskId: 'a' };
     expect(taskLive(task('a'), { ...shown, asking: 'question', asks: 'Whose eyes?' })).toEqual({ state: 'question', note: 'Has a question: Whose eyes?' });
     expect(taskLive(task('a'), { ...shown, asking: 'permission', asks: 'run typst compile' })).toEqual({ state: 'permission', note: 'Asks to run typst compile' });
     expect(taskLive(task('a'), { ...shown, running: true, activity: 'Reading “Carew” (chapter 4)' })).toEqual({ state: 'working', note: 'Reading “Carew” (chapter 4)' });
@@ -35,6 +35,8 @@ describe('taskLive', () => {
     expect(taskLive(task('b'), bg({ unread: true }))).toEqual({ state: 'unread', note: 'New reply' });
     expect(taskLive(task('b'), bg({ unread: true, failed: 'the model was busy' }))).toEqual({ state: 'stopped', note: 'Stopped: the model was busy' });
     expect(taskLive(task('b', { status: 'done' }), idle).state).toBe('done');
+    // A task with another assistant has no conversation with this one, nor anything in the background.
+    expect(taskLive(task('b', { sessionId: null }), bg({ running: true })).state).toBe('open');
   });
 });
 
@@ -82,8 +84,8 @@ describe('taskSections', () => {
       ['Open', 2],
       ['Done', 1],
     ]);
-    expect(sections[0].groups[0].items.map((i) => i.task.sessionId)).toEqual(['asks', 'unread']);
-    expect(sections[2].groups[0].items.map((i) => i.task.sessionId)).toEqual(['open-new', 'open-old']);
+    expect(sections[0].groups[0].items.map((i) => i.task.id)).toEqual(['asks', 'unread']);
+    expect(sections[2].groups[0].items.map((i) => i.task.id)).toEqual(['open-new', 'open-old']);
   });
 
   it('groups done tasks by when they were done, falling back to their last change', () => {
@@ -96,7 +98,7 @@ describe('taskSections', () => {
       ],
       NOW,
     );
-    expect(done.groups.map((g) => [g.label.startsWith('Earlier') ? 'month' : g.key, g.items.map((i) => i.task.sessionId)])).toEqual([
+    expect(done.groups.map((g) => [g.label.startsWith('Earlier') ? 'month' : g.key, g.items.map((i) => i.task.id)])).toEqual([
       ['today', ['today']],
       ['week', ['week']],
       ['2026-8', ['sep2', 'sep']],

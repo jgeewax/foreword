@@ -295,6 +295,10 @@ export const ipc = {
   historyChanges: (from: string | null, to: string) => invoke<FileChange[]>('history_changes', { from, to }),
   /** A file's text at a version, or null if it didn't exist then. */
   historyFile: (id: string, path: string) => invoke<string | null>('history_file', { id, path }),
+
+  /** A task's chat as Foreword kept it (tasks.rs), whichever assistant it was with; null if none is kept. */
+  taskChatRead: (id: string) => invoke<string | null>('task_chat_read', { id }),
+  taskChatWrite: (id: string, text: string) => invoke<void>('task_chat_write', { id, text }),
 };
 
 export { Channel };

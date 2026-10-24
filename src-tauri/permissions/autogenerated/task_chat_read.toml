@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-task-chat-read"
+description = "Enables the task_chat_read command without any pre-configured scope."
+commands.allow = ["task_chat_read"]
+
+[[permission]]
+identifier = "deny-task-chat-read"
+description = "Denies the task_chat_read command without any pre-configured scope."
+commands.deny = ["task_chat_read"]

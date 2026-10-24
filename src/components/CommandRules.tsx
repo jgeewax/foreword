@@ -32,14 +32,14 @@ const sameRule = (a: CommandRule, b: CommandRule) => a.pattern === b.pattern && 
 
 export function CommandRules({ scopes, add = [], builtIn = false, own = false }: { scopes: RuleScope[]; add?: RuleScope[]; builtIn?: boolean; own?: boolean }) {
   // The rules, and how they've been used, as they change.
-  useStore(studio.store, (s) => JSON.stringify([s.settings.alwaysAllow, s.settings.neverAllow, s.project.settings.alwaysAllow, s.project.settings.neverAllow, s.taskRules, s.agent.sessionId]));
+  useStore(studio.store, (s) => JSON.stringify([s.settings.alwaysAllow, s.settings.neverAllow, s.project.settings.alwaysAllow, s.project.settings.neverAllow, s.taskRules, s.agent.taskId]));
   useStore(studio.store, (s) => s.ruleStats);
   const book = useStore(studio.store, (s) => s.workspace?.name ?? null);
-  const session = useStore(studio.store, (s) => s.agent.sessionId);
+  const task = useStore(studio.store, (s) => s.agent.taskId);
   const [gone, setGone] = useState<CommandRule[]>([]);
   const rules = studio.commandRules();
   const groups = scopes
-    .filter((scope) => (scope === 'task' ? !!session : scope === 'book' ? !!book : true))
+    .filter((scope) => (scope === 'task' ? !!task : scope === 'book' ? !!book : true))
     .map((scope) => ({ scope, rules: [...rules.filter((r) => r.scope === scope), ...gone.filter((g) => g.scope === scope && !rules.some((r) => sameRule(r, g)))] }));
 
   const remove = async (r: CommandRule) => {

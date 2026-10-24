@@ -293,7 +293,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'switch_assistant',
     title: 'Switch the writing assistant',
-    description: `Make another program the writing assistant: ${ASSISTANTS.map((id) => `${id} (${ASSISTANT_NAMES[id]})`).join(', ')}. It happens when your reply ends: this conversation stays with the current assistant, and the author's next message starts a new one with the other. Optionally its model ("default" for its own) and effort.`,
+    description: `Make another program the writing assistant: ${ASSISTANTS.map((id) => `${id} (${ASSISTANT_NAMES[id]})`).join(', ')}. It happens when your reply ends, and the task carries on with it, as with another model: the author's next message goes to the other, with the chat so far. Optionally its model ("default" for its own) and effort.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -319,7 +319,7 @@ export const TOOLS: Tool[] = [
       }
       await approved(host, 'switch_assistant', `${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}`);
       host.whenIdle(() => host.switchAssistant(id as AssistantId, choice));
-      return `When your reply ends, Foreword switches to ${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}. This conversation stays with ${ASSISTANT_NAMES[s.assistant]}; the author's next message starts a new conversation with ${ASSISTANT_NAMES[id as AssistantId]}. Tell the author so.`;
+      return `When your reply ends, Foreword switches to ${ASSISTANT_NAMES[id as AssistantId]}${then ? ` (${then})` : ''}, and this task carries on with it: the author's next message goes to ${ASSISTANT_NAMES[id as AssistantId]}, with the chat so far. Tell the author so.`;
     },
   },
   {

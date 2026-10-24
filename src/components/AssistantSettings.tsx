@@ -364,7 +364,7 @@ export function AssistantPage() {
             </Row>
           </div>
         </div>
-        <p className="settings-help">Switching starts a new conversation, with the other assistant. The model is chosen in the chat, under the message box, for each conversation.</p>
+        <p className="settings-help">Switching keeps the chat, as switching models does: the other assistant carries the task on, and gets the chat so far with your next message. The model is chosen in the chat, under the message box.</p>
       </section>
     </>
   );

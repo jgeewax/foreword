@@ -95,7 +95,7 @@ export function AssistantMenu() {
                 aria-disabled={locked}
                 data-assistant={id}
                 className={`assistant-menu-row${id === chosen ? ' current' : ''}${locked ? ' locked' : ''}`}
-                title={locked ? 'The assistant is working: stop it, or let it finish, to switch' : id === chosen ? `${ASSISTANT_NAMES[id]} is the assistant` : `Switch to ${ASSISTANT_NAMES[id]} (a new conversation)`}
+                title={locked ? 'The assistant is working: stop it, or let it finish, to switch' : id === chosen ? `${ASSISTANT_NAMES[id]} is the assistant` : `Switch to ${ASSISTANT_NAMES[id]}: it carries this task on`}
                 onClick={() => choose(id)}
               >
                 <AssistantMark id={id} size={26} />
@@ -113,7 +113,7 @@ export function AssistantMenu() {
             );
           })}
           <div className="assistant-menu-footer">
-            <span className="muted">{busy ? 'Switch once the assistant has finished.' : 'Switching starts a new conversation.'}</span>
+            <span className="muted">{busy ? 'Switch once the assistant has finished.' : 'The chat carries on with the one you switch to.'}</span>
             <button role="menuitem" className="small assistant-menu-settings" onClick={settings}>
               <Icon name="settings" size={13} /> Settings…
             </button>

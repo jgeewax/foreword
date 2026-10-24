@@ -112,6 +112,8 @@
     "allow-history-snapshot",
     "allow-history-list",
     "allow-history-changes",
-    "allow-history-file"
+    "allow-history-file",
+    "allow-task-chat-read",
+    "allow-task-chat-write"
   ]
 }

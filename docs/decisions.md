@@ -4097,6 +4097,74 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   and no question; "make that change now" tried nothing and pointed to Make
   this change and Go ahead; Go ahead made both in Write.
 
+### A task carries on from one assistant to another (2026-10-24)
+
+- **Asked for:** "changing providers changes the tasks that i can see in
+  the ai panel... thats a problem... i might be working through the same
+  problem and want to switch from claude code -> codex mid way through…
+  switching providers needs to be the same as switching models inside a
+  single provider. we shouldnt be relying on deeply coupling w the
+  underlying harness. and we should be able to pass the conversation so far
+  with claude code over to codex to continue the conversation."
+- **A task is Foreword's, not an assistant's.** Before, the task list was
+  whatever the running program listed (session/list, OpenCode's sessions),
+  so switching program swapped the list, and an explicit switch started a
+  new chat. Now each task keeps, on this Mac, its chat and a *thread* per
+  assistant: that assistant's own conversation in it and the last item of
+  the chat it has seen (`studio.tasks:<book>`; tasks.ts). A task's id is
+  its first conversation's, so everything noted before (done, files, rules
+  for the task) still applies. The pane's `taskId` is the task shown;
+  `sessionId` is only its conversation with the program running now.
+- **The chat is kept by Foreword** (tasks.rs, `task_chat_read`/`write`): a
+  JSON file per task in the app's data folder under the book's hash, as
+  History's repo is, written whole through a temporary file. It's kept
+  ~0.8 s after the chat changes (every 4 s while a turn streams), and at
+  once on leaving the task, handing it over, closing the book or the
+  window. Item ids now carry the page's start time, so ids made after a
+  reload never meet a kept chat's.
+- **Switching assistant is a handover**, the one modes already used
+  (`chatSoFar`): the chat stays in view, that assistant's own conversation
+  in the task opens again if it has one (session/load), and the turns it
+  hasn't seen go with the next message; with none, a new conversation gets
+  the chat so far (the latest ~40,000 characters). The menu, Settings,
+  /assistant and the assistant's own switch_assistant tool all do it. A
+  switch still waits while a conversation is at work, since another program
+  would stop it. `updateSettings({ assistant })` alone still starts afresh
+  (the self-tests and another window's settings file use it).
+- **The list is every task, whichever assistant runs:** the ones Foreword
+  keeps, merged with the running program's own list (`mergeTasks`). A
+  conversation it lists that's a thread of a task shows as that task, not
+  a row of its own. One no task has yet becomes one (from before, or begun
+  outside Foreword), stamped with that assistant. While a program starts,
+  the list stays as it is. A task's details name the assistant of its
+  latest turn.
+- **Opening a task** shows its kept chat with the assistant running now: in
+  its own conversation if it has one (and if it had the latest turn, that
+  turn as it has it now, should it have gone on in the background or after
+  the window closed: `withLatestTurn`), else a new one that gets the chat
+  with the next message, said in a notice. Waiting permission cards and
+  forms are left out of a kept chat; the assistant asks again if it still
+  waits. A task from before, whose chat only another assistant has, opens
+  with that assistant (with a toast). An ACP agent that can't open a
+  conversation again now says so instead of returning nothing, so its
+  task's chat goes to a new conversation.
+- History versions, the author's edits since the last turn, and "always
+  for this task" rules are the task's, across assistants. Compacting a
+  chat with more than one assistant's turns keeps the chat as it is (the
+  summary is that assistant's alone).
+- Verified: unit tests (tasks.test.ts: old records, merging lists across
+  assistants, kept chats, the latest turn; task-list.test.ts; tasks.rs);
+  the new `provider-switch` self-test in a scratch instance (its own
+  worktree and port) with Claude Code's Haiku and Codex's 6 Luna: a
+  codeword given to Claude was known to Codex after a switch mid-task, in
+  the same task and its own conversation, the chat unchanged; the list kept
+  the one task under Codex, its Codex conversation not a row of its own;
+  back on Claude, its own conversation opened again and got only the Codex
+  turn; the task opened again from its kept chat, and with Codex from a
+  blank chat in Codex's conversation, which got only the Claude turn since;
+  a task whose chat only Claude Code had, opened while Codex ran, opened
+  with Claude Code. `mode-setups`, `conversations` and `taskbar` pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

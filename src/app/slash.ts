@@ -25,7 +25,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'resume', description: 'Carry on where it stopped', immediate: true },
   { name: 'model', arg: 'name', description: 'Switch model (e.g. /model sonnet)', immediate: false },
   { name: 'effort', arg: 'level', description: 'How hard the model thinks (e.g. /effort high)', immediate: false },
-  { name: 'assistant', arg: 'name', description: 'Switch assistant: OpenCode, Claude Code, Gemini CLI, Codex or Antigravity (a new conversation)', immediate: false },
+  { name: 'assistant', arg: 'name', description: 'Switch assistant: OpenCode, Claude Code, Gemini CLI, Codex or Antigravity (the chat carries on with it)', immediate: false },
   { name: 'permissions', arg: 'ask | edit | readonly', description: 'Ask first, Edit freely, or Read-only', immediate: false },
   { name: 'fix', description: 'Fix all open review comments', immediate: true },
   { name: 'export', description: 'Export the book to PDF', immediate: true },

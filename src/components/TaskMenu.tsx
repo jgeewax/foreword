@@ -43,7 +43,7 @@ export type Task = ReturnType<typeof studio.store.get>['agent']['tasks'][number]
  */
 export function useTaskList() {
   const tasks = useStore(studio.store, (s) => s.agent.tasks);
-  const sessionId = useStore(studio.store, (s) => s.agent.sessionId);
+  const taskId = useStore(studio.store, (s) => s.agent.taskId);
   const running = useStore(studio.store, (s) => s.agent.running);
   const activity = useStore(studio.store, (s) => activityText(s.agent.activity));
   const background = useStore(studio.store, (s) => s.agent.background);
@@ -59,9 +59,9 @@ export function useTaskList() {
     return p?.kind === 'permission' ? describePermission(p.action, p.resources, s.names).what : '';
   });
   const stopped = useStore(studio.store, (s) => s.agent.stopped) || dot === 'fail';
-  const src: LiveSource = { sessionId, running, activity, asking, asks: asks || undefined, stopped, background };
+  const src: LiveSource = { taskId, running, activity, asking, asks: asks || undefined, stopped, background };
   const listed: Listed<Task>[] = tasks.map((task) => ({ task, live: taskLive(task, src) }));
-  return { listed, sessionId, running };
+  return { listed, taskId, running };
 }
 
 /** A task's state as a mark: amber for one that needs you, blue at work, red stopped, a ring open, a tick done. */
@@ -80,10 +80,10 @@ function MenuRow({ task, live, current, now, onPick }: { task: Task; live: TaskL
       aria-label={`${task.title}, ${STATE_WORDS[live.state]}`}
       onClick={onPick}
       onContextMenu={onContextMenu(() => [
-        { label: 'Open', action: () => void studio.switchTask(task.sessionId) },
+        { label: 'Open', action: () => void studio.switchTask(task.id) },
         task.status === 'done'
-          ? { label: 'Open Again (Not Done)', action: () => studio.reopenTask(task.sessionId) }
-          : { label: 'Mark Done', enabled: live.state !== 'working', action: () => void studio.markTaskDone(task.sessionId) },
+          ? { label: 'Open Again (Not Done)', action: () => studio.reopenTask(task.id) }
+          : { label: 'Mark Done', enabled: live.state !== 'working', action: () => void studio.markTaskDone(task.id) },
       ])}
     >
       <TaskGlyph state={live.state} />
@@ -102,7 +102,7 @@ function MenuRow({ task, live, current, now, onPick }: { task: Task; live: TaskL
 export function useTaskDot(): string {
   return useStore(studio.store, (s) => {
     const a = s.agent;
-    if (!a.sessionId && !a.items.length) return '';
+    if (!a.taskId && !a.items.length) return '';
     if (pendingQuestion(a) || a.activity?.phase === 'asking' || a.items.some((it) => it.kind === 'permission' && (it.state === 'pending' || it.state === 'sending'))) return 'ask';
     if (a.running) return 'busy';
     const since = a.items.map((it) => it.kind).lastIndexOf('user');
@@ -120,14 +120,16 @@ const RECENT = 3;
  * in the sidebar has them all.
  */
 export function TaskMenu() {
-  const { listed, sessionId } = useTaskList();
+  const { listed, taskId } = useTaskList();
   const title = useStore(studio.store, (s) => s.agent.title);
   const compacting = useStore(studio.store, (s) => s.agent.compacting);
   const running = useStore(studio.store, (s) => s.agent.running);
+  // Compact is the running assistant's: its conversation in the task.
+  const hasConversation = useStore(studio.store, (s) => !!s.agent.sessionId);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
-  const current = listed.find((i) => i.task.sessionId === sessionId);
+  const current = listed.find((i) => i.task.id === taskId);
   const dot = useTaskDot();
 
   useEffect(() => {
@@ -149,13 +151,13 @@ export function TaskMenu() {
     setOpen(false);
     void studio.switchTask(id);
   };
-  const row = (i: Listed<Task>) => <MenuRow key={i.task.sessionId} task={i.task} live={i.live} current={i.task.sessionId === sessionId} now={now} onPick={() => pick(i.task.sessionId)} />;
+  const row = (i: Listed<Task>) => <MenuRow key={i.task.id} task={i.task} live={i.live} current={i.task.id === taskId} now={now} onPick={() => pick(i.task.id)} />;
   const needs = listed.filter((i) => needsYou(i.live));
   const working = listed.filter((i) => i.live.state === 'working');
   const recent = listed.filter((i) => i.live.state === 'open').slice(0, RECENT);
   const found = query.trim() ? listed.filter((i) => findInTask(i.task, query)).slice(0, 12) : null;
   // On the trigger: how many others are at work, and whether any needs the author.
-  const others = listed.filter((i) => i.task.sessionId !== sessionId);
+  const others = listed.filter((i) => i.task.id !== taskId);
   const othersWorking = others.filter((i) => i.live.state === 'working').length;
   const othersWaiting = others.filter((i) => needsYou(i.live)).length;
 
@@ -164,7 +166,7 @@ export function TaskMenu() {
       <button className="task-trigger" aria-haspopup="menu" aria-expanded={open} title="Tasks: one conversation per goal" onClick={() => setOpen((o) => !o)}>
         {/* A blank conversation's label is a placeholder, greyed out, not a third "New task" button. */}
         {dot && <span className={`task-dot ${dot}`} title={dot === 'ask' ? 'Needs you' : dot === 'busy' ? 'At work' : dot === 'fail' ? 'The last turn didn’t finish' : 'Ready'} />}
-        <span className={`task-trigger-title${sessionId ? '' : ' muted'}`}>{sessionId ? (title ?? current?.task.title ?? 'Task') : 'New task'}</span>
+        <span className={`task-trigger-title${taskId ? '' : ' muted'}`}>{taskId ? (title ?? current?.task.title ?? 'Task') : 'New task'}</span>
         {current?.task.status === 'done' && <span className="task-done-badge">done</span>}
         {othersWorking > 0 && (
           <span className="task-count busy" title={`${othersWorking} other task${othersWorking > 1 ? 's' : ''} at work`}>
@@ -222,7 +224,7 @@ export function TaskMenu() {
               <span className="task-all-count">{listed.length}</span>
             </button>
           )}
-          {sessionId && (
+          {hasConversation && (
             <div className="task-popover-footer">
               <button
                 className="small"

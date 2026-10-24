@@ -15,9 +15,9 @@ export const NEEDS_YOU: readonly TaskState[] = ['question', 'permission', 'unrea
 /** A task's state, and what's going on in a few words ("Reading “The Storm” (chapter 2)"); no words when nothing is. */
 export type TaskLive = { state: TaskState; note: string };
 
-/** The shown conversation, as the chat has it; the others, as their events left them. */
+/** The shown task, as the chat has it; the others, as their conversations' events left them. */
 export type LiveSource = {
-  sessionId: string | null;
+  taskId: string | null;
   running: boolean;
   /** What the shown turn is doing, in words. */
   activity: string;
@@ -30,15 +30,15 @@ export type LiveSource = {
   background: Record<string, BackgroundTask>;
 };
 
-export function taskLive(task: Pick<TaskSummary, 'sessionId' | 'status'>, src: LiveSource): TaskLive {
-  if (task.sessionId === src.sessionId) {
+export function taskLive(task: Pick<TaskSummary, 'id' | 'sessionId' | 'status'>, src: LiveSource): TaskLive {
+  if (task.id === src.taskId) {
     if (src.asking === 'question') return { state: 'question', note: src.asks ? `Has a question: ${src.asks}` : 'Has a question' };
     if (src.asking === 'permission') return { state: 'permission', note: src.asks ? `Asks to ${src.asks}` : 'Asks permission' };
     if (src.running) return { state: 'working', note: src.activity || 'Working…' };
     if (src.stopped) return { state: 'stopped', note: 'Stopped: the last turn didn’t finish' };
     return { state: task.status, note: '' };
   }
-  const bg = src.background[task.sessionId];
+  const bg = task.sessionId ? src.background[task.sessionId] : undefined;
   if (bg?.attention) return { state: bg.attention, note: bg.attention === 'question' ? 'Has a question' : 'Asks permission' };
   if (bg?.running) return { state: 'working', note: bg.label || 'Working…' };
   if (bg?.unread) return bg.failed ? { state: 'stopped', note: `Stopped: ${bg.failed}` } : { state: 'unread', note: 'New reply' };

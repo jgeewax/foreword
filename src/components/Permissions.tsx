@@ -66,7 +66,7 @@ export function PermissionsEditor() {
 /** The permissions chip in the composer; opens the editor upward. */
 export function PermissionsMenu() {
   const permissions = useStore(studio.store, (s) => s.settings.permissions);
-  const rules = useStore(studio.store, (s) => s.settings.alwaysAllow.length + s.settings.neverAllow.length + (s.project.settings.alwaysAllow?.length ?? 0) + (s.project.settings.neverAllow?.length ?? 0) + (s.agent.sessionId ? (s.taskRules[s.agent.sessionId]?.alwaysAllow.length ?? 0) : 0));
+  const rules = useStore(studio.store, (s) => s.settings.alwaysAllow.length + s.settings.neverAllow.length + (s.project.settings.alwaysAllow?.length ?? 0) + (s.project.settings.neverAllow?.length ?? 0) + (s.agent.taskId ? (s.taskRules[s.agent.taskId]?.alwaysAllow.length ?? 0) : 0));
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'kinds' | 'rules'>('kinds');
   const rootRef = useRef<HTMLDivElement>(null);

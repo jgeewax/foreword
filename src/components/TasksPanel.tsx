@@ -87,7 +87,8 @@ function Snippet({ match }: { match: TaskMatch }) {
 
 /** Under the task folded out: what the author asked, what it changed (each file opens its change), and what you can do with it. */
 function TaskDetail({ task, names, busy }: { task: Task; names: BookNames; busy: boolean }) {
-  const assistant = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
+  // The assistant of its latest turn (a task can go from one to another).
+  const assistant = useStore(studio.store, (s) => ASSISTANT_NAMES[task.assistant ?? s.settings.assistant]);
   const files = Object.entries(task.files ?? {});
   const noted = !!task.mode || files.length > 0;
   const facts = [task.mode && modeConfig(task.mode).label, assistant, task.turns && `${task.turns} message${task.turns === 1 ? '' : 's'}`, task.tokens && `${Math.round(task.tokens / 1000)}k tokens`].filter(Boolean);
@@ -116,12 +117,12 @@ function TaskDetail({ task, names, busy }: { task: Task; names: BookNames; busy:
       <div className="tasks-facts muted">{facts.join(' · ')}</div>
       <div className="history-version-actions">
         {task.status === 'done' ? (
-          <button className="change-action" title="Back under Open: it isn't finished" onClick={() => studio.reopenTask(task.sessionId)}>
+          <button className="change-action" title="Back under Open: it isn't finished" onClick={() => studio.reopenTask(task.id)}>
             <Icon name="undo" size={14} />
             Open again
           </button>
         ) : (
-          <button className="change-action" disabled={busy} title={busy ? 'It’s at work: stop it or let it finish first' : 'File it under Done, with a named version in History'} onClick={() => void studio.markTaskDone(task.sessionId)}>
+          <button className="change-action" disabled={busy} title={busy ? 'It’s at work: stop it or let it finish first' : 'File it under Done, with a named version in History'} onClick={() => void studio.markTaskDone(task.id)}>
             <Icon name="check" size={14} />
             Mark done
           </button>
@@ -138,7 +139,7 @@ function TaskDetail({ task, names, busy }: { task: Task; names: BookNames; busy:
  * it changed here (as a version in History); a click on it again folds it up.
  */
 export function TasksPanel() {
-  const { listed, sessionId } = useTaskList();
+  const { listed, taskId } = useTaskList();
   const names = useStore(studio.store, (s) => s.names);
   const active = useStore(studio.store, (s) => s.active);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
@@ -158,13 +159,13 @@ export function TasksPanel() {
   const shown = listed.filter((i) => {
     if (here && !i.task.files?.[herePath!]) return false;
     const m = findInTask(i.task, query);
-    if (m) matches.set(i.task.sessionId, m);
+    if (m) matches.set(i.task.id, m);
     return !!m;
   });
   const sections = taskSections(shown, now);
   // In the order shown, for ⇧-click.
   const order: string[] = [];
-  const quiet = listed.filter((i) => isQuiet(i.task, i.live, now)).map((i) => i.task.sessionId);
+  const quiet = listed.filter((i) => isQuiet(i.task, i.live, now)).map((i) => i.task.id);
   const offerTidy = !filtering && quiet.some((id) => !tidied.includes(id));
 
   const select = (id: string, e: MouseEvent) => {
@@ -176,7 +177,7 @@ export function TasksPanel() {
   };
   const pick = (id: string, e?: MouseEvent) => {
     if (e && (e.metaKey || e.shiftKey)) return select(id, e);
-    view.set((s) => ({ selected: new Set(), anchor: id, open: s.open === id && id === sessionId ? null : id }));
+    view.set((s) => ({ selected: new Set(), anchor: id, open: s.open === id && id === taskId ? null : id }));
     void studio.openTask(id);
   };
   const markSelected = () => {
@@ -185,7 +186,7 @@ export function TasksPanel() {
   };
 
   const row = ({ task, live }: Listed<Task>) => {
-    const id = task.sessionId;
+    const id = task.id;
     order.push(id);
     const open = v.open === id;
     const selected = v.selected.has(id);
@@ -218,14 +219,14 @@ export function TasksPanel() {
       );
     const busy = live.state === 'working';
     return (
-      <div key={id} className={`tasks-item${open ? ' open' : ''}${id === sessionId ? ' shown' : ''}${selected ? ' selected' : ''}`} data-task={id}>
+      <div key={id} className={`tasks-item${open ? ' open' : ''}${id === taskId ? ' shown' : ''}${selected ? ' selected' : ''}`} data-task={id}>
         <div
           className={`tasks-row st-${live.state}${isQuiet(task, live, now) ? ' quiet' : ''}`}
           role="button"
           tabIndex={0}
           aria-expanded={open}
           aria-label={`${task.title}, ${STATE_WORDS[live.state]}${live.note ? `: ${live.note}` : ''}`}
-          title={open && id === sessionId ? 'Fold up what it changed' : 'Show it in the assistant pane, and what it changed here'}
+          title={open && id === taskId ? 'Fold up what it changed' : 'Show it in the assistant pane, and what it changed here'}
           onClick={(e) => pick(id, e)}
           onKeyDown={onActivate(() => pick(id))}
           onContextMenu={onContextMenu(() => {

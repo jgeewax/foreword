@@ -5616,7 +5616,7 @@ async function conversationsChecks() {
   const day = 86_400_000;
   const chapter = studio.state.names.chapters.find((c) => c !== studio.state.names.entry) ?? 'main.typ';
   const version = studio.state.history.versions[0]?.id ?? '';
-  const made = (sessionId: string, title: string, more: Partial<TaskSummary>): TaskSummary => ({ sessionId, title, status: 'open', updated: now, tokens: null, ...more });
+  const made = (id: string, title: string, more: Partial<TaskSummary>): TaskSummary => ({ id, sessionId: id, title, status: 'open', updated: now, tokens: null, ...more });
   studio.store.set((s) => ({
     agent: {
       ...s.agent,
@@ -7181,9 +7181,9 @@ async function taskBarChecks() {
   const reply = { id: 'selftest-taskbar-reply', kind: 'assistant', text: 'I cut two of the three.', done: true } as unknown as ChatItem;
   const model = { providerID: 'selftest', id: 'taskbar' };
   try {
-    set({ sessionId: null, items: [], running: false, contextTokens: null });
+    set({ taskId: null, sessionId: null, items: [], running: false, contextTokens: null });
     out.blank = await read('blank');
-    set({ sessionId: session, items: [user], tasks: saved.tasks.filter((t) => t.sessionId !== session) });
+    set({ taskId: session, sessionId: session, items: [user], tasks: saved.tasks.filter((t) => t.id !== session) });
     out.beforeReply = await read('before-reply');
     set({ running: true });
     out.working = await read('working');
@@ -7200,9 +7200,9 @@ async function taskBarChecks() {
     if (composer) composer.style.width = '260px';
     out.narrow = await read('long-narrow');
     if (composer) composer.style.width = '';
-    set({ tasks: [{ sessionId: session, title: 'Self-test', status: 'done', updated: Date.now(), tokens: null }, ...saved.tasks] });
+    set({ tasks: [{ id: session, sessionId: session, title: 'Self-test', status: 'done', updated: Date.now(), tokens: null }, ...saved.tasks] });
     out.alreadyDone = await read('already-done');
-    set({ tasks: saved.tasks.filter((t) => t.sessionId !== session) });
+    set({ tasks: saved.tasks.filter((t) => t.id !== session) });
     await sleep(100);
     // A real click focuses the button first, and the button goes with the bar: the message box gets the keys.
     const fresh = document.querySelector<HTMLButtonElement>('.agent-pane .task-bar-button.new-task');
@@ -8082,6 +8082,130 @@ async function modeSetupChecks() {
     };
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     still.remove();
+    out.waited = waited;
+  } finally {
+    for (const [k, v] of saved) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    studio.newSession();
+    await studio.setMode('write');
+    if (studio.state.settings.assistant !== savedAssistant) studio.updateSettings({ assistant: savedAssistant }, { write: false });
+  }
+  return out;
+}
+
+/**
+ * Switching assistant mid-task is like switching model (tasks.ts): the task
+ * and its chat stay, Codex hears what was said with Claude Code (and back),
+ * every task stays listed whichever assistant runs, a task opens with either,
+ * and one whose chat only Claude Code has opens with it. Claude Code's Haiku
+ * and Codex's smallest model. Scratch book only.
+ */
+async function providerSwitchChecks() {
+  const out: Record<string, unknown> = {};
+  const keys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups'];
+  const saved = keys.map((k) => [k, localStorage.getItem(k)] as const);
+  const savedAssistant = studio.state.settings.assistant;
+  const waited: string[] = [];
+  const a = () => studio.state.agent;
+  const ready = (assistant: string) =>
+    waitFor(() => studio.state.settings.assistant === assistant && a().status === 'ready' && a().models.length > 0 && a().models.every((m) => m.providerID === assistant) && a().model, 180000, `${assistant} ready`);
+  // The cheapest model, at low effort.
+  const small = async () => {
+    const m = a().models.find((m) => m.id === 'haiku') ?? a().models.find((m) => /luna|mini/i.test(`${m.id} ${m.name}`));
+    if (m) await studio.selectModel(m);
+    const low = a().efforts.find((e) => e.value === 'low');
+    if (low) await studio.selectEffort(low.value);
+  };
+  const lastNotice = () => (a().items.filter((i) => i.kind === 'notice').at(-1) as { text?: string } | undefined)?.text ?? null;
+  const noticed = (re: RegExp) => waitFor(() => re.test(lastNotice() ?? ''), 60000, `a notice like ${re}`).catch(() => {});
+  const lastChips = () => (a().items.filter((i) => i.kind === 'user').at(-1) as { attachments?: string[] } | undefined)?.attachments ?? [];
+  /** The last message the assistant got, as it got it (the ACP transcript keeps what went with it). */
+  const lastSent = async () => ((await studio.agent!.sessionContext(a().sessionId!)) as { type: string; text?: string }[]).filter((m) => m.type === 'user').at(-1)?.text ?? '';
+  const listed = (id: string) => a().tasks.filter((t) => t.id === id).length;
+  const turnIds = () => a().items.filter((i) => i.kind === 'user' || i.kind === 'assistant').map((i) => i.id);
+  const records = () => JSON.parse(localStorage.getItem(`studio.tasks:${studio.state.workspace?.root}`) ?? '[]') as Record<string, unknown>[];
+  try {
+    localStorage.removeItem('studio.modeSetups');
+    studio.newSession();
+    await studio.setMode('write');
+    if (studio.state.settings.assistant !== 'claude') studio.switchAssistant('claude');
+    await ready('claude');
+    await small();
+
+    // A task with Claude Code.
+    await settleTurn('Remember this codeword for later: PINEAPPLE. Reply with just “OK”. Don’t read or change any files.', waited);
+    const taskId = a().taskId!;
+    const claudeSession = a().sessionId;
+    await studio.loadTasks();
+    out.started = { taskId, firstConversationsId: taskId === claudeSession, listed: listed(taskId) };
+
+    // Codex, mid-task: the same task, the chat still there.
+    const before = turnIds();
+    studio.switchAssistant('codex');
+    await ready('codex');
+    await noticed(/^With Codex/);
+    await small();
+    await studio.loadTasks();
+    out.switched = { sameTask: a().taskId === taskId, conversation: a().sessionId, chatKept: JSON.stringify(turnIds()) === JSON.stringify(before), notice: lastNotice(), listed: listed(taskId), claudeTaskStillListed: listed(taskId) === 1 };
+    const reply = await settleTurn('What codeword did I give you earlier in this task? Answer with just the word.', waited);
+    const codexSession = a().sessionId;
+    await studio.loadTasks();
+    out.codexTurn = {
+      reply: reply.slice(0, 200),
+      knew: /PINEAPPLE/i.test(reply),
+      chips: lastChips(),
+      ownConversation: !!codexSession && codexSession !== claudeSession,
+      sameTask: a().taskId === taskId,
+      listedOnce: listed(taskId),
+      codexConversationListedApart: a().tasks.some((t) => t.id === codexSession),
+    };
+
+    // Back to Claude Code: its own conversation again, told only of the Codex turn.
+    studio.switchAssistant('claude');
+    await ready('claude');
+    await waitFor(() => a().sessionId === claudeSession, 60000, 'Claude Code’s conversation again').catch(() => {});
+    await noticed(/^With Claude Code/);
+    out.back = { resumed: a().sessionId === claudeSession, sameTask: a().taskId === taskId, notice: lastNotice() };
+    await small();
+    const backReply = await settleTurn('In one short sentence: what did I just ask the other assistant, and what did it answer? Don’t read or change any files.', waited);
+    const sent = await lastSent();
+    out.backTurn = { reply: backReply.slice(0, 300), knew: /PINEAPPLE/i.test(backReply), chips: lastChips(), sentTheCodexTurn: sent.includes('What codeword did I give you'), sentItsOwnTurnAgain: sent.includes('Remember this codeword') };
+
+    // A new task, then this one again from the list: its whole chat, kept by Foreword.
+    const shown = turnIds();
+    studio.newSession();
+    await sleep(500);
+    await studio.switchTask(taskId);
+    out.reopened = { sameTask: a().taskId === taskId, conversation: a().sessionId === claudeSession, sameChat: JSON.stringify(turnIds()) === JSON.stringify(shown), kept: !!(await ipc.taskChatRead(taskId)) };
+
+    // A second task with Claude Code, its chat made unreadable: as a task from before Foreword kept chats.
+    studio.newSession();
+    await settleTurn('Reply with just “Noted.” Don’t read or change any files.', waited);
+    const oldTask = a().taskId!;
+    studio.newSession();
+    await sleep(1500);
+    await ipc.taskChatWrite(oldTask, 'not a chat');
+    const key = `studio.tasks:${studio.state.workspace?.root}`;
+    localStorage.setItem(key, JSON.stringify(records().map((r) => (r.id === oldTask ? { ...r, kept: undefined } : r))));
+
+    // Codex, from a blank chat: every task listed, and the first opens in Codex's own conversation, which hears the Claude turn it missed.
+    studio.switchAssistant('codex');
+    await ready('codex');
+    await small();
+    await studio.loadTasks();
+    out.codexList = { first: listed(taskId), old: listed(oldTask), codexConversationListedApart: a().tasks.some((t) => t.id === codexSession), titles: a().tasks.slice(0, 4).map((t) => `${t.title} (${t.assistant})`) };
+    await studio.switchTask(taskId);
+    out.codexReopened = { sameTask: a().taskId === taskId, conversation: a().sessionId === codexSession, sameChat: JSON.stringify(turnIds()) === JSON.stringify(shown), notice: lastNotice() };
+    const codexAgain = await settleTurn('In one short sentence: what did I ask the other assistant just now? Don’t read or change any files.', waited);
+    const sentToCodex = await lastSent();
+    out.codexAgain = { reply: codexAgain.slice(0, 300), chips: lastChips(), sentTheClaudeTurn: sentToCodex.includes('what did I just ask the other assistant'), sentTheFirstTurnAgain: sentToCodex.includes('Remember this codeword') };
+    out.snapshot = await snap('provider-switch');
+
+    // The old task, opened while Codex runs: Claude Code has its chat, so it opens with Claude Code.
+    await studio.switchTask(oldTask);
+    await ready('claude');
+    await waitFor(() => a().taskId === oldTask, 60000, 'the old task').catch(() => {});
+    out.oldTask = { assistant: studio.state.settings.assistant, shown: a().taskId === oldTask, turns: turnIds().length, toast: studio.state.toast?.text ?? null };
+    out.record = records().find((r) => r.id === taskId);
     out.waited = waited;
   } finally {
     for (const [k, v] of saved) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
@@ -9518,6 +9642,11 @@ export async function runSelftest(launch: LaunchOptions) {
       if (want('mode-setups')) {
         log('mode setups, Claude Code and Codex');
         result.modeSetups = await modeSetupChecks();
+      }
+      // Claude Code to Codex and back, mid-task: the task and its chat carry on.
+      if (want('provider-switch')) {
+        log('provider switch, Claude Code and Codex');
+        result.providerSwitch = await providerSwitchChecks();
       }
       if (want('edits')) {
         log('edit policy');
