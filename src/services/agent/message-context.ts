@@ -8,6 +8,9 @@ export const EARLIER_INTRO = 'The author switched assistants during this convers
 /** The chip on the author's message that they went with. */
 export const EARLIER_CHIP = 'The chat so far';
 
+/** How a mode's reminder of how to reply starts, after the author's words (modes.ts). */
+export const REMINDER_START = '(Foreword, ';
+
 /** A message as the assistant gets it: the author's words, then what goes with them (tasks.ts splits them again). */
 export const messageText = (message: string, context: readonly MessageContext[]) =>
-  [message, ...context.map((c) => ('authorEdits' in c ? formatAuthorEdits(c.authorEdits) : 'earlier' in c ? c.earlier : formatSelectionContext(c.selection, c.stale)))].join('\n\n');
+  [message, ...context.map((c) => ('authorEdits' in c ? formatAuthorEdits(c.authorEdits) : 'earlier' in c ? c.earlier : 'reminder' in c ? c.reminder : formatSelectionContext(c.selection, c.stale)))].join('\n\n');

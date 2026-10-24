@@ -15,14 +15,17 @@ import { describePermission, describeTool } from '../app/tool-labels';
 import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnsOf, turnTime, turnWords, verbAndRest, type Edit, type Tone, type ToolItem, type Turn } from '../app/trace';
 import { wordPieces, type Piece } from '../app/prose-diff';
 import { onContextMenu } from '../lib/context-menu';
+import { refNamed, type BookFiles, type SourceRef } from '../lib/source-links';
 import { useStore } from '../lib/store';
 import { modeConfig, withoutModeOffer, type AgentMode } from '../services/agent/modes';
+import { answerOf, answerText as answerPlainText, markedTerms, markPieces, proseAndCharts, quoteOf, withoutAnswerBlocks, type AnswerChange, type AnswerPlace, type AskAnswer, type Sure } from '../services/agent/ask-answer';
 import { parseOptions } from '../services/agent/options-mode';
 import { answerText, questionText, splitQuestions } from '../services/agent/questions';
 import { AssistantMark } from './AssistantSettings';
 import { CommandPermission, RuleChip, scopeWords } from './CommandPermission';
 import { FileIcon, Icon, type IconName } from './icons';
-import { Markdown, MarkdownLine } from './Markdown';
+import { ChartBlock } from './Chart';
+import { Markdown, MarkdownLine, useBookFiles } from './Markdown';
 import { TypstPassage } from './TypstSnippet';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -489,7 +492,7 @@ function StepItem({ item, editOpen }: { item: ChatItem; editOpen: boolean }) {
       );
     }
     case 'assistant': {
-      const text = withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(item.text).text)));
+      const text = withoutAnswerBlocks(shownText(item.text));
       if (!text.trim()) return null;
       return (
         <Step tone="said" menu={itemMenu(item.text, 'Message')}>
@@ -520,6 +523,9 @@ function StepItem({ item, editOpen }: { item: ChatItem; editOpen: boolean }) {
 // ---- the reply -------------------------------------------------------------------------
 
 type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
+
+/** A reply's words as the chat shows them: without the markers, offers and questions the app reads. */
+const shownText = (text: string) => withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(text).text)));
 
 /** Options-mode reply: one card per option; picking one replaces the passage in the editor. */
 /** The options as written (Typst), or as they'd print; the last choice is the next reply's. */
@@ -716,7 +722,7 @@ function Byline({ by }: { by: TurnBy | undefined }) {
 
 /** The reply that ends a turn, under its byline. */
 function Reply({ item, by }: { item: AssistantItem; by: TurnBy | undefined }) {
-  const text = withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(item.text).text)));
+  const text = withoutAnswerBlocks(shownText(item.text));
   if (!item.options && !text.trim() && item.taskCheck !== 'ask' && !item.modeSuggestion) return null;
   return (
     <div className="reply" onContextMenu={itemMenu(item.text, 'Message')}>
@@ -909,15 +915,16 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
 }
 
 /** How a finished turn ended: in how long, the History version it made, and copy / try again. */
-function TurnFooter({ turn, last }: { turn: Turn; last: boolean }) {
+function TurnFooter({ turn, last, copy, answered }: { turn: Turn; last: boolean; copy?: string; answered?: boolean }) {
   const stopped = useStore(studio.store, (s) => last && s.agent.stopped);
   const running = useStore(studio.store, (s) => s.agent.running);
   const user = turn.user!;
   const failed = [...turn.steps, ...turn.after].some((it) => it.kind === 'notice' && it.tone === 'error');
   const time = user.at && user.ended ? turnTime(user.ended - user.at) : null;
   const outcome = failed ? 'failed' : stopped ? 'stopped' : 'done';
-  const words = outcome === 'done' ? (time ? `Done in ${time}` : 'Done') : outcome === 'stopped' ? `Stopped${time ? ` after ${time}` : ''}` : 'Didn’t finish';
-  const reply = turn.reply && withoutModeOffer(withoutMarker(splitQuestions(turn.reply.text).text)).trim();
+  const done = answered ? 'Answered' : 'Done';
+  const words = outcome === 'done' ? (time ? `${done} in ${time}` : done) : outcome === 'stopped' ? `Stopped${time ? ` after ${time}` : ''}` : 'Didn’t finish';
+  const reply = copy ?? (turn.reply && withoutAnswerBlocks(withoutModeOffer(withoutMarker(splitQuestions(turn.reply.text).text))).trim());
   return (
     <div className={`turn-foot ${outcome}`}>
       <span className="turn-outcome">
@@ -971,8 +978,19 @@ function FoldedTurn({ turn, onOpen }: { turn: Turn; onOpen: () => void }) {
   );
 }
 
+type TurnProps = { turn: Turn; last: boolean; running: boolean; onFold?: () => void };
+
+/** A turn: an Ask answer's card, or the steps and the reply. */
+function TurnView(props: TurnProps) {
+  const { turn, last, running } = props;
+  const answer = useMemo(() => answerOf(turnTexts(turn)), [turn]);
+  // An answer on its way in Ask mode is a card from the start, before its first block.
+  if (answer || (running && last && turn.user?.mode === 'ask')) return <AskTurn {...props} answer={answer} />;
+  return <PlainTurn {...props} />;
+}
+
 /** A turn: your message, the steps on their line, the reply, and how it ended. */
-function TurnView({ turn, last, running, onFold }: { turn: Turn; last: boolean; running: boolean; onFold?: () => void }) {
+function PlainTurn({ turn, last, running, onFold }: TurnProps) {
   // The first two edits show their words at once (short ones); the rest fold.
   const editIds = useMemo(() => {
     const open = new Set<string>();
@@ -1004,6 +1022,479 @@ function TurnView({ turn, last, running, onFold }: { turn: Turn; last: boolean; 
       )}
       {running && last && <ActivityLine />}
       {turn.user && !(running && last) && <TurnFooter turn={turn} last={last} />}
+    </div>
+  );
+}
+
+// ---- Ask mode's answer card ------------------------------------------------------------
+//
+// The question given back as the assistant understood it (Not quite?, or the
+// other reading it could have meant), how it found out (the steps, folded once
+// it's done), the answer and how sure, the places in the book that show it
+// (quoted from the book, and pinned on a map of the file) with any chart, its
+// reasoning, what it would change (Make this change), and what to ask next.
+
+/** What a turn's replies said, in order: before it looked, then its reply. */
+const turnTexts = (turn: Turn) => [...turn.steps, ...(turn.reply ? [turn.reply] : [])].flatMap((it) => (it.kind === 'assistant' ? [it.text] : []));
+
+const SURE: Record<Sure, { label: string; icon: IconName }> = {
+  certain: { label: 'Certain', icon: 'check' },
+  fairly: { label: 'Fairly sure', icon: 'minus' },
+  guess: { label: 'A guess', icon: 'help' },
+};
+
+/** Book files' text as it is now, one read each, again after each turn and each change made from the card. */
+function useFileTexts(paths: readonly string[], again: number): Map<string, string> {
+  const marks = useStore(studio.store, (s) => s.aiMarks);
+  const key = paths.join('\0');
+  const [texts, setTexts] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    let live = true;
+    const list = key ? key.split('\0') : [];
+    void Promise.all(list.map(async (p) => [p, await studio.textOf(p)] as const)).then((pairs) => {
+      if (live) setTexts(new Map(pairs.flatMap(([p, t]) => (t == null ? [] : [[p, t] as [string, string]]))));
+    });
+    return () => {
+      live = false;
+    };
+  }, [key, marks, again]);
+  return texts;
+}
+
+/** How many lines a file has (a last line break doesn't start another). */
+const lineCount = (text: string) => text.replace(/\n$/, '').split('\n').length;
+
+/** A place the answer points to, found in the book; `n`, its number on the card and the map. */
+type Place = AnswerPlace & { ref: SourceRef; n: number };
+
+/** The places that are in the book: a file it has, and a line the file has (once its text is known). */
+function placesIn(where: readonly AnswerPlace[], book: BookFiles | null, texts: Map<string, string>): Place[] {
+  if (!book) return [];
+  const out: Place[] = [];
+  for (const p of where) {
+    const ref = refNamed(book, p.place);
+    if (!ref) continue;
+    const text = texts.get(ref.path);
+    if (text != null && ref.line && ref.line > lineCount(text)) continue;
+    out.push({ ...p, ref, n: out.length + 1 });
+  }
+  return out;
+}
+
+const lineWords = (ref: SourceRef) => (!ref.line ? 'the file' : ref.endLine ? `lines ${ref.line}–${ref.endLine}` : `line ${ref.line}`);
+
+/** A place's words, quoted from the book: its line, or the first line with words in its lines. */
+function quoteAt(text: string | undefined, ref: SourceRef): string {
+  if (text == null || !ref.line) return '';
+  const lines = text.split('\n');
+  for (let n = ref.line; n <= Math.min(ref.endLine ?? ref.line, ref.line + 40, lines.length); n++) {
+    const q = quoteOf(lines[n - 1] ?? '');
+    if (q && !/^(#|\/\/)/.test(q)) return q.length > 240 ? `${q.slice(0, 239)}…` : q;
+  }
+  return '';
+}
+
+/** The file with its places on it: a pin for a line, a band for lines, and (pale blue) what the assistant read of it. */
+function PlaceMap({ path, total, places, reads, picked, onPick }: { path: string; total: number; places: Place[]; reads: { from: number; to: number }[]; picked: number | null; onPick: (p: Place) => void }) {
+  const title = useStore(studio.store, (s) => s.names.titles[path]);
+  const pct = (line: number) => `${Math.min(100, Math.max(0, ((line - 1) / Math.max(total, 1)) * 100))}%`;
+  const width = (from: number, to: number) => `${Math.min(100, ((to - from + 1) / Math.max(total, 1)) * 100)}%`;
+  // Pins close together take turns at two heights, so their numbers don't sit on each other.
+  let lastAt = -Infinity;
+  let lane = 0;
+  const pins = places
+    .filter((p) => p.ref.line)
+    .sort((a, b) => a.ref.line! - b.ref.line!)
+    .map((p) => {
+      const at = ((p.ref.line! - 1) / Math.max(total, 1)) * 100;
+      lane = at - lastAt < 5 ? 1 - lane : 0;
+      lastAt = at;
+      return { p, lane };
+    });
+  return (
+    <div className="place-map">
+      <div className="place-map-head">
+        <FileIcon path={path} />
+        <span className="place-map-name" title={path}>
+          {title ?? basename(path)}
+        </span>
+        <span className="place-map-total">{plural(total, 'line')}</span>
+      </div>
+      <div className="place-map-plot">
+        <span className="place-map-track" aria-hidden />
+        {reads.map((r, i) => (
+          <span key={`r${i}`} className="place-map-read" style={{ left: pct(r.from), width: width(r.from, r.to) }} title={`Read lines ${r.from}–${r.to}`} aria-hidden />
+        ))}
+        {pins
+          .filter(({ p }) => p.ref.endLine)
+          .map(({ p }) => (
+            <span key={`b${p.n}`} className={`place-band${picked === p.n ? ' on' : ''}`} style={{ left: pct(p.ref.line!), width: width(p.ref.line!, p.ref.endLine!) }} aria-hidden />
+          ))}
+        {pins.map(({ p, lane }) => (
+          <button key={p.n} className={`place-pin lane-${lane}${picked === p.n ? ' on' : ''}`} style={{ left: pct(p.ref.line!) }} title={`${p.label || lineWords(p.ref)}, ${lineWords(p.ref)}`} aria-label={`${p.n}: ${p.label || lineWords(p.ref)}, ${lineWords(p.ref)}`} onClick={() => onPick(p)}>
+            {p.n}
+          </button>
+        ))}
+      </div>
+      <div className="place-map-scale" aria-hidden>
+        <span>1</span>
+        <span>{total}</span>
+      </div>
+    </div>
+  );
+}
+
+/** One place: its number, label and line, the words there (the question's own words marked), and a note. A click shows it in the editor. */
+function PlaceRow({ place, text, terms, picked, file, onPick }: { place: Place; text: string | undefined; terms: string[]; picked: boolean; file: string | null; onPick: () => void }) {
+  const quote = quoteAt(text, place.ref);
+  return (
+    <li>
+      <button className={`place-row${picked ? ' on' : ''}`} title={`Show ${lineWords(place.ref)} of ${place.ref.path} in the editor`} onClick={onPick}>
+        <span className="place-head">
+          <span className="place-n" aria-hidden>
+            {place.n}
+          </span>
+          <span className="place-label">{place.label || lineWords(place.ref)}</span>
+          <span className="place-where">
+            {place.label ? lineWords(place.ref) : ''}
+            {file ? `${place.label ? ' · ' : ''}${file}` : ''}
+          </span>
+          <span className="place-show">
+            <Icon name="eye" size={12} />
+            {picked ? 'In the editor' : 'Show'}
+          </span>
+        </span>
+        {quote && (
+          <span className={`place-quote${looksLikeProse(quote) ? ' prose' : ''}`}>
+            {markPieces(quote, terms).map((p, i) => (p.mark ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>))}
+          </span>
+        )}
+        {place.note && (
+          <span className="place-note">
+            <MarkdownLine text={place.note} />
+          </span>
+        )}
+      </button>
+    </li>
+  );
+}
+
+/** A change the answer would make, word by word: Make this change (in the editor, or by Write mode when its words have moved), Copy; once made, Show and Undo. */
+function ChangeCard({ change, index, itemId, made, book }: { change: AnswerChange; index: number; itemId: string | null; made: 'here' | 'write' | undefined; book: BookFiles | null }) {
+  const running = useStore(studio.store, (s) => s.agent.running);
+  const ref = book && change.at ? refNamed(book, change.at) : null;
+  const pieces = useMemo(() => trimPieces(wordPieces(change.find, change.replace), 16), [change.find, change.replace]);
+  const ready = !!itemId && change.complete && !!change.replace;
+  return (
+    <div className="answer-change">
+      <div className="answer-change-head">
+        <span className="answer-change-why">{change.why ? <MarkdownLine text={change.why} /> : 'A change'}</span>
+        {ref && (
+          <span className="place-where" title={ref.path}>
+            {lineWords(ref)} · {basename(ref.path)}
+          </span>
+        )}
+      </div>
+      <DiffText pieces={pieces} prose={looksLikeProse(`${change.find} ${change.replace}`)} />
+      <div className="answer-change-actions">
+        {made === 'here' ? (
+          <>
+            <span className="answer-change-done">
+              <Icon name="check" size={12} />
+              Changed
+            </span>
+            <button className="small ghost" title="Select the new words in the editor" onClick={() => itemId && void studio.showAnswerChange(itemId, index)}>
+              Show
+            </button>
+            <button className="small ghost" title="Put the words back as they were (⌘Z brings the change back)" onClick={() => itemId && void studio.undoAnswerChange(itemId, index)}>
+              Undo
+            </button>
+          </>
+        ) : made === 'write' ? (
+          <span className="answer-change-done write">
+            <span className="mode-glyph" aria-hidden>
+              ✎
+            </span>
+            Went on in Write to make it
+          </span>
+        ) : (
+          <>
+            <button className="answer-make" disabled={!ready || running} title="Make it in the editor (⌘Z to undo); if the words have moved, Write mode makes it" onClick={() => itemId && void studio.applyAnswerChange(itemId, index)}>
+              Make this change
+            </button>
+            <button className="small" disabled={!change.replace} title="Copy the new words" onClick={() => copyText(change.replace)}>
+              Copy
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The answer card itself (AskTurn draws the turn around it). */
+function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; answer: AskAnswer | null; prose: string; charts: { body: string; closed: boolean }[]; live: boolean; canAsk: boolean }) {
+  const names = useStore(studio.store, (s) => s.names);
+  const book = useBookFiles();
+  const [stepsOpen, setStepsOpen] = useState<boolean | null>(null);
+  const [rephrase, setRephrase] = useState<string | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const steps = turn.steps.filter((it) => it.kind !== 'user');
+  // The reply that holds the changes (its record says which were made).
+  const changeItem = useMemo(() => [...turn.steps, ...(turn.reply ? [turn.reply] : [])].findLast((it): it is AssistantItem => it.kind === 'assistant' && (answerOf([it.text])?.changes.length ?? 0) > 0) ?? null, [turn]);
+  const madeCount = Object.keys(changeItem?.made ?? {}).length;
+  const paths = useMemo(() => {
+    const out: string[] = [];
+    for (const p of answer?.where ?? []) {
+      const ref = book && refNamed(book, p.place);
+      if (ref && !out.includes(ref.path)) out.push(ref.path);
+    }
+    return out;
+  }, [answer?.where, book]);
+  const texts = useFileTexts(paths, madeCount);
+  const places = useMemo(() => placesIn(answer?.where ?? [], book, texts), [answer?.where, book, texts]);
+  const terms = useMemo(() => markedTerms(answer?.asked ?? ''), [answer?.asked]);
+  const stats = useMemo(() => statsOf(steps, names.root, (it) => describeTool(it.name, it.input, names).done), [steps, names]);
+  const shown = stepsOpen ?? live;
+  const files = [...new Set(places.map((p) => p.ref.path))];
+  const user = turn.user;
+  const time = user?.at && user.ended ? turnTime(user.ended - user.at) : null;
+  const found = [stats.searches ? `searched ${plural(stats.searches, 'time')}` : '', stats.reads ? `read ${plural(stats.reads, 'passage')}` : ''].filter(Boolean).join(', ');
+  const summary = [found || (steps.length ? plural(steps.length, 'step') : 'from what it knew'), time].filter(Boolean).join(' · ');
+  const asked = answer?.asked ?? '';
+  const other = answer?.other ?? '';
+  const pick = (p: Place) => {
+    setPicked(p.n);
+    void studio.openRef(p.ref);
+  };
+  const reads = (path: string) => steps.flatMap((it) => (it.kind === 'tool' && it.read?.path === path ? [it.read] : []));
+  return (
+    <section className={`answer-card${live ? ' live' : ''}`} aria-label="The answer">
+      {(asked || live) && (
+        <div className="answer-asked">
+          <div className="answer-asked-head">
+            <span className="answer-glyph" aria-hidden>
+              ?
+            </span>
+            <span className="answer-label">{other ? 'I took it as' : 'You asked'}</span>
+            <span className="spacer" />
+            {asked && canAsk && rephrase == null && (
+              <button className="link answer-rephrase" title="Say what you meant, and it answers again" onClick={() => setRephrase(asked.replace(/[*_`]/g, ''))}>
+                Not quite?
+              </button>
+            )}
+          </div>
+          {asked ? (
+            <div className="answer-asked-q">
+              <MarkdownLine text={asked} />
+            </div>
+          ) : (
+            <div className="answer-asked-q shimmer">Reading your question…</div>
+          )}
+          {rephrase != null && (
+            <form
+              className="answer-rephrase-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const q = rephrase.trim();
+                setRephrase(null);
+                if (q) void studio.askAgain(q);
+              }}
+            >
+              <label htmlFor={`rephrase-${turn.key}`}>Say what you meant, and it answers again.</label>
+              <textarea
+                id={`rephrase-${turn.key}`}
+                rows={2}
+                value={rephrase}
+                autoFocus
+                onChange={(e) => setRephrase(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                  if (e.key === 'Escape') setRephrase(null);
+                }}
+              />
+              <div className="answer-rephrase-actions">
+                <button type="button" className="small" onClick={() => setRephrase(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="small answer-ask" disabled={!rephrase.trim()}>
+                  Ask again
+                </button>
+              </div>
+            </form>
+          )}
+          {other && (
+            <div className="answer-other">
+              <div className="answer-other-q">
+                <span className="muted">Or did you mean:</span> <MarkdownLine text={other} />
+              </div>
+              {canAsk && (
+                <button className="small answer-ask" onClick={() => void studio.askAgain(other.replace(/[*_`]/g, ''))}>
+                  Answer that instead
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {steps.length > 0 && (
+        <div className="answer-steps">
+          <button className="answer-steps-toggle" aria-expanded={shown} onClick={() => setStepsOpen(!shown)}>
+            <Icon name={shown ? 'chevronDown' : 'chevronRight'} size={12} />
+            <span className="turn-dot tone-look" aria-hidden />
+            <span>
+              <strong>{live ? 'How it’s finding out' : 'How it found out'}</strong>
+              {!live && `: ${summary}`}
+            </span>
+          </button>
+          {shown && (
+            <ol className="trace" aria-label="What the assistant did">
+              {steps.map((it) => (
+                <StepItem key={it.id} item={it} editOpen={false} />
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+
+      {(answer?.answer || prose || live) && (
+        <div className="answer-main">
+          <div className="answer-label">Answer</div>
+          {answer?.answer ? (
+            <div className="answer-headline md">
+              <Markdown text={answer.answer} />
+            </div>
+          ) : prose ? (
+            <div className={`msg assistant md${live ? ' streaming' : ''}`}>
+              <Markdown text={prose} />
+            </div>
+          ) : (
+            <div className="answer-skeleton" aria-label="The answer is on its way">
+              <span />
+              <span />
+              <div className="answer-skeleton-note">{asked ? 'Comes once it has looked.' : 'It’s reading your question.'}</div>
+            </div>
+          )}
+          {answer?.sure && (
+            <div className={`answer-sure sure-${answer.sure.level}`}>
+              <span className="answer-sure-icon" aria-hidden>
+                <Icon name={SURE[answer.sure.level].icon} size={11} />
+              </span>
+              <strong>{SURE[answer.sure.level].label}</strong>
+              {answer.sure.checked && (
+                <span className="answer-sure-checked">
+                  <MarkdownLine text={answer.sure.checked} />
+                </span>
+              )}
+            </div>
+          )}
+          {(answer?.stats.length ?? 0) > 0 && (
+            <div className="answer-stats">
+              {answer!.stats.map((s, i) => (
+                <div key={i} className="answer-stat">
+                  <span className="answer-stat-value">{s.value}</span>
+                  <span className="answer-stat-label">{s.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {(places.length > 0 || charts.length > 0) && (
+        <div className="answer-where">
+          <div className="answer-label">{places.length ? 'Where in the book' : 'What it found'}</div>
+          {charts.map((c, i) => (
+            <ChartBlock key={i} source={c.body} open={!c.closed} />
+          ))}
+          {files.slice(0, 3).map((path) => {
+            const text = texts.get(path);
+            const total = text == null ? 0 : lineCount(text);
+            const on = places.filter((p) => p.ref.path === path);
+            return total > 0 && on.some((p) => p.ref.line) ? <PlaceMap key={path} path={path} total={total} places={on} reads={reads(path)} picked={picked} onPick={pick} /> : null;
+          })}
+          {places.length > 0 && (
+            <ol className="place-list">
+              {places.map((p) => (
+                <PlaceRow key={p.n} place={p} text={texts.get(p.ref.path)} terms={terms} picked={picked === p.n} file={files.length > 1 ? basename(p.ref.path) : null} onPick={() => pick(p)} />
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+
+      {answer?.answer && prose && (
+        <div className="answer-why">
+          <div className="answer-label">Why</div>
+          <div className={`msg assistant md${live ? ' streaming' : ''}`}>
+            <Markdown text={prose} />
+          </div>
+        </div>
+      )}
+
+      {(answer?.changes.length ?? 0) > 0 && (
+        <div className="answer-changes">
+          <div className="answer-changes-head">
+            <span className="answer-change-glyph" aria-hidden>
+              <Icon name="edit" size={11} />
+            </span>
+            <span className="answer-label">What I’d change</span>
+          </div>
+          {answer!.changes.map((c, i) => (
+            <ChangeCard key={i} change={c} index={i} itemId={changeItem?.id ?? null} made={changeItem?.made?.[i]} book={book} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A turn in Ask mode: your message, the answer card, then what to ask next and how it ended. */
+function AskTurn({ turn, last, running, onFold, answer }: TurnProps & { answer: AskAnswer | null }) {
+  const busy = useStore(studio.store, (s) => s.agent.running);
+  const live = running && last;
+  const reply = turn.reply;
+  const { prose, charts } = useMemo(() => proseAndCharts(reply ? shownText(reply.text) : ''), [reply?.text]);
+  const copy = answer ? answerPlainText(answer, prose) : prose;
+  const canAsk = last && !busy;
+  return (
+    <div className={`turn ask-turn${last ? ' last' : ''}`}>
+      {turn.user && <UserCard item={turn.user} onFold={onFold} />}
+      <div className="reply" onContextMenu={itemMenu(copy, 'Answer')}>
+        <Byline by={turn.user?.by} />
+        <AskCard turn={turn} answer={answer} prose={prose} charts={charts} live={live} canAsk={canAsk} />
+        {reply?.taskCheck === 'ask' && <TaskCheck id={reply.id} />}
+        {reply?.modeSuggestion && <ModeChoice item={reply} />}
+      </div>
+      {canAsk && (answer?.next.length ?? 0) > 0 && (
+        <div className="answer-next" role="group" aria-label="Ask next">
+          <div className="answer-label">Ask next</div>
+          {answer!.next.map((n, i) => (
+            <button key={i} className={`answer-next-q${n.mode && n.mode !== 'ask' ? ` mode-${n.mode}` : ''}`} title={n.mode && n.mode !== 'ask' ? `Ask it in ${modeConfig(n.mode).label} mode` : 'Ask it'} onClick={() => void studio.askNext(n.text, n.mode)}>
+              <span className="answer-next-glyph" aria-hidden>
+                {n.mode ? modeConfig(n.mode).icon : '?'}
+              </span>
+              <span className="answer-next-text">
+                <MarkdownLine text={n.text} />
+              </span>
+              {n.mode && n.mode !== 'ask' && <span className="answer-next-mode">in {modeConfig(n.mode).label}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {turn.after.length > 0 && (
+        <ol className="trace after">
+          {turn.after.map((it) => (
+            <StepItem key={it.id} item={it} editOpen={false} />
+          ))}
+        </ol>
+      )}
+      {live && <ActivityLine />}
+      {turn.user && !live && <TurnFooter turn={turn} last={last} copy={copy} answered={!!answer?.answer} />}
     </div>
   );
 }

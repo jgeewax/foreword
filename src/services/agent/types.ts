@@ -9,7 +9,8 @@ import type { SourceSelection } from '../../editor/selection';
  * to the assistant's text, or the turns of the conversation another assistant
  * had (app/mode-setups.ts).
  */
-export type MessageContext = { selection: SourceSelection; stale: boolean } | { authorEdits: AuthorEdit[] } | { earlier: string };
+/** What goes with a message: a selection, the author's edits, another assistant's turns, or the mode's reminder of how to reply. */
+export type MessageContext = { selection: SourceSelection; stale: boolean } | { authorEdits: AuthorEdit[] } | { earlier: string } | { reminder: string };
 
 export type ModelRef = { providerID: string; id: string };
 

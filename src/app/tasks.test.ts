@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatAuthorEdits } from '../services/agent/author-edits';
+import { ASK_REMINDER } from '../services/agent/ask-mode';
+import { messageText } from '../services/agent/message-context';
 import { asksTaskDone, contextTokens, itemsFromContext, readsFromContext, splitUserText, TASK_INSTRUCTIONS, TASK_MARKER, withoutMarker } from './tasks';
 
 describe('the task-done marker', () => {
@@ -94,5 +96,12 @@ describe('restoring a conversation', () => {
       { path: 'ch2.typ', from: 9, to: 8, wrote: 'C', now: '' },
     ])}`;
     expect(splitUserText(sent)).toEqual({ text: 'Tighten it', attachments: ['Your edit: ch1.typ:4–5', 'Your edit: ch2.typ:9'] });
+  });
+
+  it('leaves out the mode’s reminder of how to reply', () => {
+    const sent = messageText('Is chapter 3 too long?', [{ selection: { relativePath: 'ch3.typ', start: { line: 2, column: 1 }, end: { line: 4, column: 1 }, selectedText: 'x', documentVersion: 1 } as never, stale: false }, { reminder: ASK_REMINDER }]);
+    expect(sent.endsWith(ASK_REMINDER)).toBe(true);
+    expect(splitUserText(sent).text).toBe('Is chapter 3 too long?');
+    expect(splitUserText(`Why?\n\n${ASK_REMINDER}`)).toEqual({ text: 'Why?', attachments: [] });
   });
 });

@@ -8,7 +8,7 @@ import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 import type { AgentMode } from '../services/agent/modes';
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
-import { EARLIER_CHIP, EARLIER_INTRO } from '../services/agent/message-context';
+import { EARLIER_CHIP, EARLIER_INTRO, REMINDER_START } from '../services/agent/message-context';
 import { questionFromTool, splitQuestions } from '../services/agent/questions';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
@@ -58,8 +58,8 @@ export type TaskSummary = { sessionId: string; title: string; status: 'open' | '
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The context Foreword appends to a message: selections (editor/selection.ts), the author's edits (agent/author-edits.ts) and another assistant's turns (mode-setups.ts). */
-const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)})[\\s\\S]*$`);
+/** The context Foreword appends to a message: selections (editor/selection.ts), the author's edits (agent/author-edits.ts), another assistant's turns (mode-setups.ts) and the mode's reminder (modes.ts). */
+const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)}|${escape(REMINDER_START)})[\\s\\S]*$`);
 
 /** User message text as the author typed it, plus the labels of what was attached. */
 export function splitUserText(text: string): { text: string; attachments: string[] } {

@@ -3,6 +3,7 @@ import { ASK_INSTRUCTIONS } from './ask-mode';
 import { FIGURES_INSTRUCTIONS, FIGURE_PACKAGES } from './figures-mode';
 import { DISCUSS_INSTRUCTIONS } from './discuss-mode';
 import { AGENT_MODES, modeChoiceMessage, modeConfig, modeNamed, modeOffer, nextMode, withoutModeOffer } from './modes';
+import { REMINDER_START } from './message-context';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
 
 describe('modeConfig', () => {
@@ -76,10 +77,19 @@ describe('modeConfig', () => {
     expect(modeOffer(`\`\`\`mode\nmode: options\nthere: ${'x'.repeat(900)}\nhere: y\n\`\`\``)?.there).toHaveLength(600);
   });
 
-  it('Ask answers first, and leaves the change for Go ahead', () => {
+  it('Ask gives the question back first, as a question, and leaves the change for the card or Go ahead', () => {
     const { instructions, carryOut } = modeConfig('ask');
-    expect(instructions).toMatch(/Answer the question first/);
-    expect(instructions).toMatch(/Don't make the change/);
+    expect(instructions).toMatch(/Before you read or search anything, give the question back/);
+    expect(instructions).toMatch(/as a question in the author's voice .*never "Whether…"/);
+    expect(instructions).toMatch(/put the other on an `other:` line, also as a question, rather than asking which/);
+    expect(instructions).toMatch(/every reply in this mode as an answer card.*a request to check or review a passage/);
+    expect(instructions).toMatch(/don't ask which to make or whether to, with your question tool or in words: here that takes the place of asking the author/);
+    expect(instructions).toMatch(/press Make this change on the card, or Go ahead/);
     expect(carryOut?.prompt).toMatch(/If we didn't settle on a change, say so/);
+  });
+
+  it('only Ask sends a reminder with each message, and the chat knows where it starts', () => {
+    expect(AGENT_MODES.filter((m) => modeConfig(m).reminder)).toEqual(['ask']);
+    expect(modeConfig('ask').reminder?.startsWith(REMINDER_START)).toBe(true);
   });
 });

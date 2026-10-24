@@ -5,7 +5,7 @@
 // usual mode (never Claude Code's or Codex's plan mode, which write their
 // answer to a file and ask to leave), the app's rules block changes when it's
 // read-only, and an instruction entry shapes the reply.
-import { ASK_INSTRUCTIONS, GO_AHEAD_PROMPT } from './ask-mode';
+import { ASK_INSTRUCTIONS, ASK_REMINDER, GO_AHEAD_PROMPT } from './ask-mode';
 import { DISCUSS_INSTRUCTIONS, WRITE_FROM_DISCUSSION_PROMPT } from './discuss-mode';
 import { FIGURES_INSTRUCTIONS } from './figures-mode';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
@@ -41,6 +41,8 @@ export type ModeConfig = {
   carryOut: { question: string; label: string; prompt: string } | null;
   /** Going on in this mode, on the button of the assistant's offer of it (modeOffer). */
   go: string;
+  /** Sent with every message in the mode, after the author's words: how to reply (null: nothing). */
+  reminder: string | null;
 };
 
 /**
@@ -105,6 +107,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         notice: 'Ask mode: the agent answers in the chat, and can’t change files.',
         carryOut: { question: 'Want it changed?', label: 'Go ahead', prompt: GO_AHEAD_PROMPT },
         go: 'Just answer',
+        reminder: ASK_REMINDER,
       };
     case 'discuss':
       return {
@@ -117,6 +120,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         notice: 'Discuss mode: the agent weighs ideas with you and argues back, and can’t change files.',
         carryOut: { question: 'Settled?', label: 'Write it', prompt: WRITE_FROM_DISCUSSION_PROMPT },
         go: 'Talk it through',
+        reminder: null,
       };
     case 'options':
       return {
@@ -129,6 +133,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         notice: 'Options mode: select text and ask for a change; you’ll get three versions to choose from.',
         carryOut: null,
         go: 'Show three versions',
+        reminder: null,
       };
     case 'figures':
       return {
@@ -141,6 +146,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         notice: 'Figures mode: diagrams, charts, illustrations and tables, drawn as code you can see in the preview.',
         carryOut: null,
         go: 'Draw it',
+        reminder: null,
       };
     case 'write':
       return {
@@ -153,6 +159,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         notice: 'Write mode: the agent writes and edits the book.',
         carryOut: null,
         go: 'Write it',
+        reminder: null,
       };
   }
 }

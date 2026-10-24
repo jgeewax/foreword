@@ -4014,6 +4014,89 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   comment directives, a language inherited through `#text(lang:, include …)`,
   `.bib` titles.
 
+### Ask's answer card (2026-10-24)
+
+- **Asked for:** "for ask mode, i really want it to have a UI that shows we
+  understood the question and came up with an answer. can we make its
+  response be structured and we show it with a UI that makes this clear?"
+  Mockup first (a Design canvas: the answer, while it works, two readings,
+  not in the book, the reply format). Then: "i want to phrase the question
+  AS a QUESTION, not 'whether…'", and "it requires support for rendering
+  charts and stuff though also. can you implement all of that?"
+- **The card** (Trace.tsx `AskTurn`/`AskCard`, in Ask's teal): **You asked**,
+  the question given back as the assistant understood it, as a question in
+  the author's voice ("Do I use *orthogonal* before I define it?"), with
+  **Not quite?** (say what you meant; sent as "I meant: …" in Ask). When the
+  question could mean two things it says **I took it as**, answers the
+  likelier reading, and offers the other: **Or did you mean: …?** with
+  **Answer that instead**. Then **How it found out**, the turn's steps, open
+  while it works and folded to "searched 2 times, read 3 passages · 9 s"
+  after. Then the **Answer**: a sentence or two, bold, with **how sure**
+  (Certain, Fairly sure, A guess, and what it checked) and up to four stats.
+  **Where in the book**: numbered places, each quoted from the book itself
+  (its line, the question's emphasised words marked), pinned on a map of the
+  file with what the assistant read of it in pale blue; a click opens the
+  editor there. **Why**, the reply's prose. **What I'd change**: a word diff
+  per change with **Make this change**, then **Ask next**: a follow-up or
+  two, one perhaps for another mode ("in Discuss").
+- **The format** (ask-answer.ts, ask-mode.ts): fenced blocks the chat reads
+  and hides, as with the `mode` block. An `answer` block with `asked` (and `other`)
+  written *before* the assistant looks, so the card shows its understanding
+  while it works; a second with `answer`, `sure`, `where`, `stat`, `next`;
+  the prose; a `change` block per change (`at`, `find`, `replace`, `why`).
+  Later fields win, so writing it all once at the end works too. A block
+  still streaming fills the card line by line; a place waits for the end of
+  its line (`ch03.typ:7` of `:76`). A place the book doesn't have, or a line
+  past the file's end, is dropped, and the quote is the book's, so the card
+  can't misquote it.
+- **Why a card from the start:** a turn sent in Ask is drawn as a card
+  before its first block ("Reading your question…"), so the steps don't jump
+  into it later. Conversations come back from the assistant without the
+  mode, so a reopened turn is a card when its replies have the blocks; a
+  reply without them is drawn as before (another assistant, an older chat).
+- **Make this change makes it in the editor**, as Options puts an option
+  in: an ordinary edit, ⌘Z to undo, saved with the file; the card then says
+  Changed, with Show and Undo. The words are found near the line the block
+  names (the one place they are, or the nearest within 60 lines). When they
+  can't be found (changed since, or misquoted), Write mode makes it from a
+  message naming just that change. The mockup sent every change to Write;
+  making it at once is quicker, and Write is still there for what can't be.
+  Go ahead still makes everything discussed.
+- **Charts** (chart.ts, Chart.tsx): a `chart` block of bars, `bar: label |
+  value | *` (the `*` marks the bars the answer is about), `mark: value |
+  label` for a dashed reference line, `title`, `unit`. Drawn in any reply
+  (Markdown.tsx), and in the card with the places. Up to eight bars lie as
+  rows with their values; more stand as columns, the marked ones' values
+  written over them, a tip on hover. One series, from zero, grey with the
+  marked ones in colour; anything it can't read shows as written. Ask's
+  instructions ask for one only for numbers it counted.
+- **The question tool:** Foreword's general instructions say to ask "which
+  of several fixes" with the question tool. In Ask that's what the change
+  blocks are for, and Haiku, asked to check a paragraph, wrote a draft in the
+  prose and then asked which option and whether to apply it. Ask's
+  instructions now say every reply is a card, whatever was asked, that a
+  change is a block and never a draft in the prose, and that it doesn't ask
+  which to make or whether to. That wasn't enough on its own (the same
+  review, the same question), so **every message in Ask carries a reminder**
+  after the author's words, a sentence on the reply's shape
+  (`ModeConfig.reminder`, a `reminder` message context). A conversation
+  opened again shows the author's words without it (tasks.ts), as it does a
+  selection's context.
+- Copy (and the Tasks view's search) take the answer as plain text, not the
+  blocks. The footer says "Answered in 9 s".
+- Verified: unit tests (ask-answer.test.ts, chart.test.ts, modes, tasks);
+  the `askcard` self-test, from made-up replies in both themes (the card
+  before and after You asked, the steps folding, places quoted and pinned,
+  the one not in the book dropped, a place opening the editor at its line,
+  Make this change and Undo, a misquoted change going to Write, the messages
+  Not quite?, Answer that instead and Ask next send, a reply without blocks
+  drawn as before); and `claude-ask` with Claude Code's Haiku on the sample
+  book: "where do i talk about orthogonal vectors" gave You asked before it
+  searched, then three places, all found and quoted; "check the first
+  paragraph… what you'd change" gave a card with two places and two changes
+  and no question; "make that change now" tried nothing and pointed to Make
+  this change and Go ahead; Go ahead made both in Write.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

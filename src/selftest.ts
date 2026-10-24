@@ -18,6 +18,7 @@ import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
 import { afterNextPaint, clock, LatencyStats } from './lib/perf';
 import { menuRecorder, type MenuEntry } from './lib/context-menu';
 import { rawEventTap } from './services/agent/opencode';
+import { answerOf } from './services/agent/ask-answer';
 import { parseOptions } from './services/agent/options-mode';
 import { formFromElicitation } from './services/agent/questions';
 import { PRESETS } from './services/agent/permissions';
@@ -1485,6 +1486,184 @@ async function optionsDoneChecks() {
  * (through the agent event handler), so no model is needed. Never saves;
  * undoes everything. Scratch book only.
  */
+/**
+ * Ask mode's answer card, from made-up replies (no model): the card while the
+ * answer comes (before and after "You asked"), then done: the answer, how
+ * sure, the stats, a chart, the places quoted from the book and pinned on the
+ * file, Why, a change made in the editor and undone, one whose words aren't
+ * there (Write makes it), Not quite?, Answer that instead and Ask next (the
+ * messages they send), and a reply without blocks drawn as before. In both
+ * themes. Edits the buffer only, and puts it back.
+ */
+async function askCardChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  const s = studio as any;
+  const SID = 'selftest-askcard';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const line = model.getLinesContent().findIndex((l) => l.includes('Two vectors are orthogonal')) + 1;
+  const saved = { mode: studio.state.agent.mode, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items, running: studio.state.agent.running };
+  const { send, setMode } = studio;
+  const sent: { text: string; mode: string }[] = [];
+  studio.send = async (text: string) => {
+    sent.push({ text, mode: studio.state.agent.mode });
+    return true;
+  };
+  studio.setMode = async (mode) => {
+    studio.store.set((st) => ({ agent: { ...st.agent, mode } }));
+  };
+  const card = () => [...document.querySelectorAll('.answer-card')].pop() ?? null;
+  // Pictures at a readable size, of the whole chat: a screenful at a time, from the top.
+  const zoom = studio.state.zoom;
+  const pictures = async (name: string) => {
+    const scroller = document.querySelector<HTMLElement>('.agent-pane .transcript');
+    const shots: unknown[] = [];
+    for (let i = 0, at = 0; i < 6; i++) {
+      if (scroller) scroller.scrollTop = at;
+      await sleep(150);
+      shots.push(await snap(`${name}-${i}`));
+      if (!scroller || at + scroller.clientHeight >= scroller.scrollHeight) break;
+      at += Math.round(scroller.clientHeight * 0.8);
+    }
+    return shots;
+  };
+  const text = (sel: string) => card()?.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+  const reply = (id: string, body: string) => s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: id, ordinal: 0, text: body });
+  const EARLY = '```answer\nasked: Do I define *orthogonal* before I use it in chapter 1?\nother: Do I define it anywhere in the book?\n```';
+  const FINAL = [
+    '```answer',
+    `answer: Yes. Line ${line} defines it as it first uses it, after inner products.`,
+    'sure: certain | read the whole chapter',
+    `where: ${file}:${line} | Definition | Says what it means`,
+    `where: ch1-vectors.typ:27-31 | Inner products`,
+    `where: chapters/nowhere.typ:3 | Not in the book`,
+    'stat: 1 | use',
+    'stat: 41 | lines read',
+    'next: Do I use it in chapter 2?',
+    'next: Should it get its own heading? | discuss',
+    '```',
+    '',
+    `It comes in the same sentence that defines it (${file}:${line}).`,
+    '',
+    '```chart',
+    'title: Uses by chapter',
+    'bar: Ch 1 | 1 | *',
+    'bar: Ch 2 | 0',
+    '```',
+    '',
+    '```change',
+    `at: ${file}:${line}`,
+    'find: Two vectors are orthogonal',
+    'replace: Two vectors are _orthogonal_ (perpendicular)',
+    'why: Gloss it',
+    '```',
+    '```change',
+    `at: ${file}:${line}`,
+    'find: words that are not in the file',
+    'replace: other words',
+    'why: Misquoted',
+    '```',
+  ].join('\n');
+  try {
+    studio.store.set((st) => ({ agent: { ...st.agent, sessionId: SID, running: true, mode: 'ask', items: [{ kind: 'user', id: 'u1', text: 'is orthogonal defined before i use it', attachments: [], at: Date.now() - 9000, mode: 'ask' }], attachments: [], queued: [] } }));
+    studio.events.emit('show-agent-pane');
+    await studio.setZoom(1.25, { persist: false, write: false });
+    await sleep(250);
+    out.beforeAsked = { card: !!card(), asked: text('.answer-asked-q'), waiting: !!card()?.querySelector('.answer-asked-q.shimmer'), skeleton: !!card()?.querySelector('.answer-skeleton') };
+    reply('m1', EARLY);
+    studio.store.set((st) => ({ agent: { ...st.agent, items: [...st.agent.items, { kind: 'tool', id: 't1', name: 'read', summary: file, status: 'running', detail: '', input: { filePath: file }, read: { path: file, from: 1, to: 41 }, started: Date.now() }] } }));
+    await sleep(250);
+    out.working = {
+      label: text('.answer-asked-head .answer-label'),
+      asked: text('.answer-asked-q'),
+      other: text('.answer-other-q'),
+      stepsOpen: card()?.querySelector('.answer-steps-toggle')?.getAttribute('aria-expanded'),
+      liveStep: !!card()?.querySelector('.trace-step.live'),
+      skeleton: !!card()?.querySelector('.answer-skeleton'),
+      noRephraseWhileRunning: !card()?.querySelector('.answer-rephrase'),
+      snapshot: await pictures('askcard-working'),
+    };
+    studio.store.set((st) => ({ agent: { ...st.agent, items: st.agent.items.map((it) => (it.kind === 'tool' ? { ...it, status: 'done', ended: Date.now() } : it)) } }));
+    reply('m2', FINAL);
+    studio.store.set((st) => ({ agent: { ...st.agent, running: false, items: st.agent.items.map((it) => (it.kind === 'user' ? { ...it, ended: Date.now() } : it)) } }));
+    await setAppTheme('light');
+    await sleep(600);
+    const c = card();
+    out.done = {
+      cards: document.querySelectorAll('.answer-card').length,
+      stepsOpen: c?.querySelector('.answer-steps-toggle')?.getAttribute('aria-expanded'),
+      steps: text('.answer-steps-toggle'),
+      headline: text('.answer-headline'),
+      sure: text('.answer-sure'),
+      stats: [...(c?.querySelectorAll('.answer-stat') ?? [])].map((e) => e.textContent),
+      chart: { bars: c?.querySelectorAll('.chart-row').length, on: c?.querySelector('.chart-row.on .chart-row-label')?.textContent },
+      maps: c?.querySelectorAll('.place-map').length,
+      pins: [...(c?.querySelectorAll('.place-pin') ?? [])].map((e) => e.textContent),
+      bands: c?.querySelectorAll('.place-band').length,
+      places: [...(c?.querySelectorAll('.place-row') ?? [])].map((r) => ({ label: r.querySelector('.place-label')?.textContent, where: r.querySelector('.place-where')?.textContent, quote: r.querySelector('.place-quote')?.textContent, marked: [...r.querySelectorAll('mark')].map((m) => m.textContent) })),
+      why: text('.answer-why'),
+      changes: [...(c?.querySelectorAll('.answer-change') ?? [])].map((e) => ({ why: e.querySelector('.answer-change-why')?.textContent, cut: [...e.querySelectorAll('del')].map((d) => d.textContent), put: [...e.querySelectorAll('ins')].map((d) => d.textContent) })),
+      next: [...document.querySelectorAll('.answer-next-q')].map((b) => b.textContent),
+      footer: !!document.querySelector('.turn-foot'),
+      blocksHidden: !document.querySelector('.agent-pane')?.textContent?.includes('```'),
+      snapshot: await pictures('askcard-done'),
+    };
+    await setAppTheme(null);
+    // A place: the editor at its line.
+    c?.querySelectorAll<HTMLButtonElement>('.place-row')[0]?.click();
+    await sleep(400);
+    out.showPlace = { active: studio.state.active, line: editor.getPosition()?.lineNumber, want: line, shown: card()?.querySelector('.place-row.on .place-show')?.textContent };
+    // Make this change: in the editor; Undo puts it back.
+    card()?.querySelectorAll<HTMLButtonElement>('.answer-make')[0]?.click();
+    await sleep(500);
+    out.made = { line: model.getLineContent(line), state: (studio.state.agent.items.find((i) => i.id === 'm2:0') as any)?.made, card: card()?.querySelector('.answer-change .answer-change-done')?.textContent };
+    [...(card()?.querySelectorAll<HTMLButtonElement>('.answer-change button') ?? [])].find((b) => b.textContent === 'Undo')?.click();
+    await sleep(500);
+    out.undone = { line: model.getLineContent(line), back: model.getValue() === original, state: (studio.state.agent.items.find((i) => i.id === 'm2:0') as any)?.made };
+    // Words that aren't in the file: Write mode makes it.
+    card()?.querySelectorAll<HTMLButtonElement>('.answer-make')[1]?.click();
+    await sleep(400);
+    out.misquoted = { sent: sent.splice(0), mode: studio.state.agent.mode, card: [...(card()?.querySelectorAll('.answer-change-done') ?? [])].map((e) => e.textContent) };
+    studio.store.set((st) => ({ agent: { ...st.agent, mode: 'ask' } }));
+    // Not quite? and Answer that instead.
+    card()?.querySelector<HTMLButtonElement>('.answer-rephrase')?.click();
+    await sleep(200);
+    const area = card()?.querySelector<HTMLTextAreaElement>('.answer-rephrase-form textarea');
+    out.rephraseBox = area?.value ?? null;
+    card()?.querySelector<HTMLFormElement>('.answer-rephrase-form')?.requestSubmit();
+    await sleep(200);
+    card()?.querySelector<HTMLButtonElement>('.answer-other button')?.click();
+    await sleep(200);
+    document.querySelectorAll<HTMLButtonElement>('.answer-next-q')[1]?.click();
+    await sleep(200);
+    out.sent = sent.splice(0);
+    studio.store.set((st) => ({ agent: { ...st.agent, mode: 'ask' } }));
+    // Dark.
+    try {
+      await setAppTheme('dark');
+      await sleep(500);
+      out.darkSnapshot = await pictures('askcard-dark');
+    } finally {
+      await setAppTheme(null);
+    }
+    // A reply without the blocks: drawn as before.
+    studio.store.set((st) => ({ agent: { ...st.agent, items: [...st.agent.items, { kind: 'user', id: 'u2', text: 'And chapter 2?', attachments: [], at: Date.now(), ended: Date.now(), mode: 'ask' }] } }));
+    reply('m3', 'Chapter 2 never uses it.');
+    await sleep(300);
+    out.plainReply = { cards: document.querySelectorAll('.answer-card').length, lastIsPlain: [...document.querySelectorAll('.turn')].pop()?.classList.contains('ask-turn') === false };
+  } finally {
+    studio.send = send;
+    studio.setMode = setMode;
+    await studio.setZoom(zoom, { persist: false, write: false });
+    if (model.getValue() !== original) model.setValue(original);
+    studio.store.set((st) => ({ agent: { ...st.agent, ...saved } }));
+  }
+  return out;
+}
+
 async function optionsPassageChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
@@ -7947,8 +8126,44 @@ async function askModeChecks() {
   await studio.setMode('ask');
   const hashBefore = await ipc.fsHash(file);
   const waited: string[] = [];
+  // The answer card a turn gave: what the replies said in their blocks, and what the card shows.
+  const cardOf = (from: number) => {
+    const texts = studio.state.agent.items.slice(from).flatMap((i) => (i.kind === 'assistant' ? [i.text] : []));
+    const a = answerOf(texts);
+    const card = [...document.querySelectorAll('.answer-card')].pop();
+    const words = (sel: string) => card?.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+    return {
+      blocks: !!a,
+      // "You asked" written before it looked: a reply with `asked` before the turn's first tool.
+      askedBeforeLooking: (() => {
+        const items = studio.state.agent.items.slice(from);
+        const tool = items.findIndex((i) => i.kind === 'tool');
+        const asked = items.findIndex((i) => i.kind === 'assistant' && !!answerOf([i.text])?.asked);
+        return asked >= 0 && (tool < 0 || asked < tool);
+      })(),
+      parsed: a && { asked: a.asked, other: a.other, answer: a.answer, sure: a.sure, where: a.where, stats: a.stats, next: a.next, changes: a.changes.map((c) => ({ at: c.at, find: c.find, replace: c.replace })) },
+      shown: card ? { asked: words('.answer-asked-q'), headline: words('.answer-headline'), sure: words('.answer-sure'), places: card.querySelectorAll('.place-row').length, quotes: [...card.querySelectorAll('.place-quote')].map((q) => q.textContent), charts: card.querySelectorAll('.chart').length, changes: card.querySelectorAll('.answer-change').length, why: !!card.querySelector('.answer-why') } : null,
+      raw: texts.join('\n---\n').slice(0, 2500),
+    };
+  };
 
+  // Where in the book: the question back first, then the places.
+  {
+    const from = studio.state.agent.items.length;
+    await settleTurn('where do i talk about orthogonal vectors', waited);
+    out.where = { ...cardOf(from), ...turnTools(from), waited: waited.splice(0) };
+    try {
+      out.whereSnapshot = await ipc.previewSnapshot('ask-card', 'main');
+    } catch (e) {
+      out.whereSnapshot = errorMessage(e);
+    }
+    studio.newSession();
+    await studio.setMode('ask');
+  }
+
+  const answerFrom = studio.state.agent.items.length;
   const answer = await settleTurn(`Can you check the first paragraph of ${file}? Explain to me what you'd change before changing anything.`, waited);
+  out.answerCard = cardOf(answerFrom);
   out.answer = {
     model: studio.state.agent.model,
     instructionKeys: (await studio.agent!.getInstructions(studio.state.agent.sessionId!)).map((e) => e.key),
@@ -9138,6 +9353,7 @@ export async function runSelftest(launch: LaunchOptions) {
     }
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
+    if (only?.includes('askcard')) result.askcard = await askCardChecks();
     if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
@@ -9290,6 +9506,10 @@ export async function runSelftest(launch: LaunchOptions) {
         result.askMode = await askModeChecks();
       }
       // Ask and Discuss with Claude Code, whose own plan mode Plan (now Discuss) once used.
+      if (only?.includes('claude-ask')) {
+        log('ask mode, Claude Code');
+        result.claudeAsk = await withClaude(async () => ({ ask: await askModeChecks() }));
+      }
       if (want('claude-modes')) {
         log('ask and discuss modes, Claude Code');
         result.claudeModes = await withClaude(async () => ({ ask: await askModeChecks(), discuss: await discussModeChecks() }));

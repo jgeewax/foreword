@@ -4,12 +4,13 @@ import { parseMarkdown, type Block, type Inline } from '../lib/markdown';
 import { bookFiles, linkBlocks, refTitle, type BookFiles, type SourceRef } from '../lib/source-links';
 import { useStore } from '../lib/store';
 import { mathSource } from '../lib/typst-render';
+import { ChartBlock } from './Chart';
 import { TypstPassage, TypstSnippet } from './TypstSnippet';
 
 let shared: { files: string[]; root: string; book: BookFiles } | null = null;
 
 /** The open book's files, to find the places a reply points to: one table for every reply. */
-function useBookFiles(): BookFiles | null {
+export function useBookFiles(): BookFiles | null {
   const ws = useStore(studio.store, (s) => s.workspace);
   if (!ws) return null;
   if (shared?.files !== ws.files || shared.root !== ws.root) shared = { files: ws.files, root: ws.root, book: bookFiles(ws.files, ws.root) };
@@ -91,6 +92,8 @@ function block(b: Block, k: number): ReactNode {
           </div>
         );
       }
+      // A chart the reply asks for, drawn.
+      if (/^chart$/i.test(b.lang ?? '')) return <ChartBlock key={k} source={b.v} open={!!b.open} />;
       return <pre key={k} className="md-code" data-lang={b.lang || undefined}>{b.v}</pre>;
     case 'math': {
       // An equation on lines of its own, set as the book sets it; as written until it's all there, or if it can't be set.

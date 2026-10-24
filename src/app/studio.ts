@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { isPicture, tildePath } from '../lib/paths';
-import type { SourceRef } from '../lib/source-links';
+import { bookFiles, refNamed, type SourceRef } from '../lib/source-links';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type MergeQuestion } from '../editor/documents';
 import { definitions, toMonacoRange, uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
@@ -75,6 +75,8 @@ import { OpenCodeAdapter } from '../services/agent/opencode';
 import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
+import { answerOf, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
+import { changePrompt, meantMessage } from '../services/agent/ask-mode';
 import { parseOptions } from '../services/agent/options-mode';
 import { closestOurs, locatePassage, type PassageAt } from './option-passage';
 import { STYLE_TEMPLATES } from '../style-guides';
@@ -162,10 +164,22 @@ export type ChatItem =
       ended?: number;
       /** Who answered: the assistant, its model's name and the effort, as they were. */
       by?: TurnBy;
+      /** The mode it was sent in (this window's turns only: a conversation opened again doesn't say). */
+      mode?: AgentMode;
       /** The History version of what the turn changed (null: it changed nothing). */
       version?: string | null;
     }
-  | { kind: 'assistant'; id: string; text: string; done: boolean; options?: OptionsState; taskCheck?: 'ask' | 'dismissed'; modeSuggestion?: ModeSuggestion }
+  | {
+      kind: 'assistant';
+      id: string;
+      text: string;
+      done: boolean;
+      options?: OptionsState;
+      taskCheck?: 'ask' | 'dismissed';
+      modeSuggestion?: ModeSuggestion;
+      /** An Ask answer's changes made from its card, by number: in the editor, or sent to Write mode to make. */
+      made?: Record<number, 'here' | 'write'>;
+    }
   /**
    * The assistant asks (choices, several choices, yes or no, or its own words)
    * and waits: the question panel takes the composer's place until it's
@@ -2443,14 +2457,17 @@ export class Studio {
     editor.focus();
   }
 
-  /** From the chat: put back what one edit replaced (in the editor, so ⌘Z brings the edit back). */
-  async undoEdit(path: string, before: string, after: string) {
+  /** From the chat: put back what one edit replaced (in the editor, so ⌘Z brings the edit back). Whether it could. */
+  async undoEdit(path: string, before: string, after: string): Promise<boolean> {
     await this.openFile(path);
     const editor = this.editor;
     const model = editor?.getModel();
-    if (!editor || !model || this.state.active !== path) return;
+    if (!editor || !model || this.state.active !== path) return false;
     const found = after ? model.findMatches(after, false, false, true, null, false, 2) : [];
-    if (found.length !== 1) return this.toast(found.length ? 'That text is in the file more than once: undo it there, or in History.' : 'That text has changed since the assistant wrote it: undo it in History.', 'error');
+    if (found.length !== 1) {
+      this.toast(found.length ? 'That text is in the file more than once: undo it there, or in History.' : 'That text has changed since the assistant wrote it: undo it in History.', 'error');
+      return false;
+    }
     const range = found[0].range;
     editor.pushUndoStop();
     editor.executeEdits('undo-assistant-edit', [{ range, text: before, forceMoveMarkers: true }]);
@@ -2460,6 +2477,7 @@ export class Studio {
     editor.setSelection(monaco.Range.fromPositions(start, end));
     editor.revealRangeInCenterIfOutsideViewport(monaco.Range.fromPositions(start, end));
     this.toast('Edit undone (⌘Z to bring it back).');
+    return true;
   }
 
   /** From the chat: open the file with the lines the assistant read selected. */
@@ -3807,7 +3825,7 @@ export class Studio {
       const sessionId = this.state.agent.sessionId;
       // Its latest reply, for the Tasks view's search.
       const reply = [...this.state.agent.items].reverse().find((it) => it.kind === 'assistant' && it.text.trim());
-      if (sessionId && reply?.kind === 'assistant') this.updateTaskRecord(sessionId, { said: plainLine(withoutMarker(reply.text), 300) });
+      if (sessionId && reply?.kind === 'assistant') this.updateTaskRecord(sessionId, { said: plainLine(answerOf([reply.text])?.answer || withoutAnswerBlocks(withoutMarker(reply.text)), 300) });
       void this.history.afterAgent(this.turnMessage).then((turn) => {
         this.recordTurn(sessionId, turn);
         if (turnId && this.state.agent.sessionId === sessionId) this.updateItem(turnId, (it) => (it.kind === 'user' ? { ...it, version: turn.created } : it));
@@ -4267,12 +4285,123 @@ export class Studio {
     await this.send(modeChoiceMessage(s, go));
   }
 
+  /** The mode's reminder of how to reply, to go with a message (Ask's answer card). */
+  private modeReminder(mode: AgentMode): MessageContext[] {
+    const reminder = modeConfig(mode).reminder;
+    return reminder ? [{ reminder }] : [];
+  }
+
   /** "Write it" (Discuss) and "Go ahead" (Ask): back to Write mode, to make what was agreed. */
   async carryOut() {
     const carry = modeConfig(this.state.agent.mode).carryOut;
     if (!carry) return;
     await this.setMode('write');
     if (this.state.agent.mode === 'write') await this.send(carry.prompt);
+  }
+
+  // ---- Ask mode's answer card (ask-answer.ts) -----------------------------------------------
+
+  /** A question sent from an answer card (Ask next, Not quite?, Answer that instead), in its mode: Ask unless it says. */
+  async askNext(text: string, mode: AgentMode | null = null) {
+    if (this.state.agent.running || !text.trim()) return;
+    const to = mode ?? 'ask';
+    await this.setMode(to);
+    if (this.state.agent.mode === to) await this.send(text);
+  }
+
+  /** "Not quite?" and "Answer that instead": the question as the author meant it, answered again. */
+  askAgain(question: string) {
+    return this.askNext(meantMessage(question));
+  }
+
+  /** Change `index` of an answer, as the reply wrote it, and the book file its `at` names. */
+  private answerChange(itemId: string, index: number): { change: AnswerChange; ref: SourceRef | null } | null {
+    const item = this.state.agent.items.find((i) => i.id === itemId);
+    const change = item?.kind === 'assistant' ? answerOf([item.text])?.changes[index] : undefined;
+    if (!change?.complete) return null;
+    const ws = this.state.workspace;
+    return { change, ref: ws && change.at ? refNamed(bookFiles(ws.files, ws.root), change.at) : null };
+  }
+
+  /**
+   * Where a change's words are in its file, opened in the editor: the one
+   * place they are, or the one nearest the line it names (a few lines off is
+   * fine; the assistant counts loosely). Null if they aren't there.
+   */
+  private async changeRange(ref: SourceRef, change: AnswerChange): Promise<monaco.Range | null> {
+    await this.openFile(ref.path).catch(() => {});
+    const model = this.editor?.getModel();
+    if (!model || this.state.active !== ref.path || model !== this.docs?.get(ref.path)?.model) return null;
+    const unquoted = change.find.trim().replace(/^["“'`](.*)["”'`]$/s, '$1');
+    for (const words of [...new Set([change.find, change.find.trim(), unquoted])]) {
+      if (!words) continue;
+      const found = model.findMatches(words, false, false, true, null, false);
+      if (found.length === 1) return found[0].range;
+      if (found.length > 1 && ref.line) {
+        const near = found.map((f) => ({ f, d: Math.abs(f.range.startLineNumber - ref.line!) })).sort((a, b) => a.d - b.d);
+        if (near[0].d <= 60 && (near.length < 2 || near[1].d > near[0].d)) return near[0].f.range;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * "Make this change" on an answer card: made in the editor, as Options puts
+   * an option in (an ordinary edit: ⌘Z takes it back, and it's saved with
+   * the file). When its words can't be found there (changed since, or
+   * misquoted), Write mode makes it instead.
+   */
+  async applyAnswerChange(itemId: string, index: number) {
+    if (this.state.agent.running) return;
+    const found = this.answerChange(itemId, index);
+    if (!found) return;
+    const { change, ref } = found;
+    const made = (how: 'here' | 'write' | null) =>
+      this.updateItem(itemId, (it) => {
+        if (it.kind !== 'assistant') return it;
+        const m = { ...it.made };
+        if (how) m[index] = how;
+        else delete m[index];
+        return { ...it, made: m };
+      });
+    const range = ref ? await this.changeRange(ref, change) : null;
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!range || !editor || !model) {
+      await this.setMode('write');
+      if (this.state.agent.mode !== 'write') return;
+      made('write');
+      await this.send(changePrompt(change));
+      return;
+    }
+    const start = range.getStartPosition();
+    editor.pushUndoStop();
+    editor.executeEdits('ask-change', [{ range, text: change.replace, forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+    const put = monaco.Range.fromPositions(start, model.getPositionAt(model.getOffsetAt(start) + change.replace.length));
+    editor.setSelection(put);
+    editor.revealRangeInCenterIfOutsideViewport(put);
+    made('here');
+    this.toast('Changed (⌘Z to undo).');
+  }
+
+  /** An answer's change made in the editor, taken back from its card (⌘Z brings it back). */
+  async undoAnswerChange(itemId: string, index: number) {
+    const found = this.answerChange(itemId, index);
+    if (!found?.ref) return;
+    if (!(await this.undoEdit(found.ref.path, found.change.find, found.change.replace))) return;
+    this.updateItem(itemId, (it) => {
+      if (it.kind !== 'assistant') return it;
+      const m = { ...it.made };
+      delete m[index];
+      return { ...it, made: m };
+    });
+  }
+
+  /** An answer's change made in the editor: its new words, selected. */
+  async showAnswerChange(itemId: string, index: number) {
+    const found = this.answerChange(itemId, index);
+    if (found?.ref) await this.showEdit(found.ref.path, found.change.replace);
   }
 
   newSession() {
@@ -4745,7 +4874,7 @@ export class Studio {
       stopped: false,
       attachments: [],
       activity: { phase: 'sending', since: Date.now() },
-      items: [...a.items, { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(earlier ? [EARLIER_CHIP] : [])], at: Date.now(), by: this.turnBy() }],
+      items: [...a.items, { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(earlier ? [EARLIER_CHIP] : [])], at: Date.now(), by: this.turnBy(), mode: a.mode }],
     }));
     const unsend = (why: string) => {
       this.setAgent((a) => ({ running: false, attachments, items: a.items.filter((it) => it.id !== userId) }));
@@ -4772,6 +4901,7 @@ export class Studio {
       })),
       ...(edits.length ? [{ authorEdits: edits }] : []),
       ...(earlier ? [{ earlier }] : []),
+      ...this.modeReminder(state.mode),
     ];
     this.optionsTurn = optionsTurn && this.turnAsItIs(optionsTurn);
     try {
@@ -4890,10 +5020,13 @@ export class Studio {
     const tempId = uid('q');
     this.setAgent((a) => ({ attachments: [], queued: [...a.queued, { id: tempId, text, attachments: attachments.map((x) => x.label), delivery, sending: true }] }));
     const failures = (await docs?.saveAll()) ?? [];
-    const context = attachments.map((x) => ({
-      selection: x.selection,
-      stale: docs?.get(x.selection.relativePath)?.model.getVersionId() !== x.selection.documentVersion,
-    }));
+    const context: MessageContext[] = [
+      ...attachments.map((x) => ({
+        selection: x.selection,
+        stale: docs?.get(x.selection.relativePath)?.model.getVersionId() !== x.selection.documentVersion,
+      })),
+      ...this.modeReminder(this.state.agent.mode),
+    ];
     try {
       if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
       const inboxId = (await agent.send(sessionId, text, context, delivery)) ?? tempId;
@@ -4925,7 +5058,7 @@ export class Studio {
     }
     this.setAgent((a) => ({
       queued: a.queued.filter((m) => m.id !== inboxId),
-      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, at: Date.now(), by: this.turnBy() }],
+      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, at: Date.now(), by: this.turnBy(), mode: a.mode }],
     }));
   }
 

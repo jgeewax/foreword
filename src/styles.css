@@ -1146,11 +1146,11 @@ button.link.quiet { color: var(--muted); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
 /* Each mode's colour: its button under the message box, the assistant's offer of it, and your pick of it (Trace.tsx). */
-:is(.mode-way, .mode-choice-record, .user-action) { --mode: var(--accent); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-ask { --mode: #1f8fa5; }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-discuss { --mode: var(--milestone); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-options { --mode: var(--good); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action).mode-figures { --mode: #a35bd6; }
+:is(.mode-way, .mode-choice-record, .user-action, .answer-next-q) { --mode: var(--accent); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-ask { --mode: #1f8fa5; }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-discuss { --mode: var(--milestone); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-options { --mode: var(--good); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-figures { --mode: #a35bd6; }
 .mode-icon { width: 14px; text-align: center; }
 .mode-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding-top: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .mode-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; border: none; border-radius: 0; background: transparent; padding: 6px 10px; white-space: normal; height: auto; }
@@ -2264,3 +2264,158 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .tasks-empty-title { font-weight: 600; color: var(--fg); }
 .tasks-empty p { margin: 0; font-size: 12px; line-height: 1.45; }
 .tasks-empty-line { padding: 12px 14px; font-size: 12px; }
+
+/*
+ * Ask mode's answer card, in Ask's teal: the question as it was understood, how it found out,
+ * the answer and how sure, the places in the book (quoted from it, pinned on the file), any
+ * chart, the reasoning, and what it would change (in the purple of a change).
+ */
+.agent-pane { --answer: #1f8fa5; --answer-ink: #17717f; --change-strong: var(--change); --change-on: var(--bg); --change-ink: var(--change); --ok-ink: var(--ok); --warn-ink: var(--warn); }
+@media (prefers-color-scheme: dark) {
+  .agent-pane { --answer: #3aa9bd; --answer-ink: #6cc9d8; }
+}
+/* On a light ground, the colours as text need more ink. */
+@media (prefers-color-scheme: light) {
+  .agent-pane { --change-strong: color-mix(in srgb, var(--change) 72%, #000); --change-on: #fff; --change-ink: color-mix(in srgb, var(--change) 70%, #000); --ok-ink: color-mix(in srgb, var(--ok) 82%, #000); --warn-ink: color-mix(in srgb, var(--warn) 80%, #000); }
+  .answer-next-q.mode-discuss, .answer-next-q.mode-options { --mode: color-mix(in srgb, var(--milestone) 75%, #000); }
+}
+.answer-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid color-mix(in srgb, var(--answer) 32%, var(--border)); border-radius: 12px; background: var(--bg); overflow: hidden; -webkit-user-select: text; user-select: text; }
+.answer-card > * + * { border-top: 1px solid var(--border); }
+.answer-card > .answer-asked + * { border-top-color: color-mix(in srgb, var(--answer) 22%, var(--border)); }
+.answer-label { font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.answer-asked { padding: 9px 12px 11px; background: color-mix(in srgb, var(--answer) 8%, var(--bg)); }
+.answer-asked-head { display: flex; align-items: center; gap: 7px; }
+.answer-asked-head .answer-label { color: var(--answer-ink); }
+.answer-glyph { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--answer); color: var(--bg); font-size: 11px; font-weight: 700; line-height: 1; }
+button.link.answer-rephrase { font-size: 11.5px; color: var(--answer-ink); }
+.answer-asked-q { margin-top: 5px; font-size: 13px; line-height: 1.45; }
+.answer-rephrase-form { display: flex; flex-direction: column; gap: 6px; margin-top: 9px; }
+.answer-rephrase-form label { font-size: 11.5px; color: var(--muted); }
+.answer-rephrase-form textarea { width: 100%; resize: vertical; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--answer) 45%, var(--border)); border-radius: 8px; background: var(--bg); color: var(--fg); font: 13px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+.answer-rephrase-actions { display: flex; justify-content: flex-end; gap: 6px; }
+button.answer-ask { height: 24px; background: var(--answer-ink); border-color: var(--answer-ink); color: var(--bg); font-weight: 600; }
+.answer-other { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; margin-top: 9px; padding: 8px 10px; border: 1px dashed color-mix(in srgb, var(--answer) 55%, var(--border)); border-radius: 9px; background: var(--bg); }
+.answer-other-q { font-size: 12.5px; line-height: 1.45; }
+.answer-steps { padding: 7px 12px 8px; }
+.answer-steps-toggle { display: flex; align-items: center; gap: 7px; width: 100%; height: auto; padding: 2px 0; border: none; background: none; color: var(--muted); font-size: 12px; text-align: left; white-space: normal; }
+.answer-steps-toggle:hover:not(:disabled) { color: var(--fg); }
+.answer-steps-toggle strong { font-weight: 650; color: color-mix(in srgb, var(--fg) 78%, var(--muted)); }
+.answer-steps .trace { margin-top: 10px; }
+.answer-main, .answer-where, .answer-why, .answer-changes { padding: 10px 12px 12px; }
+.answer-headline { margin-top: 4px; font-size: 15px; line-height: 1.42; font-weight: 600; letter-spacing: -0.005em; }
+.answer-headline p { margin: 0; }
+.answer-headline p + p { margin-top: 6px; }
+.answer-card .msg.assistant { margin-top: 4px; font-size: 13px; line-height: 1.55; color: color-mix(in srgb, var(--fg) 90%, var(--muted)); }
+.answer-skeleton { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.answer-skeleton > span { display: block; height: 11px; border-radius: 4px; background: var(--bg-3); animation: answer-wait 1.8s ease-in-out infinite; }
+.answer-skeleton > span:first-child { width: 92%; }
+.answer-skeleton > span:nth-child(2) { width: 64%; }
+.answer-skeleton-note { margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+@keyframes answer-wait { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .answer-skeleton > span { animation: none; } }
+.answer-sure { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+.answer-sure strong { font-weight: 650; }
+.answer-sure-icon { flex: none; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; }
+.answer-sure-icon .icon-svg { stroke-width: 3; }
+.sure-certain .answer-sure-icon { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.sure-certain strong { color: var(--ok-ink); }
+.sure-fairly .answer-sure-icon { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.sure-fairly strong { color: var(--warn-ink); }
+.sure-guess .answer-sure-icon { color: var(--muted); background: var(--bg-3); }
+.sure-guess strong { color: var(--fg); }
+.answer-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; margin-top: 10px; }
+.answer-stat { display: flex; flex-direction: column; min-width: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2); }
+.answer-stat-value { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.answer-stat-label { font-size: 11px; line-height: 1.3; color: var(--muted); }
+.answer-where { display: flex; flex-direction: column; gap: 9px; }
+.answer-why .msg.assistant { margin-top: 4px; }
+
+/* A file with the answer's places on it: pins for lines, bands for runs of lines, and what was read (pale blue). */
+.place-map { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.place-map-head { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: var(--muted); }
+.place-map-head .file-icon { transform: scale(0.85); }
+.place-map-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.place-map-total { flex: none; font: 10.5px var(--mono); }
+.place-map-plot { position: relative; height: 34px; margin: 0 9px; }
+.place-map-track { position: absolute; left: 0; right: 0; top: 22px; height: 4px; border-radius: 2px; background: var(--bg-3); }
+.place-map-read { position: absolute; top: 22px; height: 4px; min-width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--look) 50%, transparent); }
+.place-band { position: absolute; top: 20px; height: 8px; min-width: 3px; border-radius: 3px; background: color-mix(in srgb, var(--answer) 50%, transparent); }
+.place-band.on { background: var(--answer); }
+.place-pin { position: absolute; top: 15px; z-index: 1; width: 18px; height: 18px; margin-left: -9px; padding: 0; border: 2px solid var(--answer); border-radius: 50%; background: var(--bg); color: var(--answer-ink); font-size: 9.5px; font-weight: 700; line-height: 14px; text-align: center; transition: transform 0.1s; }
+.place-pin.lane-1 { top: 0; }
+.place-pin:hover:not(:disabled) { transform: scale(1.12); border-color: var(--answer); }
+.place-pin.on { background: var(--answer); color: var(--bg); }
+.place-map-scale { display: flex; justify-content: space-between; margin: 0 9px; font: 10px var(--mono); color: var(--muted); }
+.place-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.place-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 100%; height: auto; padding: 8px 10px 9px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--fg); text-align: left; white-space: normal; }
+.place-row:hover:not(:disabled) { border-color: color-mix(in srgb, var(--answer) 50%, var(--border)); }
+.place-row.on { border-color: var(--answer); background: color-mix(in srgb, var(--answer) 6%, var(--bg)); }
+.place-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.place-n { flex: none; width: 16px; height: 16px; border: 2px solid var(--answer); border-radius: 50%; color: var(--answer-ink); font-size: 9.5px; font-weight: 700; line-height: 12px; text-align: center; }
+.place-row.on .place-n { background: var(--answer); color: var(--bg); }
+.place-label { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
+.place-where { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); color: var(--muted); }
+.place-show { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--accent); }
+.place-row.on .place-show { color: var(--answer-ink); }
+.place-quote { font: 12px/1.5 var(--mono); color: color-mix(in srgb, var(--fg) 86%, var(--muted)); word-wrap: break-word; }
+.place-quote.prose { font: 13.5px/1.5 var(--serif); }
+.place-quote mark { padding: 0 2px; border-radius: 3px; background: color-mix(in srgb, var(--answer) 24%, transparent); color: inherit; }
+.place-note { font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+
+/* What it would change: the words, as an edit shows them, and Make this change. */
+.answer-changes { display: flex; flex-direction: column; gap: 9px; background: color-mix(in srgb, var(--change) 3%, var(--bg)); }
+.answer-changes-head { display: flex; align-items: center; gap: 7px; }
+.answer-changes-head .answer-label { color: var(--change-ink); }
+.answer-change-glyph { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--change); background: color-mix(in srgb, var(--change) 16%, transparent); }
+.answer-change-glyph .icon-svg { stroke-width: 2.4; }
+.answer-change { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.answer-change-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12.5px; }
+.answer-change-why { flex: none; max-width: 60%; font-weight: 600; }
+.answer-change .diff-text { border: 1px solid var(--border); border-radius: 9px; background: var(--bg-2); }
+.answer-change-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+button.answer-make { height: 26px; padding: 0 12px; border-color: var(--change-strong); background: var(--change-strong); color: var(--change-on); font-size: 12px; font-weight: 600; }
+.answer-change-actions button.small { height: 26px; }
+.answer-change-done { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--ok-ink); }
+.answer-change-done.write { font-weight: 500; color: var(--muted); }
+.answer-change-done.write .mode-glyph { color: var(--change); }
+
+/* What to ask next, under the card: a click asks it (in its mode). */
+.answer-next { display: flex; flex-direction: column; gap: 6px; }
+.answer-next-q { --mode: var(--answer-ink); display: flex; align-items: center; gap: 8px; width: 100%; height: auto; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); font-size: 12.5px; text-align: left; white-space: normal; }
+.answer-next-q:hover:not(:disabled) { border-color: color-mix(in srgb, var(--mode) 50%, var(--border)); background: var(--bg-2); }
+.answer-next-glyph { flex: none; width: 14px; text-align: center; font-weight: 700; color: var(--mode); }
+.answer-next-text { flex: 1; min-width: 0; }
+.answer-next-mode { flex: none; font-size: 11px; color: var(--mode); }
+
+/* A ```chart in a reply: one series of bars from zero, the ones it's about in colour, reference lines dashed. */
+.chart { --chart-on: var(--accent); --chart-on-ink: var(--fg); --chart-off: color-mix(in srgb, var(--muted) 58%, var(--bg)); display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 4px 0 10px; }
+.answer-where .chart { --chart-on: var(--answer); --chart-on-ink: var(--answer-ink); margin: 0 0 2px; }
+.chart-title { display: flex; align-items: baseline; gap: 8px; font-size: 12px; font-weight: 650; color: var(--fg); }
+.chart-unit { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--muted); }
+.chart-columns .chart-plot { position: relative; display: flex; align-items: stretch; gap: 2px; height: 76px; margin-top: 16px; border-bottom: 1px solid color-mix(in srgb, var(--muted) 50%, transparent); }
+.chart-col { position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end; }
+.chart-bar { position: relative; display: block; width: 100%; min-height: 1px; border-radius: 4px 4px 0 0; background: var(--chart-on); }
+.chart.some-on .chart-bar, .chart.some-on .chart-fill { background: var(--chart-off); }
+.chart.some-on .on .chart-bar, .chart.some-on .on .chart-fill { background: var(--chart-on); }
+.chart-col.hover .chart-bar { filter: brightness(0.85); }
+.chart-col-value { position: absolute; left: 50%; bottom: 100%; margin-bottom: 2px; transform: translateX(-50%); font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--chart-on-ink); }
+.chart-mark-h { position: absolute; left: 0; right: 0; z-index: 1; height: 0; border-top: 1px dashed color-mix(in srgb, var(--muted) 85%, transparent); pointer-events: none; }
+.chart-tip { position: absolute; bottom: calc(100% + 4px); z-index: 2; transform: translateX(-50%); padding: 3px 7px; border-radius: 6px; background: var(--fg); color: var(--bg); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.chart-axis { position: relative; height: 14px; font: 10px var(--mono); color: var(--muted); }
+.chart-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.chart-axis span.first { transform: none; }
+.chart-axis span.last { transform: translateX(-100%); }
+.chart-axis span.on { font-weight: 700; color: var(--chart-on-ink); }
+.chart-rows .chart-plot { display: flex; flex-direction: column; gap: 5px; }
+.chart-row { display: grid; grid-template-columns: minmax(0, 34%) 1fr auto; align-items: center; gap: 8px; font-size: 12px; }
+.chart-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: color-mix(in srgb, var(--fg) 85%, var(--muted)); }
+.chart-row.on .chart-row-label { font-weight: 600; color: var(--fg); }
+.chart-track { position: relative; height: 10px; }
+.chart-fill { position: absolute; left: 0; top: 0; bottom: 0; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--chart-on); }
+.chart-fill.zero, .chart-bar.zero { min-width: 0; min-height: 0; }
+.chart-mark-v { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1px dashed color-mix(in srgb, var(--muted) 85%, transparent); }
+.chart-row-value { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.chart-row.on .chart-row-value { font-weight: 600; color: var(--fg); }
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); }
+.chart-key-mark { display: inline-block; width: 14px; height: 0; margin-right: 5px; border-top: 1px dashed currentColor; vertical-align: 3px; }
+.chart-pending { margin: 4px 0 10px; font-size: 12px; }
