@@ -85,6 +85,22 @@ export type AppSettings = {
   toolPaths: Partial<Record<ToolName, string>>;
   /** Which program runs the writing assistant. */
   assistant: AssistantId;
+  /** Check spelling while typing: red squiggles (Edit ▸ Spelling and Grammar). */
+  checkSpelling: boolean;
+  /** Check grammar with spelling: blue squiggles. */
+  checkGrammar: boolean;
+  /** Style suggestions too (wordiness, house style): dotted purple underlines. */
+  checkStyle: boolean;
+  /** Check the words in code: raw blocks, the names a file defines, code files. */
+  checkCode: boolean;
+  /** As Word's "Ignore words in UPPERCASE": acronyms aren't flagged. */
+  ignoreUppercase: boolean;
+  /** As Word's "Ignore words that contain numbers". */
+  ignoreNumbers: boolean;
+  /** The language of a book that doesn't say ("en-GB"; '' for the Mac's). */
+  spellingLanguage: string;
+  /** Grammar rules turned on or off in every book, over Foreword's choice (proof/mod.rs BOOK_RULES). */
+  proofRules: Record<string, boolean>;
   /** Look for a new version of Foreword when it starts. */
   checkForUpdates: boolean;
   /** A version the author chose to skip: not offered at start ('' for none). */
@@ -111,6 +127,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   previewScope: 'book',
   toolPaths: {},
   assistant: 'opencode',
+  checkSpelling: true,
+  checkGrammar: true,
+  checkStyle: false,
+  checkCode: true,
+  ignoreUppercase: true,
+  ignoreNumbers: true,
+  spellingLanguage: '',
+  proofRules: {},
   checkForUpdates: true,
   skippedUpdate: '',
 };
@@ -198,8 +222,22 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (raw.previewScope === 'book' || raw.previewScope === 'chapter') out.previewScope = raw.previewScope;
   if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
   if (ASSISTANTS.includes(raw.assistant as AssistantId)) out.assistant = raw.assistant as AssistantId;
+  for (const k of ['checkSpelling', 'checkGrammar', 'checkStyle', 'checkCode', 'ignoreUppercase', 'ignoreNumbers'] as const) {
+    if (typeof raw[k] === 'boolean') out[k] = raw[k];
+  }
+  if (typeof raw.spellingLanguage === 'string' && (raw.spellingLanguage === '' || /^[a-z]{2,3}(-[A-Z]{2})?$/.test(raw.spellingLanguage))) out.spellingLanguage = raw.spellingLanguage;
+  const rules = sanitizeRules(raw.proofRules);
+  if (rules) out.proofRules = rules;
   if (typeof raw.checkForUpdates === 'boolean') out.checkForUpdates = raw.checkForUpdates;
   if (typeof raw.skippedUpdate === 'string' && /^[\w.+-]{0,40}$/.test(raw.skippedUpdate)) out.skippedUpdate = raw.skippedUpdate;
+  return out;
+}
+
+/** Grammar rules on or off, by Harper's name for them ("AnA"). */
+export function sanitizeRules(raw: unknown): Record<string, boolean> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(raw).slice(0, 1000)) if (/^[A-Za-z][A-Za-z0-9]{0,79}$/.test(k) && typeof v === 'boolean') out[k] = v;
   return out;
 }
 

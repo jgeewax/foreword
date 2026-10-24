@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-proof-language"
+description = "Enables the proof_language command without any pre-configured scope."
+commands.allow = ["proof_language"]
+
+[[permission]]
+identifier = "deny-proof-language"
+description = "Denies the proof_language command without any pre-configured scope."
+commands.deny = ["proof_language"]

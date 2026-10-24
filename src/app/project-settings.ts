@@ -2,6 +2,7 @@
 // non-secret, per-book settings. Unknown keys are preserved when saving.
 import { normalizeHex } from './book-color';
 import { rulesFrom } from '../services/agent/command-rules';
+import { sanitizeRules } from './settings';
 
 export const PROJECT_FILE = '.foreword.json';
 
@@ -28,6 +29,10 @@ export type ProjectSettings = {
    * status bars; "none" for none, even where VS Code's Peacock gives it one.
    */
   color?: string;
+  /** The language the book is checked in ("en-GB"), over what its Typst says (spelling and grammar). */
+  language?: string;
+  /** Grammar rules on or off in this book, over the author's own (Settings ▸ Spelling & Grammar). */
+  proofRules?: Record<string, boolean>;
 };
 
 export type ParsedProjectSettings = {
@@ -57,6 +62,9 @@ export function parseProjectSettings(text: string | null): ParsedProjectSettings
   if ('alwaysAllow' in r || 'neverAllow' in r || 'allowCommands' in r) Object.assign(settings, rulesFrom(r));
   const color = r.color === 'none' ? 'none' : normalizeHex(r.color);
   if (color) settings.color = color;
+  if (typeof r.language === 'string' && /^[a-z]{2,3}(-[A-Z]{2})?$/.test(r.language)) settings.language = r.language;
+  const rules = sanitizeRules(r.proofRules);
+  if (rules) settings.proofRules = rules;
   return { settings, raw: r, error: null };
 }
 
@@ -80,7 +88,8 @@ export function serializeProjectSettings(raw: Record<string, unknown>, patch: Pr
   // Commands allowed by name, from before rules: they're among alwaysAllow now.
   if ('alwaysAllow' in patch || 'neverAllow' in patch) delete next.allowCommands;
   for (const [k, v] of Object.entries(next)) {
-    if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) delete next[k];
+    const emptyObject = !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0;
+    if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0) || emptyObject) delete next[k];
   }
   return JSON.stringify(next, null, 2) + '\n';
 }

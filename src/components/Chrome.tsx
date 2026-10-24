@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { countsLabel } from '../app/proofing-core';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Stat } from '../app/studio';
 import { numberedTitle } from '../app/tool-labels';
@@ -97,6 +98,7 @@ export function StatusBar() {
   const active = useStore(studio.store, (s) => s.active);
   const cursor = useStore(studio.store, (s) => s.cursor);
   const problems = useStore(studio.store, (s) => s.problems);
+  const proofing = useStore(studio.store, (s) => countsLabel(s.active ? s.proofing.counts[s.active] : undefined));
   const compile = useStore(studio.store, (s) => s.compile);
   const preview = useStore(studio.store, (s) => s.preview);
   const agent = useStore(studio.store, (s) => s.agent.status);
@@ -164,6 +166,7 @@ export function StatusBar() {
             title="Typst warnings (hover the yellow squiggles in the editor)"
           />
         )}
+        {proofing && <Indicator icon="edit" label={proofing} title="Spelling and grammar in this file: go to the next mistake (⌘;)" onClick={() => studio.nextSpelling()} />}
         {compileLabel && (
           <Indicator
             tone={compileTone}

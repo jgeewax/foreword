@@ -9,6 +9,11 @@ describe('parseProjectSettings', () => {
     expect(p.error).toBeNull();
   });
 
+  it('reads the book’s language and grammar rules', () => {
+    expect(parseProjectSettings('{"language":"en-GB","proofRules":{"AnA":false}}').settings).toEqual({ language: 'en-GB', proofRules: { AnA: false } });
+    expect(parseProjectSettings('{"language":"British"}').settings).toEqual({});
+  });
+
   it('reads the book’s colour: a hex colour, or none', () => {
     expect(parseProjectSettings('{"color":"#00AD9F"}').settings.color).toBe('#00ad9f');
     expect(parseProjectSettings('{"color":"none"}').settings.color).toBe('none');
@@ -37,6 +42,10 @@ describe('validateProjectSettings', () => {
 });
 
 describe('serializeProjectSettings', () => {
+  it('drops a rule list emptied out', () => {
+    expect(JSON.parse(serializeProjectSettings({ proofRules: { AnA: false }, outputDir: 'x' }, { proofRules: {} }))).toEqual({ outputDir: 'x' });
+  });
+
   it('merges over existing keys, preserves unknown ones, and drops empty values', () => {
     const text = serializeProjectSettings({ entryPoint: 'main.typ', custom: true, outputDir: 'old' }, { outputDir: '', fontPaths: [] });
     expect(JSON.parse(text)).toEqual({ entryPoint: 'main.typ', custom: true });

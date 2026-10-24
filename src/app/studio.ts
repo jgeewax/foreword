@@ -16,7 +16,7 @@ import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
 import type { SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
-import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
+import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DialectHint, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
 import type { SnippetBook } from '../lib/typst-render';
@@ -43,6 +43,8 @@ import { labelPlaces, referenceAt } from './labels';
 import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
+import { initialProofing, Proofing, type ProofingState } from './proofing';
+import { bookLanguage, languageName, PROOFING_KEYS, proofOptions } from './proofing-core';
 import { History, initialHistory, type HistoryState } from './history';
 import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
@@ -362,6 +364,8 @@ export type StudioState = {
   questions: Record<string, MergeQuestion[]>;
   cursor: { line: number; column: number } | null;
   problems: { errors: number; warnings: number };
+  /** Spelling and grammar: each open file's mistakes, counted (proofing.ts). */
+  proofing: ProofingState;
   compile: { status: 'idle' | 'compiling' | 'ok' | 'error'; pages?: number; words?: number };
   preview: { status: 'off' | 'starting' | 'ready' | 'error'; url?: string; error?: string };
   agent: {
@@ -511,6 +515,7 @@ const initialState: StudioState = {
   questions: {},
   cursor: null,
   problems: { errors: 0, warnings: 0 },
+  proofing: initialProofing,
   compile: { status: 'idle' },
   preview: { status: 'off' },
   agent: {
@@ -768,6 +773,52 @@ export class Studio {
     refreshFiles: () => this.refreshFiles(),
   });
   private codeScanTimer: number | undefined;
+  /** Spelling and grammar, for each open file (proofing.ts; the checking is in Rust, proof/). */
+  readonly proofing = new Proofing({
+    docs: () => this.docs,
+    editor: () => this.editor,
+    options: () => {
+      const { settings, project, workspace } = this.state;
+      if (!workspace) return null;
+      return proofOptions(settings, project.settings, bookLanguage(project.settings, this.typstLanguage, settings, navigator.language), []);
+    },
+    set: (update) => this.store.set((s) => ({ proofing: update(s.proofing) })),
+    log: (text) => void ipc.uiLog(text),
+    disableRule: (rule, scope) => {
+      if (scope === 'book') void this.updateProjectSettings({ proofRules: { ...this.state.project.settings.proofRules, [rule]: false } }).then(() => this.proofing.recheckAll());
+      else this.updateSettings({ proofRules: { ...this.state.settings.proofRules, [rule]: false } });
+    },
+    dialect: (hint) => this.offerDialect(hint),
+  });
+  /** Books offered another English this session (offerDialect). */
+  private dialectOffered = new Set<string>();
+
+  /**
+   * A book whose words are spelled as in British English, say, but checked as
+   * American (its Typst says `lang: "en"`, the Mac is in en-US): offered, once a
+   * session, to check it as British English (This book ▸ Spelling).
+   */
+  private offerDialect(hint: DialectHint) {
+    const root = this.state.workspace?.root;
+    if (!root || this.state.project.settings.language || this.dialectOffered.has(root)) return;
+    this.dialectOffered.add(root);
+    const name = languageName(hint.tag);
+    const words = hint.words.map((w) => `“${w}”`).join(', ');
+    this.toast(`Words like ${words} are spelled as in ${name}. Check this book as ${name}?`, 'info', [
+      { label: `Use ${name}`, run: () => void this.updateProjectSettings({ language: hint.tag }) },
+    ]);
+  }
+  /** The language the book's Typst sets (`set text(lang: "en", region: "gb")`), for spelling. */
+  private typstLanguage: string | null = null;
+
+  /** Look up the language the book's Typst sets again (its files saved, its settings read); a new one checks again. */
+  private async refreshTypstLanguage() {
+    const entry = this.state.workspace?.entry;
+    const lang = entry ? await ipc.proofLanguage(entry).catch(() => null) : null;
+    if (lang === this.typstLanguage) return;
+    this.typstLanguage = lang;
+    this.proofing.recheckAll();
+  }
   /** The message of the agent turn in progress (names its history version). */
   private turnMessage = '';
 
@@ -867,6 +918,8 @@ export class Studio {
     void getCurrentWebview().listen<string>('menu', (e) => void this.menuCommand(e.payload));
     // The update is the app's: any window's check, download or install shows in all of them.
     void listen<UpdateState>('update', (e) => this.store.set({ update: e.payload }));
+    // A word added to a dictionary, in any window: check again.
+    void listen('proofing:words', () => this.proofing.recheckAll());
     void getCurrentWebview().listen<{ tag?: string; x?: number; y?: number; text?: string; selection?: string; page?: number; offset?: number }>('preview:report', (e) => {
       if (e.payload?.tag === 'loaded') this.configurePreview({ place: true });
       if (e.payload?.tag === 'place') this.rememberPreviewPlace(e.payload);
@@ -909,6 +962,8 @@ export class Studio {
     'find-in-book': () => this.showSearch(),
     replace: () => this.editorAction('editor.action.startFindReplaceAction'),
     'format-document': () => this.formatDocument(),
+    'next-spelling': () => this.nextSpelling(),
+    'prev-spelling': () => this.nextSpelling(true),
     'add-comment': () => this.addComment(),
     // View
     'command-palette': () => this.openCommandPalette(),
@@ -1093,6 +1148,8 @@ export class Studio {
         if (!dirty && p.endsWith('.typ')) void this.refreshNames([p]);
         // Its headings and labels count for a chapter shown alone (its number, references to it).
         if (!dirty && p.endsWith('.typ')) this.scheduleChapterPreview();
+        // It may set the book's language (`set text(lang: …)`).
+        if (!dirty && p.endsWith('.typ')) void this.refreshTypstLanguage();
       },
       onConflict: (p, message) =>
         this.store.set((s) => {
@@ -1101,6 +1158,8 @@ export class Studio {
           else delete conflicts[p];
           return { conflicts };
         }),
+      onOpened: (doc) => this.proofing.opened(doc),
+      onClosed: (p) => this.proofing.closed(p),
       onQuestions: (p, questions) =>
         this.store.set((s) => {
           const all = { ...s.questions };
@@ -1611,6 +1670,14 @@ export class Studio {
     editor.executeEdits('typst-guide', [{ range: selection, text: snippetInsertion(code, before, after), forceMoveMarkers: true }]);
     editor.pushUndoStop();
     editor.focus();
+  }
+
+  /** ⌘; (as in Pages and TextEdit): the next spelling or grammar mistake, selected, with its suggestions. */
+  nextSpelling(back = false) {
+    const found = this.proofing.next(back);
+    if (found) return this.editor?.trigger('proofing', 'editor.action.showHover', { focus: false });
+    const { checkSpelling, checkGrammar } = this.state.settings;
+    this.toast(checkSpelling || checkGrammar ? 'No spelling or grammar mistakes in this file.' : 'Spelling and grammar checking is off (Settings ▸ Spelling & Grammar).', 'info');
   }
 
   /** Errors across the book, in file and line order. */
@@ -2823,6 +2890,7 @@ export class Studio {
       conflicts: {},
       questions: {},
       problems: { errors: 0, warnings: 0 },
+      proofing: initialProofing,
       compile: { status: 'idle' },
       preview: { status: 'off' },
       agent: initialState.agent,
@@ -5549,6 +5617,7 @@ export class Studio {
     if (settings.previewPages !== before.previewPages) this.configurePreview();
     // The whole book or one chapter: another main file for Tinymist.
     if (settings.previewScope !== before.previewScope && this.state.workspace && this.state.previewTarget === 'book') void this.restartTypst();
+    if (PROOFING_KEYS.some((k) => JSON.stringify(settings[k]) !== JSON.stringify(before[k]))) this.proofing.recheckAll();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
     else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
     if (settings.assistant !== before.assistant && this.state.workspace && restart) {
@@ -5911,6 +5980,8 @@ export class Studio {
     const parsed = parseProjectSettings(text);
     this.store.set({ project: { settings: parsed.settings, raw: parsed.raw, hash, error: parsed.error } });
     if (restartIfNeeded && needsRestart(before, parsed.settings)) await this.applyEntryAndRestart(parsed.settings);
+    if (before.language !== parsed.settings.language || JSON.stringify(before.proofRules) !== JSON.stringify(parsed.settings.proofRules)) this.proofing.recheckAll();
+    void this.refreshTypstLanguage();
     if (rulesDiffer(before, parsed.settings)) this.permissionsApplied = this.applyPermissions({ notice: false });
   }
 
@@ -5966,6 +6037,7 @@ export class Studio {
     }
     if (needsRestart(project.settings, next)) await this.applyEntryAndRestart(next);
     if (rulesDiffer(project.settings, next)) this.permissionsApplied = this.applyPermissions({ notice: false });
+    if ('language' in patch || 'proofRules' in patch) this.proofing.recheckAll();
     return [];
   }
 

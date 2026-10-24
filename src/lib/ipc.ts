@@ -16,6 +16,43 @@ export function errorMessage(e: unknown): string {
 }
 
 export type WorkspaceInfo = { root: string; name: string; entry: string | null; files: string[] };
+/** A spelling or grammar mistake (proof/mod.rs): UTF-16 offsets in the file's text, as Monaco counts. */
+export type ProofIssue = {
+  start: number;
+  end: number;
+  kind: 'spelling' | 'grammar' | 'style';
+  /** Harper's rule ("AnA"), or "CodeSpelling". */
+  rule: string;
+  message: string;
+  /** The text flagged. */
+  word: string;
+  /** What could go in its place, best first ("" removes it). */
+  fixes: string[];
+  /** A fix can replace the text where it is (not across markup). */
+  fixable: boolean;
+  lang: string;
+  /** The same mistake in the same sentence, for Ignore. */
+  key: string;
+  /** In code: the name the word is part of ("tmie_zone"). */
+  name: string | null;
+};
+export type ProofOptions = {
+  spelling: boolean;
+  grammar: boolean;
+  style: boolean;
+  code: boolean;
+  ignoreUppercase: boolean;
+  ignoreNumbers: boolean;
+  /** The book's language ("en-GB"). */
+  language: string;
+  rules: Record<string, boolean>;
+  ignored: string[];
+};
+/** Words flagged in a file that are spelled as in another English ("colour" in a US check): perhaps the book is in it. */
+export type DialectHint = { tag: string; words: string[] };
+export type ProofChecked = { version: number; issues: ProofIssue[]; stale: boolean; unchecked: string[]; dialect: DialectHint | null };
+export type ProofRule = { name: string; description: string; default: boolean };
+export type WordScope = 'book' | 'user';
 export type FileContent = { text: string; hash: string };
 /** A snapshot in the book's history (app-owned Git repo, see history.rs). */
 export type Version = { id: string; parent: string | null; time: number; label: string; kind: string; files: number; added: number; deleted: number };
@@ -180,6 +217,17 @@ export const ipc = {
     invoke<string>('fs_write', { path, text, expectedHash }),
   /** The chapter preview's file on disk (a stub; Tinymist gets its text from the app), kept out of git. */
   previewChapterFile: (path: string) => invoke<void>('preview_chapter_file', { path }),
+
+  /** A file's spelling and grammar mistakes (`text`: an open file's; else it's read from disk). */
+  proofCheck: (path: string, version: number, text: string | null, options: ProofOptions, scan = false) =>
+    invoke<ProofChecked>('proof_check', { request: { path, version, text, options, scan } }),
+  /** The words spell checking accepts: the book's (.foreword/dictionary.txt) or the author's (~/.foreword/dictionary.txt). */
+  proofWords: (scope: WordScope) => invoke<string[]>('proof_words', { scope }),
+  proofWordsEdit: (scope: WordScope, add: string[], remove: string[]) => invoke<string[]>('proof_words_edit', { scope, add, remove }),
+  /** Harper's grammar and style rules, for Settings. */
+  proofRules: () => invoke<ProofRule[]>('proof_rules'),
+  /** The language the book's Typst sets ("en-GB"), found from its main file through what it imports. */
+  proofLanguage: (entry: string) => invoke<string | null>('proof_language', { entry }),
 
   typstStart: (onMessage: Channel<any>) => invoke<{ bin: string; pid: number | null }>('typst_start', { onMessage }),
   typstSend: (message: string) => invoke<void>('typst_send', { message }),

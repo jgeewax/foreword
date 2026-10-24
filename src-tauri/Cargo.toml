@@ -40,7 +40,24 @@ http-body-util = "0.1"
 zip = { version = "4", default-features = false, features = ["deflate"] }
 base64 = "0.22"
 tauri-plugin-updater = "2"
+# Spelling and grammar (proof/): Harper, offline and rule-based, for English; Typst's own parser to
+# tell prose from markup, math and code (the minor version of the bundled Tinymist's Typst).
+harper-core = { version = "=2.13.0", default-features = false, features = ["concurrent"] }
+typst-syntax = "=0.15.1"
+regex = "1"
 
+
+# Spelling and grammar in dev builds too (tauri dev): unoptimised, Harper takes a second or more a chapter.
+[profile.dev.package.harper-core]
+opt-level = 3
+[profile.dev.package.harper-brill]
+opt-level = 3
+[profile.dev.package.fst]
+opt-level = 3
+[profile.dev.package.levenshtein_automata]
+opt-level = 3
+[profile.dev.package.typst-syntax]
+opt-level = 3
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

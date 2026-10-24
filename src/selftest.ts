@@ -4750,6 +4750,118 @@ async function commentTagChecks() {
 }
 
 /**
+ * Spelling and grammar (proofing.ts; proof/ in Rust): a misspelling, a grammar
+ * mistake and a name in code get their squiggles in their colours; the word
+ * being typed waits until the caret leaves it; the hover and the right-click
+ * menu offer the fixes first; a fix replaces the word and ⌘Z puts it back; Add
+ * to Book Dictionary writes .foreword/dictionary.txt and the squiggle goes; the
+ * squiggles stay through a tab switch. Edits a chapter: scratch book only; puts
+ * it back. Settings are changed in memory only.
+ */
+async function proofingChecks() {
+  const out: Record<string, unknown> = {};
+  const path = 'chapters/ch1-vectors.typ';
+  let last: Exclude<MenuEntry, null | false | undefined>[] = [];
+  menuRecorder.record = (entries) => (last = entries);
+  const labels = () => last.map((e) => (typeof e === 'string' ? `[${e}]` : `${e.label}${e.enabled === false ? ' (disabled)' : ''}`));
+  const action = (label: string) => last.find((e): e is Extract<MenuEntry, { action: () => void }> => typeof e === 'object' && !!e && 'action' in e && e.label === label)?.action;
+  const settings = studio.state.settings;
+  studio.store.set((s) => ({ settings: { ...s.settings, checkSpelling: true, checkGrammar: true, checkStyle: false, checkCode: true } }));
+  await studio.openFile(path);
+  const editor = await waitFor(() => studio.editor?.getModel() && studio.editor, 10000, 'editor');
+  const model = editor.getModel()!;
+  const before = model.getAlternativeVersionId();
+  const hadWords = (await ipc.fsHash('.foreword/dictionary.txt').catch(() => null)) !== null;
+  const shown = () => studio.proofing.list(path).map((f) => `${f.issue.kind}:${f.issue.word}`);
+  const offsetOf = (text: string) => model.getValue().indexOf(text);
+  const right = async (offset: number) => {
+    last = [];
+    const pos = model.getPositionAt(offset + 1);
+    editor.revealPositionInCenter(pos);
+    editor.render(true);
+    await sleep(200);
+    const p = editor.getScrolledVisiblePosition(pos)!;
+    const host = editor.getDomNode()!.getBoundingClientRect();
+    const [x, y] = [host.left + p.left + 2, host.top + p.top + 5];
+    (document.elementFromPoint(x, y) ?? editor.getDomNode()!).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 }));
+    await sleep(250);
+    return labels();
+  };
+  try {
+    const planted = 'This is an test of teh system, which Grevlund wrote with `tmie_zone` in it.\n\n';
+    editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: planted }]);
+    editor.setPosition(model.getFullModelRange().getEndPosition());
+    const t0 = performance.now();
+    await waitFor(() => shown().includes('spelling:teh') && shown().includes('spelling:tmie'), 20000, 'squiggles');
+    out.firstCheckMs = Math.round(performance.now() - t0);
+    out.issues = shown().filter((s) => /teh|tmie|Grevlund|:an$/.test(s));
+    editor.revealLineInCenter(2);
+    editor.render(true);
+    await sleep(300);
+    out.drawn = [...new Set([...document.querySelectorAll<HTMLElement>('.monaco-editor .proof-spelling, .monaco-editor .proof-grammar')].map((e) => [...e.classList].find((c) => c.startsWith('proof-'))))];
+    out.ruler = model.getAllDecorations().filter((d) => d.options.className?.startsWith('proof-')).map((d) => d.options.overviewRuler?.color)[0];
+    out.snapshot = await snap('proofing');
+
+    // A re-check after one edit: how long until its squiggles are back.
+    const edited = performance.now();
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(model.getPositionAt(offsetOf('system')), model.getPositionAt(offsetOf('system'))), text: 'whole ' }]);
+    await waitFor(() => shown().includes('spelling:teh') && studio.proofing.list(path).some((f) => model.getValueInRange(f.range) === 'teh'), 10000, 'the check after an edit');
+    out.recheckMs = Math.round(performance.now() - edited);
+
+    // Typing a misspelling: not flagged while the caret is at it, flagged once it leaves.
+    const lineEnd = monaco.Position.lift({ lineNumber: 2, column: model.getLineMaxColumn(2) });
+    editor.setPosition(lineEnd);
+    editor.focus();
+    editor.trigger('selftest', 'type', { text: ' Anothr' });
+    await sleep(1200);
+    out.whileTyping = shown().includes('spelling:Anothr');
+    editor.setPosition(new monaco.Position(1, 1));
+    await sleep(300);
+    out.afterLeaving = shown().includes('spelling:Anothr');
+
+    // The hover: what's wrong and the fixes.
+    editor.setPosition(model.getPositionAt(offsetOf('teh') + 1));
+    editor.trigger('selftest', 'editor.action.showHover', {});
+    await sleep(600);
+    out.hover = document.querySelector('.monaco-hover:not(.hidden)')?.textContent?.slice(0, 200) ?? null;
+    editor.trigger('selftest', 'editor.action.hideHover', {});
+
+    // The right-click menu: the fixes first; one replaces the word, ⌘Z puts it back.
+    out.menu = (await right(offsetOf('teh'))).slice(0, 7);
+    action('the')?.();
+    await sleep(200);
+    out.fixed = model.getValue().includes('test of the whole system');
+    editor.trigger('selftest', 'undo', null);
+    await sleep(150);
+    out.undone = model.getValue().includes('of teh whole system');
+
+    // Learning a word for the book: written to its dictionary, and not flagged again.
+    out.grevlundMenu = (await right(offsetOf('Grevlund'))).slice(0, 6);
+    action('Add to Book Dictionary')?.();
+    await waitFor(() => !shown().includes('spelling:Grevlund'), 5000, 'the learned word unflagged');
+    out.dictionary = (await ipc.fsRead('.foreword/dictionary.txt')).text;
+    await sleep(800);
+    out.stillLearned = !shown().includes('spelling:Grevlund');
+
+    // A tab switch keeps them: they're on the model.
+    await studio.openFile('chapters/ch2-eigenvalues.typ');
+    await sleep(300);
+    await studio.openFile(path);
+    await sleep(300);
+    out.afterTabSwitch = shown().includes('spelling:teh');
+    out.statusBar = [...document.querySelectorAll('.statusbar .indicator')].map((e) => e.textContent).find((t) => /spelling|grammar/.test(t ?? '')) ?? null;
+  } finally {
+    studio.store.set((s) => ({ settings: { ...s.settings, checkSpelling: settings.checkSpelling, checkGrammar: settings.checkGrammar, checkStyle: settings.checkStyle, checkCode: settings.checkCode } }));
+    menuRecorder.record = undefined;
+    await ipc.proofWordsEdit('book', [], ['Grevlund']).catch(() => {});
+    if (!hadWords) await ipc.fsTrash('.foreword/dictionary.txt').catch(() => {});
+    while (model.getAlternativeVersionId() !== before && model.canUndo()) await model.undo();
+    await studio.save().catch(() => {});
+  }
+  return out;
+}
+
+/**
  * Format on save and Format Document (typstyle, through Tinymist): an equation
  * and a #let are saved formatted, with blank lines around headings (not around
  * an equation line starting with `=`), one blank line at most in a row (raw
@@ -9008,6 +9120,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && want('difftabs')) result.difftabs = await diffTabChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
+    if (launch.selftestEdits && want('proofing')) result.proofing = await proofingChecks();
     if (launch.selftestEdits && want('format')) result.format = await formatChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();

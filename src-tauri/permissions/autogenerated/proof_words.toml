@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-proof-words"
+description = "Enables the proof_words command without any pre-configured scope."
+commands.allow = ["proof_words"]
+
+[[permission]]
+identifier = "deny-proof-words"
+description = "Denies the proof_words command without any pre-configured scope."
+commands.deny = ["proof_words"]

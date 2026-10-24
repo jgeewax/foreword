@@ -60,6 +60,9 @@ export type DocumentHooks = {
   onQuestions(path: string, questions: MergeQuestion[]): void;
   /** The assistant at work in the book now (its name), or null. */
   agentAtWork(): string | null;
+  /** A file opened, and closed (spelling follows its model). */
+  onOpened?(doc: Doc): void;
+  onClosed?(path: string): void;
 };
 
 let questionIds = 0;
@@ -115,6 +118,7 @@ export class Documents {
     });
     this.docs.set(path, doc);
     this.openInLsp(doc);
+    this.hooks.onOpened?.(doc);
     return doc;
   }
 
@@ -470,6 +474,7 @@ export class Documents {
     const doc = this.docs.get(path);
     if (!doc) return;
     if (doc.lspOpen) this.typst.didClose(doc.uri);
+    this.hooks.onClosed?.(path);
     doc.model.dispose();
     this.docs.delete(path);
     this.dirty.delete(path);

@@ -38,6 +38,8 @@ pub const COMMANDS: &[&str] = &[
     "find-in-book",
     "replace",
     "format-document",
+    "next-spelling",
+    "prev-spelling",
     "add-comment",
     // View
     "command-palette",
@@ -154,6 +156,10 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &item("find-in-book", "Find in Book…", Some("CmdOrCtrl+Shift+F"))?,
             &sep()?,
             &item("format-document", "Format Document", Some("Shift+Alt+F"))?,
+            &sep()?,
+            // ⌘; as in Pages and TextEdit ("Check Document Now").
+            &item("next-spelling", "Next Spelling or Grammar Mistake", Some("CmdOrCtrl+;"))?,
+            &item("prev-spelling", "Previous Spelling or Grammar Mistake", Some("CmdOrCtrl+Shift+;"))?,
             &sep()?,
             &item("add-comment", "Add Comment…", Some("CmdOrCtrl+Alt+M"))?,
         ],

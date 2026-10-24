@@ -11,6 +11,7 @@ import { commentTags, type TagKind } from '../editor/comment-tags';
 import { removable, todoAt } from '../app/todos';
 import { attachTodoHover } from './TodoHover';
 import { attachSelectionBar } from './SelectionBar';
+import { attachProofing, proofEntries } from './ProofingHover';
 import { headings, type Heading } from '../editor/outline';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
@@ -106,6 +107,8 @@ export function EditorPane() {
       fixedOverflowWidgets: true,
       // Our own native menu instead of Monaco's HTML one (see onContextMenu below).
       contextmenu: false,
+      // Spelling's fixes are on ⌘., the hover and the right-click menu: no bulb in the margin.
+      lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void studio.save());
     editor.addAction({
@@ -141,6 +144,8 @@ export function EditorPane() {
       // What's under the pointer first, then the selection, then editing. File- and
       // book-level commands live in the menu bar and the tab's menu.
       void showContextMenu([
+        // A misspelling's suggestions first, as TextEdit and Word put them.
+        ...(model ? proofEntries(model, pos) : []),
         error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
         todo && ready && { label: todo.fix ? 'Fix This with the Assistant' : 'Do This TODO with the Assistant', action: () => void studio.askTodo(todo.todo) },
         todo && removable(todo.todo) && { label: 'Mark as Done', action: () => void studio.todoDone(todo.todo) },
@@ -249,6 +254,8 @@ export function EditorPane() {
     paintTags();
     // The cursor on a TODO comment, or the pointer resting on one: ask the assistant to do it, mark it done, or see the others.
     const offTodoHover = attachTodoHover(editor);
+    // Spelling and grammar: the hover, ⌘. and the caret that holds back the word being typed.
+    const offProofing = attachProofing(editor);
     // The headings, for the path bar (the cursor's own line comes from the store).
     const readOutline = () => {
       const model = editor.getModel();
@@ -450,6 +457,7 @@ export function EditorPane() {
       clearTimeout(outlineTimer);
       showVersion.dispose();
       offTodoHover();
+      offProofing();
       offReview();
       clearTimeout(commentTimer);
       offSelectionBar();

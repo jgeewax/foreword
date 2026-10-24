@@ -18,6 +18,7 @@ mod menu;
 mod packages;
 mod preview;
 mod print;
+mod proof;
 mod render;
 #[cfg(target_os = "macos")]
 mod snapshot;
@@ -523,6 +524,7 @@ pub fn run() {
         })
         .manage(AppState::default())
         .manage(mcp::McpState::default())
+        .manage(proof::ProofState::default())
         .setup(|app| {
             children::init(app.path().app_data_dir()?);
             acp::init(app.path().app_data_dir()?);
@@ -601,6 +603,11 @@ pub fn run() {
             print::open_url,
             code::code_run,
             render::typst_render,
+            proof::proof_check,
+            proof::proof_words,
+            proof::proof_words_edit,
+            proof::proof_rules,
+            proof::proof_language,
             lsp::typst_start,
             lsp::typst_send,
             lsp::typst_stop,

@@ -56,6 +56,13 @@ describe('settings storage', () => {
     expect(loadSettings().markAiReads).toBe(false);
   });
 
+  it('keeps spelling and grammar choices, and drops what isn’t one', () => {
+    store.set('studio.settings', '{"checkGrammar":false,"checkStyle":true,"spellingLanguage":"en-GB","proofRules":{"AnA":false,"bad key":true,"Spaces":"no"}}');
+    expect(loadSettings()).toMatchObject({ checkSpelling: true, checkGrammar: false, checkStyle: true, spellingLanguage: 'en-GB', proofRules: { AnA: false } });
+    store.set('studio.settings', '{"spellingLanguage":"British","proofRules":[1]}');
+    expect(loadSettings()).toMatchObject({ spellingLanguage: '', proofRules: {} });
+  });
+
   it('turns the old "edit without asking" switch into the Edit freely preset', () => {
     store.set('studio.settings', '{"agentEdits":"allow"}');
     expect(loadSettings().permissions).toEqual(PRESETS.edit.permissions);
@@ -63,7 +70,7 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ theme: 'system', sendKey: 'enter', permissions: PRESETS.ask.permissions, markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', alwaysAllow: [], neverAllow: [], formatOnSave: true, autoSaveMinutes: 5, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], previewPages: 'nearby', previewScope: 'book', toolPaths: {}, assistant: 'opencode', checkForUpdates: true, skippedUpdate: '' });
+    expect(loadSettings()).toEqual({ theme: 'system', sendKey: 'enter', permissions: PRESETS.ask.permissions, markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', alwaysAllow: [], neverAllow: [], formatOnSave: true, autoSaveMinutes: 5, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], previewPages: 'nearby', previewScope: 'book', toolPaths: {}, assistant: 'opencode', checkSpelling: true, checkGrammar: true, checkStyle: false, checkCode: true, ignoreUppercase: true, ignoreNumbers: true, spellingLanguage: '', proofRules: {}, checkForUpdates: true, skippedUpdate: '' });
     store.set('studio.settings', '{"theme":"light"}');
     expect(loadSettings().theme).toBe('light');
     store.set('studio.settings', '{"theme":"sepia"}');
