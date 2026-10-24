@@ -2,6 +2,13 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.8.2 · 24 October 2026
+
+### The assistant
+
+- **Switch assistants halfway through a task.** Choosing another assistant is like choosing another model: the chat stays where it is, and the task carries on. Start with Claude Code, switch to Codex, and Codex gets the conversation so far with your next message. Switch back, and Claude Code picks up its own conversation, told only what was said since.
+- **Every task in one list.** The Tasks view and the menu at the top of the assistant pane list all your tasks, whichever assistant they were with, and a task opens with the assistant you're using now.
+
 ## 0.8.1 · 24 October 2026
 
 ### The assistant

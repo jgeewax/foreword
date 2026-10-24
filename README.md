@@ -16,6 +16,8 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
+**New in 0.8.2:** switch assistants halfway through a task, as you would models: the chat carries on with the new one · every task in one list, whichever assistant it was with
+
 **New in 0.8.1:** Ask mode answers as a card: your question as it understood it, the answer and how sure it is, the places in your book that show it, and what it would change · charts in the chat
 
 **New in 0.8:** spelling and grammar as you type, as Word does it, checked on your Mac · a Tasks view: what needs you, what's at work, what each task changed · ask about a selection in your own words · <kbd>⌘</kbd>-click a reference to go to what it points to · a reference that points nowhere shows in red, and the preview carries on
@@ -170,7 +172,7 @@ The assistant is a program on your Mac, signed in with your own account, so ther
 | **Antigravity** | Google | Your Google account, a Gemini API key or Gemini Enterprise | Agent Client Protocol, through Google's connector (Settings downloads it) |
 | **Gemini CLI** | Google | A paid Gemini API key or a Gemini Code Assist work account | Agent Client Protocol |
 
-Each conversation is its own task, and several can run at once; the Tasks view in the sidebar shows which need you, which are at work, and what each one changed. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box, and each mode keeps its own: Discuss with one, Write with another. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Foreword's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
+Each conversation is its own task, and several can run at once. Switch assistants halfway through one and the chat carries on, as it does when you change model; the Tasks view in the sidebar shows which need you, which are at work, and what each one changed. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box, and each mode keeps its own: Discuss with one, Write with another. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Foreword's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
 
 ## Everything else a book needs
 
