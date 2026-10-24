@@ -2,6 +2,14 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.8.1 · 24 October 2026
+
+### The assistant
+
+- **Ask mode answers as a card.** It starts by giving your question back as it understood it, so you see at once whether it took you right, and *Not quite?* lets you say it again. When a question could mean two things, it answers the likelier one and offers the other: *Or did you mean…?*, with *Answer that instead*. Then the answer, in a sentence or two, and how sure it is (certain, fairly sure, or a guess) with what it checked.
+- **The places that show it, quoted from your book.** Each place it points to is quoted from your own text, the words you asked about marked, and pinned on a map of the chapter; click one to go there. Its reasoning follows, then what it would change, word by word: *Make this change* makes it in your text (⌘Z undoes it), and *Go ahead* still makes them all. Under the card, a follow-up or two to ask next, one click each.
+- **Charts in the chat.** When numbers compare, such as how long each chapter is or how often a name comes up, the assistant can draw them as bars, the ones it means in colour. Rest the pointer on a bar for its value.
+
 ## 0.8.0 · 24 October 2026
 
 ### Spelling and grammar

@@ -16,6 +16,8 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
+**New in 0.8.1:** Ask mode answers as a card: your question as it understood it, the answer and how sure it is, the places in your book that show it, and what it would change · charts in the chat
+
 **New in 0.8:** spelling and grammar as you type, as Word does it, checked on your Mac · a Tasks view: what needs you, what's at work, what each task changed · ask about a selection in your own words · <kbd>⌘</kbd>-click a reference to go to what it points to · a reference that points nowhere shows in red, and the preview carries on
 
 <br>
