@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The editor · Foreword</title>
-<meta name="description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, ⌘-click to where a name is defined or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
+<meta name="description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, spelling and grammar as you type, ⌘-click to where a name is defined, to what a reference points to, or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
 <meta property="og:title" content="The editor · Foreword">
-<meta property="og:description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, ⌘-click to where a name is defined or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
+<meta property="og:description" content="Foreword&#x27;s editor: Typst shown close to how it prints, typing that wraps a selection, spelling and grammar as you type, ⌘-click to where a name is defined, to what a reference points to, or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/editor-search.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -25,7 +25,7 @@
       <div class="menu">
         <button class="menu-toggle" type="button" aria-expanded="false" aria-current="true">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
         <div class="menu-panel">
-          <div><h4>Writing</h4><a href="../features/editor.html" aria-current="page"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
+          <div><h4>Writing</h4><a href="../features/editor.html" aria-current="page"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="../features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="../features/spelling.html"><b>Spelling and grammar</b><span>Red and blue squiggles as you type, checked on your Mac, and your book’s own words.</span></a><a href="../features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="../features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="../features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="../features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="../features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="../features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="../features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="../features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="../features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="../features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="../features/">All features →</a></div>
         </div>
       </div>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
@@ -46,12 +46,13 @@
 </figure>
 
 <h2 id="writing-in-it">Writing in it</h2>
-<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way. Rest the pointer on a TODO and a small bar offers <span class="ui">Ask the assistant to do it</span>, <span class="ui">Done</span>, which takes the note out, and <span class="ui">All 12 TODOs</span>, the To do list.</p>
+<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way. Rest the pointer on a TODO, or put the cursor on its line, and a small bar offers <span class="ui">Ask the assistant to do it</span>, <span class="ui">Done</span>, which takes the note out, and <span class="ui">All 12 TODOs</span>, the To do list.</p>
 <p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes. A change Foreword makes for you, like taking out a TODO, is a step of its own.</p>
 <figure class="small">
   <img src="../images/f/editor-wrap.webp" width="2480" height="560" alt="The word lovable selected in Jekyll and Hyde and wrapped as _lovable_ by typing an underscore, shown in italic in the editor and on the typeset page beside it.">
   <figcaption>Type <code>_</code> over a word: it’s wrapped, and italic on the page.</figcaption>
 </figure>
+<p>A misspelling gets a red squiggle and a grammar slip a blue one, as in Word, checked on your Mac. See <a href="spelling.html">Spelling and grammar</a>.</p>
 <p>Long lines wrap at the edge of the pane, at a column you choose, or not at all, with guide lines wherever you want them (Settings ▸ Editor ▸ Long lines). The text size is separate from the rest of the window.</p>
 
 <h2 id="tidied-when-you-save">Tidied when you save</h2>
@@ -62,7 +63,7 @@
 <p><kbd>⇧</kbd><kbd>⌘</kbd><kbd>F</kbd> searches every chapter at once, including what you haven’t saved yet. Results are grouped under each chapter’s number and title, in reading order. <span class="ui">Replace All</span> asks first, then saves a version in <a href="history.html">History</a> before it changes anything, so one click takes the whole book back.</p>
 
 <h3>Contents</h3>
-<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit, and Contents opens scrolled to it, so in chapter 17 of a long book you don’t have to hunt for your place. Click any heading to go there. <span class="ui">Collapse all</span> folds it down to just the chapters.</p>
+<p>The book’s chapters in order, numbered as the book numbers them, each with its sections and roughly how many words it has, and the whole book’s count at the top. The section you’re in is lit, and Contents opens scrolled to it, so in chapter 17 of a long book you don’t have to hunt for your place. Switch to another chapter and it follows. Click any heading to go there. <span class="ui">Collapse all</span> folds it down to just the chapters.</p>
 <div class="pair">
   <figure>
     <img src="../images/f/editor-contents.webp" width="600" height="1312" alt="The Contents view for The Elements of Style: each chapter numbered, with its rules as sections and a word count, and the section the cursor is in lit.">
@@ -75,7 +76,7 @@
 </div>
 
 <h3>⌘-click to go there</h3>
-<p>As in VS Code, hold <kbd>⌘</kbd> over a name your book defines, like <code>#key-idea</code>, and it’s underlined as a link, with its definition and the comments above it under the pointer. <kbd>⌘</kbd>-click opens its file at the definition. A file’s name in quotes works the same way: <code>#include "chapters/one.typ"</code> opens the chapter, and <code>image("figures/map.png")</code> opens the picture in Preview. Typst’s own functions, like <code>#figure</code>, are part of Typst, so there’s nowhere to go.</p>
+<p>As in VS Code, hold <kbd>⌘</kbd> over a name your book defines, like <code>#key-idea</code>, and it’s underlined as a link, with its definition and the comments above it under the pointer. <kbd>⌘</kbd>-click opens its file at the definition. A reference works the same way: hold <kbd>⌘</kbd> over <code>@ch:vectors</code> to see the heading, figure or table it points to, and <kbd>⌘</kbd>-click to open that chapter there, whether the preview shows the whole book or just one chapter. A citation opens your bibliography at its entry. A file’s name in quotes works the same way: <code>#include "chapters/one.typ"</code> opens the chapter, and <code>image("figures/map.png")</code> opens the picture in Preview. Typst’s own functions, like <code>#figure</code>, are part of Typst, so there’s nowhere to go.</p>
 
 <h3>Chapters by number</h3>
 <p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, so typing <code>4</code> finds chapter 4, whatever its file is called. The numbers are the book’s own: a preface or prologue without a number doesn’t throw the count off. Contents, Search and the assistant use the same numbers.</p>
@@ -99,7 +100,7 @@
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>No spell check yet, and no suggestions as you type Typst’s commands.</li>
+    <li>No suggestions as you type Typst’s commands.</li>
     <li>Search doesn’t look inside pictures, PDFs or exports.</li>
     <li>Word counts leave out code, maths and labels, so they’re approximate.</li>
   </ul>

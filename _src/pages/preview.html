@@ -2,7 +2,7 @@
 title: Live preview
 heading: The pages, as you type
 lede: Beside your text, the typeset pages, as they’ll print. They change as you type, whether you’ve saved or not. Click a word on a page and you’re at it in your text. Click in your text and the pages scroll there.
-description: How Foreword's live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages; just one chapter for a long book; and exporting the PDF.
+description: How Foreword's live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; and exporting the PDF.
 image: images/f/preview-chapter.webp
 -->
 <figure class="lead">
@@ -17,6 +17,7 @@ image: images/f/preview-chapter.webp
 
 <h2>Mistakes, without a blank page</h2>
 <p>A mistake in the markup gets a red underline where it is, with Typst’s message when you rest the pointer on it, and the status bar counts it (“1 error”; click to go to it). Meanwhile the pages keep showing the last version that worked, so you can still see the chapter while you fix it. Typst’s messages are terse. <span class="ui">Ask the assistant to fix it</span> in the status bar, or <span class="ui">Fix This Error with the Assistant</span> on the right-click menu, explains the mistake in plain words and fixes it.</p>
+<p>A reference to something the book doesn’t have, like a mistyped <code>@ch:vectrs</code>, doesn’t stop the book. It’s set on the page in red, where it is, and every other page carries on as usual. The editor underlines it and suggests what you probably meant (“Did you mean @ch:vectors?”), and clicking the red reference on the page finds it in your text. Export PDF asks first while a reference points nowhere.</p>
 <figure class="small">
   <img src="../images/f/preview-error.webp" width="2560" height="880" alt="A stray # before lawyer in chapter 1 of Jekyll and Hyde, underlined in red, with Typst's message on hover: unknown variable: lawyer. The preview header says error in source (showing last good render), and the page stays up.">
   <figcaption>The mistake, where it is. The pages stay as they were until it’s fixed.</figcaption>
@@ -32,7 +33,7 @@ image: images/f/preview-chapter.webp
   <figcaption>Calculus Made Easy, chapter 4: in the whole book (left) and on its own (right). On its own it’s still chapter 4, but its pages start at 1, and the reference to chapter 2 shows in grey instead of a page number.</figcaption>
 </figure>
 <p>The chapter is set with your book’s own design, so apart from the page numbers it looks as it will in the book. Nothing is copied or changed in your files to do it.</p>
-<p>On a long book the preview also lets go of pages far from where you are, and draws them again as you scroll back, so it doesn’t run out of memory after you’ve read through the whole thing. If it ever has to reload, it comes back to where you were.</p>
+<p>On a long book the preview keeps only the pages near you drawn, and draws the others again as you scroll back to them, so it stays quick even after you’ve read through the whole thing. If it ever has to reload, it comes back to where you were.</p>
 
 <h2>Export</h2>
 <p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it offers to run them first, so a PDF never goes out with old output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one. The <strong>Cover</strong> view above the preview shows the <a href="printing.html">print cover</a>, with its guides.</p>

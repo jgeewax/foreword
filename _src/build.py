@@ -17,6 +17,7 @@ GROUPS = [
     ('Writing', [
         ('editor', 'The editor', 'Where you write: search the whole book, a table of contents, chapters by number.'),
         ('preview', 'Live preview', 'The typeset pages beside your text, changing as you type.'),
+        ('spelling', 'Spelling and grammar', 'Red and blue squiggles as you type, checked on your Mac, and your book’s own words.'),
         ('templates', 'Templates and samples', 'Novels, textbooks, picture books and papers, at the sizes printers use.'),
     ]),
     ('The assistant', [
@@ -41,6 +42,7 @@ GROUP_OF = {slug: g for g, items in GROUPS for slug, _, _ in items}
 ICONS = {
     'editor': '<path d="M4 5.5h16M4 10h10M4 14.5h16M4 19h8"/>',
     'preview': '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M8.5 7.5h7M8.5 10.5h7M8.5 13.5h4"/>',
+    'spelling': '<path d="M4 6h16M4 10.5h11"/><path d="M4 16.5c1.3-1.4 2.7-1.4 4 0s2.7 1.4 4 0 2.7-1.4 4 0 2.7 1.4 4 0"/>',
     'templates': '<rect x="3.5" y="4" width="7" height="9" rx="1"/><rect x="13.5" y="4" width="7" height="6" rx="1"/><rect x="13.5" y="13" width="7" height="7" rx="1"/><rect x="3.5" y="16" width="7" height="4" rx="1"/>',
     'assistant': '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
     'permissions': '<path d="M12 3.5l7 2.8v5.2c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6.3z"/><path d="M9 12l2.2 2.2L15.5 10"/>',

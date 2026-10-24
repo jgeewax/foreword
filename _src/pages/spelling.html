@@ -1,0 +1,67 @@
+<!--
+title: Spelling and grammar
+heading: Spelling and grammar
+lede: A red squiggle under a misspelling and a blue one under a grammar slip, as in Word or Google Docs, with the fix a click away. It’s all checked on your Mac, without AI, and nothing in your book is sent anywhere. It reads Typst, so your markup, maths and labels are left alone, and it learns your book’s own words.
+description: How Foreword checks spelling and grammar as you type: red and blue squiggles with suggestions, checked on your Mac without AI; what's checked and what's left alone; your book's own dictionary; passages in other languages; the whole book's mistakes in one view; and the settings.
+image: images/f/spelling-lead.webp
+-->
+<figure class="lead">
+  <img src="../images/f/spelling-lead.webp" width="2560" height="1424" alt="Chapter 1 of Jekyll and Hyde with a typo, freindly, underlined in red and its suggestions open: Spelling, “freindly” isn’t in the dictionary; friendly; Ignore Spelling, Add to Book Dictionary, Add to My Dictionary. Two lines down, the a in a approved has a blue underline. The typeset page is beside it.">
+  <figcaption>A typo in chapter 1, with its fix a click away. Two lines down, “a approved” is underlined in blue.</figcaption>
+</figure>
+
+<h2>As you type</h2>
+<p>A moment after you stop typing, the chapter is checked. A word the dictionary doesn’t know gets a red wavy line. A grammar slip, like “an test”, “the the” or “their” for “there”, gets a blue one. The word you’re in the middle of typing isn’t marked until you’ve finished it.</p>
+<p>Click a marked word, or right-click it, and its suggestions come up. Click one to put it in. A fix is a single step, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out again. <kbd>⌘</kbd><kbd>;</kbd> goes to the next mistake, and <kbd>⌘</kbd><kbd>.</kbd> offers the fixes for the one under the cursor. The status bar counts them in the chapter you’re in: “4 spelling · 1 grammar”.</p>
+<p>Squiggles never count as errors and never stop the book from typesetting. They’re notes for you, not for the printer.</p>
+
+<h2>What’s checked</h2>
+<p>Foreword reads your chapter the way Typst does, so it can tell your sentences from your markup.</p>
+<dl class="facts">
+  <dt>Your sentences</dt><dd>Paragraphs, headings, list items, footnotes, captions and table cells. Bold and italic are read as part of their sentence: <code>This is *very* good</code> is checked as “This is very good”.</dd>
+  <dt>Spelling only</dt><dd>Your comments to yourself, and the code in a programming book. Names in code are split into their words, so <code>tmie_zone</code> suggests <code>time_zone</code>.</dd>
+  <dt>Left alone</dt><dd>Maths, labels and references, file names, fonts and other settings. To start with, so are words in capitals, like SVD, and words with numbers in them, like FP32, as in Word.</dd>
+</dl>
+
+<h2>Your book’s own words</h2>
+<p>A novel is full of words no dictionary has: its characters, its places, words its author made up. Right-click one for:</p>
+<dl class="facts">
+  <dt>Add to Book Dictionary</dt><dd>For a word that belongs to this book, like Utterson. It’s kept in the book’s folder, so it goes wherever the book goes, and a co-author’s copy knows it too.</dd>
+  <dt>Add to My Dictionary</dt><dd>For a word you use in all your books. It’s kept on your Mac.</dd>
+  <dt>Ignore</dt><dd>Lets this one mistake be, in this one sentence, and the book remembers it. The same words anywhere else are still checked. Settings ▸ This book ▸ Spelling lists what you’ve ignored, each with <span class="ui">See again</span>.</dd>
+</dl>
+<p>Your Mac’s own dictionary is a second opinion. So words you’ve already taught your Mac in Pages or Mail aren’t marked here, and neither are terms it knows, like “eigenvector” and “orthonormal”.</p>
+
+<h2>The whole book at once</h2>
+<p>Going through a long book one squiggle at a time is slow. The <strong>Spelling</strong> view (down the left of the window, or Edit ▸ Show Spelling and Grammar, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>;</kbd>) checks every chapter. It lists each word the dictionary doesn’t know once, with how often it comes up and where, the most frequent first. In Jekyll and Hyde, “Utterson” comes top, 134 times across ten chapters, and one click puts it in the book’s dictionary. After the words comes the grammar, chapter by chapter.</p>
+<figure>
+  <img src="../images/f/spelling-view.webp" width="2330" height="1310" alt="The Spelling view for Jekyll and Hyde: Not in the dictionary, 38 words, starting with Utterson, 134 times in 10 files, and Lanyon, 30 times in 7 files, then words used once or twice, each with its chapter. Beside it, chapter 1 with Utterson underlined in red and its suggestions open: Unperson, Utters, Paterson, then Ignore Spelling, Add to Book Dictionary and Add to My Dictionary.">
+  <figcaption>The book’s unknown words, the most frequent first. Utterson comes up 134 times: one click puts him in the book’s dictionary.</figcaption>
+</figure>
+<p>Click a word to go to it, and click again for the next place it’s used. The list keeps up as you save, and when a chapter changes outside Foreword.</p>
+
+<h2>Other languages</h2>
+<p>A book is checked in its own language: the one its Typst sets (every Foreword template sets one), or the one you choose in Settings ▸ This book ▸ Spelling. English can be American, British, Canadian, Australian or Indian. A book checked as American but spelled the British way (“colour”, “theatre”) is offered British English, once.</p>
+<p>A passage in another language is checked in that language. Select it and choose <span class="ui">Set Language</span> on the right-click menu. Foreword marks the passage the way Typst does, so it’s also hyphenated and given its quotation marks as that language when it’s typeset. Other languages use the dictionaries that come with your Mac, about forty of them, so there’s nothing to download.</p>
+
+<h2>Settings</h2>
+<p>Settings ▸ Spelling &amp; Grammar has:</p>
+<ul>
+  <li>Each check on or off: spelling, grammar, code, and <strong>Suggest style</strong>, a dotted purple line under wordiness and house-style choices (“in order to”, “non-zero” for “nonzero”). Those aren’t mistakes, so it’s off unless you want it.</li>
+  <li>The language for books that don’t set one.</li>
+  <li>Whether to skip words in capitals and words with numbers in them.</li>
+  <li>Your dictionary, to find, add and remove words.</li>
+  <li>Every grammar rule, to turn on or off. A few that misfire on careful prose, like “every one” for “everyone”, start off. <span class="ui">Don’t Check for…</span> on a grammar mistake turns its rule off from the editor.</li>
+</ul>
+<p>Settings ▸ This book ▸ Spelling has the book’s own: its language, its dictionary, the mistakes you’ve ignored, and any rules it checks differently from your other books.</p>
+
+<div class="limits">
+  <h3>What it doesn’t do</h3>
+  <ul>
+    <li>Grammar is checked in English only. Other languages get spelling.</li>
+    <li>A language your Mac has no dictionary for isn’t checked at all, rather than being marked all in red.</li>
+    <li>Like Word’s, the grammar check catches common slips, not everything, and it can question an unusual sentence that’s perfectly right, especially in older prose.</li>
+    <li>It checks words, not writing: it won’t tell you a paragraph drags. For that, select it and <a href="assistant.html#a-bar-under-what-you-select">ask the assistant</a>.</li>
+    <li>Squiggles show in the chapters you have open. The Spelling view checks the rest.</li>
+  </ul>
+</div>

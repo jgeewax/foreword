@@ -26,7 +26,7 @@
       <div class="menu">
         <button class="menu-toggle" type="button" aria-expanded="false">Features <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3.5l3 3 3-3"/></svg></button>
         <div class="menu-panel">
-          <div><h4>Writing</h4><a href="features/editor.html"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="features/">All features →</a></div>
+          <div><h4>Writing</h4><a href="features/editor.html"><b>The editor</b><span>Where you write: search the whole book, a table of contents, chapters by number.</span></a><a href="features/preview.html"><b>Live preview</b><span>The typeset pages beside your text, changing as you type.</span></a><a href="features/spelling.html"><b>Spelling and grammar</b><span>Red and blue squiggles as you type, checked on your Mac, and your book’s own words.</span></a><a href="features/templates.html"><b>Templates and samples</b><span>Novels, textbooks, picture books and papers, at the sizes printers use.</span></a><h4>Keeping your work</h4><a href="features/history.html"><b>History</b><span>Every version, kept outside the book, with what changed word by word.</span></a></div><div><h4>The assistant</h4><a href="features/assistant.html"><b>The assistant</b><span>It edits your chapters, says what it did, and marks every line it changed.</span></a><a href="features/permissions.html"><b>Permissions</b><span>You decide what it may do without asking, and can take back any “always”.</span></a><a href="features/style-guide.html"><b>Style guide</b><span>One file of rules that every request follows, written with you.</span></a><a href="features/comments.html"><b>Comments and Fix all</b><span>Mark a chapter up like an editor, then hand every comment over at once.</span></a><a href="features/assistants.html"><b>Choosing an assistant</b><span>Claude Code, Codex, OpenCode, Gemini CLI or Antigravity, on your own account.</span></a></div><div><h4>Publishing</h4><a href="features/printing.html"><b>Printing and covers</b><span>A PDF for the printer, and a cover with the spine worked out from the page count.</span></a><a href="features/ebooks.html"><b>E-books</b><span>An EPUB that reflows, or one with every page as typeset.</span></a><a href="features/code.html"><b>Code that runs</b><span>Examples run from the book, with their real output set beneath.</span></a><a class="all" href="features/">All features →</a></div>
         </div>
       </div>
       <a href="https://github.com/jgeewax/foreword">GitHub</a>
@@ -38,7 +38,7 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <a class="pill" href="https://github.com/jgeewax/foreword/blob/main/CHANGELOG.md"><b>New in 0.7</b><span>A bar under what you select, replies that link to your lines, and more</span></a>
+      <a class="pill" href="https://github.com/jgeewax/foreword/blob/main/CHANGELOG.md"><b>New in 0.8</b><span>Spelling and grammar as you type, a view of every task, and more</span></a>
       <h1>Write in plain text. <em>Watch it become a book.</em></h1>
       <p class="lede">Foreword is a Mac app for writing books, papers and picture books in Typst. The typeset pages update beside your words as you type, and a writing assistant reads, explains and edits with you, showing every change it makes.</p>
       <div class="cta">
@@ -51,7 +51,7 @@
           View on GitHub
         </a>
       </div>
-      <p class="fine"><span data-version>Version 0.7.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
+      <p class="fine"><span data-version>Version 0.8.0</span><span data-size>Free</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
     </div>
     <figure class="shot">
       <picture>
@@ -83,15 +83,15 @@
       <div class="copy">
         <span class="eyebrow">Live pages</span>
         <h2>The pages as they'll print, while you type</h2>
-        <p>Foreword typesets the book from what you've typed, saved or not, and redraws only the pages in view. In a 491-page book, a change shows up in about a tenth of a second.</p>
+        <p>Foreword typesets the book from what you've typed, saved or not, so the page changes as you write, even in a book of hundreds of pages. There's nothing to build and nothing to wait for.</p>
         <a class="more-link" href="features/preview.html">How the live preview works</a>
       </div>
       <ul>
         <li>Click a passage in the pages and its source comes up level with the click.</li>
         <li>Errors are underlined where they are, explained in plain words.</li>
         <li>Export the PDF when you want it. Nothing to compile by hand.</li>
-        <li>A 700-page book stays light, and keeps your place.</li>
-        <li>Or show just the chapter you're in, for a long book's speed.</li>
+        <li>A reference that points nowhere shows in red, and the rest of the book carries on.</li>
+        <li>For a very long book, show just the chapter you're in.</li>
       </ul>
       <figure>
         <picture>
@@ -106,12 +106,13 @@
       <div class="copy">
         <span class="eyebrow">A writing assistant</span>
         <h2>An assistant that edits, and shows its work</h2>
-        <p>Select a passage and a bar under it offers Revise, Options and Explain, or ask about it in the chat. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves, in plain sentences, never shell commands.</p>
+        <p>Select a passage and a bar under it offers Revise, Options and Ask: say what you want changed, or what you want to know. The assistant reads the chapters it needs, follows your book's style guide, and edits the files themselves, in plain sentences, never shell commands.</p>
         <a class="more-link" href="features/assistant.html">How the assistant works</a>
       </div>
       <ul>
         <li>Lines it changed are marked until you rewrite them.</li>
         <li>A line it points to in a reply is a link to that line.</li>
+        <li>Run several tasks at once: the Tasks view shows which need you and what each changed.</li>
         <li>Ask answers in the chat and changes nothing; Discuss weighs a direction with you, and argues back.</li>
         <li>When another mode would suit what you asked, it offers it, saying what it would do.</li>
         <li>Options gives three versions of a passage to pick from, as text or set as they'd print.</li>
@@ -194,6 +195,11 @@
       <h2>Made for the whole job of a book</h2>
       <a class="more-link" href="features/">Every feature, in detail</a>
       <div class="grid">
+        <a class="card" href="features/spelling.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 10.5h11"/><path d="M4 16.5c1.3-1.4 2.7-1.4 4 0s2.7 1.4 4 0 2.7-1.4 4 0 2.7 1.4 4 0"/></svg>
+          <h3>Spelling and grammar</h3>
+          <p>Red under a misspelling, blue under a grammar slip, as in Word, checked on your Mac without AI. Your characters' names go in the book's own dictionary.</p>
+        </a>
         <a class="card" href="features/comments.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z"/><path d="M8 9.5h8M8 12.5h5"/></svg>
           <h3>Review comments</h3>
@@ -217,7 +223,7 @@
         <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5.5A2 2 0 0 1 7 3.5h12v14H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h12v-4"/></svg>
           <h3>New to Typst?</h3>
-          <p>Typst is plain text with a little markup. Typst basics opens beside your book and takes about five minutes.</p>
+          <p>Typst is plain text with a little markup. Typst basics opens beside your book and takes about five minutes, and a minute's tour shows you around the window.</p>
         </a>
         <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg>
@@ -232,12 +238,7 @@
         <a class="card" href="features/editor.html">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 2-.9 2-1.9 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.8 1.8-1.8h2.1a3.8 3.8 0 0 0 3.8-3.8C20.5 6.6 16.7 3.5 12 3.5z"/><circle cx="7.6" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="7.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.4" cy="7.4" r="1.1" fill="currentColor" stroke="none"/></svg>
           <h3>A colour for each book</h3>
-          <p>As VS Code's Peacock does for a folder: the title bar, icons, status bar and dividers wear the book's colour, so you can tell its window from the rest. Light or dark, whatever the Mac is set to.</p>
-        </a>
-        <a class="card" href="features/editor.html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
-          <h3>A tour to start</h3>
-          <p>The first time you open a book, a minute's tour shows you around the window, one part at a time. Help ▸ Take the Tour runs it again.</p>
+          <p>As VS Code's Peacock does for a folder: the title bar, icons, status bar and dividers wear the book's colour, so you can tell its window from the rest. Light or dark, as you choose.</p>
         </a>
       </div>
     </div>
@@ -252,7 +253,7 @@
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg>
         Download for Mac
       </a>
-      <p class="fine"><span data-version>Version 0.7.0</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
+      <p class="fine"><span data-version>Version 0.8.0</span><span>macOS 13 or later</span><span>Apple Silicon</span></p>
       <details class="source">
         <summary>Or build it from source</summary>
         <pre>brew install rust node tinymist

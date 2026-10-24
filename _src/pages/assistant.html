@@ -2,7 +2,7 @@
 title: The assistant
 heading: The assistant
 lede: Ask for a change in plain words and the assistant makes it in your chapters. It tells you what it did in the book’s own terms (“Read ‘Story of the Door’ (chapter 1)”), marks every line it changed, and History keeps the text from before, so any change can come out again.
-description: How Foreword's writing assistant works: a bar under what you select (Revise, Options, Explain, Comment, Ask in chat), one task at a time, an account of what it did in the book's terms, the lines it changed marked in your text, formulas in your book's notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.
+description: How Foreword's writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book's terms, the lines it changed marked in your text, formulas in your book's notation, five modes (Write, Ask, Discuss, Options, Figures), three versions to pick from, and questions you answer in a panel.
 image: images/f/assistant-trace.webp
 -->
 <figure class="lead">
@@ -11,13 +11,18 @@ image: images/f/assistant-trace.webp
 </figure>
 
 <h2>One task, one goal</h2>
-<p>Each conversation is a <em>task</em>: one thing you want done, like “tighten chapter 3” or “add a section on limits”. The assistant starts by saying the goal back to you in a sentence. When it thinks the goal is met, it ends its reply with <strong>Is this task done?</strong> <span class="ui">Yes, it’s done</span> saves your open files, keeps a named version in History (“Task done: …”), and starts a fresh task. The old one stays in the task menu at the top of the pane, under Done, and you can go back to it.</p>
+<p>Each conversation is a <em>task</em>: one thing you want done, like “tighten chapter 3” or “add a section on limits”. The assistant starts by saying the goal back to you in a sentence. When it thinks the goal is met, it ends its reply with <strong>Is this task done?</strong> <span class="ui">Yes, it’s done</span> saves your open files, keeps a named version in History (“Task done: …”), and starts a fresh task. The old one stays in the Tasks view, under Done, and you can go back to it.</p>
 <p>Keeping each conversation to one job keeps the assistant on it. A long conversation that wanders from chapter to chapter gets slower, and loses track of what you asked last. <span class="ui">Done</span> and <span class="ui">New task</span> sit just above the message box. <kbd>⌘</kbd><kbd>T</kbd> starts a new task and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>D</kbd> marks this one done, whenever you like.</p>
-<p>Several tasks can run at once. Start a new one while the assistant is working and the first carries on in the background. A notice tells you when it’s finished or needs you, and the task menu shows what each one is doing (“Reading ‘The Carew Murder Case’ (chapter 4)”).</p>
+<p>Several tasks can run at once. Start a new one while the assistant is working and the first carries on in the background. A notice tells you when it’s finished or needs you.</p>
+
+<h3>The Tasks view</h3>
+<p>Every task in the book is in the <strong>Tasks</strong> view, down the left of the window, with an amber badge when one needs you. They’re grouped as <strong>Needs you</strong> (a question for you, a permission to give, or a reply you haven’t read), <strong>At work</strong>, <strong>Open</strong> and <strong>Done</strong>, by day and then by month. Each says what it’s doing (“Reading ‘The Carew Murder Case’ (chapter 4)”), or the mode it ran in and the chapters it changed.</p>
 <figure class="small">
-  <img src="../images/f/assistant-tasks.webp" width="1288" height="800" alt="The task menu open at the top of the assistant pane: in progress, a proofread with a new reply and a rewrite that has a question; open tasks; and a done one with a tick.">
-  <figcaption>The task menu. Two tasks carried on in the background: one has replied, the other has a question for you.</figcaption>
+  <img src="../images/f/assistant-tasks-view.webp" width="1034" height="1180" alt="The Tasks view for Jekyll and Hyde. Needs you: Chapter 3 epigraph, has a question. At work: Documents in Jekyll and Hyde chapters 8-10, writing. Open: Hyde's physical descriptions across chapters (Ask, no changes), Chapter 4 proofreading (Write, chapter 4, one line in, one out), and Mr. Enfield and Utterson's Sunday walks. Done, today: Chapter 2 will paragraph tightening (Write, chapter 2).">
+  <figcaption>Five tasks on Jekyll and Hyde: one has a question for you, one is still reading, three are open, and one is done.</figcaption>
 </figure>
+<p>Click a task and it opens in the assistant pane, and what it changed folds out beneath it, as a version does in History. Search them, or show only those that touched <span class="ui">This chapter</span>. Open tasks that haven’t moved in two weeks can be marked done together. The menu at the top of the assistant pane is for switching: find a task by name, or go to one that needs you.</p>
+
 <p>You can keep typing while it works. <kbd>⏎</kbd> holds your message until it finishes. <kbd>⌥</kbd><kbd>⏎</kbd> sends it now, and the assistant reads it at its next step (with assistants that allow this, like Claude Code). Messages waiting to go sit above the box, where you can edit them or take them back.</p>
 
 <h2>It tells you what it did</h2>
@@ -32,7 +37,7 @@ image: images/f/assistant-trace.webp
 <p>Each step has a coloured dot: blue for reading, violet for changing, grey for thinking, amber when it needs you, red when something went wrong. A change says where it was and how many words it touched (“line 6 +2 −7 words”). <span class="ui">Show change</span> opens it word by word, with the words it cut struck through and the words it wrote in their place. From there, <span class="ui">Show in editor</span> takes you to it, and <span class="ui">Undo this edit</span> takes it out (and <kbd>⌘</kbd><kbd>Z</kbd> in the editor puts it back).</p>
 <p>When a reply points to a place in the book, like <code>chapters/one.typ:42</code> or “one.typ, lines 42–48”, it’s a link: a click puts the cursor on that line in the editor, or selects the lines. Only the book’s own files are links, so “10:30” never is.</p>
 <p>Under the reply is how long it took, and <span class="ui">Saved in History</span>, which opens the version History kept. Below the conversation, <strong>Changed in this task</strong> lists each file it has touched so far.</p>
-<p>Many requests start from a button rather than from you typing: <span class="ui">Write it</span>, <span class="ui">Fix This Error</span>, <span class="ui">Explain This</span>, <span class="ui">Fix all</span>. A button sends the assistant a full set of instructions, but the chat shows only what you asked for, in a line (“Explain this passage · in plain words”), so a one-click request doesn’t look like a page you wrote.</p>
+<p>Many requests start from a button rather than from you typing: <span class="ui">Write it</span>, <span class="ui">Fix This Error</span>, <span class="ui">Tighten</span>, <span class="ui">Fix all</span>. A button sends the assistant a full set of instructions, but the chat shows only what you asked for, in a line (“Revise this passage · Tighten it”), so a one-click request doesn’t look like a page you wrote.</p>
 
 <h2>The lines it changed stay marked</h2>
 <p>Every line the assistant wrote gets a violet bar beside the line number and a faint tint. The mark stays until you rewrite the line, and then it’s yours. Rest the pointer on the line number to see which request changed it, when, and what the line said before. Lines it read in this conversation get a thin blue bar. You can choose both colours in Settings ▸ Editor ▸ The assistant’s marks.</p>
@@ -43,18 +48,22 @@ image: images/f/assistant-trace.webp
 <h2>A bar under what you select</h2>
 <p>Select a passage, in your text or on the typeset pages, and a bar comes up under it, each button in the colour of what it does.</p>
 <figure class="small">
-  <img src="../images/f/assistant-selection-bar.webp" width="1520" height="736" alt="Three sentences of Jekyll and Hyde's first chapter selected in the editor, and under them a bar: Revise, Options, Explain, Comment, and Ask in chat with its shortcut, Command-I.">
+  <img src="../images/f/assistant-selection-bar.webp" width="1866" height="906" alt="Three sentences of Jekyll and Hyde's first chapter selected in the editor, and under them a bar: Revise, Options, Ask, Comment, and Add to chat with its shortcut, Command-I.">
   <figcaption>Select a passage and the bar comes up under it.</figcaption>
 </figure>
 <dl class="facts">
   <dt>Revise</dt><dd>Changes the passage in place. Say how, or pick one of the usual requests: Tighten, Proofread, Clearer, Simpler words, Expand, and Match my style guide when the book has one.</dd>
   <dt>Options</dt><dd><a href="#three-versions-options">Three versions</a> to pick from, with Shorter, Plainer and More vivid a click away.</dd>
-  <dt>Explain</dt><dd>Puts the passage in plain words, in the chat, and changes nothing.</dd>
+  <dt>Ask</dt><dd>A question about the passage, in your own words, or one of the usual ones: Explain it, Is it clear?, Check the facts, What’s weakest?, Does it fit?, and Against my style guide when the book has one. The answer comes in the chat, and the passage stays as it is.</dd>
   <dt>Comment</dt><dd>Leaves a <a href="comments.html">comment</a> on it, to come back to.</dd>
-  <dt>Ask in chat</dt><dd>Takes the passage to the chat, with the cursor in the message box, for anything else (<kbd>⌘</kbd><kbd>I</kbd>).</dd>
+  <dt>Add to chat</dt><dd>Takes the passage to the chat, with the cursor in the message box, for anything else (<kbd>⌘</kbd><kbd>I</kbd>).</dd>
 </dl>
+<figure class="small">
+  <img src="../images/f/assistant-ask.webp" width="1866" height="798" alt="The same three sentences, and under them the Ask box: Why would a man like Utterson choose his friends this way? typed in, and below it Explain it, Is it clear?, Check the facts, What's weakest?, Does it fit? and Against my style guide, with Continue in chat and an Ask button.">
+  <figcaption>Ask, in your own words. The usual questions are a click away.</figcaption>
+</figure>
 <p>Over a Typst error, <span class="ui">Fix error</span> comes first. The bar sits under the end of the selection, so it never covers what you’re reading, and in a narrow editor all but the first button show just their icons.</p>
-<p>A note under the passage follows a Revise. While the assistant works it says <span class="ui">Revising…</span>, with Stop, and the passage is marked in violet. Then it says how much changed (“Revised −11 words”), with <span class="ui">Undo</span>, which puts the passage back in one step, and <span class="ui">Show change</span>, the words it changed. Revise switches the chat to Write, and Options to Options. If a reply is still running, the request waits for it, with <span class="ui">Send now</span> and <span class="ui">Cancel</span>.</p>
+<p>A note under the passage follows a Revise. While the assistant works it says <span class="ui">Revising…</span>, with Stop, and the passage is marked in violet. Then it says how much changed (“Revised −11 words”), with <span class="ui">Undo</span>, which puts the passage back in one step, and <span class="ui">Show change</span>, the words it changed. After an Ask, the note says <span class="ui">Answering…</span> until the answer is in the chat. Revise switches the chat to Write, Options to Options, and Ask to Ask, so a question never changes your text. Add to chat leaves the mode as it is. If a reply is still running, the request waits for it, with <span class="ui">Send now</span> and <span class="ui">Cancel</span>.</p>
 <figure>
   <img src="../images/f/assistant-revise.webp" width="2560" height="1559" alt="The same three sentences after Revise ▸ Tighten, marked in violet, with a note under them: Revised −3 words, Undo, Hide change, and the words it changed: to be, whom and they struck out, and put in their place. In the chat beside it: Revise this passage, Tighten it: fewer words, the same meaning; Claude Code read and edited the chapter, and its reply links to chapters/01-story-of-the-door.typ:13–15.">
   <figcaption>Revise ▸ Tighten on the same passage. The note under it says what changed, and the line the reply points to is a link.</figcaption>
@@ -93,7 +102,8 @@ image: images/f/assistant-trace.webp
 </figure>
 
 <h2>Three versions: Options</h2>
-<p>Select a passage and say what should change: “make it punchier”, “less formal”. You get three complete versions side by side, each with a short label and a line on how it differs. <span class="ui">Use this</span> puts one in place, like any edit you’d make, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out. The others then say <span class="ui">Use this instead</span>, so you can swap. If you changed the passage while it was thinking, Foreword won’t guess: it tells you, and leaves your text alone.</p>
+<p>Select a passage and say what should change: “make it punchier”, “less formal”. You get three complete versions side by side, each with a short label and a line on how it differs. <span class="ui">Use this</span> puts one in place, like any edit you’d make, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out. The others then say <span class="ui">Use this instead</span>, so you can swap.</p>
+<p>The versions stay with their passage. <span class="ui">Use this</span> puts one where the passage is now, even if you’ve since moved the cursor, selected other words, or written above it. A follow-up such as “shorter”, with nothing selected, is about the same passage. If you’ve changed the passage itself since you asked, it won’t write over your changes. The card shows what you changed, and offers <span class="ui">New options for it as it is</span>, <span class="ui">Replace mine anyway</span>, or <span class="ui">Cancel</span>.</p>
 <p>Two tabs switch how the versions look. <span class="ui">Text</span> shows them as you’d write them. <span class="ui">Preview</span> sets each as it would print, with italics, bold and maths, so you compare three passages rather than three lots of markup. Foreword remembers which you used last.</p>
 <figure class="small">
   <img src="../images/f/assistant-options-preview.webp" width="1520" height="1093" alt="Three versions of a passage from Calculus Made Easy, chapter 4, on the Preview tab: Plain and direct, Numbers first and Chatty and reassuring, each set as it would print, with (dx)² and the fractions 1/1000 and 1/1000000 as maths, and the reference to chapter 2 shown in grey as smallness. Each has Use this and Copy.">
