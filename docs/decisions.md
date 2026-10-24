@@ -3845,6 +3845,73 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   clears both, and the chapter preview does the same. Citations still typeset
   as [1].
 
+### The Tasks view (2026-10-24)
+
+- **Asked for:** "lets add a tasks tab on the left bar? its the history of AI
+  tasks taht have run… whats still pending etc (the dropdown list on the top
+  of the ai panel is too small and wont be very helpful when the list gets
+  crazy long)". A mockup first (a Design canvas). Answers: a click does what
+  it does everywhere else in the app ("be consistent w the app. no
+  surprises"), icon A, "This chapter" means the tasks that changed it, and
+  the pane's menu shrinks.
+- **Not the Conversations view again.** That view (above, "The assistant's
+  tasks stay in the assistant pane") was the menu's list on the far side of
+  the window, and went. This one keeps a record the menu can't show: what
+  each task changed, a search, the tasks that changed the chapter you're in,
+  and tidying up. The pane's menu stays for switching.
+- **Where:** the activity bar, after History (always there, so it never
+  moves). Its icon is the assistant's sparkle in a ring not yet closed; the
+  gap is where the badge sits. The badge is amber with how many tasks need
+  you (a question, a permission, a reply not yet seen, a turn that stopped),
+  or a blue dot while some are only at work. Open tasks don't count: they
+  wait for you. View ▸ Tasks (with the other views now) and the palette's
+  Show Tasks open it.
+- **The list** (TasksPanel.tsx, the logic in task-list.ts): Needs you, At
+  work, Open (newest first) and Done, by day this week (Today, Yesterday,
+  This week) and by month before that, the months folded. Each row has a
+  mark for its state, its title and when it last changed. Under the title
+  goes what's happening ("Has a question: …", "Reading “The Storm”
+  (chapter 2)"), or else the mode it ran in, the chapters it changed and
+  the lines added and removed ("Write · ch. 1, 2 · +48 −61", "Ask · no
+  changes"). Colour only ever shows the state. The task shown in the
+  assistant pane has the accent edge.
+- **A click works as a version in History does:** the task shows in the
+  assistant pane (the pane comes back if hidden) and folds out under its
+  row: your first message, each file it changed with its lines (a click
+  shows that change side by side, as a file under a version), the mode,
+  assistant, messages and tokens, and Mark done or Open again. A second click
+  folds it up. Right-click: Open, Mark Done or Open Again.
+- **Long lists:** search covers titles, your first message and the latest
+  reply. When the match isn't in the title, the second line shows where it
+  is. **This chapter** (This file for a file that isn't a numbered chapter)
+  lists the tasks that changed the file in the editor, with their counts
+  there. Open tasks untouched for two weeks are greyed and offered once:
+  Mark them done, Select them, Not now (remembered per book). ⌘-click and
+  ⇧-click select several, for Mark done. Several marked done at once make
+  one named version in History, not one each. Up to 500 conversations are
+  listed (60 before).
+- **What it knows of a task** is kept on this Mac with done/open
+  (`studio.tasks:<book>`, now up to 1,000): the mode and message count at
+  each send, your first message as the chat shows it, the latest reply (a
+  line, without Markdown, for search), and the files each turn's History
+  version changed, with the latest version for each. Tasks from before
+  this have none of it: one line, and "Not known" when folded out. Counts
+  are lines, as in History.
+- **The pane's menu** is for switching: Find a task, Needs you, At work,
+  the three most recent open tasks, and "All tasks, in the sidebar" with
+  the count. Compact stays at the foot. Its rows have the view's marks and
+  second lines. View ▸ Assistant Tasks, which opened this menu, is View ▸
+  Tasks.
+- Verified: unit tests (task-list.test.ts); self-test `conversations`,
+  rewritten, on made-up tasks: the icon after History, its amber badge and
+  its blue dot, every section, Today and a folded month, the tidy-up offer,
+  the fold-out with the chapter and its lines, search by title and by what
+  was asked, the shorter menu and its way to the view, and the hidden pane's
+  badge. Self-test `tasks` with a real turn (OpenCode): the task remembered
+  Write, the message, its reply and `ch1-vectors.typ` +1 −1, and its row
+  said "Write · ch. 1 · +1 −1", lit and folded out after a click. `activity`,
+  `palette`, `menubar` and `chrome` pass.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

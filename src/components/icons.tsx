@@ -106,6 +106,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7.5 9h9M7.5 12.5h5.5" />
     </>
   ),
+  // Tasks: the assistant's sparkle in a ring not yet closed; the gap is where the badge sits.
+  tasks: (
+    <>
+      <path d="M12 20.5A8.5 8.5 0 1 1 20.5 12" />
+      <path d="M12 7.6l1.15 3.25 3.25 1.15-3.25 1.15L12 16.4l-1.15-3.25L7.6 12l3.25-1.15z" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   minus: <path d="M5 12h14" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,

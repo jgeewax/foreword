@@ -64,7 +64,7 @@ import { chapterImports, chapterText, includePath, nextChapterPath, withInclude 
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
-import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, type TaskRecord, type TaskSummary } from './tasks';
+import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, readsFromContext, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withoutMarker, type TaskRecord, type TaskSummary } from './tasks';
 import { chatSoFar, readModeSetups, setupLine, type ModeSetup, type ModeSetups } from './mode-setups';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
@@ -87,6 +87,7 @@ import { claudeRules, codexRules, type OwnRule } from '../services/agent/assista
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import { BAR_MODE, barMessage, type BarKind } from './selection-bar';
 import { fixErrorPrompt, mergePrompt, messageLine, OPTIONS_AGAIN_PROMPT, stockTitle } from './stock-prompts';
+import { clip, plainLine } from './task-list';
 import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
@@ -489,7 +490,7 @@ export type StudioState = {
     facts?: PrintFacts;
   };
   /** Left pane: the file tree, the book's history, its code examples, or its TODOs. */
-  sidebar: 'files' | 'contents' | 'search' | 'history' | 'code' | 'todos' | 'review' | 'git';
+  sidebar: 'files' | 'contents' | 'search' | 'history' | 'tasks' | 'code' | 'todos' | 'review' | 'git';
   /** Each Typst file's headings and about how many words it has (the Contents view). */
   contents: Record<string, FileContents>;
   /** The Search view: what's searched for, how, and what it found. */
@@ -600,6 +601,10 @@ const EXPORT_TARGETS_KEY = 'studio.exportTargets';
 /** How many of the assistant's latest versions of a file are marked in the editor. */
 const AI_EDIT_VERSIONS = 12;
 
+/** How many of the book's conversations the Tasks view lists, and how many Foreword remembers things about. */
+const TASK_LIMIT = 500;
+const TASK_RECORDS = 1000;
+
 /** A picture or PDF named in the text (⌘-click): an empty model stands in for it, since Monaco only links to one. */
 const VIEWER_SCHEME = 'foreword-viewer';
 
@@ -702,8 +707,6 @@ export class Studio {
     'selection-card': [kind: BarKind];
     'find-in-settings': [];
     'show-agent-pane': [];
-    /** The assistant pane's list of the book's tasks, opened (View ▸ Assistant Tasks). */
-    'show-tasks': [];
     'show-explorer': [];
     'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
     /** ⌘P or ⇧⌘P, pressed again while the box is open: it starts over in that mode. */
@@ -2449,6 +2452,7 @@ export class Studio {
     t.head = turn.head;
     if (turn.created) t.versions.push(turn.created);
     this.turnVersions.set(sessionId, t);
+    if (turn.created) void this.noteTaskChanges(sessionId, turn.created);
   }
 
   /**
@@ -2771,16 +2775,15 @@ export class Studio {
     return true;
   }
 
-  /** The book's tasks (conversations): in the assistant pane, with its list of them open. */
+  /** The book's tasks (conversations): the sidebar's Tasks view. */
   showTasks() {
-    this.events.emit('show-agent-pane');
-    void this.loadTasks();
-    this.events.emit('show-tasks');
+    this.revealSidebar('tasks');
   }
 
   showSidebar(view: StudioState['sidebar']) {
     this.store.set({ sidebar: view });
     if (view === 'history') void this.history.refresh().catch(() => {});
+    if (view === 'tasks') void this.loadTasks();
   }
 
   /** Exported PDFs aren't part of the book's history. */
@@ -3719,6 +3722,9 @@ export class Studio {
       void this.refreshContextSize();
       this.turnEnds();
       const sessionId = this.state.agent.sessionId;
+      // Its latest reply, for the Tasks view's search.
+      const reply = [...this.state.agent.items].reverse().find((it) => it.kind === 'assistant' && it.text.trim());
+      if (sessionId && reply?.kind === 'assistant') this.updateTaskRecord(sessionId, { said: plainLine(withoutMarker(reply.text), 300) });
       void this.history.afterAgent(this.turnMessage).then((turn) => {
         this.recordTurn(sessionId, turn);
         if (turnId && this.state.agent.sessionId === sessionId) this.updateItem(turnId, (it) => (it.kind === 'user' ? { ...it, version: turn.created } : it));
@@ -4339,24 +4345,81 @@ export class Studio {
     return readJson<TaskRecord[]>(this.tasksKey()) ?? [];
   }
 
-  private setTaskRecord(sessionId: string, status: TaskRecord['status']) {
-    const records = this.taskRecords().filter((r) => r.sessionId !== sessionId);
-    records.push({ sessionId, status, ...(status === 'done' ? { doneAt: Date.now() } : {}) });
-    writeJson(this.tasksKey(), records.slice(-500));
+  /** Change what's remembered of a task, keeping the rest, in the list as well. */
+  private updateTaskRecord(sessionId: string, patch: Partial<TaskRecord> | ((r: TaskRecord) => Partial<TaskRecord>)) {
+    const records = this.taskRecords();
+    const old: TaskRecord = records.find((r) => r.sessionId === sessionId) ?? { sessionId, status: 'open' };
+    const next: TaskRecord = { ...old, ...(typeof patch === 'function' ? patch(old) : patch), sessionId };
+    writeJson(this.tasksKey(), [...records.filter((r) => r.sessionId !== sessionId), next].slice(-TASK_RECORDS));
+    this.setAgent((a) => ({ tasks: a.tasks.map((t) => (t.sessionId === sessionId ? { ...t, ...next } : t)) }));
   }
 
-  /** The book's conversations from OpenCode, with done/open from this Mac. */
+  private setTaskRecord(sessionId: string, status: TaskRecord['status']) {
+    this.updateTaskRecord(sessionId, { status, doneAt: status === 'done' ? Date.now() : undefined });
+  }
+
+  /** What a turn's version changed, added to its task's files (for the Tasks view). */
+  private async noteTaskChanges(sessionId: string, version: string) {
+    try {
+      const changes = await ipc.historyChanges(null, version);
+      if (!changes.length) return;
+      this.updateTaskRecord(sessionId, (r) => {
+        const files = { ...r.files };
+        for (const c of changes) files[c.path] = { added: (files[c.path]?.added ?? 0) + (c.added ?? 0), deleted: (files[c.path]?.deleted ?? 0) + (c.deleted ?? 0), version };
+        return { files };
+      });
+    } catch (e) {
+      console.warn('tasks: changes', e);
+    }
+  }
+
+  /** The book's conversations from the assistant, with what this Mac remembers of each. */
   async loadTasks() {
     if (!this.agent || this.state.agent.status !== 'ready') return;
     try {
-      const sessions = await this.agent.listSessions(60);
-      const records = new Map(this.taskRecords().map((r) => [r.sessionId, r.status]));
+      const sessions = await this.agent.listSessions(TASK_LIMIT);
+      const records = new Map(this.taskRecords().map((r) => [r.sessionId, r]));
       this.setAgent({
-        tasks: sessions.map((s) => ({ sessionId: s.id, title: s.title ? stockTitle(s.title) : 'Untitled task', status: records.get(s.id) ?? 'open', updated: s.updated, tokens: s.tokens })),
+        tasks: sessions.map((s) => {
+          const r = records.get(s.id);
+          return { ...r, sessionId: s.id, title: s.title ? stockTitle(s.title) : 'Untitled task', status: r?.status ?? 'open', updated: s.updated, tokens: s.tokens };
+        }),
       });
     } catch (e) {
       console.warn('tasks: list failed', e);
     }
+  }
+
+  /** A task from the Tasks view: shown in the assistant pane (brought back if hidden). */
+  async openTask(sessionId: string) {
+    this.events.emit('show-agent-pane');
+    await this.switchTask(sessionId);
+  }
+
+  /** What a task changed in a file: its latest version's change there, side by side (as a file under a version in History). */
+  async showTaskChange(versionId: string, path: string) {
+    const version = this.state.history.versions.find((v) => v.id === versionId) ?? (await ipc.historyList(300).catch(() => [])).find((v) => v.id === versionId);
+    if (!version) return this.toast('That change is too far back in History to show here.', 'error');
+    await this.history.showDiff(version, path);
+  }
+
+  /** Several tasks done at once (the Tasks view's selection, or its tidy-up): one named version for them all. */
+  async markTasksDone(sessionIds: string[]) {
+    const ids = sessionIds.filter((id) => !(id === this.state.agent.sessionId && this.state.agent.running) && !this.state.agent.background[id]?.running);
+    if (!ids.length) return;
+    if (ids.length === 1) return this.markTaskDone(ids[0]);
+    const titles = ids.map((id) => this.taskTitle(id));
+    const shown = ids.includes(this.state.agent.sessionId ?? '');
+    if (shown) {
+      const failures = (await this.docs?.saveAll()) ?? [];
+      if (failures.length) return this.toast(`Not marked done: couldn't save ${failures.map((f) => `${f.path} (${errorMessage(f.error)})`).join(', ')}`, 'error');
+    }
+    for (const id of ids) this.setTaskRecord(id, 'done');
+    await this.history.saveNamed(`Tasks done: ${titles.slice(0, 2).join('; ')}${titles.length > 2 ? ` and ${titles.length - 2} more` : ''}`).catch(() => {});
+    // As Done on the shown one: the next task is a new one.
+    if (shown) this.newTask();
+    await this.loadTasks();
+    this.toast(`${ids.length} tasks marked done.`, 'info', [{ label: 'Undo', run: () => ids.forEach((id) => this.reopenTask(id)) }]);
   }
 
   /** Open another conversation: its messages come back from OpenCode. One at work carries on in the background. */
@@ -4647,6 +4710,10 @@ export class Studio {
       if (this.pendingBrief) await agent.setInstructions(sessionId, this.pendingBrief.key, this.pendingBrief.text);
       await agent.send(sessionId, text, context);
       if (this.handover === handover) this.handover = null;
+      // For the Tasks view: the mode, the goal (the author's first message, as the chat shows it) and how many messages.
+      const sent = state.items.filter((it) => it.kind === 'user');
+      this.updateTaskRecord(sessionId, (r) => ({ mode: state.mode, turns: sent.length + 1, asked: r.asked ?? clip(messageLine(sent[0]?.kind === 'user' ? sent[0].text : text), 300) }));
+      if (!sent.length) void this.loadTasks();
       return true;
     } catch (e) {
       return unsend(`Message not sent: ${errorMessage(e)}`);

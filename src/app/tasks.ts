@@ -6,6 +6,7 @@
 import { readLabel, readOf, type AiRead } from './ai-marks';
 import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
+import type { AgentMode } from '../services/agent/modes';
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
 import { EARLIER_CHIP, EARLIER_INTRO } from '../services/agent/message-context';
 import { questionFromTool, splitQuestions } from '../services/agent/questions';
@@ -40,9 +41,20 @@ export function withoutMarker(text: string): string {
 /** Marks a message's chip for the author's edits sent with it. */
 export const AUTHOR_EDIT_CHIP = 'Your edit:';
 
-export type TaskRecord = { sessionId: string; status: 'open' | 'done'; doneAt?: number };
+/** A file a task changed: lines added and removed over its turns, and its latest version that changed it. */
+export type TaskFile = { added: number; deleted: number; version: string };
 
-export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null };
+/**
+ * What Foreword remembers of a task on this Mac (the assistant keeps the
+ * conversation): done or not, and, from when it started keeping them, the
+ * mode of its last turn, the author's first message, its latest reply, how
+ * many messages, and the files its turns changed.
+ */
+export type TaskNotes = { doneAt?: number; mode?: AgentMode; asked?: string; said?: string; turns?: number; files?: Record<string, TaskFile> };
+
+export type TaskRecord = { sessionId: string; status: 'open' | 'done' } & TaskNotes;
+
+export type TaskSummary = { sessionId: string; title: string; status: 'open' | 'done'; updated: number; tokens: number | null } & TaskNotes;
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

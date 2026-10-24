@@ -1,16 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { pendingQuestion, studio } from '../app/studio';
+import { activityText, pendingQuestion, studio } from '../app/studio';
+import { findInTask, taskLive, whenLabel, needsYou, type Listed, type LiveSource, type TaskLive, type TaskState } from '../app/task-list';
+import { describePermission } from '../app/tool-labels';
 import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
-
-const ago = (ms: number) => {
-  const m = Math.round((Date.now() - ms) / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} h ago`;
-  return new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' });
-};
+import { Icon } from './icons';
 
 const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
 
@@ -40,40 +34,66 @@ export function ContextMeter() {
   );
 }
 
-type Task = ReturnType<typeof studio.store.get>['agent']['tasks'][number];
+export type Task = ReturnType<typeof studio.store.get>['agent']['tasks'][number];
 
-/** The book's tasks (conversations) in groups: at work or waiting, open, done; and each one's state in words. */
-export function useTaskGroups() {
-  const agent = useStore(studio.store, (s) => s.agent);
-  // In progress: the shown one while it runs, and any at work or waiting in the background.
-  const busy = (id: string) => (id === agent.sessionId ? agent.running : !!agent.background[id]);
-  const status = (t: Task): { icon: React.ReactNode; text: string; tone: string } => {
-    if (t.sessionId === agent.sessionId) return agent.running ? { icon: <span className="tool-spinner" />, text: 'working', tone: 'busy' } : { icon: '●', text: '', tone: 'current' };
-    const bg = agent.background[t.sessionId];
-    if (bg?.attention) return { icon: '!', text: bg.attention === 'question' ? 'has a question' : 'asks permission', tone: 'attention' };
-    if (bg?.running) return { icon: <span className="tool-spinner" />, text: bg.label, tone: 'busy' };
-    if (bg?.unread) return { icon: '●', text: bg.failed ? 'stopped' : 'new reply', tone: bg.failed ? 'failed' : 'unread' };
-    return { icon: t.status === 'done' ? '✓' : '○', text: '', tone: '' };
-  };
-  return {
-    agent,
-    status,
-    inProgress: agent.tasks.filter((t) => busy(t.sessionId)),
-    open: agent.tasks.filter((t) => t.status === 'open' && !busy(t.sessionId)),
-    done: agent.tasks.filter((t) => t.status === 'done' && !busy(t.sessionId)),
-  };
+/**
+ * The book's tasks, each with its state right now: the shown one's from the
+ * chat, the others' from their events. Read in slices, so a reply streaming
+ * in doesn't redraw the list.
+ */
+export function useTaskList() {
+  const tasks = useStore(studio.store, (s) => s.agent.tasks);
+  const sessionId = useStore(studio.store, (s) => s.agent.sessionId);
+  const running = useStore(studio.store, (s) => s.agent.running);
+  const activity = useStore(studio.store, (s) => activityText(s.agent.activity));
+  const background = useStore(studio.store, (s) => s.agent.background);
+  const dot = useTaskDot();
+  const asking = useStore(studio.store, (s): LiveSource['asking'] => {
+    if (pendingQuestion(s.agent) || s.agent.activity?.phase === 'asking') return 'question';
+    return s.agent.items.some((it) => it.kind === 'permission' && (it.state === 'pending' || it.state === 'sending')) ? 'permission' : null;
+  });
+  const asks = useStore(studio.store, (s) => {
+    const q = pendingQuestion(s.agent);
+    if (q) return q.fields[0]?.title ?? q.fields[0]?.description ?? '';
+    const p = s.agent.items.find((it) => it.kind === 'permission' && (it.state === 'pending' || it.state === 'sending'));
+    return p?.kind === 'permission' ? describePermission(p.action, p.resources, s.names).what : '';
+  });
+  const stopped = useStore(studio.store, (s) => s.agent.stopped) || dot === 'fail';
+  const src: LiveSource = { sessionId, running, activity, asking, asks: asks || undefined, stopped, background };
+  const listed: Listed<Task>[] = tasks.map((task) => ({ task, live: taskLive(task, src) }));
+  return { listed, sessionId, running };
 }
 
-/** One task in a list: its state, title and when it last changed. */
-export function TaskRow({ task, status, current, onPick, onContextMenu }: { task: Task; status: ReturnType<ReturnType<typeof useTaskGroups>['status']>; current: boolean; onPick: () => void; onContextMenu?: (e: React.MouseEvent) => void }) {
+/** A task's state as a mark: amber for one that needs you, blue at work, red stopped, a ring open, a tick done. */
+export function TaskGlyph({ state }: { state: TaskState }) {
+  return <span className={`task-glyph g-${state}`} aria-hidden />;
+}
+
+/** The state's words for a screen reader, where the mark has none. */
+export const STATE_WORDS: Record<TaskState, string> = { question: 'needs you', permission: 'needs you', unread: 'new reply', stopped: 'stopped', working: 'at work', open: 'open', done: 'done' };
+
+/** One task in the pane's menu: its state, title and when it last changed, and what's going on under it. */
+function MenuRow({ task, live, current, now, onPick }: { task: Task; live: TaskLive; current: boolean; now: number; onPick: () => void }) {
   return (
-    <button className={`task-row${current ? ' current' : ''}${task.status === 'done' ? ' done' : ''} ${status.tone}`} onClick={onPick} onContextMenu={onContextMenu}>
-      <span className="task-status">{status.icon}</span>
-      <span className="task-title">
-        {task.title}
-        {status.text && <span className="task-doing">{status.text}</span>}
+    <button
+      className={`task-row st-${live.state}${current ? ' current' : ''}`}
+      aria-label={`${task.title}, ${STATE_WORDS[live.state]}`}
+      onClick={onPick}
+      onContextMenu={onContextMenu(() => [
+        { label: 'Open', action: () => void studio.switchTask(task.sessionId) },
+        task.status === 'done'
+          ? { label: 'Open Again (Not Done)', action: () => studio.reopenTask(task.sessionId) }
+          : { label: 'Mark Done', enabled: live.state !== 'working', action: () => void studio.markTaskDone(task.sessionId) },
+      ])}
+    >
+      <TaskGlyph state={live.state} />
+      <span className="task-row-text">
+        <span className="task-row-line">
+          <span className="task-title">{task.title}</span>
+          <span className="task-when">{whenLabel(task.updated, now)}</span>
+        </span>
+        {live.note && <span className={`task-note n-${live.state}`}>{live.note}</span>}
       </span>
-      <span className="task-when">{ago(task.updated)}</span>
     </button>
   );
 }
@@ -91,22 +111,28 @@ export function useTaskDot(): string {
   });
 }
 
+/** Open tasks the menu lists besides the ones that need you or are at work. */
+const RECENT = 3;
+
 /**
- * The current task, and a list of the book's other tasks (conversations):
- * a click opens one, right-click marks it done or opens it again.
+ * The current task, and a menu for switching: the tasks that need you, those
+ * at work, and the last few open ones; type to find any other. The Tasks view
+ * in the sidebar has them all.
  */
 export function TaskMenu() {
-  const { agent, status, inProgress, open: openTasks, done: doneTasks } = useTaskGroups();
+  const { listed, sessionId } = useTaskList();
+  const title = useStore(studio.store, (s) => s.agent.title);
+  const compacting = useStore(studio.store, (s) => s.agent.compacting);
+  const running = useStore(studio.store, (s) => s.agent.running);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
-  const current = agent.tasks.find((t) => t.sessionId === agent.sessionId);
+  const current = listed.find((i) => i.task.sessionId === sessionId);
   const dot = useTaskDot();
-
-  // View ▸ Assistant Tasks (the sidebar's Conversations view was this list).
-  useEffect(() => studio.events.on('show-tasks', () => setOpen(true)), []);
 
   useEffect(() => {
     if (!open) return;
+    setQuery('');
     void studio.loadTasks();
     const onDown = (e: MouseEvent) => !rootRef.current?.contains(e.target as Node) && setOpen(false);
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
@@ -118,44 +144,36 @@ export function TaskMenu() {
     };
   }, [open]);
 
-  const row = (t: Task) => (
-    <TaskRow
-      key={t.sessionId}
-      task={t}
-      status={status(t)}
-      current={t.sessionId === agent.sessionId}
-      onPick={() => {
-        setOpen(false);
-        void studio.switchTask(t.sessionId);
-      }}
-      onContextMenu={onContextMenu(() => [
-        { label: 'Open', action: () => void studio.switchTask(t.sessionId) },
-        t.status === 'done'
-          ? { label: 'Open Again (Not Done)', action: () => studio.reopenTask(t.sessionId) }
-          : { label: 'Mark Done', enabled: !(t.sessionId === agent.sessionId && agent.running), action: () => void studio.markTaskDone(t.sessionId) },
-      ])}
-    />
-  );
+  const now = Date.now();
+  const pick = (id: string) => {
+    setOpen(false);
+    void studio.switchTask(id);
+  };
+  const row = (i: Listed<Task>) => <MenuRow key={i.task.sessionId} task={i.task} live={i.live} current={i.task.sessionId === sessionId} now={now} onPick={() => pick(i.task.sessionId)} />;
+  const needs = listed.filter((i) => needsYou(i.live));
+  const working = listed.filter((i) => i.live.state === 'working');
+  const recent = listed.filter((i) => i.live.state === 'open').slice(0, RECENT);
+  const found = query.trim() ? listed.filter((i) => findInTask(i.task, query)).slice(0, 12) : null;
   // On the trigger: how many others are at work, and whether any needs the author.
-  const others = Object.values(agent.background);
-  const working = others.filter((b) => b.running).length;
-  const waiting = others.filter((b) => b.attention || b.unread).length;
+  const others = listed.filter((i) => i.task.sessionId !== sessionId);
+  const othersWorking = others.filter((i) => i.live.state === 'working').length;
+  const othersWaiting = others.filter((i) => needsYou(i.live)).length;
 
   return (
     <div className="task-menu" ref={rootRef}>
       <button className="task-trigger" aria-haspopup="menu" aria-expanded={open} title="Tasks: one conversation per goal" onClick={() => setOpen((o) => !o)}>
         {/* A blank conversation's label is a placeholder, greyed out, not a third "New task" button. */}
         {dot && <span className={`task-dot ${dot}`} title={dot === 'ask' ? 'Needs you' : dot === 'busy' ? 'At work' : dot === 'fail' ? 'The last turn didn’t finish' : 'Ready'} />}
-        <span className={`task-trigger-title${agent.sessionId ? '' : ' muted'}`}>{agent.sessionId ? (agent.title ?? current?.title ?? 'Task') : 'New task'}</span>
-        {current?.status === 'done' && <span className="task-done-badge">done</span>}
-        {working > 0 && (
-          <span className="task-count busy" title={`${working} other task${working > 1 ? 's' : ''} at work`}>
-            <span className="tool-spinner" /> {working}
+        <span className={`task-trigger-title${sessionId ? '' : ' muted'}`}>{sessionId ? (title ?? current?.task.title ?? 'Task') : 'New task'}</span>
+        {current?.task.status === 'done' && <span className="task-done-badge">done</span>}
+        {othersWorking > 0 && (
+          <span className="task-count busy" title={`${othersWorking} other task${othersWorking > 1 ? 's' : ''} at work`}>
+            <span className="tool-spinner" /> {othersWorking}
           </span>
         )}
-        {waiting > 0 && (
-          <span className="task-count attention" title={`${waiting} other task${waiting > 1 ? 's need' : ' needs'} you (a question, a permission or a new reply)`}>
-            {waiting}
+        {othersWaiting > 0 && (
+          <span className="task-count attention" title={`${othersWaiting} other task${othersWaiting > 1 ? 's need' : ' needs'} you (a question, a permission or a new reply)`}>
+            {othersWaiting}
           </span>
         )}
         <span className="model-trigger-chevron">▾</span>
@@ -163,25 +181,59 @@ export function TaskMenu() {
       {open && (
         // For switching: New task, Done and the context meter are on the message box already.
         <div className="task-popover" role="menu">
-          {inProgress.length > 0 && <div className="task-section">In progress</div>}
-          {inProgress.map(row)}
-          {openTasks.length > 0 && <div className="task-section">Open</div>}
-          {openTasks.map(row)}
-          {doneTasks.length > 0 && <div className="task-section">Done</div>}
-          {doneTasks.map(row)}
-          {!agent.tasks.length && <div className="task-empty muted">No conversations yet.</div>}
-          {agent.sessionId && (
+          <label className="task-find">
+            <Icon name="search" size={13} />
+            <input autoFocus value={query} placeholder="Find a task" aria-label="Find a task" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
+          </label>
+          {found ? (
+            <>
+              {found.map(row)}
+              {!found.length && <div className="task-empty muted">No task matches “{query.trim()}”.</div>}
+            </>
+          ) : (
+            <>
+              {needs.length > 0 && (
+                <div className="task-section">
+                  Needs you<span className="task-section-count attention">{needs.length}</span>
+                </div>
+              )}
+              {needs.map(row)}
+              {working.length > 0 && (
+                <div className="task-section">
+                  At work<span className="task-section-count busy">{working.length}</span>
+                </div>
+              )}
+              {working.map(row)}
+              {recent.length > 0 && <div className="task-section">Recent</div>}
+              {recent.map(row)}
+              {!listed.length && <div className="task-empty muted">No conversations yet.</div>}
+            </>
+          )}
+          {listed.length > 0 && (
+            <button
+              className="task-all"
+              onClick={() => {
+                setOpen(false);
+                studio.showTasks();
+              }}
+            >
+              <Icon name="tasks" size={16} />
+              All tasks, in the sidebar
+              <span className="task-all-count">{listed.length}</span>
+            </button>
+          )}
+          {sessionId && (
             <div className="task-popover-footer">
               <button
                 className="small"
-                disabled={agent.running || agent.compacting}
+                disabled={running || compacting}
                 title="Summarize this conversation so far to free up the context window"
                 onClick={() => {
                   setOpen(false);
                   void studio.compactTask();
                 }}
               >
-                {agent.compacting ? 'Compacting…' : 'Compact'}
+                {compacting ? 'Compacting…' : 'Compact'}
               </button>
               <span className="muted">Summarize this conversation to free up room</span>
             </div>

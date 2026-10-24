@@ -9,6 +9,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 import { bookPalette } from './app/book-color';
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
 import { studio, type ChatItem } from './app/studio';
+import type { TaskSummary } from './app/tasks';
 import { chapterNumber } from './app/tool-labels';
 import { monaco } from './editor/monaco';
 import { selectAll } from './editor/select-all';
@@ -3366,6 +3367,18 @@ async function taskChecks() {
     record: studio.state.agent.tasks.find((t) => t.sessionId === sessionId),
     historyLatest: studio.state.history.versions[0]?.label,
   };
+  // The Tasks view: the task under Done, with its mode and the chapter it changed; a click folds that out.
+  const sidebar = studio.state.sidebar;
+  studio.showTasks();
+  await sleep(800);
+  const item = () => document.querySelector(`[data-task="${sessionId}"]`);
+  out.tasksView = { row: item()?.querySelector('.tasks-row')?.getAttribute('aria-label'), line: item()?.querySelector('.tasks-meta, .tasks-note')?.textContent };
+  item()?.querySelector<HTMLElement>('.tasks-row')?.click();
+  await sleep(1500);
+  out.tasksView = { ...(out.tasksView as object), shown: studio.state.agent.sessionId === sessionId, detail: item()?.querySelector('.tasks-detail')?.textContent };
+  out.snapshotTasks = await snap('tasks-real');
+  studio.newSession();
+  studio.showSidebar(sidebar);
 
   document.querySelector<HTMLButtonElement>('.task-trigger')?.click();
   await sleep(1200);
@@ -5235,29 +5248,104 @@ async function reloadWindowChecks() {
 }
 
 /**
- * The book's tasks (conversations) live in the assistant pane, not the
- * sidebar: no Conversations icon; View ▸ Assistant Tasks (and the palette)
- * shows the pane with its task list open, even from hidden; and while the
- * pane is hidden, a task that needs you puts a badge on its title bar toggle.
+ * The Tasks view, after History in the activity bar: View ▸ Tasks (and the
+ * palette) shows it; Needs you, At work, Open and Done (by day, then months
+ * folded), with an offer to tidy quiet ones; search; a click folds out what a
+ * task changed; its badge counts the tasks that need you. The pane's menu
+ * lists what needs you, what's at work and the recent ones, with a way to the
+ * view. While the pane is hidden, a task that needs you badges its toggle.
+ * The tasks are made up for the test, and the real ones put back.
  */
 async function conversationsChecks() {
   const out: Record<string, unknown> = {};
   const layout = localStorage.getItem('react-resizable-panels:studio-panes');
+  const sidebar = studio.state.sidebar;
   const agentShown = () => !!document.querySelector('.titlebar button[aria-label^="Assistant"][aria-pressed="true"]');
-  const icons = [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label') ?? '');
-  out.activityIcons = icons;
-  out.noConversationsIcon = !icons.some((l) => /conversation/i.test(l));
+  const labels = () => [...document.querySelectorAll('.activity-bar button')].map((b) => b.getAttribute('aria-label') ?? '');
+  out.activityIcons = labels();
+  out.tasksAfterHistory = labels().findIndex((l) => l.startsWith('Tasks')) === labels().findIndex((l) => l.startsWith('History')) + 1;
   out.paletteLabel = available(paletteCommands(studio)).find((c) => c.id === 'show-tasks')?.title;
-  // From a hidden pane: the menu item brings it back with the list open.
-  if (agentShown()) studio.events.emit('toggle-pane', 'agent');
-  await sleep(300);
-  out.hiddenFirst = !agentShown();
   await studio.menuCommand('show-tasks');
   await sleep(500);
-  out.fromMenu = { paneShown: agentShown(), listOpen: !!document.querySelector('.task-popover'), sidebar: studio.state.sidebar, snapshot: await snap('assistant-tasks') };
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  await sleep(200);
-  out.listClosed = !document.querySelector('.task-popover');
+  out.fromMenu = { sidebar: studio.state.sidebar, view: !!document.querySelector('.tasks-panel'), title: document.querySelector('.explorer .pane-title')?.textContent };
+
+  const saved = { tasks: studio.state.agent.tasks, background: studio.state.agent.background };
+  // The made-up tasks stay: no reloading the real ones, and no check that ends the one "at work" (the assistant doesn't know it).
+  const stubbed = { loadTasks: studio.loadTasks, pollBackground: (studio as any).pollBackground };
+  studio.loadTasks = async () => {};
+  (studio as any).pollBackground = async () => {};
+  const now = Date.now();
+  const day = 86_400_000;
+  const chapter = studio.state.names.chapters.find((c) => c !== studio.state.names.entry) ?? 'main.typ';
+  const version = studio.state.history.versions[0]?.id ?? '';
+  const made = (sessionId: string, title: string, more: Partial<TaskSummary>): TaskSummary => ({ sessionId, title, status: 'open', updated: now, tokens: null, ...more });
+  studio.store.set((s) => ({
+    agent: {
+      ...s.agent,
+      tasks: [
+        made('st-ask', 'Selftest: has a question', { updated: now - 4 * 60_000 }),
+        made('st-busy', 'Selftest: at work', { updated: now - 60_000 }),
+        made('st-open', 'Selftest: open, changed a chapter', { updated: now - 3_600_000, tokens: 22_000, mode: 'write', asked: 'Make the fog in this chapter do more work', turns: 3, files: { [chapter]: { added: 3, deleted: 14, version } } }),
+        made('st-talk', 'Selftest: open, a talk', { updated: now - 2 * 3_600_000, mode: 'discuss' }),
+        made('st-quiet', 'Selftest: quiet for weeks', { updated: now - 20 * day, mode: 'ask' }),
+        made('st-done', 'Selftest: done today', { status: 'done', updated: now - 2 * 3_600_000, doneAt: now - 3_600_000, mode: 'ask' }),
+        made('st-old', 'Selftest: done long ago', { status: 'done', updated: now - 70 * day }),
+      ],
+      background: {
+        'st-ask': { running: false, attention: 'question', unread: false, label: '', since: now },
+        'st-busy': { running: true, attention: null, unread: false, label: 'Reading “The Storm” (chapter 2)', since: now },
+      },
+    },
+  }));
+  await sleep(400);
+  const icon = () => document.querySelector('.activity-bar button[aria-label^="Tasks"]');
+  const text = (sel: string) => [...document.querySelectorAll(sel)].map((e) => e.textContent?.trim());
+  out.view = {
+    sections: text('.tasks-section-head'),
+    days: text('.tasks-day'),
+    months: text('.tasks-month-head'),
+    rows: [...document.querySelectorAll('.tasks-row')].map((r) => r.getAttribute('aria-label')),
+    lines: text('.tasks-note, .tasks-meta'),
+    tidy: document.querySelector('.tasks-tidy')?.textContent,
+    badge: { text: icon()?.querySelector('.activity-badge')?.textContent, amber: !!icon()?.querySelector('.activity-badge.attention'), label: icon()?.getAttribute('aria-label') },
+  };
+  out.snapshotView = await snap('tasks-view');
+  // A click folds out what it changed (the made-up task can't open in the pane: that's a toast, cleared).
+  document.querySelector<HTMLElement>('[data-task="st-open"] .tasks-row')?.click();
+  await sleep(400);
+  out.folded = { detail: document.querySelector('[data-task="st-open"] .tasks-detail')?.textContent, files: text('[data-task="st-open"] .history-file') };
+  out.snapshotFolded = await snap('tasks-folded');
+  studio.store.set({ toast: null });
+  // Search: the title, or what was asked (shown under the title).
+  const input = document.querySelector<HTMLInputElement>('.tasks-search input')!;
+  const search = async (value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(250);
+    return { filter: document.querySelector('.tasks-filter span')?.textContent, rows: [...document.querySelectorAll('.tasks-row')].map((r) => r.getAttribute('aria-label')), marked: text('.tasks-note mark') };
+  };
+  out.search = { title: await search('quiet'), asked: await search('fog'), none: await search('zzzz') };
+  await search('');
+  // No task needs you, one at work: a blue dot, no number.
+  studio.store.set((s) => ({ agent: { ...s.agent, background: { 'st-busy': s.agent.background['st-busy'] } } }));
+  await sleep(300);
+  out.busyOnly = { badge: !!icon()?.querySelector('.activity-badge'), dot: !!icon()?.querySelector('.activity-dot') };
+  studio.store.set((s) => ({ agent: { ...s.agent, background: { ...s.agent.background, 'st-ask': { running: false, attention: 'question', unread: false, label: '', since: now } } } }));
+  await sleep(300);
+  // The pane's menu: what needs you, what's at work, the recent ones, and the view.
+  if (!agentShown()) studio.events.emit('toggle-pane', 'agent');
+  await sleep(300);
+  document.querySelector<HTMLButtonElement>('.task-trigger')?.click();
+  await sleep(400);
+  out.menu = { items: text('.task-popover .task-section, .task-popover .task-row .task-title, .task-all'), find: !!document.querySelector('.task-popover .task-find input') };
+  out.snapshotMenu = await snap('tasks-menu');
+  document.querySelector<HTMLButtonElement>('.task-popover .task-all')?.click();
+  await sleep(300);
+  out.menuToView = { closed: !document.querySelector('.task-popover'), sidebar: studio.state.sidebar };
+  studio.loadTasks = stubbed.loadTasks;
+  (studio as any).pollBackground = stubbed.pollBackground;
+  studio.store.set((s) => ({ agent: { ...s.agent, tasks: saved.tasks, background: saved.background } }));
+  studio.showSidebar(sidebar);
   // A task in the background asks a question while the pane is hidden: the toggle has a badge.
   const background = studio.state.agent.background;
   studio.store.set((s) => ({ agent: { ...s.agent, background: { ...s.agent.background, 'selftest-task': { running: false, attention: 'question', unread: false, label: '', since: Date.now() } } } }));

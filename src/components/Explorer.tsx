@@ -13,6 +13,7 @@ import { SourceControlPanel } from './SourceControlPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { SearchPanel } from './SearchPanel';
 import { ContentsActions, ContentsPanel } from './ContentsPanel';
+import { TasksActions, TasksPanel, useTaskCounts } from './TasksPanel';
 import { Icon, type IconName } from './icons';
 
 function FileTree() {
@@ -139,7 +140,7 @@ function SourceControlActions() {
   );
 }
 
-export type View = 'files' | 'contents' | 'search' | 'history' | 'code' | 'todos' | 'review' | 'git';
+export type View = 'files' | 'contents' | 'search' | 'history' | 'tasks' | 'code' | 'todos' | 'review' | 'git';
 
 /** What the sidebar can show right now (Code, To do and Review only when they have something). */
 function useViews() {
@@ -219,9 +220,10 @@ function useViewTips() {
 export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: View, current: View) => void }) {
   const current = useSidebarView();
   const { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged } = useViews();
+  const tasks = useTaskCounts();
   // The views that are always there first, so they never move: the book's files, its
-  // review comments, its history. Then those that come and go, the most fleeting last.
-  const items: { id: View; icon: IconName; label: string; badge?: number; tip: Tip }[] = [
+  // review comments, its history, the assistant's tasks. Then those that come and go, the most fleeting last.
+  const items: { id: View; icon: IconName; label: string; badge?: number; tone?: 'attention' | 'busy'; tip: Tip }[] = [
     { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. Right-click one to rename it, add a chapter, and more.' } },
     { id: 'contents', icon: 'contents', label: 'Contents', tip: { name: 'Contents', about: 'The book’s chapters in order, numbered as the book numbers them, with their sections and about how long each is. Click one to go there.' } },
     { id: 'search', icon: 'search', label: 'Search the book', tip: { name: 'Search', keys: '⇧⌘F', about: 'Find words, or a pattern, in every chapter at once, and replace them all.' } },
@@ -237,6 +239,19 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
         ]
       : []),
     { id: 'history', icon: 'history', label: 'History: saved versions of the book', tip: { name: 'History', about: 'Versions of the book, saved as you work and around every change the assistant makes. See what changed, or go back to any of them.' } },
+    {
+      id: 'tasks',
+      icon: 'tasks',
+      // Amber with how many need you; else a blue dot while any are at work. Open ones wait for you, so they don't count.
+      label: `Tasks${tasks.needs ? `: ${tasks.needs} need${tasks.needs === 1 ? 's' : ''} you` : tasks.working ? `: ${tasks.working} at work` : ''}`,
+      badge: tasks.needs || undefined,
+      tone: tasks.needs ? 'attention' : tasks.working ? 'busy' : undefined,
+      tip: {
+        name: 'Tasks',
+        about: 'Everything you’ve asked the assistant to do in this book: what needs you, what’s at work, what’s still open, and what each one changed.',
+        note: [tasks.needs && `${tasks.needs} need${tasks.needs === 1 ? 's' : ''} you`, tasks.working && `${tasks.working} at work`, tasks.open && `${tasks.open} open`].filter(Boolean).join(' · ') || undefined,
+      },
+    },
     ...(hasGit
       ? [
           {
@@ -279,7 +294,7 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
               {...tips.props(it.id, on ? { ...it.tip, note: [it.tip.note, 'Click to hide the sidebar.'].filter(Boolean).join(' · ') } : it.tip)}
             >
               <Icon name={it.icon} />
-              {it.badge ? <span className="activity-badge">{it.badge > 99 ? '99+' : it.badge}</span> : null}
+              {it.badge ? <span className={`activity-badge${it.tone ? ` ${it.tone}` : ''}`}>{it.badge > 99 ? '99+' : it.badge}</span> : it.tone === 'busy' ? <span className="activity-dot" /> : null}
             </button>
           );
         })}
@@ -317,6 +332,8 @@ function ViewHeader({ view }: { view: View }) {
         ? 'Search'
       : view === 'history'
         ? 'History'
+      : view === 'tasks'
+        ? 'Tasks'
         : view === 'code'
           ? 'Code examples'
           : view === 'todos'
@@ -337,6 +354,7 @@ function ViewHeader({ view }: { view: View }) {
         </>
       )}
       {view === 'contents' && <ContentsActions />}
+      {view === 'tasks' && <TasksActions />}
       {view === 'git' && <SourceControlActions />}
     </header>
   );
@@ -351,6 +369,8 @@ function ViewBody({ view }: { view: View }) {
     <SearchPanel />
   ) : view === 'history' ? (
     <HistoryPanel />
+  ) : view === 'tasks' ? (
+    <TasksPanel />
   ) : view === 'code' ? (
     <CodePanel />
   ) : view === 'todos' ? (
@@ -367,7 +387,7 @@ function useSidebarView(): View {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
   const { hasCode, todoCount, hasReview, hasGit } = useViews();
   const available =
-    sidebar === 'files' || sidebar === 'contents' || sidebar === 'search' || sidebar === 'history' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+    sidebar === 'files' || sidebar === 'contents' || sidebar === 'search' || sidebar === 'history' || sidebar === 'tasks' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
   return available ? sidebar : 'files';
 }
 

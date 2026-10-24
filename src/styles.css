@@ -280,6 +280,9 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
  * out of the icon by a ring of the bar's colour.
  */
 .activity-badge { position: absolute; right: 3px; top: 22px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-size: 9px; font-weight: 600; line-height: 16px; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg-2); }
+/* Tasks: amber with how many need you, as the pane's menu; a blue dot while some are only at work. */
+.activity-badge.attention { background: var(--warn); color: var(--bg); }
+.activity-dot { position: absolute; right: 9px; top: 25px; width: 8px; height: 8px; border-radius: 50%; background: var(--ai-read); box-shadow: 0 0 0 2px var(--bg-2); }
 .tree { overflow: auto; flex: 1; padding: 4px 0; }
 .tree-row { display: flex; align-items: center; gap: 4px; height: 22px; padding-right: 8px; white-space: nowrap; }
 .tree-row:hover { background: var(--bg-3); }
@@ -555,15 +558,27 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .task-done-badge { font-size: 10px; font-weight: 600; color: var(--good); border: 1px solid var(--good); border-radius: 8px; padding: 0 5px; }
 .task-popover { position: absolute; top: calc(100% + 4px); left: 0; width: min(380px, 80vw); max-height: 60vh; overflow-y: auto; z-index: 50; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); padding: 6px 0; }
 .task-popover-footer { display: flex; gap: 8px; align-items: center; margin-top: 6px; padding: 8px 10px 2px; border-top: 1px solid var(--border); font-size: 11px; }
-.task-section { padding: 8px 10px 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-.task-row { display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; padding: 4px 10px; }
+.task-section { display: flex; align-items: center; gap: 6px; padding: 8px 10px 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.task-section-count { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; font-size: 10px; line-height: 16px; text-align: center; letter-spacing: 0; background: var(--bg-3); color: var(--muted); }
+.task-section-count.attention { background: var(--warn); color: var(--bg); }
+.task-section-count.busy { background: color-mix(in srgb, var(--ai-read) 20%, transparent); color: var(--ai-read); }
+.task-row { display: flex; gap: 7px; align-items: flex-start; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; padding: 4px 10px 4px 8px; }
 .task-row:hover:not(:disabled), .task-row.current { background: var(--sel); }
-.task-row.done .task-title { color: var(--muted); }
-.task-status { width: 12px; color: var(--muted); }
-.task-row.done .task-status { color: var(--good); }
+.task-row.st-done .task-title { color: var(--muted); }
+.task-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.task-row-line { display: flex; gap: 8px; align-items: baseline; }
 .task-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-when { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.task-when { font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.task-note { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-empty { padding: 8px 10px; }
+/* The menu's search, and its way to the Tasks view. */
+.task-find { display: flex; align-items: center; gap: 6px; height: 26px; margin: 2px 8px 4px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--muted); }
+.task-find:focus-within { border-color: var(--accent); }
+.task-find .icon-svg { flex: none; }
+.task-find input { flex: 1; min-width: 0; height: 100%; padding: 0; border: none; outline: none; background: transparent; color: var(--fg); font: inherit; }
+.task-all { display: flex; align-items: center; gap: 8px; width: calc(100% - 16px); margin: 6px 8px 0; padding: 5px 9px; border-radius: 7px; background: var(--bg-2); font-size: 12px; }
+.task-all .icon-svg { color: var(--muted); }
+.task-all-count { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .context-meter { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .context-bar { display: inline-block; width: 36px; height: 5px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
 .context-bar > span { display: block; height: 100%; background: var(--good); }
@@ -1544,14 +1559,7 @@ button.ask-choice:focus { border-color: var(--accent); box-shadow: 0 0 0 2px col
 /* Tasks at work in the background. */
 .task-count { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 0 6px; height: 16px; border-radius: 8px; font-size: 10.5px; font-weight: 700; }
 .task-count.busy { color: var(--accent); background: var(--sel); }
-.task-count.attention { color: var(--accent-fg); background: var(--warn); }
-.task-title { display: flex; flex-direction: column; min-width: 0; }
-.task-doing { font-size: 11px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-row.busy .task-doing { color: var(--accent); }
-.task-row.attention .task-status { color: var(--warn); font-weight: 800; }
-.task-row.attention .task-doing { color: var(--warn); }
-.task-row.unread .task-status { color: var(--accent); }
-.task-row.failed .task-status, .task-row.failed .task-doing { color: var(--bad); }
+.task-count.attention { color: var(--bg); background: var(--warn); }
 
 /* Review: groups in the list and comment cards in the editor. */
 .review-group { margin: 10px 10px 2px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
@@ -2148,3 +2156,83 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .own-rules-list .rule-pattern code { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .own-rules-actions { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12px; }
 .own-rules-actions button.link { font-size: 12px; }
+
+/*
+ * A task's state as a mark, in the pane's menu and the Tasks view: amber for
+ * one that needs you (? a question, ! a permission), a blue dot for a reply
+ * not yet seen, the assistant's blue turning while at work, red stopped, a
+ * ring open, a tick done. Colour is only ever the state.
+ */
+.task-glyph { flex: none; display: grid; place-items: center; width: 16px; height: 18px; }
+.task-glyph::before { content: ""; display: block; box-sizing: border-box; }
+.task-glyph.g-open::before { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.task-glyph.g-done::before { width: 9px; height: 5px; border-left: 2px solid var(--good); border-bottom: 2px solid var(--good); transform: translateY(-2px) rotate(-45deg); }
+.task-glyph.g-working::before { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid color-mix(in srgb, var(--ai-read) 28%, transparent); border-top-color: var(--ai-read); animation: spin 0.8s linear infinite; }
+.task-glyph.g-unread::before { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.task-glyph.g-question::before, .task-glyph.g-permission::before { width: 15px; height: 15px; border-radius: 50%; background: var(--warn); color: var(--bg); font-size: 10.5px; font-weight: 800; line-height: 15px; text-align: center; }
+.task-glyph.g-question::before { content: "?"; }
+.task-glyph.g-permission::before { content: "!"; }
+.task-glyph.g-stopped::before { width: 9px; height: 9px; border-radius: 2px; background: var(--bad); }
+:is(.task-note, .tasks-note).n-question, :is(.task-note, .tasks-note).n-permission { color: var(--warn); }
+:is(.task-note, .tasks-note).n-working { color: var(--ai-read); }
+:is(.task-note, .tasks-note).n-unread { color: var(--fg); }
+:is(.task-note, .tasks-note).n-stopped { color: var(--bad); }
+
+/*
+ * The Tasks view: a search box and This chapter, then Needs you, At work,
+ * Open and Done (by day, then by month, folded), as History's list: the task
+ * shown in the assistant pane is lit, and the one clicked folds out what it
+ * changed.
+ */
+.tasks-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tasks-search { display: flex; align-items: center; gap: 6px; padding: 8px 8px 6px; }
+.tasks-search .search-box { flex: 1; min-width: 0; }
+.tasks-here { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 26px; padding: 0 8px; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.tasks-here:hover:not(:disabled) { color: var(--fg); }
+.tasks-here.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tasks-filter { display: flex; align-items: baseline; gap: 6px; padding: 0 12px 6px; font-size: 11px; }
+.tasks-filter .link { margin-left: auto; font-size: 11px; }
+.tasks-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 14px; }
+.tasks-section-head, .tasks-month-head { display: flex; align-items: center; gap: 2px; width: 100%; padding: 0 10px 0 4px; border: none; border-radius: 0; background: var(--bg-2); color: var(--muted); }
+.tasks-section-head { position: sticky; top: 0; z-index: 3; height: 26px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.tasks-section-head:disabled { opacity: 1; }
+.tasks-section-head:hover:not(:disabled), .tasks-month-head:hover:not(:disabled) { color: var(--fg); border-color: transparent; }
+.tasks-twisty { display: grid; place-items: center; width: 16px; height: 16px; transition: transform 0.12s; }
+.tasks-twisty.open { transform: rotate(90deg); }
+.tasks-count { margin-left: 5px; min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; font-size: 10px; line-height: 16px; text-align: center; letter-spacing: 0; background: var(--bg-3); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tasks-count.attention { background: var(--warn); color: var(--bg); }
+.tasks-count.busy { background: color-mix(in srgb, var(--ai-read) 20%, transparent); color: var(--ai-read); }
+.tasks-day { padding: 8px 12px 2px 30px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.tasks-month-head { height: 26px; margin-top: 2px; padding-left: 10px; font-size: 11.5px; font-weight: 600; background: transparent; }
+.tasks-month-head:disabled { opacity: 1; }
+.tasks-month-count { margin-left: auto; font-weight: 400; font-variant-numeric: tabular-nums; }
+.tasks-item { position: relative; margin: 0 6px; }
+.tasks-row { display: flex; gap: 7px; padding: 5px 8px 5px 5px; border-radius: 7px; cursor: default; outline: none; }
+.tasks-row:hover { background: var(--bg-3); }
+.tasks-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tasks-item.shown > .tasks-row, .tasks-item.selected > .tasks-row { background: var(--sel); }
+/* The task shown in the assistant pane: an accent edge, as the open view's in the activity bar. */
+.tasks-item.shown > .tasks-row::before { content: ""; position: absolute; left: -6px; top: 5px; height: calc(100% - 10px); max-height: 32px; width: 2px; border-radius: 1px; background: var(--accent); }
+.tasks-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tasks-line { display: flex; gap: 8px; align-items: baseline; }
+.tasks-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tasks-row:is(.st-done, .quiet) .tasks-title { color: var(--muted); }
+.tasks-when { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tasks-note, .tasks-meta { font-size: 11px; line-height: 16px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tasks-note mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 2px; }
+.tasks-detail { margin: 2px 0 8px 24px; padding: 2px 0 0; display: flex; flex-direction: column; gap: 1px; animation: appear 0.12s ease-out; }
+.tasks-detail-label { padding: 6px 8px 1px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.tasks-asked { padding: 0 8px; font-size: 12px; -webkit-user-select: text; user-select: text; }
+.tasks-file { font-family: inherit; font-size: 12px; }
+.tasks-none { padding: 0 8px; font-size: 11.5px; }
+.tasks-facts { padding: 6px 8px 0; font-size: 11px; }
+.tasks-detail .history-version-actions { margin-left: 2px; }
+.tasks-tidy { display: flex; flex-direction: column; gap: 7px; margin: 2px 8px 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: 12px; }
+.tasks-tidy-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.tasks-selection { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); font-size: 12px; }
+.tasks-selection > span { margin-right: auto; font-weight: 600; }
+.tasks-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 36px 24px; text-align: center; color: var(--muted); }
+.tasks-empty .icon-svg { opacity: 0.7; stroke-width: 1.3; }
+.tasks-empty-title { font-weight: 600; color: var(--fg); }
+.tasks-empty p { margin: 0; font-size: 12px; line-height: 1.45; }
+.tasks-empty-line { padding: 12px 14px; font-size: 12px; }
