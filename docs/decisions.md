@@ -4425,6 +4425,40 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   outline with each chapter's file and line, an error typed (not saved)
   listed with Typst's hint and no pages until it's gone.
 
+### Ready to notarize (2026-10-29)
+
+- **Asked for:** notarizing, so a downloaded Foreword opens without System
+  Settings ▸ Privacy & Security ▸ Open Anyway. The release workflow already
+  handed Tauri a Developer ID certificate from secrets; none are set, and
+  this Mac has only an Apple Development certificate, which can't notarize.
+  What the first signed run would have hit, found without one:
+- **OpenCode and Tinymist went in unsigned.** They're resources
+  (tauri.bundle.json), and Tauri signs only the app and its sidecars;
+  notarizing checks every program in the app. `scripts/sign-bundled.mjs`
+  signs both first (hardened runtime, secure timestamp) and runs each once.
+- **OpenCode needs its JIT.** Under the hardened runtime, Bun's engine gets
+  no JIT without `com.apple.security.cs.allow-jit` (and unsigned executable
+  memory): it still runs, six times slower (OpenCode 2.0.20, a loop run with
+  `BUN_BE_BUN=1`: 0.95 s unsigned, 5.9 s hardened, 0.95 s hardened with
+  `src-tauri/entitlements/opencode.plist`). Library validation is off too,
+  for the native modules it loads. Tinymist and the app need nothing: the
+  app links only system libraries and sends no Apple Events.
+- Checked with ad hoc signatures that have the runtime flag (the same
+  rules, no keychain): OpenCode hardened, with the entitlements, served a
+  turn through a mock model, Foreword's tools and an image; the debug app
+  hardened ran the `bookpages` self-test (preview, Tinymist, the MCP server).
+- **The workflow:** with all six secrets, the certificate goes into a
+  keychain of the run's own (Tauri then finds it there, not importing it
+  again), the bundled programs are signed, and an overlay config gives the
+  app the identity in place of tauri.bundle.json's ad hoc `-` (Tauri reads
+  `APPLE_SIGNING_IDENTITY` too, but that couldn't be tried). Tauri signs and
+  notarizes with the Apple ID; a last step checks the signature, OpenCode's
+  JIT entitlement, the stapled ticket and `spctl` saying "Notarized
+  Developer ID". The release notes leave out Open Anyway when it's signed.
+  Without the secrets nothing changes.
+- **Not tried:** a signed run itself, which needs the Developer ID
+  certificate (Apple Developer Program).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
