@@ -45,6 +45,33 @@ export function listedHeadings(c: FileContents, main: boolean, open: boolean): H
   return [...c.headings.slice(0, 1), ...(open ? sections(c, false) : [])];
 }
 
+/** A heading's words, to compare one as typeset with one as written (Typst curls quotes, makes dashes, drops markup). */
+const headingKey = (title: string) =>
+  title
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/**
+ * Where each typeset heading is written ("chapters/one.typ:12"), given the
+ * book's headings as written, in reading order: the next one that reads the
+ * same (so each chapter's "Exercises" is its own), else the same anywhere.
+ * Undefined where none does.
+ */
+export function whereWritten(typeset: readonly { title: string }[], written: readonly { path: string; line: number; title: string }[]): (string | undefined)[] {
+  const keys = written.map((w) => headingKey(w.title));
+  let next = 0;
+  return typeset.map(({ title }) => {
+    const key = headingKey(title);
+    if (!key) return undefined;
+    let at = keys.indexOf(key, next);
+    if (at >= 0) next = at + 1;
+    else at = keys.indexOf(key);
+    return at >= 0 ? `${written[at].path}:${written[at].line}` : undefined;
+  });
+}
+
 /** "2,140 words", "1 word": rounded, since it's only about. */
 export function wordsLabel(n: number): string {
   if (n === 1) return '1 word';

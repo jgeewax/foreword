@@ -11,6 +11,7 @@ import { available, commandLabel, paletteCommands, rankCommands } from './app/co
 import { studio, type ChatItem } from './app/studio';
 import type { TaskSummary } from './app/tasks';
 import { chapterNumber } from './app/tool-labels';
+import { handleMcp, pngSize } from './app/studio-tools';
 import { monaco } from './editor/monaco';
 import { selectAll } from './editor/select-all';
 import { undoRedo } from './editor/undo-redo';
@@ -3530,6 +3531,47 @@ async function menuChecks() {
  * cards in place, comments following edits; with the agent, fix one, then all, and
  * keep one change and undo another.
  */
+/**
+ * Foreword's tools for the book as the author sees it (view_pages,
+ * book_outline, book_problems, review_comments), called through the MCP
+ * handler as an assistant calls them, on the live preview. An error is typed
+ * into the open chapter (never saved) and taken out again.
+ */
+async function bookPagesChecks(editor: monaco.editor.IStandaloneCodeEditor) {
+  const out: Record<string, unknown> = {};
+  const call = async (name: string, args: object = {}) => {
+    const answer = await handleMcp(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }), studio.toolsHost);
+    const r = JSON.parse(answer!).result as { content: { type: string; text?: string; data?: string; mimeType?: string }[]; isError?: boolean };
+    const images = r.content.slice(1);
+    return { text: r.content[0].text, error: !!r.isError, images: images.map((c) => ({ type: c.type, mimeType: c.mimeType, size: pngSize(c.data ?? ''), chars: c.data?.length })), first: images[0]?.data };
+  };
+  await waitFor(() => studio.state.compile.status === 'ok', 60000, 'the book typeset');
+  // Tinymist sends the outline while the preview is connected.
+  await waitFor(() => studio.toolsHost.book.outline(), 15000, 'the outline').catch(() => null);
+  out.outline = await call('book_outline');
+  const pages = await call('view_pages', { pages: '1-2' });
+  out.page1 = pages.first;
+  out.pages = { ...pages, first: undefined };
+  const t = Date.now();
+  await call('view_pages', { pages: '2' });
+  out.onePageMs = Date.now() - t;
+  out.problems = await call('book_problems');
+  out.comments = await call('review_comments');
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  try {
+    editor.executeEdits('selftest', [{ range: monaco.Range.fromPositions(model.getFullModelRange().getEndPosition()), text: '\n#nosuchthing-foreword\n' }]);
+    await waitFor(() => studio.state.compile.status === 'error', 20000, 'the error');
+    out.problemsWithError = await call('book_problems');
+    out.pagesWithError = await call('view_pages', { pages: '1' });
+  } finally {
+    if (model.getValue() !== original) model.setValue(original);
+  }
+  await waitFor(() => studio.state.compile.status === 'ok', 20000, 'the error gone');
+  out.problemsAfter = await call('book_problems');
+  return out;
+}
+
 async function reviewChecks(withAgent: boolean) {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
@@ -9752,6 +9794,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('bundle')) result.bundle = await bundleChecks();
     if (launch.selftestEdits && want('samples')) result.samples = await sampleChecks();
     if (want('tools')) result.tools = await toolPathChecks();
+    if (want('bookpages')) result.bookpages = await bookPagesChecks(editor);
     for (const kind of ['claude', 'gemini', 'codex'] as const) if (launch.selftestAgent && want(`acp-${kind}`)) result[`acp-${kind}`] = await acpChecks(kind);
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('dividers')) result.dividers = await dividerChecks();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countWords, fileContents, headingAt, listedHeadings, wordsLabel } from './contents';
+import { countWords, fileContents, headingAt, listedHeadings, whereWritten, wordsLabel } from './contents';
 
 describe('the book’s contents', () => {
   it('counts the words of the prose, not the code around it', () => {
@@ -45,5 +45,28 @@ describe('the book’s contents', () => {
     expect(wordsLabel(1)).toBe('1 word');
     expect(wordsLabel(347)).toBe('347 words');
     expect(wordsLabel(2143)).toBe('2,140 words');
+  });
+});
+
+describe('where a typeset heading is written', () => {
+  const written = [
+    { path: 'chapters/one.typ', line: 1, title: 'The "Storm"' },
+    { path: 'chapters/one.typ', line: 30, title: 'Exercises' },
+    { path: 'chapters/two.typ', line: 1, title: 'Calm -- at last' },
+    { path: 'chapters/two.typ', line: 44, title: 'Exercises' },
+    { path: 'main.typ', line: 12, title: 'Index' },
+  ];
+
+  it('is the next heading in reading order that reads the same, as Typst sets its quotes and dashes', () => {
+    expect(whereWritten([{ title: 'The “Storm”' }, { title: 'Exercises' }, { title: 'Calm – at last' }, { title: 'Exercises' }], written)).toEqual([
+      'chapters/one.typ:1',
+      'chapters/one.typ:30',
+      'chapters/two.typ:1',
+      'chapters/two.typ:44',
+    ]);
+  });
+
+  it('is found anywhere when it comes out of order, and nowhere when no heading reads the same', () => {
+    expect(whereWritten([{ title: 'Index' }, { title: 'The Storm' }, { title: 'Contents' }, { title: '' }], written)).toEqual(['main.typ:12', 'chapters/one.typ:1', undefined, undefined]);
   });
 });

@@ -50,6 +50,16 @@ describe('buildInstructions', () => {
     expect(text).toMatch(/never offer to do so/);
   });
 
+  it('with Foreword’s tools, looks at the pages when the request is about how they look', () => {
+    expect(text).toMatch(/To check your work, re-read the source\. Compiler errors show up/);
+    expect(text).not.toMatch(/view_pages/);
+    const tools = buildInstructions({ ...ctx, studioTools: true });
+    expect(tools).toMatch(/You can see the pages: view_pages/);
+    expect(tools).toMatch(/look at the pages before and after your change/);
+    expect(tools).toMatch(/book_problems says whether you left an error/);
+    expect(tools).toMatch(/review_comments/);
+  });
+
   it('caps long file lists', () => {
     const many = Array.from({ length: 100 }, (_, i) => `chapters/ch${i}.typ`);
     const long = buildInstructions({ ...ctx, typFiles: many });

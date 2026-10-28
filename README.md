@@ -95,6 +95,8 @@ Typst can set almost anything a book designer can imagine, if you know how to as
 > *“Draw a flowchart of the hiring process.”*<br>
 > *“Make a chart from data/sales.csv.”*
 
+It sees the pages as you do, so it checks its own work: a figure that landed two pages late, a table running off the page, a heading left alone at the foot of one.
+
 And when you're stuck, it gets you moving: an outline for the next chapter, a rough first pass, three ways to open a scene.
 
 </td>

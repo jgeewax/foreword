@@ -14,7 +14,7 @@ import { definitionPreview, filePreview, labelPreview } from '../editor/definiti
 import { jumpCandidates, jumpScrollTop } from '../editor/preview-sync';
 import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
-import type { SourceJump } from '../services/typst';
+import type { OutlineItem, SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
 import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DialectHint, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
@@ -31,13 +31,13 @@ import {
   type ProjectSettings,
 } from './project-settings';
 import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type PreviewScope, type ToolName } from './settings';
-import { handleMcp, STUDIO_TOOLS, type ModelChoice, type StudioHost } from './studio-tools';
+import { handleMcp, STUDIO_TOOLS, type BookProblem, type CommentRow, type ModelChoice, type PageHeading, type StudioHost } from './studio-tools';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
-import { chapterNumber, describeTool, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
-import { chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
+import { chapterNumber, describeTool, fileName, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
+import { CHAPTER_PREVIEW_NAME, chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
 import { scanIncludes } from './includes';
 import { labelPlaces, referenceAt } from './labels';
 import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
@@ -53,7 +53,7 @@ import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
 import { shouldStartTour, TOUR_SEEN_KEY, TOUR_STEPS } from './tour';
 import { replaceText, searchPattern, searchText, SEARCHABLE, type FileMatches, type SearchMatch, type SearchOptions } from './book-search';
-import { fileContents, type FileContents } from './contents';
+import { fileContents, whereWritten, type FileContents } from './contents';
 import { bookPreviewText, inRefGuard, RefIndex, refDiagnostic, refGuard, type RefProblem } from './broken-refs';
 import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
@@ -891,6 +891,11 @@ export class Studio {
   private previewOpened = false;
   private pendingDisk = new Set<string>();
   private diskTimer: number | undefined;
+  /** When a file last changed on disk (the assistant's edits, say): Tinymist hears of it a moment later. */
+  private lastDiskChange = 0;
+  /** Typesets that worked since Tinymist started, and the headings as the latest one placed them (Tinymist sends them while the preview is connected). */
+  private typesets = 0;
+  private pageOutline: { items: OutlineItem[]; typeset: number } | null = null;
   private unsubscribeAgent: (() => void) | null = null;
   /** Which program the running assistant is (Settings ▸ Assistant). */
   private agentKind: AssistantId | null = null;
@@ -960,8 +965,10 @@ export class Studio {
     });
     window.addEventListener('pagehide', () => this.keepChat());
     this.typst.on('diagnostics', (uri, list) => this.onDiagnostics(uri, list));
+    this.typst.on('outline', (items) => (this.pageOutline = { items, typeset: this.typesets }));
     this.typst.on('compile', (s) => {
       const status = s.status === 'compiling' ? 'compiling' : s.status === 'compileSuccess' ? 'ok' : 'error';
+      if (status === 'ok') this.typesets++;
       this.store.set((st) => ({
         compile: {
           status,
@@ -2995,6 +3002,7 @@ export class Studio {
   }
 
   private onDiskChange(paths: string[]) {
+    this.lastDiskChange = Date.now();
     for (const p of paths) this.pendingDisk.add(p);
     clearTimeout(this.diskTimer);
     this.diskTimer = window.setTimeout(() => {
@@ -3520,6 +3528,7 @@ export class Studio {
       return;
     }
     this.store.set({ preview: { status: 'starting' } });
+    this.pageOutline = null;
     // The cover is its own document: preview it instead of the book on request.
     if (this.state.previewTarget === 'cover' && !ws.files.includes(COVER_PREVIEW)) this.store.set({ previewTarget: 'book' });
     // The book's citations, for the guard against references that go nowhere (refGuard): known before it's first typeset.
@@ -6871,7 +6880,76 @@ export class Studio {
     },
     setMode: (mode) => this.setMode(mode),
     openSettings: (page) => this.openSettings(page),
+    book: {
+      preview: () => {
+        const { previewTarget, previewChapter, names, compile } = this.state;
+        return {
+          shows: previewTarget === 'cover' ? { kind: 'cover' } : previewChapter ? { kind: 'chapter', chapter: fileName(previewChapter, names) } : { kind: 'book' },
+          pages: compile.pages ?? null,
+          status: compile.status,
+        };
+      },
+      settled: () => this.typesetSettled(),
+      pageImages: (pages, ppi) => this.typst.pageImages(pages, ppi),
+      outline: () => {
+        const o = this.pageOutline;
+        return o && { headings: this.pageHeadings(o.items), stale: o.typeset < this.typesets };
+      },
+      problems: () =>
+        [...this.diagnostics.entries()]
+          .filter(([path]) => !path.endsWith(CHAPTER_PREVIEW_NAME))
+          .flatMap(([path, list]) =>
+            list
+              .filter((d) => d.severity === 1 || d.severity === 2)
+              .map((d): BookProblem => ({ path, line: d.range.start.line + 1, column: d.range.start.character + 1, severity: d.severity === 1 ? 'error' : 'warning', message: d.message })),
+          )
+          .sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line || a.column - b.column),
+      comments: async () => {
+        const rows: CommentRow[] = [];
+        for (const c of this.state.review.comments) {
+          if (c.status === 'resolved') continue;
+          const text = await this.currentText(c.path);
+          const at = text == null ? null : locate(text, c);
+          rows.push({ id: c.id, path: c.path, line: at && text != null ? text.slice(0, at[0]).split('\n').length : null, quote: c.quote, text: c.text, status: c.status });
+        }
+        return rows;
+      },
+    },
   };
+
+  /**
+   * Once Tinymist has caught up: a file changed on disk a moment ago reaches it
+   * through its watcher (or the editor's merge), then it typesets. False if it's
+   * still at it after 20 s (a long book's first typeset can take that).
+   */
+  private async typesetSettled(): Promise<boolean> {
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const deadline = Date.now() + 20_000;
+    const sinceDisk = Date.now() - this.lastDiskChange;
+    if (sinceDisk < 700) await wait(700 - sinceDisk);
+    while (this.state.compile.status === 'compiling' || this.state.preview.status === 'starting') {
+      if (Date.now() > deadline) return false;
+      await wait(100);
+    }
+    return true;
+  }
+
+  /** Tinymist's outline as a list, each heading with where it's written (the files in reading order, then the main file). */
+  private pageHeadings(items: OutlineItem[]): PageHeading[] {
+    const flat: PageHeading[] = [];
+    const walk = (list: OutlineItem[], level: number) => {
+      for (const it of list) {
+        flat.push({ level, title: String(it.title ?? '').trim(), page: Number(it.position?.page_no) || 0 });
+        walk(Array.isArray(it.children) ? it.children : [], level + 1);
+      }
+    };
+    walk(items, 1);
+    const { names, contents } = this.state;
+    const files = [...names.chapters, ...(names.entry ? [names.entry] : [])];
+    const written = files.flatMap((path) => (contents[path]?.headings ?? []).map((h) => ({ path, line: h.line, title: h.title })));
+    const at = whereWritten(flat, written);
+    return flat.map((h, i) => (at[i] ? { ...h, at: at[i] } : h));
+  }
 
   /** The reply that asked is over: what the tools asked for, in order. */
   private async runWhenIdle() {

@@ -135,7 +135,7 @@ export function describeTool(name: string, input: unknown, names: BookNames, out
     return rel ? ` in ${fileName(rel, names) === rel ? `${rel}/` : fileName(rel, names)}` : '';
   };
   const own = studioToolName(name);
-  if (own) return describeStudioTool(own, o);
+  if (own) return describeStudioTool(own, o, output);
   switch (name) {
     case 'read':
       return {
@@ -269,9 +269,22 @@ const STUDIO_TOOL_ASKS: Record<string, string> = {
 };
 
 /** Foreword's own tools (studio-tools.ts), in words. */
-function describeStudioTool(tool: string, o: Record<string, unknown>): ToolLabel {
+function describeStudioTool(tool: string, o: Record<string, unknown>, output?: string): ToolLabel {
   const said = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   switch (tool) {
+    case 'view_pages': {
+      const asked = String(o.pages ?? '').trim();
+      const pages = /^\d+$/.test(asked) ? `page ${asked}` : asked ? `pages ${asked.replace(/\s*[-–]\s*/g, '–')}` : 'pages of the book';
+      return { done: `Looked at ${pages}`, running: `Looking at ${pages}` };
+    }
+    case 'book_outline':
+      return { done: 'Looked at where the chapters fall', running: 'Looking at where the chapters fall' };
+    case 'book_problems': {
+      const counts = output == null ? null : /^No errors/.test(output) ? 'none' : (/^([^:\n]*(?:error|warning)s?)[:.]/i.exec(output)?.[1].toLowerCase() ?? null);
+      return { done: 'Checked the book for errors', running: 'Checking the book for errors', note: counts ?? undefined };
+    }
+    case 'review_comments':
+      return { done: 'Read your review comments', running: 'Reading your review comments' };
     case 'get_settings':
       return { done: 'Looked at Foreword’s settings', running: 'Looking at Foreword’s settings' };
     case 'change_settings': {

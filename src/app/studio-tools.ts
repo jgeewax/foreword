@@ -7,6 +7,10 @@
 //
 // Changes to the assistant itself (which one, model, effort, mode) wait until
 // its reply ends, so they never pull the rug from under the turn that asked.
+//
+// And the book as the author sees it, which its files alone don't show: its
+// pages as they're typeset (images), where each heading landed, Typst's
+// errors, and the author's review comments. These only look.
 import type { AgentMode } from '../services/agent/modes';
 import { AGENT_MODES, modeConfig, modeNamed } from '../services/agent/modes';
 import { effortFor } from '../services/agent/models';
@@ -26,6 +30,33 @@ export type ToolsSettingsPage = (typeof SETTINGS_PAGES)[number];
 
 /** Model and effort to use once an assistant is switched to (or now): a model's id or part of its name ("default": its own), an effort level. */
 export type ModelChoice = { model?: string; effort?: string };
+
+/** What the preview typesets: the whole book, one chapter of it alone (named as the chat names it), or the cover. */
+export type PreviewShows = { kind: 'book' } | { kind: 'chapter'; chapter: string } | { kind: 'cover' };
+
+/** A heading as typeset: its page (from 1) and, when Foreword can tell, where it's written ("chapters/one.typ:12"). */
+export type PageHeading = { level: number; title: string; page: number; at?: string };
+
+export type BookProblem = { path: string; line: number; column: number; severity: 'error' | 'warning'; message: string };
+
+/** A review comment, found in its file as it is now (line null: its passage has changed since). */
+export type CommentRow = { id: string; path: string; line: number | null; quote: string; text: string; status: 'open' | 'addressed' };
+
+/** The book as the preview has it, for the tools that look at it. */
+export type BookHost = {
+  /** What the preview shows, its page count (null: not typeset yet), and whether Typst is at work or stopped by errors. */
+  preview(): { shows: PreviewShows; pages: number | null; status: 'idle' | 'compiling' | 'ok' | 'error' };
+  /** Once typesetting has caught up with the latest changes: true, or false if it took too long. */
+  settled(): Promise<boolean>;
+  /** Pages (from 1) as PNGs, base64, at `ppi`, and the page count. */
+  pageImages(pages: number[], ppi: number): Promise<{ total: number; pages: { page: number; data: string }[] }>;
+  /** Its headings in order, as last typeset (stale: from before the latest changes); null if it hasn't been with the preview open. */
+  outline(): { headings: PageHeading[]; stale: boolean } | null;
+  /** Typst's errors and warnings, and references that go nowhere, in file and line order. */
+  problems(): BookProblem[];
+  /** The review comments not yet resolved. */
+  comments(): Promise<CommentRow[]>;
+};
 
 /** What the tools act on: Foreword (studio.ts), or a test's stand-in. */
 export type StudioHost = {
@@ -58,6 +89,7 @@ export type StudioHost = {
   chooseModel(choice: ModelChoice): Promise<void>;
   setMode(mode: AgentMode): Promise<void>;
   openSettings(page?: ToolsSettingsPage): void;
+  book: BookHost;
 };
 
 /** The app preferences the assistant may change, what each does, and the values it takes. */
@@ -116,13 +148,16 @@ const AUTHOR_ONLY_NOTE =
 const BOOK_NOTE =
   'This book’s own settings (its main file, Typst root, output folder, font folders, the language its spelling is checked in) are in .foreword.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there. The words its spelling check accepts (its characters’ names, its terms) are in .foreword/dictionary.txt, one per line, sorted.';
 
+/** A tool's answer: words, and pictures after them (PNGs, base64). */
+type ToolOutput = { text: string; images?: string[] };
+
 type Tool = {
   name: string;
   title: string;
   description: string;
   inputSchema: Record<string, unknown>;
   readOnly?: boolean;
-  run(input: Record<string, unknown>, host: StudioHost): Promise<string> | string;
+  run(input: Record<string, unknown>, host: StudioHost): Promise<string | ToolOutput> | string | ToolOutput;
 };
 
 /** A refusal or a mistake: the assistant reads it as the tool's error. */
@@ -176,6 +211,79 @@ function unwrapped(input: Record<string, unknown>): Record<string, unknown> {
   }
   return inner && typeof inner === 'object' && !Array.isArray(inner) ? (inner as Record<string, unknown>) : input;
 }
+
+/** Pages at a time: each is an image for the model to read. */
+export const MAX_PAGES = 4;
+/** Pages are drawn at this resolution (11 pt text about 17 px tall), unless a page would then be longer than MAX_SIDE pixels. */
+const PAGE_PPI = 110;
+const MAX_SIDE = 1600;
+
+/** "41", "41-42", "pages 12, 30" (or a number): the pages asked for, in order and each once (the first MAX_PAGES), and how many that was; null if it isn't pages. */
+export function parsePages(v: unknown): { pages: number[]; asked: number } | null {
+  const text = (typeof v === 'number' ? String(v) : typeof v === 'string' ? v : '').replace(/\b(pages?|pp?)\b\.?/gi, ' ');
+  const parts = text
+    .replace(/\s*(?:[-–—]|\bto\b)\s*/gi, '-')
+    .split(/[\s,;&]+|\band\b/i)
+    .filter(Boolean);
+  if (!parts.length) return null;
+  const pages: number[] = [];
+  let asked = 0;
+  for (const part of parts) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) return null;
+    const [a, b] = [Number(m[1]), Number(m[2] ?? m[1])];
+    if (a < 1 || b < a) return null;
+    for (let p = a; p <= b; p++) {
+      if (pages.includes(p)) continue;
+      asked++;
+      if (pages.length < MAX_PAGES) pages.push(p);
+      // A range over the whole book needs no more counting than that.
+      if (asked > 10_000) break;
+    }
+  }
+  return { pages, asked };
+}
+
+/** A PNG's size in pixels, from its header (base64); null if it isn't one. */
+export function pngSize(data: string): { width: number; height: number } | null {
+  try {
+    const head = atob(data.slice(0, 32));
+    if (head.slice(12, 16) !== 'IHDR') return null;
+    const n = (i: number) => ((head.charCodeAt(i) << 24) | (head.charCodeAt(i + 1) << 16) | (head.charCodeAt(i + 2) << 8) | head.charCodeAt(i + 3)) >>> 0;
+    return { width: n(16), height: n(20) };
+  } catch {
+    return null;
+  }
+}
+
+/** "page 41", "pages 41–42", "pages 12, 30 and 31". */
+function pagesWords(pages: number[]): string {
+  if (pages.length === 1) return `page ${pages[0]}`;
+  const run = pages.every((p, i) => i === 0 || p === pages[i - 1] + 1);
+  return run ? `pages ${pages[0]}–${pages[pages.length - 1]}` : `pages ${pages.slice(0, -1).join(', ')} and ${pages[pages.length - 1]}`;
+}
+
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+
+/** What the preview shows, said once at the top of what a tool found there. */
+function previewWords(shows: PreviewShows): string {
+  if (shows.kind === 'chapter')
+    return `The preview shows ${shows.chapter} alone (the author previews one chapter at a time), so these are that chapter's pages, not the whole book's: its page numbers, and its references to other chapters, are right only in the whole book.`;
+  if (shows.kind === 'cover') return 'The preview shows the book’s cover now, with its guides (trim, bleed and spine), not the book’s pages.';
+  return '';
+}
+
+/** Said when what a tool found may be from before the latest change. */
+const NOT_SETTLED = 'It was still being typeset after the latest change, so this may be from just before it.';
+
+const COMMENT_NOTE =
+  'To work through them all, the author can press Fix all in Review: they come to you with a way to report on each, and the author keeps or undoes each change. If they ask you to fix some here instead, make the changes and say which comment each one answers.';
+
+const short = (s: string, n = 160) => {
+  const one = s.replace(/\s+/g, ' ').trim();
+  return one.length > n ? `${one.slice(0, n - 1)}…` : one;
+};
 
 export const TOOLS: Tool[] = [
   {
@@ -350,10 +458,135 @@ export const TOOLS: Tool[] = [
       return `Settings is open${page ? ` at ${page}` : ''} for the author.`;
     },
   },
+  {
+    name: 'view_pages',
+    title: 'Look at pages of the book',
+    description: `See pages of the book as they're typeset now, as images, with any text the author hasn't saved yet. For what the source can't show: where a figure or table landed and whether it fits, a heading left alone at the foot of a page, a chapter opening on a left-hand page, a page left mostly empty, spacing and alignment, how a layout change came out. Pages count from the document's first page (1), which isn't always the number printed on it; book_outline says on which page each chapter and section starts. Up to ${MAX_PAGES} pages at a time.`,
+    inputSchema: {
+      type: 'object',
+      properties: { pages: { type: 'string', description: 'A page, a range or a list, counted from the first page: "41", "41-42", "12, 30"' } },
+      required: ['pages'],
+      additionalProperties: false,
+    },
+    readOnly: true,
+    run: async (input, host) => {
+      const asked = parsePages(input.pages);
+      if (!asked) throw new ToolError('Give the pages as a number, a range or a list, like "41", "41-42" or "12, 30", counted from the first page (book_outline says where each chapter starts).');
+      const book = host.book;
+      const settled = await book.settled();
+      const { shows, pages: count } = book.preview();
+      const what = shows.kind === 'cover' ? 'The cover' : shows.kind === 'chapter' ? capital(shows.chapter) : 'The book';
+      const beyond = count ? asked.pages.filter((p) => p > count) : [];
+      const want = asked.pages.filter((p) => !beyond.includes(p));
+      if (!want.length) throw new ToolError(`${what} has ${plural(count!, 'page')}: there's no ${pagesWords(beyond)}.`);
+      // With an error, Typst makes no pages: the preview keeps the last ones it could.
+      const draw = (ppi: number) =>
+        book.pageImages(want, ppi).catch((e) => {
+          if (book.preview().status === 'error')
+            throw new ToolError('Typst has an error just now, so there are no pages to look at until it’s fixed: book_problems lists it. (The preview keeps showing the last pages it could make.)');
+          throw e;
+        });
+      let got = await draw(PAGE_PPI);
+      // A big page (a poster, a cover spread) drawn smaller, so it isn't more than the model looks at.
+      const longest = Math.max(0, ...got.pages.map((p) => pngSize(p.data)).map((s) => (s ? Math.max(s.width, s.height) : 0)));
+      if (longest > MAX_SIDE) got = await draw(Math.max(36, Math.floor((PAGE_PPI * MAX_SIDE) / longest)));
+      if (!got.pages.length) throw new ToolError(`Foreword couldn’t draw ${pagesWords(want)}${got.total ? `: ${what.toLowerCase()} has ${plural(got.total, 'page')}` : ''}.`);
+      const shown = got.pages.map((p) => p.page);
+      const said = [
+        `${capital(pagesWords(shown))} of ${got.total || count || '?'}${shows.kind === 'book' ? ', as the book is typeset now' : ''}${shown.length > 1 ? ', in that order' : ''}.`,
+        previewWords(shows),
+        beyond.length ? `There's no ${pagesWords(beyond)}: ${what.toLowerCase()} has ${plural(count!, 'page')}.` : '',
+        asked.asked > asked.pages.length ? `You asked for ${plural(asked.asked, 'page')}; these are the first ${MAX_PAGES}. Ask for the others in turn.` : '',
+        settled ? '' : NOT_SETTLED,
+      ];
+      return { text: said.filter(Boolean).join(' '), images: got.pages.map((p) => p.data) };
+    },
+  },
+  {
+    name: 'book_outline',
+    title: 'Where the chapters fall',
+    description:
+      'Where each chapter and section starts in the book as typeset now: its title, its page (counted from the first page, as view_pages counts them, not the numbers printed on them) and, where Foreword can tell, the file and line it is written on; and how many pages there are. To find the pages to look at, or to check how long chapters run.',
+    inputSchema: {
+      type: 'object',
+      properties: { depth: { type: 'integer', minimum: 1, maximum: 6, description: 'How deep: 1 for chapters only, 2 (the default) with their sections, 3 or more for subsections' } },
+      additionalProperties: false,
+    },
+    readOnly: true,
+    run: async (input, host) => {
+      const book = host.book;
+      const settled = await book.settled();
+      const outline = book.outline();
+      const { shows, pages } = book.preview();
+      if (!outline)
+        throw new ToolError('Foreword hasn’t had the book typeset with its preview open yet, so it can’t say where the pages fall. view_pages still shows any page, by its number.');
+      const depth = Math.min(6, Math.max(1, Math.round(Number(input.depth)) || 2));
+      const rows = outline.headings.filter((h) => h.level <= depth);
+      const shownRows = rows.slice(0, 400);
+      const head = [
+        pages ? `${plural(pages, 'page')}${shows.kind === 'book' ? ', as the book is typeset now' : ''}.` : '',
+        previewWords(shows),
+        outline.stale || !settled ? 'This is from just before the latest change, which is still being typeset.' : '',
+      ].filter(Boolean);
+      if (!rows.length) return [...head, outline.headings.length ? `No headings at level ${depth} or above: give a greater depth.` : 'It has no headings in its outline.'].join(' ');
+      const lines = shownRows.map((h) => `${'  '.repeat(h.level - 1)}p. ${h.page}  ${h.title}${h.at ? `  (${h.at})` : ''}`);
+      const more = rows.length - shownRows.length;
+      return [head.join(' '), 'Each heading’s page, and where it’s written:', ...lines, more ? `…and ${plural(more, 'more heading')}: give a smaller depth to see them all.` : ''].filter(Boolean).join('\n');
+    },
+  },
+  {
+    name: 'book_problems',
+    title: 'Typst’s errors and warnings',
+    description:
+      'Typst’s errors and warnings in the book now, as the editor marks them, and references that point to no label: each one’s file, line and message. An error stops the book from typesetting (the preview keeps the last pages it could make) until it’s fixed; a warning doesn’t. It waits for typesetting to catch up with the latest changes first, so call it after an edit to check you left none.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    readOnly: true,
+    run: async (_input, host) => {
+      const settled = await host.book.settled();
+      const list = host.book.problems();
+      const late = settled ? '' : ` ${NOT_SETTLED}`;
+      if (!list.length) return `No errors or warnings: the book typesets cleanly.${late}`;
+      const errors = list.filter((p) => p.severity === 'error').length;
+      const warnings = list.length - errors;
+      const shownList = list.slice(0, 60);
+      const counts = [errors ? plural(errors, 'error') : '', warnings ? plural(warnings, 'warning') : ''].filter(Boolean).join(' and ');
+      return [
+        `${capital(counts)}:${late}`,
+        ...shownList.map((p) => `- ${p.severity} at ${p.path}:${p.line}:${p.column}: ${short(p.message, 400)}`),
+        list.length > shownList.length ? `…and ${list.length - shownList.length} more.` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    },
+  },
+  {
+    name: 'review_comments',
+    title: 'The author’s review comments',
+    description:
+      'The author’s review comments: notes they left on passages of the book, in Review, beside the text (never in it). Each one’s file and line as the text is now, the passage it’s on, and what it says: those still open, and those you changed that wait for the author to keep or undo.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    readOnly: true,
+    run: async (_input, host) => {
+      const rows = await host.book.comments();
+      if (!rows.length) return 'The author has no review comments open.';
+      const row = (r: CommentRow) => `- ${r.id} at ${r.line ? `${r.path}:${r.line}` : `${r.path} (its passage has changed since, so it isn’t found)`}, on “${short(r.quote)}”: ${r.text}`;
+      const open = rows.filter((r) => r.status === 'open');
+      const addressed = rows.filter((r) => r.status === 'addressed');
+      return [
+        open.length ? `${capital(plural(open.length, 'open comment'))}:` : 'No comments are open.',
+        ...open.map(row),
+        addressed.length ? `\n${capital(plural(addressed.length, 'comment'))} you changed the passage for, waiting for the author to keep or undo:` : '',
+        ...addressed.map(row),
+        open.length ? `\n${COMMENT_NOTE}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    },
+  },
 ];
 
 const SERVER_INSTRUCTIONS =
-  'Foreword’s own settings: when the author asks to change how Foreword works (which assistant, model, effort or chat mode, the editor’s text size, wrapping, rulers, marks, zoom…), use these tools rather than editing files. get_settings first. Changes to the assistant itself happen when your reply ends.';
+  'Foreword’s own tools. Its settings: when the author asks to change how Foreword works (which assistant, model, effort or chat mode, the editor’s text size, wrapping, rulers, marks, zoom…), use these tools rather than editing files. get_settings first. Changes to the assistant itself happen when your reply ends. And the book as the author sees it, which its files don’t show: view_pages (its pages as typeset now, as images), book_outline (the page each chapter and section starts on), book_problems (Typst’s errors and warnings) and review_comments (the author’s notes on passages).';
 
 /** The MCP versions this server speaks (the newest first); a client's own is used when it's one of them. */
 const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -393,8 +626,9 @@ async function answer(m: RpcMessage, host: StudioHost): Promise<object | null> {
       if (!tool) return fail(-32602, `No tool called ${String(m.params?.name)}`);
       const args = m.params?.arguments;
       try {
-        const text = await tool.run(args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {}, host);
-        return ok({ content: [{ type: 'text', text }] });
+        const out = await tool.run(args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {}, host);
+        const { text, images = [] } = typeof out === 'string' ? { text: out } : out;
+        return ok({ content: [{ type: 'text', text }, ...images.map((data) => ({ type: 'image', data, mimeType: 'image/png' }))] });
       } catch (e) {
         const message = e instanceof ToolError ? e.message : `Foreword couldn’t do it: ${e instanceof Error ? e.message : String(e)}`;
         return ok({ content: [{ type: 'text', text: message }], isError: true });

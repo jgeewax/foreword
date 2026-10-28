@@ -5,11 +5,45 @@ import { PRESETS, sessionRules, type Level } from '../services/agent/permissions
 import { STUDIO_TOOL_NAMES, studioToolName } from '../services/agent/studio-tool';
 import type { AgentMode } from '../services/agent/modes';
 import { DEFAULT_SETTINGS, type AppSettings, type AssistantId } from './settings';
-import { handleMcp, TOOLS, type ModelChoice, type StudioHost } from './studio-tools';
+import { handleMcp, parsePages, pngSize, TOOLS, type BookHost, type ModelChoice, type StudioHost } from './studio-tools';
 import { describePermission, describeTool, NO_NAMES } from './tool-labels';
 
+/** A PNG's first bytes (signature and header) for a page of this size, base64, as Tinymist sends one. */
+function png(width: number, height: number): string {
+  const bytes = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, ...'IHDR'.split('').map((c) => c.charCodeAt(0))];
+  for (const n of [width, height]) bytes.push((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+  return btoa(String.fromCharCode(...bytes, 8, 6, 0, 0, 0));
+}
+
+/** A stand-in for the book as the preview has it: 120 pages of 6×9 in at the ppi asked for. */
+function book(over: Partial<BookHost> = {}): BookHost & { drawn: { pages: number[]; ppi: number }[] } {
+  const drawn: { pages: number[]; ppi: number }[] = [];
+  return {
+    drawn,
+    preview: () => ({ shows: { kind: 'book' }, pages: 120, status: 'ok' }),
+    settled: async () => true,
+    pageImages: async (pages, ppi) => {
+      drawn.push({ pages, ppi });
+      return { total: 120, pages: pages.filter((p) => p <= 120).map((page) => ({ page, data: png(6 * ppi, 9 * ppi) })) };
+    },
+    outline: () => ({
+      headings: [
+        { level: 1, title: 'Preface', page: 7, at: 'front/preface.typ:1' },
+        { level: 1, title: 'The Storm', page: 11, at: 'chapters/one.typ:1' },
+        { level: 2, title: 'Before', page: 12, at: 'chapters/one.typ:9' },
+        { level: 3, title: 'The harbour', page: 13 },
+        { level: 1, title: 'The Calm', page: 40, at: 'chapters/two.typ:1' },
+      ],
+      stale: false,
+    }),
+    problems: () => [],
+    comments: async () => [],
+    ...over,
+  };
+}
+
 /** A stand-in for Foreword: what the tools changed, and what waits for the reply's end. */
-function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' = 'yes') {
+function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' = 'yes', pages: BookHost = book()) {
   const did: string[] = [];
   const asked: string[] = [];
   const idle: (() => unknown)[] = [];
@@ -44,9 +78,17 @@ function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' =
     chooseModel: async (choice: ModelChoice) => void did.push(`model ${JSON.stringify(choice)}`),
     setMode: async (mode: AgentMode) => void did.push(`mode ${mode}`),
     openSettings: (page) => void did.push(`settings ${page ?? ''}`),
+    book: pages,
   };
   return { h, did, idle, asked, settings: () => settings, zoom: () => zoom };
 }
+
+/** The whole answer to a call: its words, its pictures, and whether it's an error. */
+const callAll = async (h: StudioHost, name: string, args: object = {}) => {
+  const r = await rpc(h, 'tools/call', { name, arguments: args });
+  const content = r.result.content as { type: string; text?: string; data?: string; mimeType?: string }[];
+  return { text: content[0].text!, images: content.slice(1), error: !!r.result.isError };
+};
 
 const rpc = async (h: StudioHost, method: string, params?: object, id: number | 'none' = 1) => {
   const out = await handleMcp(JSON.stringify({ jsonrpc: '2.0', ...(id === 'none' ? {} : { id }), method, params }), h);
@@ -65,7 +107,19 @@ describe('Foreword’s tools, as an MCP server', () => {
     expect((await rpc(h, 'initialize', { protocolVersion: '1999-01-01' })).result.protocolVersion).toBe('2025-06-18');
     expect(await rpc(h, 'notifications/initialized', {}, 'none')).toBeNull();
     const list = await rpc(h, 'tools/list');
-    expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual(['get_settings', 'change_settings', 'list_models', 'set_model', 'switch_assistant', 'set_mode', 'open_settings']);
+    expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
+      'get_settings',
+      'change_settings',
+      'list_models',
+      'set_model',
+      'switch_assistant',
+      'set_mode',
+      'open_settings',
+      'view_pages',
+      'book_outline',
+      'book_problems',
+      'review_comments',
+    ]);
     for (const t of list.result.tools) expect(t.inputSchema.type).toBe('object');
     expect((await rpc(h, 'resources/list')).error.code).toBe(-32601);
     expect(JSON.parse((await handleMcp('{oops', h))!).error.code).toBe(-32700);
@@ -208,6 +262,118 @@ describe('Foreword’s tools, as an MCP server', () => {
   });
 });
 
+describe('the book as the author sees it', () => {
+  it('reads pages asked for in any of the usual ways', () => {
+    expect(parsePages('41')).toEqual({ pages: [41], asked: 1 });
+    expect(parsePages(41)).toEqual({ pages: [41], asked: 1 });
+    expect(parsePages('41-42')).toEqual({ pages: [41, 42], asked: 2 });
+    expect(parsePages('pages 41 – 42')).toEqual({ pages: [41, 42], asked: 2 });
+    expect(parsePages('pp. 12, 30 and 31')).toEqual({ pages: [12, 30, 31], asked: 3 });
+    expect(parsePages('12 to 14, 12')).toEqual({ pages: [12, 13, 14], asked: 3 });
+    // The first four, and how many it was.
+    expect(parsePages('1-745')).toEqual({ pages: [1, 2, 3, 4], asked: 745 });
+    for (const bad of ['', 'chapter 3', '0', '9-3', 'last', null]) expect(parsePages(bad), String(bad)).toBeNull();
+  });
+
+  it('knows a PNG’s size from its header', () => {
+    expect(pngSize(png(660, 990))).toEqual({ width: 660, height: 990 });
+    expect(pngSize('bm90IGEgcG5nIGF0IGFsbCwgbm8gc2lyIG5vdCBhdCBhbGw=')).toBeNull();
+    expect(pngSize('***')).toBeNull();
+  });
+
+  it('view_pages: the pages as images, after what they are', async () => {
+    const b = book();
+    const r = await callAll(host('allow', 'yes', b).h, 'view_pages', { pages: '41-42' });
+    expect(r.error).toBe(false);
+    expect(r.text).toBe('Pages 41–42 of 120, as the book is typeset now, in that order.');
+    expect(r.images).toEqual([41, 42].map(() => ({ type: 'image', data: png(660, 990), mimeType: 'image/png' })));
+    expect(b.drawn).toEqual([{ pages: [41, 42], ppi: 110 }]);
+    // Never more than four, and none that aren't there.
+    const many = await callAll(host('allow', 'yes', b).h, 'view_pages', { pages: '1-10' });
+    expect(many.images).toHaveLength(4);
+    expect(many.text).toMatch(/You asked for 10 pages; these are the first 4\. Ask for the others in turn\./);
+    const past = await callAll(host('allow', 'yes', b).h, 'view_pages', { pages: '119-122' });
+    expect(past.text).toMatch(/^Pages 119–120 of 120.*There's no pages 121–122: the book has 120 pages\./);
+    expect(await callAll(host('allow', 'yes', b).h, 'view_pages', { pages: '200' })).toMatchObject({ text: "The book has 120 pages: there's no page 200.", error: true, images: [] });
+    expect((await callAll(host().h, 'view_pages', { pages: 'the end' })).text).toMatch(/Give the pages as a number, a range or a list/);
+  });
+
+  it('view_pages: draws a big page smaller, and says what the preview shows when it isn’t the book', async () => {
+    const poster = book({ pageImages: async (pages, ppi) => ({ total: 1, pages: pages.map((page) => ({ page, data: png(24 * ppi, 36 * ppi) })) }) });
+    const big = await callAll(host('allow', 'yes', poster).h, 'view_pages', { pages: '1' });
+    expect(pngSize(big.images[0].data!)).toEqual({ width: 1056, height: 1584 });
+    const chapter = book({ preview: () => ({ shows: { kind: 'chapter', chapter: '“The Storm” (chapter 1)' }, pages: 30, status: 'ok' }) });
+    expect((await callAll(host('allow', 'yes', chapter).h, 'view_pages', { pages: '3' })).text).toBe(
+      "Page 3 of 120. The preview shows “The Storm” (chapter 1) alone (the author previews one chapter at a time), so these are that chapter's pages, not the whole book's: its page numbers, and its references to other chapters, are right only in the whole book.",
+    );
+    expect((await callAll(host('allow', 'yes', chapter).h, 'view_pages', { pages: '31' })).text).toBe("“The Storm” (chapter 1) has 30 pages: there's no page 31.");
+    const cover = book({ preview: () => ({ shows: { kind: 'cover' }, pages: 1, status: 'ok' }) });
+    expect((await callAll(host('allow', 'yes', cover).h, 'view_pages', { pages: '1' })).text).toMatch(/^Page 1 of 120\. The preview shows the book’s cover now/);
+  });
+
+  it('view_pages: with an error, says there are no pages until it’s fixed; and when the typesetting hasn’t caught up', async () => {
+    const broken = book({
+      preview: () => ({ shows: { kind: 'book' }, pages: 120, status: 'error' }),
+      pageImages: async () => {
+        throw new Error('ExportTask(0): document is not available for export');
+      },
+    });
+    const r = await callAll(host('allow', 'yes', broken).h, 'view_pages', { pages: '2' });
+    expect(r).toMatchObject({ error: true, text: 'Typst has an error just now, so there are no pages to look at until it’s fixed: book_problems lists it. (The preview keeps showing the last pages it could make.)' });
+    const slow = book({ settled: async () => false });
+    expect((await callAll(host('allow', 'yes', slow).h, 'view_pages', { pages: '2' })).text).toMatch(/still being typeset after the latest change, so this may be from just before it\.$/);
+  });
+
+  it('book_outline: each heading’s page and where it’s written, as deep as asked', async () => {
+    const r = await call(host().h, 'book_outline');
+    expect(r.text).toBe(
+      [
+        '120 pages, as the book is typeset now.',
+        'Each heading’s page, and where it’s written:',
+        'p. 7  Preface  (front/preface.typ:1)',
+        'p. 11  The Storm  (chapters/one.typ:1)',
+        '  p. 12  Before  (chapters/one.typ:9)',
+        'p. 40  The Calm  (chapters/two.typ:1)',
+      ].join('\n'),
+    );
+    expect((await call(host().h, 'book_outline', { depth: 3 })).text).toMatch(/\n {4}p\. 13 {2}The harbour$/m);
+    expect((await call(host().h, 'book_outline', { depth: 1 })).text).not.toMatch(/Before/);
+    const none = book({ outline: () => null });
+    expect((await call(host('allow', 'yes', none).h, 'book_outline')).text).toMatch(/hasn’t had the book typeset with its preview open yet.*view_pages still shows any page/);
+    const stale = book({ outline: () => ({ headings: [], stale: true }) });
+    expect((await call(host('allow', 'yes', stale).h, 'book_outline')).text).toBe('120 pages, as the book is typeset now. This is from just before the latest change, which is still being typeset. It has no headings in its outline.');
+  });
+
+  it('book_problems: none, or each with its place', async () => {
+    expect((await call(host().h, 'book_problems')).text).toBe('No errors or warnings: the book typesets cleanly.');
+    const some = book({
+      problems: () => [
+        { path: 'chapters/one.typ', line: 12, column: 3, severity: 'error', message: 'unknown variable: sidenote' },
+        { path: 'main.typ', line: 4, column: 1, severity: 'warning', message: 'unknown font family: garamond' },
+      ],
+    });
+    const r = await call(host('allow', 'yes', some).h, 'book_problems');
+    expect(r.text).toBe('1 error and 1 warning:\n- error at chapters/one.typ:12:3: unknown variable: sidenote\n- warning at main.typ:4:1: unknown font family: garamond');
+    expect(describeTool('foreword_book_problems', {}, NO_NAMES, r.text).note).toBe('1 error and 1 warning');
+    expect(describeTool('foreword_book_problems', {}, NO_NAMES, 'No errors or warnings: the book typesets cleanly.').note).toBe('none');
+  });
+
+  it('review_comments: the open ones, then those waiting for the author, and how to fix them all', async () => {
+    expect((await call(host().h, 'review_comments')).text).toBe('The author has no review comments open.');
+    const noted = book({
+      comments: async () => [
+        { id: 'c1', path: 'chapters/one.typ', line: 18, quote: 'The storm broke   at midnight.', text: 'too slow', status: 'open' },
+        { id: 'c2', path: 'chapters/two.typ', line: null, quote: 'Calm.', text: 'cut this', status: 'open' },
+        { id: 'c3', path: 'chapters/two.typ', line: 4, quote: 'And then', text: 'needs a source', status: 'addressed' },
+      ],
+    });
+    const r = await call(host('allow', 'yes', noted).h, 'review_comments');
+    expect(r.text).toMatch(/^2 open comments:\n- c1 at chapters\/one\.typ:18, on “The storm broke at midnight\.”: too slow\n- c2 at chapters\/two\.typ \(its passage has changed since, so it isn’t found\), on “Calm\.”: cut this\n/);
+    expect(r.text).toMatch(/1 comment you changed the passage for, waiting for the author to keep or undo:\n- c3 at chapters\/two\.typ:4/);
+    expect(r.text).toMatch(/Fix all in Review/);
+  });
+});
+
 describe('the tools as the assistants name them', () => {
   it('are known by every assistant’s name for them', () => {
     expect(studioToolName('mcp__foreword__set_model')).toBe('set_model');
@@ -221,7 +387,8 @@ describe('the tools as the assistants name them', () => {
   it('are all of them; OpenCode asks about each by name: those that look are allowed, those that change follow the settings permission', () => {
     expect([...STUDIO_TOOL_NAMES]).toEqual(TOOLS.map((t) => t.name));
     const effect = (preset: keyof typeof PRESETS, t: string) => decide(`foreword_${t}`, ['*'], sessionRules(PRESETS[preset].permissions));
-    for (const t of ['get_settings', 'list_models', 'open_settings']) for (const p of ['ask', 'edit', 'readonly'] as const) expect(effect(p, t), `${p} ${t}`).toBe('allow');
+    for (const t of ['get_settings', 'list_models', 'open_settings', 'view_pages', 'book_outline', 'book_problems', 'review_comments'])
+      for (const p of ['ask', 'edit', 'readonly'] as const) expect(effect(p, t), `${p} ${t}`).toBe('allow');
     for (const t of ['change_settings', 'set_model', 'switch_assistant', 'set_mode']) {
       expect(effect('ask', t)).toBe('ask');
       expect(effect('edit', t)).toBe('allow');
@@ -256,6 +423,10 @@ describe('the tools as the assistants name them', () => {
     expect(describeTool('mcp__foreword__switch_assistant', { assistant: 'claude' }, NO_NAMES).done).toBe('Switched the assistant to Claude Code');
     expect(describeTool('foreword_set_model', { model: 'sonnet', effort: 'high' }, NO_NAMES).note).toBe('model “sonnet”, effort “high”, when it finishes');
     expect(describeTool('foreword_get_settings', {}, NO_NAMES).running).toBe('Looking at Foreword’s settings');
+    expect(describeTool('mcp__foreword__view_pages', { pages: '41-42' }, NO_NAMES).done).toBe('Looked at pages 41–42');
+    expect(describeTool('foreword_view_pages', { pages: '7' }, NO_NAMES).running).toBe('Looking at page 7');
+    expect(describeTool('foreword_book_outline', {}, NO_NAMES).done).toBe('Looked at where the chapters fall');
+    expect(describeTool('foreword_review_comments', {}, NO_NAMES).done).toBe('Read your review comments');
   });
 });
 

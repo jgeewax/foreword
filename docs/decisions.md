@@ -4374,6 +4374,57 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Antigravity knew the colour from its added prompt; Gemini CLI (not signed
   in here) sent the mock Foreword's prompt as its whole system instruction.
 
+### The assistant sees the pages (2026-10-29)
+
+- **Asked for:** "the assistant can't see the pages" from a list of what
+  Foreword was missing (Ayakaleaf's `view_page`, `get_diagnostics` and an MCP
+  server per project, in IDEAS.md). Four more tools on the foreword server,
+  all of them only looking (never asked about, as get_settings):
+  **view_pages** (up to four pages as PNG images), **book_outline** (each
+  heading's page, and the file and line it's written on), **book_problems**
+  (Typst's errors and warnings, and references that go nowhere, as the
+  editor marks them) and **review_comments** (the author's open notes, found
+  where their passages are now, read-only: fixing them stays with Fix all,
+  which tracks each change for the author to keep or undo).
+- **Pages:** `tinymist.exportPng` on the preview's own main file, with
+  `{ pages, ppi, pageNumberTemplate }` and a third argument
+  `{ write: false }` (Tinymist's ExportActionOpts, found in its binary):
+  it returns each page as base64 and writes nothing. It uses the document
+  already typeset, unsaved text and all, so it's what the author sees:
+  ~3 ms a page on the sample book, 150–270 ms on the 745-page test copy.
+  110 ppi (11 pt text about 17 px), drawn smaller if a page would be longer
+  than 1,600 px. With an error, Tinymist has no document to export
+  ("document is not available"), so the tool says to fix it (book_problems)
+  first. In the chapter preview or the cover, the pages are what the
+  preview shows, and the tool says so.
+- **Where headings land:** Tinymist sends `tinymist/documentOutline` after
+  each typeset (titles as plain text, nested, each with `page_no`), but only
+  while a preview client is connected, which Foreword's always is. Free: no
+  second typeset. Rejected: a Typst `query` over metadata added to the
+  preview's main file (exportQuery works), because Typst has no try/catch:
+  one odd numbering function in a book would have broken the whole preview,
+  and every keystroke would pay for it. Each heading is matched to where it's
+  written by its words (Typst curls quotes and makes dashes), the next one in
+  reading order, so each chapter's "Exercises" is its own.
+- **Fresh:** the tools wait for typesetting to catch up first: 0.7 s after a
+  file changed on disk (the assistant's edit reaches Tinymist through its
+  watcher), then until it isn't compiling, at most 20 s.
+- **The instructions** say it can see the pages, and to look before and
+  after a change to how they look (where a figure lands, page breaks,
+  spacing, a chapter's opening), not for text changes; and that
+  book_problems says whether an edit left an error. Without the tools, the
+  old line ("re-read the source").
+- **Images reach the models** (a stand-in server whose page shows only
+  "PELICAN 7342"): Claude Code's Haiku and Codex 6 Luna read it back on the
+  author's sign-ins; OpenCode 2.0.20 sends it as an `image_url` in the next
+  message (to a mock model that takes images); Gemini CLI 0.64 turns MCP
+  images into `inlineData` (read in its code, not signed in here).
+  Antigravity not checked. The chat leaves the images out of a step's text.
+- Verified: unit tests (studio-tools, contents, instructions); the
+  `bookpages` self-test on the real app: two pages as 641×909 PNGs, the
+  outline with each chapter's file and line, an error typed (not saved)
+  listed with Typst's hint and no pages until it's gone.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

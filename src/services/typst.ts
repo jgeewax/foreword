@@ -43,9 +43,20 @@ export type CompileStatus = {
 /** Preview → source: the user clicked rendered content. Positions are 0-based [line, character]. */
 export type SourceJump = { filepath: string; start: [number, number] | null; end: [number, number] | null };
 
+/**
+ * A heading where it was typeset, as Tinymist tells the preview after each
+ * compile (while a preview is connected): its plain-text title and its page,
+ * counted from 1 in the document.
+ */
+export type OutlineItem = { title: string; position: { page_no: number; x: number; y: number }; children: OutlineItem[] };
+
+/** Pages of the previewed document as PNG (base64), with its page count. */
+export type PageImages = { total: number; pages: { page: number; data: string }[] };
+
 type Events = {
   diagnostics: [uri: string, diagnostics: LspDiagnostic[]];
   compile: [CompileStatus];
+  outline: [OutlineItem[]];
   scrollSource: [SourceJump];
   closed: [];
 };
@@ -197,6 +208,18 @@ export class TypstService extends Emitter<Events> {
     return res.path as string;
   }
 
+  /**
+   * Pages (1-based) of the previewed document as it's typeset now, unsaved
+   * text included, as PNGs at `ppi`. Nothing is written to disk.
+   */
+  async pageImages(pages: number[], ppi: number): Promise<PageImages> {
+    if (!this.running) throw new Error('the preview isn’t running');
+    const res = await this.executeCommand('tinymist.exportPng', [this.entryAbs, { pages: pages.map(String), ppi, pageNumberTemplate: 'page-{p}' }, { write: false }]);
+    if (!Array.isArray(res?.items)) throw new Error('Tinymist did not return the pages');
+    // Its items count pages from 0.
+    return { total: Number(res.total_pages) || 0, pages: res.items.filter((i: any) => typeof i?.data === 'string').map((i: any) => ({ page: Number(i.page) + 1, data: i.data as string })) };
+  }
+
   executeCommand(command: string, args: unknown[]) {
     return this.request('workspace/executeCommand', { command, arguments: args });
   }
@@ -261,6 +284,8 @@ export class TypstService extends Emitter<Events> {
       this.emit('diagnostics', msg.params.uri, msg.params.diagnostics);
     } else if (msg.method === 'tinymist/compileStatus') {
       this.emit('compile', msg.params);
+    } else if (msg.method === 'tinymist/documentOutline') {
+      if (Array.isArray(msg.params?.items)) this.emit('outline', msg.params.items);
     } else if (msg.method === 'tinymist/preview/scrollSource') {
       this.emit('scrollSource', msg.params);
     }
