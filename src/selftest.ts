@@ -1718,10 +1718,24 @@ async function askCardChecks() {
     c?.querySelectorAll<HTMLButtonElement>('.place-row')[0]?.click();
     await sleep(400);
     out.showPlace = { active: studio.state.active, line: editor.getPosition()?.lineNumber, want: line, shown: card()?.querySelector('.place-row.on .place-show')?.textContent };
-    // Make this change: in the editor; Undo puts it back.
-    card()?.querySelectorAll<HTMLButtonElement>('.answer-make')[0]?.click();
+    // Make this change: in the editor, its new words selected as Show selects them; Undo puts it back.
+    const NEW = 'Two vectors are _orthogonal_ (perpendicular)';
+    const fromChat = (b: HTMLButtonElement | null | undefined) => {
+      b?.focus();
+      const blurred = !editor.hasTextFocus();
+      b?.click();
+      return blurred;
+    };
+    const shown = () => ({ focused: editor.hasTextFocus(), active: !!editor.getDomNode()?.contains(document.activeElement), selected: model.getValueInRange(editor.getSelection()!) });
+    const blurred = fromChat(card()?.querySelectorAll<HTMLButtonElement>('.answer-make')[0]);
     await sleep(500);
     out.made = { line: model.getLineContent(line), state: (studio.state.agent.items.find((i) => i.id === 'm2:0') as any)?.made, card: card()?.querySelector('.answer-change .answer-change-done')?.textContent };
+    out.madeShown = { blurred, ...shown(), ok: shown().focused && shown().selected === NEW };
+    // Show, from the chat: the same.
+    editor.setPosition({ lineNumber: 1, column: 1 });
+    const blurredShow = fromChat([...(card()?.querySelectorAll<HTMLButtonElement>('.answer-change button') ?? [])].find((b) => b.textContent === 'Show'));
+    await sleep(300);
+    out.showShown = { blurred: blurredShow, ...shown(), ok: shown().focused && shown().selected === NEW };
     [...(card()?.querySelectorAll<HTMLButtonElement>('.answer-change button') ?? [])].find((b) => b.textContent === 'Undo')?.click();
     await sleep(500);
     out.undone = { line: model.getLineContent(line), back: model.getValue() === original, state: (studio.state.agent.items.find((i) => i.id === 'm2:0') as any)?.made };
@@ -1751,7 +1765,7 @@ async function askCardChecks() {
     card()?.querySelector('.answer-changes')?.scrollIntoView({ block: 'center' });
     await sleep(150);
     out.makeAllSnapshot = await snap('askcard-make-all');
-    makeAll()?.click();
+    const blurredAll = fromChat(makeAll());
     await sleep(600);
     out.madeAll = {
       line: model.getLineContent(line),
@@ -1760,6 +1774,7 @@ async function askCardChecks() {
       mode: studio.state.agent.mode,
       toast: studio.state.toast?.text,
       buttonGone: !makeAll(),
+      shown: { blurred: blurredAll, ...shown(), ok: shown().focused && shown().selected === NEW },
     };
     editor.trigger('selftest', 'undo', null);
     await sleep(200);
@@ -1807,10 +1822,15 @@ async function optionsPassageChecks() {
   const offsetRange = (start: number, end: number) => monaco.Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end));
   const find = (t: string) => offsetRange(model.getValue().indexOf(t), model.getValue().indexOf(t) + t.length);
   const replies = () => [...document.querySelectorAll('.options-reply')];
+  // As a click does: the button takes the focus from the editor first.
   const use = async (r: number, n: number) => {
-    replies()[r]?.querySelectorAll('.option-card')[n]?.querySelector<HTMLButtonElement>('.option-actions button')?.click();
+    const b = replies()[r]?.querySelectorAll('.option-card')[n]?.querySelector<HTMLButtonElement>('.option-actions button');
+    b?.focus();
+    b?.click();
     await sleep(300);
   };
+  // The option put in: selected, with the editor focused (as Show selects a change).
+  const shown = (text: string) => ({ focused: editor.hasTextFocus(), selected: model.getValueInRange(editor.getSelection()!) === text });
   const conflict = (r: number) => {
     const c = replies()[r]?.querySelector('.option-conflict');
     return c
@@ -1823,7 +1843,9 @@ async function optionsPassageChecks() {
       : null;
   };
   const press = async (r: number, label: string) => {
-    [...(replies()[r]?.querySelectorAll<HTMLButtonElement>('.option-conflict button') ?? [])].find((b) => b.textContent === label)?.click();
+    const b = [...(replies()[r]?.querySelectorAll<HTMLButtonElement>('.option-conflict button') ?? [])].find((b) => b.textContent === label);
+    b?.focus();
+    b?.click();
     await sleep(300);
   };
   const states = () => studio.state.agent.items.filter((i) => i.kind === 'assistant' && i.options).map((i: any) => ({ applied: i.options.applied, passage: i.options.passage, conflict: i.options.conflict?.kind ?? null }));
@@ -1857,9 +1879,9 @@ async function optionsPassageChecks() {
     const around = (t: string) => `Indeed, ${t} (typed after)`;
     const lineNow = () => model.getLineContent(line + 1);
     await use(0, 1);
-    out.movedAndTypedAround = { line: lineNow(), ok: lineNow() === around(OPTIONS[1]), addedAbove: model.getLineContent(1), states: states(), button: replies()[0]?.querySelectorAll('.option-card')[1]?.querySelector('button')?.textContent };
+    out.movedAndTypedAround = { line: lineNow(), ok: lineNow() === around(OPTIONS[1]), addedAbove: model.getLineContent(1), states: states(), button: replies()[0]?.querySelectorAll('.option-card')[1]?.querySelector('button')?.textContent, shown: shown(OPTIONS[1]) };
     await use(0, 2);
-    out.instead = { ok: lineNow() === around(OPTIONS[2]) };
+    out.instead = { ok: lineNow() === around(OPTIONS[2]), shown: shown(OPTIONS[2]) };
     // ⌘Z twice: the original back (the range then covers only part of it), then a shorter one over all of it.
     editor.trigger('selftest', 'undo', null);
     await sleep(100);
@@ -1894,7 +1916,7 @@ async function optionsPassageChecks() {
     await press(0, 'Replace mine anyway');
     out.changedAgain = { unchanged: model.getValue() === authors2, conflict: conflict(0) };
     await press(0, 'Replace mine anyway');
-    out.replacedAnyway = { ok: lineNow() === around(OPTIONS[1]), conflict: conflict(0), states: states() };
+    out.replacedAnyway = { ok: lineNow() === around(OPTIONS[1]), conflict: conflict(0), states: states(), shown: shown(OPTIONS[1]) };
     editor.trigger('selftest', 'undo', null);
     await sleep(100);
     out.undoBringsMineBack = { ok: model.getValue() === authors2 };

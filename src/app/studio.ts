@@ -2494,8 +2494,19 @@ export class Studio {
     if (!editor || !model || this.state.active !== path) return;
     const found = after ? model.findMatches(after, false, false, true, null, false, 2) : [];
     if (found.length !== 1) return this.toast(after ? 'That text has changed since the assistant wrote it.' : 'The assistant only took text out there.');
-    editor.setSelection(found[0].range);
-    editor.revealRangeInCenterIfOutsideViewport(found[0].range);
+    this.showWords(found[0].range);
+  }
+
+  /**
+   * Words the chat points to (Show, or a change just made from it): selected
+   * and in view, with the editor focused, so the selection is drawn in full
+   * and not in the pale colour Monaco gives an unfocused editor's.
+   */
+  private showWords(range: monaco.IRange) {
+    const editor = this.editor;
+    if (!editor) return;
+    editor.setSelection(range);
+    editor.revealRangeInCenterIfOutsideViewport(range);
     editor.focus();
   }
 
@@ -4445,9 +4456,7 @@ export class Studio {
     editor.pushUndoStop();
     editor.executeEdits('ask-change', [{ range, text: change.replace, forceMoveMarkers: true }]);
     editor.pushUndoStop();
-    const put = monaco.Range.fromPositions(start, model.getPositionAt(model.getOffsetAt(start) + change.replace.length));
-    editor.setSelection(put);
-    editor.revealRangeInCenterIfOutsideViewport(put);
+    this.showWords(monaco.Range.fromPositions(start, model.getPositionAt(model.getOffsetAt(start) + change.replace.length)));
     made('here');
     this.toast('Changed (⌘Z to undo).');
   }
@@ -4503,10 +4512,7 @@ export class Studio {
     this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, made: { ...it.made, ...made } } : it));
     if (last) {
       await this.openFile(last.path);
-      if (this.state.active === last.path) {
-        this.editor?.setSelection(last.range);
-        this.editor?.revealRangeInCenterIfOutsideViewport(last.range);
-      }
+      if (this.state.active === last.path) this.showWords(last.range);
     }
     const here = Object.values(made).filter((m) => m === 'here').length;
     if (here) this.toast(`${here === 1 ? 'Changed' : `Made ${here} changes`} (⌘Z to undo).${write ? ` Write mode makes the other ${elsewhere.length === 1 ? 'one' : elsewhere.length}.` : ''}`);
@@ -5557,8 +5563,7 @@ export class Studio {
     editor.pushUndoStop();
     const end = model.getPositionAt(model.getOffsetAt(start) + option.text.length);
     const put = monaco.Range.fromPositions(start, end);
-    editor.setSelection(put);
-    editor.revealRangeInCenterIfOutsideViewport(put);
+    this.showWords(put);
     const applied = targetIn(p.path, model, put);
     this.refollow(p, model, put);
     p.last = applied;
