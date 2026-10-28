@@ -4165,6 +4165,46 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   a task whose chat only Claude Code had, opened while Codex ran, opened
   with Claude Code. `mode-setups`, `conversations` and `taskbar` pass.
 
+### Make all changes, New task at the top, a Revise box that grows (2026-10-28)
+
+- **Asked for:** "make a 'make all changes' button whenever there are 2+
+  'make this change' buttons"; "we need a 'new task' button at the top where
+  everyone is expecting it. dont take away the other one … anyone used to
+  claude code will be frustrated by the new task button being missing from
+  the top"; "revise/ask input text box needs to expand to multiline for long
+  comments."
+- **Make all changes** (Ask's answer card, Trace.tsx): in What I'd change's
+  heading, once two or more changes have their Make this change, "Make all 3
+  changes" ("Make the other 2" after one was made by hand).
+  `studio.applyAllAnswerChanges` makes each in the editor as Make this change
+  does, a file at a time, each change's words looked for after the one
+  before is in (so two changes in one paragraph both land). A file's changes
+  are one step for ⌘Z, and each card's own Undo still works. The ones whose
+  words can't be found go to Write mode together, in one message
+  (`changesPrompt`, which words one alone as Make this change would). The
+  last change made is selected.
+- **New task at the top:** a + in the assistant pane's header, left of the
+  settings gear, where Claude Code and the other chats have it. The message
+  box's New task stays. While a turn runs its tooltip says the task carries
+  on in the background.
+- **The Revise and Ask box** is a textarea: one line tall as before, it grows
+  a line at a time as a comment wraps, up to about eight lines (then it
+  scrolls). ⏎ sends, ⇧⏎ is a new line (said in the card's hint once the
+  comment is long). The card is a Monaco content widget, so a resize asks
+  Monaco to place it again (above the selection, it moves up instead of
+  covering the text). The card was 470 px whatever the editor's width, so
+  beside an open preview its right side, and the end of each line of a long
+  comment, was cut off at the editor's edge: it's as wide as the editor's
+  text area now (down to 240 px), and when it's narrower than 360 px the
+  other two tabs show only their icons, as the bar's do in compact.
+- Verified: unit tests for `changesPrompt`; self-test `askcard` (Make all 2
+  changes made the one it found in the editor and sent the misquoted one to
+  Write, both marked, the button gone, one ⌘Z put the file back) and the new
+  `selcard` (in a 260 px editor at 125%: the box 32 px for one line, 120 with
+  a long comment, 155 with a ⇧⏎ line, capped at 164 and scrolling; the card
+  inside the editor each time; ⇧⏎ didn't send, ⏎ sent the whole comment; the
+  Ask tab the same; the header's + left of the gear and calling New task).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

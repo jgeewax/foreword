@@ -75,3 +75,13 @@ export function changePrompt(c: { at: string; find: string; replace: string; why
   const why = c.why.trim().replace(/[.]$/, '');
   return `Make just this one change from your answer, and nothing else${c.at ? `, in ${c.at}` : ''}: replace “${c.find}” with “${c.replace}”${why ? ` (${why})` : ''}. If those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence what you changed.`;
 }
+
+/** "Make all changes", for the ones whose words can't be found in the editor: Write mode makes them, in one message. */
+export function changesPrompt(cs: { at: string; find: string; replace: string; why: string }[]): string {
+  if (cs.length === 1) return changePrompt(cs[0]);
+  const list = cs.map((c, i) => {
+    const why = c.why.trim().replace(/[.]$/, '');
+    return `${i + 1}. ${c.at ? `In ${c.at}, replace` : 'Replace'} “${c.find}” with “${c.replace}”${why ? ` (${why})` : ''}.`;
+  });
+  return `Make just these ${cs.length} changes from your answer, and nothing else:\n\n${list.join('\n')}\n\nIf any of those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence or two what you changed.`;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ASK_INSTRUCTIONS, changePrompt, meantMessage } from './ask-mode';
+import { ASK_INSTRUCTIONS, changePrompt, changesPrompt, meantMessage } from './ask-mode';
 import { parseChart } from '../../lib/chart';
 import { answerOf, answerText, hasAnswerBlocks, markedTerms, markPieces, proseAndCharts, quoteOf, segments, sureOf, withoutAnswerBlocks } from './ask-answer';
 
@@ -181,5 +181,14 @@ describe('the instructions', () => {
     expect(changePrompt({ at: 'chapters/04-storm.typ:114', find: 'a', replace: 'b', why: 'Show him hiding it.' })).toBe(
       'Make just this one change from your answer, and nothing else, in chapters/04-storm.typ:114: replace “a” with “b” (Show him hiding it). If those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence what you changed.',
     );
+    // Make all changes: the ones it couldn't find go in one message (one alone, as Make this change words it).
+    const two = [
+      { at: 'chapters/04-storm.typ:114', find: 'a', replace: 'b', why: 'Show him hiding it.' },
+      { at: '', find: 'c', replace: 'd', why: '' },
+    ];
+    expect(changesPrompt(two)).toBe(
+      'Make just these 2 changes from your answer, and nothing else:\n\n1. In chapters/04-storm.typ:114, replace “a” with “b” (Show him hiding it).\n2. Replace “c” with “d”.\n\nIf any of those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence or two what you changed.',
+    );
+    expect(changesPrompt(two.slice(0, 1))).toBe(changePrompt(two[0]));
   });
 });

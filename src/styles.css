@@ -757,12 +757,15 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-tab .icon-svg, .sel-tab .sel-glyph { color: var(--tone); stroke-width: 2; }
 .sel-tab:hover:not(:disabled) { color: var(--fg); }
 .sel-tab[aria-selected="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
-.sel-card-where { font-size: 11.5px; color: var(--muted); }
+.sel-card-where { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--muted); }
 .sel-close { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: none; border-radius: 5px; background: transparent; color: var(--muted); }
 .sel-close:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+/* One line to start (as tall as it was as a one-line field); a longer comment wraps and the box grows, up to about eight lines. */
 .sel-input {
-  height: 32px; padding: 0 10px; border: 1px solid var(--tone); border-radius: 7px; background: var(--bg-2); color: var(--fg); outline: none;
-  font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+  display: block; width: 100%; height: 32px; min-height: 32px; max-height: 164px; padding: 6px 10px; resize: none; overflow-y: auto;
+  border: 1px solid var(--tone); border-radius: 7px; background: var(--bg-2); color: var(--fg); outline: none;
+  font: 13px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
   -webkit-user-select: text; user-select: text;
 }
 .sel-input::placeholder { color: var(--muted); }
@@ -770,10 +773,10 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-preset { height: 24px; padding: 0 10px; border: 1px solid var(--border); border-radius: 12px; background: transparent; font-size: 11.5px; }
 .sel-preset:hover:not(:disabled) { border-color: color-mix(in srgb, var(--tone) 55%, var(--border)); background: color-mix(in srgb, var(--tone) 12%, transparent); }
 .sel-card-foot { padding-top: 7px; border-top: 1px solid var(--border); }
-.sel-to-chat { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 7px; border: none; border-radius: 5px; background: transparent; color: var(--muted); }
+.sel-to-chat { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 7px; white-space: nowrap; border: none; border-radius: 5px; background: transparent; color: var(--muted); }
 .sel-to-chat:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
-.sel-hint { font-size: 11px; color: var(--muted); }
-.sel-go { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border: 1px solid var(--tone); border-radius: 6px; background: color-mix(in srgb, var(--tone) 22%, var(--bg)); font-weight: 600; }
+.sel-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted); }
+.sel-go { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border: 1px solid var(--tone); border-radius: 6px; background: color-mix(in srgb, var(--tone) 22%, var(--bg)); font-weight: 600; }
 .sel-go:hover:not(:disabled) { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 32%, var(--bg)); }
 .sel-go kbd { margin-left: 0; font-weight: 400; color: var(--muted); opacity: 1; }
 /* The note under a passage sent from the bar. */
@@ -2366,6 +2369,7 @@ button.answer-ask { height: 24px; background: var(--answer-ink); border-color: v
 .answer-changes { display: flex; flex-direction: column; gap: 9px; background: color-mix(in srgb, var(--change) 3%, var(--bg)); }
 .answer-changes-head { display: flex; align-items: center; gap: 7px; }
 .answer-changes-head .answer-label { color: var(--change-ink); }
+.answer-changes-head button.answer-make-all { flex: none; height: 24px; padding: 0 11px; }
 .answer-change-glyph { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--change); background: color-mix(in srgb, var(--change) 16%, transparent); }
 .answer-change-glyph .icon-svg { stroke-width: 2.4; }
 .answer-change { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -2373,7 +2377,7 @@ button.answer-ask { height: 24px; background: var(--answer-ink); border-color: v
 .answer-change-why { flex: none; max-width: 60%; font-weight: 600; }
 .answer-change .diff-text { border: 1px solid var(--border); border-radius: 9px; background: var(--bg-2); }
 .answer-change-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-button.answer-make { height: 26px; padding: 0 12px; border-color: var(--change-strong); background: var(--change-strong); color: var(--change-on); font-size: 12px; font-weight: 600; }
+button.answer-make, button.answer-make-all { height: 26px; padding: 0 12px; border-color: var(--change-strong); background: var(--change-strong); color: var(--change-on); font-size: 12px; font-weight: 600; }
 .answer-change-actions button.small { height: 26px; }
 .answer-change-done { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--ok-ink); }
 .answer-change-done.write { font-weight: 500; color: var(--muted); }

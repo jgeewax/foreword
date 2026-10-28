@@ -1006,6 +1006,15 @@ export function AgentPane() {
           <TaskMenu />
           {agent.running && <span className="busy-bar" aria-hidden />}
           <span className="spacer" />
+          {/* At the top, where Claude Code and the other chats have it; the message box's New task stays too. */}
+          <button
+            className="icon pane-action agent-new-task"
+            aria-label="New task"
+            title={agent.running ? 'New task: this one carries on in the background (⌘T)' : 'New task (⌘T)'}
+            onClick={() => studio.newTask()}
+          >
+            <Icon name="plus" size={16} />
+          </button>
           <button
             className="icon pane-action agent-settings"
             aria-label="Assistant settings"

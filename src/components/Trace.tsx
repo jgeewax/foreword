@@ -1243,6 +1243,9 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
   // The reply that holds the changes (its record says which were made).
   const changeItem = useMemo(() => [...turn.steps, ...(turn.reply ? [turn.reply] : [])].findLast((it): it is AssistantItem => it.kind === 'assistant' && (answerOf([it.text])?.changes.length ?? 0) > 0) ?? null, [turn]);
   const madeCount = Object.keys(changeItem?.made ?? {}).length;
+  const running = useStore(studio.store, (s) => s.agent.running);
+  // The changes still to make, each with its Make this change (one that only takes words out has none).
+  const unmade = (answer?.changes ?? []).filter((c, i) => !changeItem?.made?.[i] && !!c.replace).length;
   const paths = useMemo(() => {
     const out: string[] = [];
     for (const p of answer?.where ?? []) {
@@ -1443,6 +1446,18 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
               <Icon name="edit" size={11} />
             </span>
             <span className="answer-label">What I’d change</span>
+            <span className="spacer" />
+            {/* Two or more Make this change buttons: one for all of them. */}
+            {unmade >= 2 && (
+              <button
+                className="answer-make-all"
+                disabled={!changeItem || running}
+                title={`Make ${madeCount ? 'the changes not made yet' : 'every change here'} in the editor (⌘Z to undo); any whose words have moved, Write mode makes`}
+                onClick={() => changeItem && void studio.applyAllAnswerChanges(changeItem.id)}
+              >
+                {madeCount ? `Make the other ${unmade}` : `Make all ${unmade} changes`}
+              </button>
+            )}
           </div>
           {answer!.changes.map((c, i) => (
             <ChangeCard key={i} change={c} index={i} itemId={changeItem?.id ?? null} made={changeItem?.made?.[i]} book={book} />

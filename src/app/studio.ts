@@ -76,7 +76,7 @@ import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../service
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
 import { answerOf, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
-import { changePrompt, meantMessage } from '../services/agent/ask-mode';
+import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
 import { parseOptions } from '../services/agent/options-mode';
 import { closestOurs, locatePassage, type PassageAt } from './option-passage';
 import { STYLE_TEMPLATES } from '../style-guides';
@@ -4423,6 +4423,67 @@ export class Studio {
     editor.revealRangeInCenterIfOutsideViewport(put);
     made('here');
     this.toast('Changed (⌘Z to undo).');
+  }
+
+  /**
+   * "Make all changes" on an answer card: each change not made yet, in the
+   * editor as Make this change makes it, in the order they come. A file's
+   * changes are one step for ⌘Z. The ones whose words can't be found there
+   * go to Write mode together, in one message.
+   */
+  async applyAllAnswerChanges(itemId: string) {
+    if (this.state.agent.running) return;
+    const item = this.state.agent.items.find((i) => i.id === itemId);
+    if (item?.kind !== 'assistant') return;
+    const all = answerOf([item.text])?.changes ?? [];
+    const todo = all.flatMap((c, i) => {
+      const found = c.complete && c.replace && !item.made?.[i] ? this.answerChange(itemId, i) : null;
+      return found ? [{ i, ...found }] : [];
+    });
+    if (!todo.length) return;
+    const made: Record<number, 'here' | 'write'> = {};
+    const elsewhere: typeof todo = [];
+    // The last one made, selected at the end (nothing is changed in its file after it).
+    let last: { path: string; range: monaco.Range } | null = null;
+    // A file at a time (it opens once); each change's words looked for after the one before is in.
+    const paths = [...new Set(todo.flatMap((t) => (t.ref ? [t.ref.path] : [])))];
+    for (const path of paths) {
+      let open = false;
+      for (const t of todo.filter((x) => x.ref?.path === path)) {
+        const range = await this.changeRange(t.ref!, t.change);
+        const editor = this.editor;
+        const model = editor?.getModel();
+        if (!range || !editor || !model) {
+          elsewhere.push(t);
+          continue;
+        }
+        if (!open) editor.pushUndoStop();
+        open = true;
+        const start = range.getStartPosition();
+        editor.executeEdits('ask-change', [{ range, text: t.change.replace, forceMoveMarkers: true }]);
+        last = { path, range: monaco.Range.fromPositions(start, model.getPositionAt(model.getOffsetAt(start) + t.change.replace.length)) };
+        made[t.i] = 'here';
+      }
+      if (open) this.editor?.pushUndoStop();
+    }
+    elsewhere.push(...todo.filter((t) => !t.ref));
+    let write = false;
+    if (elsewhere.length) {
+      await this.setMode('write');
+      write = this.state.agent.mode === 'write';
+      if (write) for (const t of elsewhere) made[t.i] = 'write';
+    }
+    this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, made: { ...it.made, ...made } } : it));
+    if (last) {
+      await this.openFile(last.path);
+      if (this.state.active === last.path) {
+        this.editor?.setSelection(last.range);
+        this.editor?.revealRangeInCenterIfOutsideViewport(last.range);
+      }
+    }
+    const here = Object.values(made).filter((m) => m === 'here').length;
+    if (here) this.toast(`${here === 1 ? 'Changed' : `Made ${here} changes`} (⌘Z to undo).${write ? ` Write mode makes the other ${elsewhere.length === 1 ? 'one' : elsewhere.length}.` : ''}`);
+    if (write) await this.send(changesPrompt(elsewhere.map((t) => t.change)));
   }
 
   /** An answer's change made in the editor, taken back from its card (⌘Z brings it back). */

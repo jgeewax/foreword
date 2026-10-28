@@ -1487,6 +1487,108 @@ async function optionsDoneChecks() {
  * undoes everything. Scratch book only.
  */
 /**
+ * The selection bar's Revise and Ask card with a long comment: the box starts
+ * one line tall, grows a line at a time as the words wrap (⇧⏎ lines too), up
+ * to its cap, and the card stays in the editor; ⏎ sends it all. Then the
+ * assistant pane's New task at the top. No model: the send is caught.
+ */
+async function selectionCardChecks() {
+  const out: Record<string, unknown> = {};
+  await studio.openFile('chapters/ch1-vectors.typ');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+  const { sendFromBar } = studio;
+  const sent: { kind: string; instruction: string }[] = [];
+  studio.sendFromBar = async (kind, instruction) => {
+    sent.push({ kind, instruction });
+    return false;
+  };
+  const zoom = studio.state.zoom;
+  try {
+    await studio.setZoom(1.25, { persist: false, write: false });
+    editor.revealLineInCenter(line);
+    editor.setSelection(new monaco.Range(line, 1, line, 30), 'mouse');
+    await sleep(200);
+    studio.events.emit('selection-card', 'revise');
+    await sleep(400);
+    editor.render(true);
+    const box = () => document.querySelector<HTMLTextAreaElement>('.selection-card .sel-input');
+    const type = async (text: string) => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box()!, text);
+      box()!.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(250);
+      editor.render(true);
+    };
+    const measure = () => {
+      const b = box()?.getBoundingClientRect();
+      const card = document.querySelector('.selection-card')?.getBoundingClientRect();
+      const ed = editor.getDomNode()!.getBoundingClientRect();
+      return {
+        box: b && Math.round(b.height),
+        scrolls: !!box() && box()!.scrollHeight > box()!.clientHeight + 1,
+        cardInEditor: !!card && card.top >= ed.top - 1 && card.bottom <= ed.bottom + 1 && card.left >= ed.left - 1 && card.right <= ed.right + 1,
+        width: card && Math.round(card.width),
+      };
+    };
+    out.textarea = box()?.tagName;
+    out.focused = document.activeElement === box();
+    out.empty = measure();
+    await type('Shorter');
+    out.oneLine = measure();
+    const long = 'Make it read more like a conversation with the reader, keep the definition exact, and say in plain words why a vector has both a size and a direction before the notation comes in.';
+    await type(long);
+    out.long = { ...measure(), hint: document.querySelector('.selection-card .sel-hint')?.textContent };
+    out.longSnapshot = await snap('selcard-long');
+    await type(`${long}\nAnd keep the example with the arrow.`);
+    out.withNewLine = measure();
+    await type(Array.from({ length: 14 }, (_, i) => `Line ${i + 1}`).join('\n'));
+    out.capped = measure();
+    out.cappedSnapshot = await snap('selcard-capped');
+    // ⇧⏎ is a new line (the box keeps it), ⏎ sends.
+    await type(long);
+    const shift = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+    box()!.dispatchEvent(shift);
+    out.shiftEnterKept = { sent: sent.length, defaultPrevented: shift.defaultPrevented };
+    box()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await sleep(200);
+    out.sent = sent.splice(0);
+    // The Ask tab's box is the same.
+    editor.setSelection(new monaco.Range(line, 1, line, 30), 'mouse');
+    studio.events.emit('selection-card', 'ask');
+    await sleep(400);
+    await type(long);
+    out.ask = { tab: document.querySelector('.selection-card')?.className, ...measure() };
+    document.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();
+    await sleep(100);
+
+    // New task at the top of the assistant pane, beside the settings; the message box's stays.
+    studio.events.emit('show-agent-pane');
+    await sleep(200);
+    const header = document.querySelector<HTMLElement>('.agent-pane .pane-header');
+    const top = header?.querySelector<HTMLButtonElement>('.agent-new-task');
+    const saved = { taskId: studio.state.agent.taskId, items: studio.state.agent.items };
+    const { newTask } = studio;
+    let pressed = 0;
+    studio.newTask = () => void pressed++;
+    try {
+      top?.click();
+    } finally {
+      studio.newTask = newTask;
+    }
+    const r = top?.getBoundingClientRect();
+    const gear = header?.querySelector('.agent-settings')?.getBoundingClientRect();
+    out.newTaskTop = { shown: !!top, label: top?.getAttribute('aria-label'), title: top?.title, pressed, leftOfSettings: !!r && !!gear && r.right <= gear.left + 1, size: r && [Math.round(r.width), Math.round(r.height)] };
+    out.headerSnapshot = await snap('agent-header-new-task');
+    studio.store.set((st) => ({ agent: { ...st.agent, ...saved } }));
+  } finally {
+    studio.sendFromBar = sendFromBar;
+    await studio.setZoom(zoom, { persist: false, write: false });
+  }
+  return out;
+}
+
+/**
  * Ask mode's answer card, from made-up replies (no model): the card while the
  * answer comes (before and after "You asked"), then done: the answer, how
  * sure, the stats, a chart, the places quoted from the book and pinned on the
@@ -1640,6 +1742,28 @@ async function askCardChecks() {
     document.querySelectorAll<HTMLButtonElement>('.answer-next-q')[1]?.click();
     await sleep(200);
     out.sent = sent.splice(0);
+    studio.store.set((st) => ({ agent: { ...st.agent, mode: 'ask' } }));
+    // Make all changes, with both still to make: the one found is made in the editor, the misquoted one goes to Write.
+    studio.store.set((st) => ({ agent: { ...st.agent, items: st.agent.items.map((it) => (it.id === 'm2:0' ? { ...it, made: {} } : it)) } }));
+    await sleep(300);
+    const makeAll = () => card()?.querySelector<HTMLButtonElement>('.answer-make-all') ?? null;
+    out.makeAllShown = { label: makeAll()?.textContent ?? null, buttons: card()?.querySelectorAll('.answer-make').length };
+    card()?.querySelector('.answer-changes')?.scrollIntoView({ block: 'center' });
+    await sleep(150);
+    out.makeAllSnapshot = await snap('askcard-make-all');
+    makeAll()?.click();
+    await sleep(600);
+    out.madeAll = {
+      line: model.getLineContent(line),
+      state: (studio.state.agent.items.find((i) => i.id === 'm2:0') as any)?.made,
+      sent: sent.splice(0),
+      mode: studio.state.agent.mode,
+      toast: studio.state.toast?.text,
+      buttonGone: !makeAll(),
+    };
+    editor.trigger('selftest', 'undo', null);
+    await sleep(200);
+    out.madeAllUndone = model.getValue() === original;
     studio.store.set((st) => ({ agent: { ...st.agent, mode: 'ask' } }));
     // Dark.
     try {
@@ -9478,6 +9602,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
     if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
     if (only?.includes('askcard')) result.askcard = await askCardChecks();
+    if (only?.includes('selcard')) result.selcard = await selectionCardChecks();
     if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { barMessage, barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
@@ -93,11 +93,31 @@ function Card(props: {
   send: (kind: BarKind, instruction: string) => void;
   toChat: (kind: BarKind, draft: string) => void;
   close: () => void;
+  /** The card grew or shrank: Monaco puts it in its place again (above the selection, it moves up). */
+  resized: () => void;
+  /** As wide as it can be in the editor (it's 470 px where there's room), so a long comment isn't cut off at its edge. */
+  width: number;
 }) {
-  const { kind, summary, styleGuide, setKind, send, toChat, close } = props;
+  const { kind, summary, styleGuide, setKind, send, toChat, close, resized, width } = props;
   const [draft, setDraft] = useState('');
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const tab = TABS[kind];
+  const narrow = width < 360;
+  // The box grows with what's written, a line at a time, up to a cap (then it scrolls).
+  const lines = useRef(0);
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    // One line keeps the box's own height; past it, the box is as tall as the words (and its border).
+    el.style.height = '';
+    // (A pixel or two over is rounding at a zoom, not a second line.)
+    if (el.scrollHeight > el.clientHeight + 2) el.style.height = `${el.scrollHeight + 2}px`;
+    if (el.scrollHeight !== lines.current) {
+      const first = !lines.current;
+      lines.current = el.scrollHeight;
+      if (!first) resized();
+    }
+  }, [draft]);
   // Once Monaco has drawn it in its place (it's hidden until then).
   useEffect(() => {
     let tries = 0;
@@ -113,6 +133,7 @@ function Card(props: {
   return (
     <div
       className={`selection-card sel-${kind}`}
+      style={{ width }}
       role="dialog"
       aria-label={tab.dialog}
       // The editor's keys stay out of it; Escape closes it.
@@ -127,9 +148,10 @@ function Card(props: {
       <div className="sel-card-head">
         <div className="sel-tabs" role="tablist">
           {(Object.keys(TABS) as BarKind[]).map((k) => (
-            <button key={k} role="tab" aria-selected={k === kind} className={`sel-tab sel-${k}`} onClick={() => setKind(k)}>
+            <button key={k} role="tab" aria-selected={k === kind} aria-label={TABS[k].label} title={narrow ? TABS[k].label : undefined} className={`sel-tab sel-${k}`} onClick={() => setKind(k)}>
               <KindIcon kind={k} size={13} />
-              {TABS[k].label}
+              {/* In a narrow editor the other tabs are their icons, as the bar's are. */}
+              {(!narrow || k === kind) && TABS[k].label}
             </button>
           ))}
         </div>
@@ -139,16 +161,18 @@ function Card(props: {
           <Icon name="close" size={12} />
         </button>
       </div>
-      <input
+      {/* ⏎ sends, ⇧⏎ starts a new line, as in the message box. */}
+      <textarea
         ref={input}
         className="sel-input"
+        rows={1}
         value={draft}
         placeholder={tab.box}
         aria-label={tab.box}
         spellCheck={false}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+          if (e.key !== 'Enter' || e.shiftKey || e.altKey || e.nativeEvent.isComposing) return;
           e.preventDefault();
           go();
         }}
@@ -166,7 +190,7 @@ function Card(props: {
           Continue in chat
         </button>
         <span className="spacer" />
-        <span className="sel-hint">esc to close</span>
+        <span className="sel-hint">{draft.includes('\n') || draft.length > 50 ? '⇧⏎ new line · esc to close' : 'esc to close'}</span>
         <button className="sel-go" disabled={!draft.trim()} onClick={go}>
           {tab.go}
           <kbd>⏎</kbd>
@@ -294,7 +318,7 @@ function endOf(model: monaco.editor.ITextModel, r: monaco.IRange): monaco.IPosit
 
 /** Clicks keep the editor's focus and selection (but the card's box takes the keys). */
 const keepFocus = (e: MouseEvent) => {
-  if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+  if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault();
 };
 
 /**
@@ -321,6 +345,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
   };
   editor.addContentWidget(barWidget);
 
+  /** The card's width: 470 px, or what the editor's text area has room for (less the widget's 20 px), but no narrower than 240. */
+  const cardWidth = () => Math.max(240, Math.min(470, editor.getLayoutInfo().contentWidth - 28));
   const selection = () => {
     const sel = editor.getSelection();
     return sel && !sel.isEmpty() ? sel : null;
@@ -336,7 +362,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     const sel = selection();
     const model = editor.getModel();
     const summary = sel && model ? selectionSummary(sel.startLineNumber, endOf(model, sel).lineNumber, model.getValueInRange(sel)) : '';
-    return <Card key="card" kind={view.tab} summary={summary} styleGuide={studio.state.styleGuide.exists} setKind={openCard} send={send} toChat={toChat} close={close} />;
+    return <Card key="card" kind={view.tab} summary={summary} styleGuide={studio.state.styleGuide.exists} setKind={openCard} send={send} toChat={toChat} close={close} resized={() => editor.layoutContentWidget(barWidget)} width={cardWidth()} />;
   };
   // At once, so Monaco measures it and puts it below the line (or above, at the bottom of the pane);
   // from the store, whose updates can come mid-render, on the next frame.
@@ -536,7 +562,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
       renderNote();
       editor.layoutContentWidget(noteWidget);
     }),
-    editor.onDidLayoutChange(() => view?.kind === 'bar' && renderBar()),
+    editor.onDidLayoutChange(() => view && renderBar()),
   ];
   // The assistant getting ready or going to work, the reply that answers a request, the style guide appearing.
   const offStore = studio.store.subscribe(() => {
