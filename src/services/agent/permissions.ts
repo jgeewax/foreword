@@ -179,6 +179,10 @@ export function sessionRules(p: AgentPermissions, readOnly = false, extra: reado
     // (multiple choice or free text, in the chat): asking needs no permission.
     { action: 'subagent', resource: '*', effect: 'deny' },
     { action: 'task', resource: '*', effect: 'deny' },
+    // OpenCode's Code Mode: `execute` runs code that calls its built-in browser tools (and MCP
+    // servers in code mode; Foreword's own are plain tools). Denied, the tool and its catalog
+    // leave the prompt: 8,700 of its 24,000 characters (2.0.20).
+    { action: 'execute', resource: '*', effect: 'deny' },
     { action: 'question', resource: '*', effect: 'allow' },
     // Foreword's own tools: changing its settings is the author's call (never these rules: the tools can't);
     // looking at them, and opening Settings for the author, never needs asking. Never is the tools' own to

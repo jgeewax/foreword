@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInstructions, MODES_SECTION } from './instructions';
+import { buildInstructions, FOREWORD_PROMPT, MODES_SECTION } from './instructions';
 import { modeOffer } from './modes';
 
 const ctx = {
@@ -65,6 +65,17 @@ describe('buildInstructions', () => {
     // Its example is an offer the chat reads.
     const example = /```mode\n[\s\S]*?\n```/.exec(MODES_SECTION)![0];
     expect(modeOffer(example)).toEqual({ mode: 'discuss', there: 'Weigh Sam against Ada as the narrator with you. Nothing changes.', here: "Go with Sam, and rewrite chapter 1's first scene in his voice." });
+  });
+
+  it('under Foreword’s own system prompt, leaves who it is to that prompt', () => {
+    const own = buildInstructions({ ...ctx, ownPrompt: true });
+    expect(own.startsWith('# This book\n\n## The project')).toBe(true);
+    expect(own).not.toContain('coding agent');
+    expect(own).toContain('Entry point: `main.typ`');
+    // The prompt itself: a writer's assistant in Foreword, with what a coding agent's prompt said about its harness.
+    expect(FOREWORD_PROMPT).toMatch(/^You are the writing assistant inside Foreword/);
+    expect(FOREWORD_PROMPT).toMatch(/A refusal means no: don't try the same thing another way/);
+    expect(FOREWORD_PROMPT).not.toMatch(/software|coding|codebase/i);
   });
 
   it('handles a project without an entry point or chapters', () => {

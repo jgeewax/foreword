@@ -2,11 +2,13 @@
 // Gemini CLI, Codex and Antigravity, each through its ACP program, which the Rust side runs
 // in the book's folder (acp.rs). JSON-RPC lines both ways. What OpenCode keeps
 // on its server, the app keeps here: each conversation's transcript, its
-// instructions (sent with the next message when they change), its permission
-// rules (the agent asks; the rules answer, or the author does), the questions
-// it asks the author (form elicitations), and messages queued while a turn runs.
+// instructions (Claude Code's system prompt, the others' next message, when
+// they change), its permission rules (the agent asks; the rules answer, or the
+// author does), the questions it asks the author (form elicitations), and
+// messages queued while a turn runs.
 import { Channel, ipc } from '../../lib/ipc';
 import { appTool, conversationTitle, decide, INSTRUCTIONS_URI, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
+import { FOREWORD_PROMPT } from './instructions';
 import { messageText } from './message-context';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
@@ -85,6 +87,10 @@ type Session = {
   instructions: Map<string, string>;
   /** The instructions as last sent (sent again when they change). */
   sentInstructions: string;
+  /** Claude Code: the system prompt its session has now ('': the others). */
+  systemPrompt: string;
+  /** The turn the author stopped (Claude Code's can be stopped before it's sent, while its prompt changes). */
+  stoppedTurn: number;
   queue: { inboxId: string; text: string }[];
   /** Permission requests waiting for the author: our request id → the agent's JSON-RPC id and options. */
   asking: Map<string, { rpcId: number | string; options: { optionId: string; kind: string }[]; ask: { action: string; resources: string[]; patches: FilePatch[] } }>;
@@ -112,6 +118,16 @@ export const CLAUDE_ASKS = ['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'
  * job, in the chat (modes.ts).
  */
 export const CLAUDE_DISALLOWED = ['EnterPlanMode', 'ExitPlanMode'] as const;
+
+/**
+ * Claude Code's own tools that it has here, of the twenty-odd it comes with:
+ * the ones for looking at and changing files, the web, and asking the author.
+ * Not its subagents, skills, schedules, worktrees or other coding tools:
+ * with 0.93.0 all of them came to 63,000 characters in every request, and
+ * these nine to 18,000. Not ToolSearch either, so Foreword's own tools come whole, as
+ * tools it can call, never only their names (verified with Haiku, 2026-10-25).
+ */
+export const CLAUDE_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash', 'WebFetch', 'WebSearch', 'AskUserQuestion'] as const;
 
 /** ACP tool kinds that change files: never in a read-only mode, in the book or outside it. */
 const CHANGE_KINDS = new Set(['edit', 'delete', 'move']);
@@ -156,6 +172,16 @@ export class AcpAdapter implements AgentAdapter {
 
   hasStudioTools() {
     return this.mcpServers().length > 0;
+  }
+
+  /** Claude Code's system prompt is Foreword's: its custom prompt (sessionMeta), changed by a resume (systemPromptFor). */
+  ownsSystemPrompt() {
+    return this.kind === 'claude';
+  }
+
+  /** The system prompt for a conversation with these instructions. */
+  private systemFor(instructions: Map<string, string>) {
+    return [FOREWORD_PROMPT, ...instructions.values()].join('\n\n');
   }
 
   /** The MCP servers a conversation gets: Foreword's own tools, when the agent takes HTTP servers. */
@@ -261,8 +287,11 @@ export class AcpAdapter implements AgentAdapter {
   // ---- sessions and their settings -----------------------------------------------------
 
   private async newSession(): Promise<Session> {
-    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta() });
-    return this.track(res.sessionId, res);
+    const system = this.ownsSystemPrompt() ? this.systemFor(new Map()) : '';
+    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system) });
+    const s = this.track(res.sessionId, res);
+    s.systemPrompt = system;
+    return s;
   }
 
   /**
@@ -272,11 +301,44 @@ export class AcpAdapter implements AgentAdapter {
    * seeing it. An ask rule wins over an allow there, and these settings are
    * its highest layer. The app answers what its rules allow at once
    * (askPermission), so only what they ask about reaches the author. Its plan
-   * mode's tools are taken away (claude-agent-acp adds them to its own list).
+   * mode's tools are taken away (claude-agent-acp adds them to its own list),
+   * and so are its coding tools (CLAUDE_TOOLS).
+   *
+   * `system` is its whole system prompt, in place of Claude Code's own: the
+   * Agent SDK's custom prompt, not ACP's `systemPrompt`, which the connector
+   * passes on as a bare string that Claude Code records with the conversation
+   * and keeps when it's resumed. Not recorded (`snapshot: false`), a resume
+   * with another prompt gives the conversation that one (verified with
+   * claude-agent-acp 0.93.0: the instructions changed, the model kept).
    */
-  private sessionMeta() {
+  private sessionMeta(system: string) {
     if (this.kind !== 'claude') return {};
-    return { _meta: { claudeCode: { options: { settings: { permissions: { ask: [...CLAUDE_ASKS] } }, disallowedTools: [...CLAUDE_DISALLOWED] } } } };
+    return {
+      _meta: {
+        claudeCode: {
+          options: {
+            settings: { permissions: { ask: [...CLAUDE_ASKS] } },
+            disallowedTools: [...CLAUDE_DISALLOWED],
+            tools: [...CLAUDE_TOOLS],
+            systemPrompt: { type: 'custom', prompt: system, snapshot: false },
+          },
+        },
+      },
+    };
+  }
+
+  /**
+   * Before a turn: the conversation's system prompt with its instructions now
+   * (a mode, a style guide changed since). Claude Code takes another one by a
+   * resume, which starts its program again with the conversation (about half
+   * a second), so it happens only when they've changed.
+   */
+  private async systemPromptFor(s: Session) {
+    const system = this.systemFor(s.instructions);
+    if (system === s.systemPrompt) return;
+    const res = await this.request('session/resume', { sessionId: s.id, cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system) });
+    s.systemPrompt = system;
+    if (Array.isArray(res?.configOptions)) s.config = res.configOptions;
   }
 
   private track(id: string, res: any): Session {
@@ -292,6 +354,8 @@ export class AcpAdapter implements AgentAdapter {
       rules: [],
       instructions: new Map(),
       sentInstructions: '',
+      systemPrompt: '',
+      stoppedTurn: 0,
       queue: [],
       asking: new Map(),
       forms: new Map(),
@@ -458,7 +522,10 @@ export class AcpAdapter implements AgentAdapter {
       s = this.track(sessionId, null);
       s.replaying = true;
       try {
-        const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta() });
+        // Its instructions come later (Studio sets them): until then, Foreword's prompt alone.
+        const system = this.ownsSystemPrompt() ? this.systemFor(s.instructions) : '';
+        const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system) });
+        s.systemPrompt = system;
         s.config = Array.isArray(res?.configOptions) ? res.configOptions : [];
         s.modes = (res?.modes?.availableModes ?? []).map((m: any) => String(m.id));
       } catch (e) {
@@ -540,12 +607,13 @@ export class AcpAdapter implements AgentAdapter {
   }
 
   /**
-   * Start a turn: the instructions first when they've changed. The request
-   * returns when the turn ends; this returns once it's sent.
+   * Start a turn: the instructions first when they've changed, in Claude
+   * Code's system prompt or the others' message. The request returns when the
+   * turn ends; this returns once it's sent.
    */
   private async prompt(s: Session, text: string, { record = true, command = false } = {}) {
     // A slash command must come first, so the instructions wait for the next message.
-    const instructions = command ? s.sentInstructions : [...s.instructions.values()].join('\n\n');
+    const instructions = command || this.ownsSystemPrompt() ? s.sentInstructions : [...s.instructions.values()].join('\n\n');
     const changed = instructions !== s.sentInstructions;
     const block = changed && instructions ? `${INSTRUCTIONS_OPEN}\n${instructions}\n${INSTRUCTIONS_CLOSE}` : '';
     const prompt = !block
@@ -558,6 +626,16 @@ export class AcpAdapter implements AgentAdapter {
     if (record) s.transcript.user(`${s.id}:u${s.turn}`, text);
     s.running = true;
     this.emit({ type: 'turn-started', sessionId: s.id });
+    if (this.ownsSystemPrompt() && this.systemFor(s.instructions) !== s.systemPrompt) {
+      try {
+        await this.systemPromptFor(s);
+      } catch (e) {
+        this.finish(s, 'failed', `Couldn’t give ${ACP_NAMES[this.kind]} the instructions: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
+      // Stopped meanwhile: no turn to start.
+      if (s.stoppedTurn === s.turn) return this.finish(s, 'interrupted');
+    }
     this.request('session/prompt', { sessionId: s.id, prompt }).then(
       (res) => {
         const reason = res?.stopReason;
@@ -592,6 +670,7 @@ export class AcpAdapter implements AgentAdapter {
 
   async cancel(sessionId: string) {
     const s = this.session(sessionId);
+    if (s.running) s.stoppedTurn = s.turn;
     // The protocol: answer every open permission request and question as cancelled, then cancel.
     for (const [, a] of s.asking) this.respond(a.rpcId, { outcome: { outcome: 'cancelled' } });
     for (const [formId, f] of s.forms) {

@@ -16,7 +16,8 @@ describe('the task-done marker', () => {
 
   it('is explained in the instructions', () => {
     expect(TASK_INSTRUCTIONS).toContain(`end your reply with this exact line on its own:\n${TASK_MARKER}`);
-    expect(TASK_INSTRUCTIONS).toMatch(/restate the goal in one sentence/);
+    // "At the start" was read, in a system prompt, as nothing to do in the reply (Haiku: 0 of 6, then 3 of 3).
+    expect(TASK_INSTRUCTIONS).toMatch(/Begin your first reply, before any step, with the goal restated in one sentence/);
   });
 });
 

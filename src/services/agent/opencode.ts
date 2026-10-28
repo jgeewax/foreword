@@ -2,6 +2,7 @@
 // Rust bridge (agent.rs). API shapes verified against the server's own
 // /openapi.json (OpenCode 2.0.20); the npm SDK (1.x) targets the older API.
 import { Channel, ipc } from '../../lib/ipc';
+import { FOREWORD_PROMPT } from './instructions';
 import { messageText } from './message-context';
 import { mapOpenCodeEvent, toFormRequest } from './opencode-events';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
@@ -33,6 +34,24 @@ export const rawEventTap: { fn?: (raw: any) => void } = {};
 /** A model as OpenCode takes it: with a variant (its effort), or as it comes. */
 const modelBody = (model: ModelRef, effort?: string | null) => ({ providerID: model.providerID, id: model.id, ...(effort && effort !== DEFAULT_EFFORT ? { variant: effort } : {}) });
 
+/**
+ * Foreword's own OpenCode agent, which its conversations use in place of
+ * `build`: its `system` takes the place of OpenCode's prompt for a coding
+ * agent ("You are an AI agent running in OpenCode, a coding agent
+ * harness…"). OpenCode still adds the model, the environment and the
+ * instruction entries after it (verified with 2.0.20).
+ */
+export const FOREWORD_AGENT = 'foreword';
+
+/**
+ * The agent as a config layer for the server's start (OPENCODE_CONFIG_CONTENT),
+ * on top of the author's own OpenCode config, whose providers and agents stay.
+ */
+export const OPENCODE_CONFIG = JSON.stringify({
+  // A line break after it, as OpenCode's own has: its "# Your Model" follows on the next line.
+  agents: { [FOREWORD_AGENT]: { system: `${FOREWORD_PROMPT}\n`, mode: 'primary', description: 'Foreword’s writing assistant' } },
+});
+
 export class OpenCodeAdapter implements AgentAdapter {
   private listeners = new Set<(e: AgentEvent) => void>();
   /** Each model's variants (its levels of effort), from the last list of models. */
@@ -45,7 +64,14 @@ export class OpenCodeAdapter implements AgentAdapter {
   ) {}
 
   async start() {
-    await ipc.agentStart();
+    await ipc.agentStart(OPENCODE_CONFIG);
+    // A session with an agent the server hasn't sends the model nothing at all (2.0.20), so only one it has.
+    // /api/agent leaves out agents from config layers; the config lists ours as a document of its own.
+    this.ownAgent = await call('GET', `/api/config?location[directory]=${encodeURIComponent(this.root)}`).then(
+      // Its documents, as a list (2.0.20), from the author's files and ours.
+      (res) => ((Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : []) as any[]).some((doc) => typeof doc?.info?.agents?.[FOREWORD_AGENT]?.system === 'string'),
+      (e) => (console.warn('opencode: its config unread, so its own prompt', e), false),
+    );
     const channel = new Channel<any>();
     channel.onmessage = (raw) => {
       rawEventTap.fn?.(raw);
@@ -66,9 +92,15 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   private toolsAdded = false;
+  /** The server has Foreword's agent (FOREWORD_AGENT): its conversations use it. */
+  private ownAgent = false;
 
   hasStudioTools() {
     return this.toolsAdded;
+  }
+
+  ownsSystemPrompt() {
+    return this.ownAgent;
   }
 
   async stop() {
@@ -106,20 +138,22 @@ export class OpenCodeAdapter implements AgentAdapter {
     const res = await call('POST', '/api/session', {
       location: { directory: this.root },
       model: model ? modelBody(model, effort) : null,
-      agent: null,
+      agent: this.ownAgent ? FOREWORD_AGENT : null,
       permissions: sessionRules(permissions, readOnly, rules),
     });
     return res.data.id;
   }
 
   /**
-   * Update a live session's rules (verified to apply mid-session). Always the
-   * `build` agent: a conversation from when Plan used OpenCode's `plan` agent
-   * goes back to it (the app's modes are its own, modes.ts).
+   * Update a live session's rules (verified to apply mid-session). Always
+   * Foreword's agent (or, without it, `build`): a conversation from before it,
+   * or from when Plan used OpenCode's `plan` agent, goes to it (the app's
+   * modes are its own, modes.ts).
    */
   async setPermissions(sessionId: string, permissions: AgentPermissions, readOnly = false, rules: PermissionRule[] = []) {
     await call('PATCH', `/api/session/${sessionId}`, { permissions: sessionRules(permissions, readOnly, rules) });
-    if ((await call('GET', `/api/session/${sessionId}`)).data?.agent === 'plan') await call('POST', `/api/session/${sessionId}/agent`, { agent: 'build' });
+    const agent = this.ownAgent ? FOREWORD_AGENT : 'build';
+    if (((await call('GET', `/api/session/${sessionId}`)).data?.agent ?? 'build') !== agent) await call('POST', `/api/session/${sessionId}/agent`, { agent });
   }
 
   // Experimental in OpenCode 2.0.20; entries appear as `api/<key>` in the system context (verified).

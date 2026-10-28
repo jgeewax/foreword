@@ -110,6 +110,12 @@ export interface AgentAdapter {
   start(): Promise<void>;
   /** Whether its conversations have Foreword's own tools (its settings): given them, and its program takes them. */
   hasStudioTools(): boolean;
+  /**
+   * Whether its system prompt is Foreword's (instructions.ts, FOREWORD_PROMPT)
+   * with the instructions in it, rather than a coding agent's own: Claude Code's
+   * and OpenCode's are. Otherwise the instructions go with a message.
+   */
+  ownsSystemPrompt(): boolean;
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;
@@ -132,7 +138,7 @@ export interface AgentAdapter {
    * keeps the agent in its usual mode, never its own plan mode (see modes.ts).
    */
   setPermissions(sessionId: string, permissions: AgentPermissions, readOnly?: boolean, rules?: PermissionRule[]): Promise<void>;
-  /** Add (or replace) a named instruction block in the session's system context. */
+  /** Add (or replace) a named instruction block in the session's system context (Claude Code: from its next message). */
   setInstructions(sessionId: string, key: string, text: string): Promise<void>;
   getInstructions(sessionId: string): Promise<{ key: string; value: unknown }[]>;
   removeInstructions(sessionId: string, key: string): Promise<void>;

@@ -5,6 +5,7 @@ import recorded from './__fixtures__/acp-claude.jsonl?raw';
 import recordedCodex from './__fixtures__/acp-codex.jsonl?raw';
 import recordedPlan from './__fixtures__/acp-plan.jsonl?raw';
 import { AcpAdapter, isSignedOut, stripInstructions, type AcpTransport } from './acp';
+import { FOREWORD_PROMPT } from './instructions';
 import { appTool, conversationTitle, decide, permissionAsk, toolOutput, type AcpToolCall } from './acp-events';
 import { PRESETS, sessionRules } from './permissions';
 import type { AgentEvent } from './types';
@@ -101,6 +102,7 @@ function harness() {
       sent.push(m);
       // The recording's own replies to initialize and session/new.
       if (m.method === 'initialize' || m.method === 'session/new') queueMicrotask(() => deliver(messages.find((r) => r.id === m.id && r.result)));
+      if (m.method === 'session/resume') queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, result: {} }));
     },
     stop: async () => {},
   };
@@ -169,10 +171,15 @@ describe('AcpAdapter', () => {
     expect(sent.at(-1).result.outcome.optionId).toBe('yes');
   });
 
-  it('runs a turn: instructions once, the rules or the author answer, events, transcript, queue', async () => {
+  it('runs a turn: instructions in the system prompt, the rules or the author answer, events, transcript, queue', async () => {
     const { adapter, sent, events, deliver } = harness();
     await adapter.start();
     expect(sent.map((m) => m.method)).toEqual(['initialize', 'session/new']);
+    // Foreword's prompt in place of Claude Code's, and only the tools for a book.
+    const options = (m: any) => m.params._meta.claudeCode.options;
+    expect(options(sent[1]).systemPrompt).toEqual({ type: 'custom', prompt: FOREWORD_PROMPT, snapshot: false });
+    expect(options(sent[1]).tools).toEqual(['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash', 'WebFetch', 'WebSearch', 'AskUserQuestion']);
+    expect(adapter.ownsSystemPrompt()).toBe(true);
     const models = await adapter.listModels();
     expect(models.map((m) => m.id)).toContain('opus');
     expect(await adapter.defaultModel()).toEqual({ providerID: 'claude', id: 'opus' });
@@ -181,10 +188,16 @@ describe('AcpAdapter', () => {
     expect(sessionId).toBe(messages.find((m) => m.id === 2).result.sessionId);
     await adapter.setInstructions(sessionId, 'book', 'You are writing a Typst book.');
     await adapter.send(sessionId, 'Count the words, then change one.', []);
-    const prompt = sent.at(-1);
+    // The instructions changed: the conversation resumed with them in its prompt, then the message alone.
+    const [resume, prompt] = sent.slice(-2);
+    expect(resume.method).toBe('session/resume');
+    expect(resume.params).toMatchObject({ sessionId, cwd: ROOT });
+    expect(options(resume).systemPrompt).toEqual({ type: 'custom', prompt: `${FOREWORD_PROMPT}\n\nYou are writing a Typst book.`, snapshot: false });
+    expect(options(resume).settings).toEqual(options(sent[1]).settings);
     expect(prompt.method).toBe('session/prompt');
-    expect(prompt.params.prompt[0].text).toBe('<foreword-instructions>\nYou are writing a Typst book.\n</foreword-instructions>\n\nCount the words, then change one.');
-    expect(stripInstructions(prompt.params.prompt[0].text)).toBe('Count the words, then change one.');
+    expect(prompt.params.prompt).toEqual([{ type: 'text', text: 'Count the words, then change one.' }]);
+    // A conversation from before had them with its first message: a replay leaves them out.
+    expect(stripInstructions('<foreword-instructions>\nYou are writing a Typst book.\n</foreword-instructions>\n\nCount the words.')).toBe('Count the words.');
 
     // The turn as recorded; the edit waits for the author.
     for (const m of messages.filter((m) => m.method)) deliver(m);
@@ -207,8 +220,9 @@ describe('AcpAdapter', () => {
     expect(events.find((e) => e.type === 'turn-finished')).toMatchObject({ outcome: 'succeeded' });
     expect(events.at(-2)).toEqual({ type: 'inbox-delivered', sessionId, inboxId });
     expect(events.at(-1)).toEqual({ type: 'turn-started', sessionId });
-    // The queued message goes as the next prompt, without the instructions again.
+    // The queued message goes as the next prompt; the instructions are as they were, so no resume.
     expect(sent.at(-1).params.prompt[0].text).toBe('And a summary, please.');
+    expect(sent.filter((m) => m.method === 'session/resume').length).toBe(1);
 
     // The conversation as the app rebuilds it after a switch.
     const context = await adapter.sessionContext(sessionId);
@@ -217,6 +231,28 @@ describe('AcpAdapter', () => {
     expect(items.find((i) => i.kind === 'assistant')).toMatchObject({ text: 'done' });
     expect(items.find((i) => i.kind === 'tool' && i.name === 'read')).toMatchObject({ read: { path: 'chapters/ch1-vectors.typ', from: 25, to: 34 } });
     expect(contextTokens(context as never)).toBeGreaterThan(30000);
+  });
+
+  it('another mode: the conversation resumes with its prompt first; Stop meanwhile starts no turn', async () => {
+    const { adapter, sent, events } = harness();
+    await adapter.start();
+    const sessionId = await adapter.createSession(null, { permissions: PRESETS.ask.permissions });
+    await adapter.setInstructions(sessionId, 'book', 'Book.');
+    await adapter.setInstructions(sessionId, 'mode', 'Ask mode.');
+    const sending = adapter.send(sessionId, 'What is chapter 2 about?', []);
+    // Stopped while it resumes: no prompt goes, and the turn is over.
+    await adapter.cancel(sessionId);
+    await sending;
+    expect(sent.filter((m) => m.method === 'session/prompt')).toEqual([]);
+    expect(events.at(-1)).toEqual({ type: 'turn-finished', sessionId, outcome: 'interrupted', error: undefined });
+    expect(await adapter.isRunning(sessionId)).toBe(false);
+
+    // Write mode again: the next message resumes it without the mode's instructions.
+    await adapter.removeInstructions(sessionId, 'mode');
+    await adapter.send(sessionId, 'Then shorten it.', []);
+    const [resume, prompt] = sent.slice(-2);
+    expect(resume.params._meta.claudeCode.options.systemPrompt.prompt).toBe(`${FOREWORD_PROMPT}\n\nBook.`);
+    expect(prompt.params.prompt).toEqual([{ type: 'text', text: 'Then shorten it.' }]);
   });
 
   it('says how to sign in when the agent isn’t signed in', async () => {

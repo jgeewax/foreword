@@ -33,12 +33,14 @@ describe('always', () => {
     }
   });
 
-  it('allows reading the book and asking the author, asks for .env, and blocks subagents', () => {
+  it('allows reading the book and asking the author, asks for .env, and blocks subagents and Code Mode', () => {
     for (const rules of [ask, edit, ro]) {
       expect(effect('read', 'chapters/ch1.typ', rules)).toBe('allow');
       expect(effect('grep', 'x', rules)).toBe('allow');
       expect(effect('read', '.env', rules)).toBe('ask');
       expect(effect('subagent', 'explore', rules)).toBe('deny');
+      // OpenCode's browser tools, called from code: denied, they leave its prompt.
+      expect(effect('execute', '*', rules)).toBe('deny');
       expect(effect('question', 'q', rules)).toBe('allow');
       expect(effect('something-new', 'x', rules)).toBe('ask');
     }

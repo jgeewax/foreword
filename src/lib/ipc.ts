@@ -260,7 +260,8 @@ export const ipc = {
   nativeGeometry: (label: 'main' | 'preview') => invoke<Record<string, unknown>>('native_geometry', { label }),
   focusMain: () => invoke<void>('focus_main'),
 
-  agentStart: () => invoke<AgentInfo>('agent_start'),
+  /** `config`: an OpenCode config layer (JSON) for a server it starts, over the author's own. */
+  agentStart: (config?: string) => invoke<AgentInfo>('agent_start', { config: config ?? null }),
   agentRequest: (method: string, path: string, body?: unknown) =>
     invoke<AgentResponse>('agent_request', { method, path, body: body ?? null }),
   agentSubscribe: (onEvent: Channel<any>) => invoke<void>('agent_subscribe', { onEvent }),

@@ -9953,7 +9953,10 @@ async function agentTurn(chapter: string, line: number) {
   const sid = studio.state.agent.sessionId;
   if (sid) {
     const entries = await studio.agent!.getInstructions(sid).catch((e) => [{ key: 'error', value: errorMessage(e) }]);
-    out.instructions = entries.map((e) => ({ key: e.key, length: String(e.value).length, writingAssistant: String(e.value).includes('writing assistant') }));
+    // Under Foreword's own system prompt (Claude Code, OpenCode) that prompt says who it is; the book's entry starts "# This book".
+    out.ownPrompt = studio.agent!.ownsSystemPrompt();
+    out.assistant = studio.state.settings.assistant;
+    out.instructions = entries.map((e) => ({ key: e.key, length: String(e.value).length, writingAssistant: String(e.value).includes(out.ownPrompt ? '# This book' : 'writing assistant') }));
     // And the model sees itself as working on a book (no tools needed).
     await studio.send('Without using any tools, answer in one short sentence: what kind of project is this, and are you here to write software?');
     await sleep(1000);

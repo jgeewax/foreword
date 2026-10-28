@@ -5384,6 +5384,7 @@ export class Studio {
       root: ws.root,
       assistant: this.agentKind ?? this.state.settings.assistant,
       studioTools: this.agent.hasStudioTools(),
+      ownPrompt: this.agent.ownsSystemPrompt(),
     });
     try {
       await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);

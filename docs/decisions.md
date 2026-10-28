@@ -4165,6 +4165,73 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   a task whose chat only Claude Code had, opened while Codex ran, opened
   with Claude Code. `mode-setups`, `conversations` and `taskbar` pass.
 
+### Foreword's own system prompt, for Claude Code and OpenCode (2026-10-25)
+
+- **Asked for:** "is it worthwhile to build our own harness that focuses on
+  writing? or are we overriding the system prompt of opencode and using it
+  for the very very basic stuff it provides rather than 'coding'?", then
+  "lets try pushing things further into the system prompt, starting with
+  claude code and opencode." Not a harness of our own: the assistants'
+  programs keep the loop, the tools, the sign-in (the author's own Claude
+  or ChatGPT plan) and the models. What changes is what they're told.
+- **What they were sent before** (measured with a mock model API, which logs
+  each request): Claude Code (claude-agent-acp 0.93.0) had its own prompt for
+  a coding agent (5,800 characters: security policy, code style, its memory
+  files), 22 tools whose definitions came to 63,000 characters (subagents,
+  schedules, worktrees, workflows…) and an environment message of 9,700
+  listing its subagents and skills; Foreword's instructions came with the
+  author's first message, saying "You are not writing software, even though
+  your other instructions describe a coding agent." OpenCode (2.0.20) had
+  24,000 characters of its own ahead of Foreword's entries: its preamble
+  ("You are an AI agent running in OpenCode, a coding agent harness…"), a
+  Code Mode catalog of its built-in browser tools (8,700), the skills on
+  the Mac and the environment.
+- **FOREWORD_PROMPT** (instructions.ts): what those prompts said about their
+  harness, said for a writer: who it is and for whom, replies in Markdown
+  for an author, a refusal means no, Foreword's notes in messages,
+  summarized conversations, looking before changing, edit or write, the
+  author's work, saying what happened, they/them. The book's instructions
+  follow it under "# This book" (`ownPrompt`), without the reframing.
+- **Claude Code:** the Agent SDK's custom prompt, in `_meta.claudeCode.options`
+  (`systemPrompt: { type: 'custom', prompt, snapshot: false }`), with the
+  instructions in it, and `tools` cut to Read, Edit, Write, Glob, Grep,
+  Bash, WebFetch, WebSearch and AskUserQuestion (18,000 characters). Not
+  ACP's own `systemPrompt`: the connector passes that on as a bare string,
+  which Claude Code records with the conversation (`prompt_snapshot`) and
+  keeps on a resume, so a change of mode would never reach it. When the
+  instructions change (a mode, the style guide), the next message first
+  resumes the conversation with the new prompt (`session/resume`, which
+  starts its program again: ~0.5 s); the model and effort stay, and so does
+  an older conversation's history. Without ToolSearch, Foreword's own tools
+  come whole: Haiku called get_settings directly, no lookup first. Its
+  subagents, skills (its built-in ones are all for code) and auto-memory
+  are gone with its prompt and tools. The author's sign-in works with it.
+- **OpenCode:** a `foreword` agent, given as a config layer when Foreword
+  starts the server (`OPENCODE_CONFIG_CONTENT`, over the author's own config,
+  whose providers stay), whose `system` takes the place of the preamble;
+  OpenCode adds the model, the skills and the environment after it, then
+  the entries as before. Conversations use it; older ones move to it
+  (setPermissions). A session with an agent the server hasn't sends the
+  model nothing at all, and `/api/agent` leaves out agents from config
+  layers, so the adapter looks for its layer in `/api/config` and, without
+  it, stays on `build`. The rules deny `execute`, which takes Code Mode and
+  its browser catalog out of the prompt.
+- **The task's first line** was "At the start, restate the goal in one
+  sentence". In a system prompt Haiku took it as nothing to do in the reply
+  (0 of 6, against 3 of 3 with it in the message); "Begin your first reply,
+  before any step, with the goal restated in one sentence" did it 3 of 3.
+- **Same requests, before and after** (Haiku, the sample book, a fresh copy
+  each, the app's rules with edits allowed): tightening chapter 1's first
+  paragraph, checking every `@reference`, adding an exercise. Both did all
+  three; after, a turn's context was 16,500–17,500 tokens instead of
+  29,000–32,000, and cost a fifth to a half less. Before, it checked the
+  references with chained shell commands (`find … && echo '---REFS---' &&
+  grep …`), after with the grep and glob tools; before, it dropped `v_2`
+  from a formula while tightening, after it left the formulas alone.
+- Not changed: Codex, Gemini CLI and Antigravity keep their own prompts, and
+  the instructions with the message. OpenCode still lists the skills on the
+  Mac (12,800 characters here, humanizer and typst-deck among them).
+
 ### Make all changes, New task at the top, a Revise box that grows (2026-10-28)
 
 - **Asked for:** "make a 'make all changes' button whenever there are 2+

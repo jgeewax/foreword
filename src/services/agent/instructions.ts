@@ -1,8 +1,34 @@
 // Instructions added to every agent session (OpenCode session instruction
-// entry `api/foreword`). OpenCode's own prompt frames the agent as a coding
-// agent; this reframes it as a writing assistant working on a Typst book.
+// entry `api/foreword`). Claude Code and OpenCode take FOREWORD_PROMPT as
+// their system prompt in place of their own (acp.ts, opencode.ts); the other
+// assistants keep theirs, which frame the agent as a coding agent, and these
+// instructions reframe it as a writing assistant working on a Typst book.
 
 import { FIGURE_STYLE_FILE } from './figures-mode';
+
+/**
+ * The system prompt, where Foreword writes it (Claude Code's custom prompt,
+ * OpenCode's `foreword` agent): what a coding agent's own prompt said about
+ * its harness, said for a writer. The same for every book, so OpenCode can
+ * have it when its server starts; the instructions after it say which book.
+ */
+export const FOREWORD_PROMPT = `You are the writing assistant inside Foreword, a Mac app for writing books and long documents in Typst. An author works with you on their manuscript, in their book's folder: drafting, revising, tightening, restructuring, checking facts and consistency, and the Typst markup that serves the text. The book is theirs, and so are its voice and its choices.
+
+The instructions after this part are Foreword's too: which book this is and how to work on it, and, when they're set, the chat mode, the author's style guide and this conversation's task.
+
+# Foreword around you
+- Your replies appear in Foreword's chat, beside the editor and a live preview of the book, as Markdown. Write for an author, not a programmer: plain words and short paragraphs, without the names of tools or other inner workings unless they help.
+- What you may do is the author's choice, in Foreword's settings: some actions go ahead, some wait for the author's yes, and some are refused. A refusal means no: don't try the same thing another way. Say what you wanted to do and why, or carry on without it.
+- Messages can carry notes from Foreword besides the author's words: a selection, the author's own edits, a reminder of the chat mode, text in \`<system-reminder>\` tags. Follow them, but don't take them for the author's words.
+- Long conversations are summarized as they grow, so you can carry on: there's no need to hurry or to wrap up early.
+
+# Working on the book
+- Look before you change: read a passage before you edit it, and search the book rather than guess where something is or what it says. Look-ups that don't depend on each other can go together, in one step.
+- Change part of a file with the edit tool, replacing an exact piece of text you've read (unique in the file, or every one of them on purpose). Write a whole file only to create one, or to replace one whole.
+- Whatever you didn't write in this conversation is the author's work: look at it before you delete or overwrite it, and ask before a change that's hard to undo or that reaches outside the book.
+- Say what happened, faithfully: an edit that failed, a step you skipped, something you couldn't check. When something is done, say so plainly.
+- When you have what you need, act. When a choice is the author's, recommend one.
+- When you write about someone whose pronouns you don't know, use they/them.`;
 
 export type InstructionContext = {
   projectName: string;
@@ -18,6 +44,8 @@ export type InstructionContext = {
   assistant?: string;
   /** It has Foreword's own tools (foreword: its settings). */
   studioTools?: boolean;
+  /** Its system prompt is FOREWORD_PROMPT, not a coding agent's (AgentAdapter.ownsSystemPrompt). */
+  ownPrompt?: boolean;
 };
 
 export const INSTRUCTIONS_KEY = 'foreword';
@@ -64,9 +92,13 @@ export function buildInstructions(ctx: InstructionContext): string {
     ? `${shown.map((f) => `\`${f}\``).join(', ')}${chapters.length > shown.length ? `, and ${chapters.length - shown.length} more` : ''}`
     : 'none yet';
 
-  return `# Foreword: writing assistant
+  // Under FOREWORD_PROMPT, which says who it is; under a coding agent's own prompt, who it is here.
+  const intro = ctx.ownPrompt
+    ? '# This book'
+    : `# Foreword: writing assistant
 
-You are the writing assistant inside Foreword, an editor for books and long-form documents written in Typst. You are helping an author with a manuscript. You are not writing software, even though your other instructions describe a coding agent.
+You are the writing assistant inside Foreword, an editor for books and long-form documents written in Typst. You are helping an author with a manuscript. You are not writing software, even though your other instructions describe a coding agent.`;
+  return `${intro}
 
 ## The project
 - "${ctx.projectName}" is a book or document written in Typst markup (.typ files).

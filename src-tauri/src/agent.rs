@@ -61,8 +61,10 @@ fn free_port() -> std::io::Result<u16> {
 }
 
 /// Start `opencode serve` for the workspace (no-op if already running).
+/// `config` is a config layer of the app's (OPENCODE_CONFIG_CONTENT: its own
+/// agent) on top of the author's OpenCode config.
 #[tauri::command]
-pub async fn agent_start(state: Win) -> CmdResult<AgentInfo> {
+pub async fn agent_start(state: Win, config: Option<String>) -> CmdResult<AgentInfo> {
     let root = state.root()?;
     let mut guard = state.agent.lock().await;
     if let Some(server) = guard.as_mut()
@@ -77,7 +79,8 @@ pub async fn agent_start(state: Win) -> CmdResult<AgentInfo> {
     })?;
     let port = free_port()?;
     let password = uuid::Uuid::new_v4().simple().to_string();
-    let mut child = Command::new(&bin)
+    let mut command = Command::new(&bin);
+    command
         .args([
             "serve",
             "--hostname",
@@ -87,7 +90,11 @@ pub async fn agent_start(state: Win) -> CmdResult<AgentInfo> {
         ])
         .current_dir(&root)
         .env("PATH", discover::search_path())
-        .env("OPENCODE_SERVER_PASSWORD", &password)
+        .env("OPENCODE_SERVER_PASSWORD", &password);
+    if let Some(config) = config {
+        command.env("OPENCODE_CONFIG_CONTENT", config);
+    }
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -24,7 +24,7 @@ export const TASK_MARKER = 'TASK COMPLETE?';
 export const TASK_INSTRUCTIONS = `# This conversation is one task
 
 The author works in tasks: each conversation has one goal.
-- At the start, restate the goal in one sentence. If something important is unclear, ask one or two short questions before starting; otherwise get going.
+- Begin your first reply, before any step, with the goal restated in one sentence. If something important is unclear, ask one or two short questions before starting; otherwise get going.
 - Stay on that goal. If the author asks for something unrelated, help briefly, or suggest starting a new task for it.
 - When you believe the goal is done, say in a sentence or two what you did, then end your reply with this exact line on its own:
 ${TASK_MARKER}
