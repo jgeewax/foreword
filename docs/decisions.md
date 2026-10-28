@@ -4339,6 +4339,41 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   origin/draft-two), back to main from Checkout to…, and the ⋯ menu's
   submenus.
 
+### Codex, Gemini CLI and Antigravity too (2026-10-29)
+
+- **Asked for:** "100% sure theres no way to tweak the codex / antigravity
+  prompt?", then "yes please". There was: each program has its own way, not
+  ACP's `systemPrompt`, and none was in their docs. Found in their code and
+  checked against a mock model API and the author's own sign-ins.
+- **Codex** (codex-acp 2.2.2, Codex 0.160.1): `model_instructions_file` in
+  `CODEX_CONFIG` takes the place of its 17,000-character prompt ("You are a
+  coding agent running in the Codex CLI…"). acp.rs writes FOREWORD_PROMPT to
+  `foreword-prompt.md` in the app's assistants folder (whole, through a
+  temporary file) and points Codex at it. A conversation's instructions go
+  above it as its developer instructions (`_meta.jetbrains.air.customInstructions`,
+  the connector's key for JetBrains' AI client), which it takes only on
+  `session/new`: so a new conversation starts on its own, not on the one made
+  at start (which stays, for the models; Codex doesn't list a conversation
+  with no messages), and Studio hands `createSession` the instructions it is
+  about to set. A change later on (a mode) still goes with the next message.
+  It still adds its skills, its sandbox's rules and the environment.
+- **Gemini CLI** (0.64): `GEMINI_SYSTEM_MD=<that file>` takes the place of its
+  whole system instruction, in `--acp` too; the instructions still go with
+  the message, there being nowhere else.
+- **Antigravity** (1.4.1): its ACP server only adds to its prompt
+  (`_meta.antigravity.systemPrompt = { append }`, on new, load and resume);
+  its SDK can replace it, but the server doesn't pass that on. So it keeps
+  its own prompt and starts each conversation with the instructions added,
+  still saying it isn't writing software.
+- `AcpInfo.ownPrompt` says the file was written; only then does the app
+  drop that reframing (`ownsSystemPrompt`).
+- Verified: unit tests (acp.test.ts, acp.rs); the app's adapter, bundled and
+  driving each real program launched as acp.rs launches it, with a codename
+  in the prompt file and a colour word in the instructions: Codex 6 Luna
+  answered "HERON-42, MAGENTA" with a first message free of instructions;
+  Antigravity knew the colour from its added prompt; Gemini CLI (not signed
+  in here) sent the mock Foreword's prompt as its whole system instruction.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

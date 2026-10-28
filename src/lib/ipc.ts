@@ -267,7 +267,9 @@ export const ipc = {
   agentSubscribe: (onEvent: Channel<any>) => invoke<void>('agent_subscribe', { onEvent }),
   agentStop: () => invoke<void>('agent_stop'),
   /** An assistant over ACP (Claude Code, Gemini CLI, Codex, Antigravity): its JSON-RPC lines arrive on `onMessage`. */
-  acpStart: (kind: string, onMessage: Channel<any>) => invoke<{ program: string; args: string[] }>('acp_start', { kind, onMessage }),
+  /** `system`: the app's system prompt, for a program that takes it in place of its own (`ownPrompt`: it did). */
+  acpStart: (kind: string, onMessage: Channel<any>, system?: string) =>
+    invoke<{ program: string; args: string[]; ownPrompt: boolean }>('acp_start', { kind, onMessage, system: system ?? null }),
   acpSend: (line: string) => invoke<void>('acp_send', { line }),
   /** Foreword's own tools for the assistant (mcp.rs): this window's address; each request comes to `page`, answered with mcpReply. */
   mcpServe: (page: Channel<{ id: number; body: string }>) => invoke<string>('mcp_serve', { page }),

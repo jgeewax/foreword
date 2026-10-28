@@ -112,17 +112,23 @@ export interface AgentAdapter {
   hasStudioTools(): boolean;
   /**
    * Whether its system prompt is Foreword's (instructions.ts, FOREWORD_PROMPT)
-   * with the instructions in it, rather than a coding agent's own: Claude Code's
-   * and OpenCode's are. Otherwise the instructions go with a message.
+   * rather than a coding agent's own: Claude Code's, OpenCode's, Codex's and
+   * Gemini CLI's are (not Antigravity's), so the instructions needn't say it
+   * isn't writing software.
    */
   ownsSystemPrompt(): boolean;
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;
-  /** `effort`: one of the model's levels (efforts()), or null for its own. */
+  /**
+   * `effort`: one of the model's levels (efforts()), or null for its own.
+   * `instructions`: what setInstructions will set (key, text), for an agent
+   * that takes them above the conversation only as it starts (Codex,
+   * Antigravity).
+   */
   createSession(
     model: ModelRef | null,
-    opts?: { permissions?: AgentPermissions; readOnly?: boolean; rules?: PermissionRule[]; effort?: string | null },
+    opts?: { permissions?: AgentPermissions; readOnly?: boolean; rules?: PermissionRule[]; effort?: string | null; instructions?: [string, string][] },
   ): Promise<string>;
   /**
    * The model's levels of effort, and the one in use: in the conversation, or

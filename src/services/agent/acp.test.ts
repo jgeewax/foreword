@@ -370,6 +370,95 @@ describe('Codex', () => {
     expect(replayed.map((m: any) => (m.type === 'user' ? m.text : m.type))).toEqual(['Tighten chapter 2', 'assistant']);
   });
 
+  it('Foreword’s prompt in place of its own, and the instructions as its developer instructions, as a conversation starts', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    let system: string | undefined;
+    const started = codex.find((r) => r.result?.sessionId).result;
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage, prompt) => {
+        deliver = onMessage;
+        system = prompt;
+        return { ownPrompt: true };
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        if (m.id === undefined || !m.method || m.method === 'session/prompt') return;
+        const result = m.method === 'initialize' ? codex.find((r) => r.id === m.id && r.result).result : m.method === 'session/new' ? { ...started, sessionId: `codex-${m.id}` } : {};
+        queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, result }));
+      },
+      stop: async () => {},
+    };
+    const adapter = new AcpAdapter(ROOT, 'codex', transport);
+    await adapter.start();
+    // acp.rs writes it to the file Codex reads (model_instructions_file), and says it did.
+    expect(system).toBe(FOREWORD_PROMPT);
+    expect(adapter.ownsSystemPrompt()).toBe(true);
+    const instructions: [string, string][] = [
+      ['foreword', '# This book'],
+      ['task', '# This conversation is one task'],
+    ];
+    const sessionId = await adapter.createSession(null, { instructions });
+    // A conversation of its own (not the one made at start), with them as developer instructions.
+    const news = sent.filter((m) => m.method === 'session/new');
+    expect(news.length).toBe(2);
+    expect(news[0].params._meta).toBeUndefined();
+    expect(news[1].params._meta).toEqual({ jetbrains: { air: { customInstructions: '# This book\n\n# This conversation is one task' } } });
+    expect(sessionId).toBe(`codex-${news[1].id}`);
+    // Studio sets the same ones: the first message goes alone.
+    for (const [key, text] of instructions) await adapter.setInstructions(sessionId, key, text);
+    await adapter.send(sessionId, 'Tighten chapter 2', []);
+    expect(sent.at(-1).params.prompt).toEqual([{ type: 'text', text: 'Tighten chapter 2' }]);
+    // Ask mode later on: with the next message, as before.
+    await adapter.setInstructions(sessionId, 'mode', 'Ask mode.');
+    deliver({ jsonrpc: '2.0', id: sent.at(-1).id, result: { stopReason: 'end_turn' } });
+    await Promise.resolve();
+    await adapter.send(sessionId, 'What is chapter 2 about?', []);
+    expect(sent.at(-1).params.prompt[0]).toMatchObject({ type: 'resource', resource: { text: expect.stringContaining('Ask mode.') } });
+
+    // Without the file (it couldn't be written), the instructions say what it is.
+    const plain = new AcpAdapter(ROOT, 'codex', { ...transport, start: async (_k, onMessage) => ((deliver = onMessage), { ownPrompt: false }) });
+    await plain.start();
+    expect(plain.ownsSystemPrompt()).toBe(false);
+  });
+
+  it('Antigravity keeps its own prompt and has the instructions added to it; Gemini CLI takes Foreword’s', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    const prompts: Record<string, string | undefined> = {};
+    const transport: AcpTransport = {
+      start: async (kind, onMessage, prompt) => {
+        deliver = onMessage;
+        prompts[kind] = prompt;
+        return { ownPrompt: !!prompt };
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        if (m.id === undefined || !m.method) return;
+        const result = m.method === 'initialize' ? { protocolVersion: 1 } : m.method === 'session/new' ? { sessionId: `s${m.id}` } : {};
+        queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, result }));
+      },
+      stop: async () => {},
+    };
+    const antigravity = new AcpAdapter(ROOT, 'antigravity', transport);
+    await antigravity.start();
+    expect(prompts.antigravity).toBeUndefined();
+    expect(antigravity.ownsSystemPrompt()).toBe(false);
+    await antigravity.createSession(null, { instructions: [['foreword', '# Foreword: writing assistant']] });
+    expect(sent.filter((m) => m.method === 'session/new').at(-1).params._meta).toEqual({ antigravity: { systemPrompt: { append: '# Foreword: writing assistant' } } });
+
+    const gemini = new AcpAdapter(ROOT, 'gemini', transport);
+    await gemini.start();
+    expect(prompts.gemini).toBe(FOREWORD_PROMPT);
+    expect(gemini.ownsSystemPrompt()).toBe(true);
+    // Its instructions go with the message, as before: the conversation made at start, no _meta.
+    const before = sent.length;
+    await gemini.createSession(null, { instructions: [['foreword', '# This book']] });
+    expect(sent.slice(before).some((m) => m.method === 'session/new')).toBe(false);
+  });
+
   it('a model’s levels of effort: read for the model chosen, set after the model, only those it has', async () => {
     const sent: any[] = [];
     let deliver: (m: any) => void = () => {};

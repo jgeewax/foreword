@@ -5150,6 +5150,8 @@ export class Studio {
           readOnly: config.readOnly,
           rules: this.authorRules(this.state.agent.taskId),
           effort: this.state.agent.effort,
+          // For an agent that takes them above the conversation only as it starts (Codex, Antigravity).
+          instructions: this.instructionEntries(),
         });
         // A new task, named for its first conversation; or this assistant's own conversation in the task shown.
         const id = sessionId;
@@ -5378,10 +5380,10 @@ export class Studio {
     }
   }
 
-  /** Session context: this is a Typst book, not a software project (see instructions.ts). */
-  private async applyInstructions(sessionId: string) {
+  /** Session context, as (key, text): this is a Typst book, not a software project (see instructions.ts); the style guide, the task, the mode. */
+  private instructionEntries(): [string, string][] {
     const ws = this.state.workspace;
-    if (!ws || !this.agent) return;
+    if (!ws || !this.agent) return [];
     const text = buildInstructions({
       projectName: ws.name,
       entry: ws.entry,
@@ -5392,12 +5394,19 @@ export class Studio {
       studioTools: this.agent.hasStudioTools(),
       ownPrompt: this.agent.ownsSystemPrompt(),
     });
+    const modeText = modeConfig(this.state.agent.mode).instructions;
+    return [
+      [INSTRUCTIONS_KEY, text],
+      ...(this.styleGuideText?.trim() ? [[STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText)] as [string, string]] : []),
+      [TASK_INSTRUCTIONS_KEY, TASK_INSTRUCTIONS],
+      ...(modeText ? [[MODE_INSTRUCTIONS_KEY, modeText] as [string, string]] : []),
+    ];
+  }
+
+  private async applyInstructions(sessionId: string) {
+    if (!this.agent) return;
     try {
-      await this.agent.setInstructions(sessionId, INSTRUCTIONS_KEY, text);
-      if (this.styleGuideText?.trim()) await this.agent.setInstructions(sessionId, STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText));
-      await this.agent.setInstructions(sessionId, TASK_INSTRUCTIONS_KEY, TASK_INSTRUCTIONS);
-      const modeText = modeConfig(this.state.agent.mode).instructions;
-      if (modeText) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, modeText);
+      for (const [key, text] of this.instructionEntries()) await this.agent.setInstructions(sessionId, key, text);
     } catch (e) {
       // Still usable without them, but the agent will behave like a coding assistant: say so.
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't set the writing-assistant instructions: ${errorMessage(e)}` });

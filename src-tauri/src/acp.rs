@@ -106,6 +106,9 @@ impl AcpProcess {
 pub struct AcpInfo {
     program: String,
     args: Vec<String>,
+    /// Its system prompt is the app's (`system`) in place of its own: Codex's
+    /// `model_instructions_file`, Gemini CLI's `GEMINI_SYSTEM_MD`.
+    own_prompt: bool,
 }
 
 /// The npm package npx runs for an assistant that isn't installed.
@@ -710,24 +713,45 @@ async fn signed_by_google(path: &Path) -> bool {
     intact && google
 }
 
-/// Settings for the assistant's connector (codex-acp's `CODEX_CONFIG`, on top
-/// of the author's own config.toml). Codex offers its question tool
+/// Settings for Codex's connector (codex-acp's `CODEX_CONFIG`, on top of the
+/// author's own config.toml). Codex offers its question tool
 /// (request_user_input, which the chat shows as its question panel) only in
-/// Plan mode unless this feature is on.
-fn config_for(kind: &str) -> Option<&'static str> {
-    match kind {
-        "codex" => Some(r#"{"features":{"default_mode_request_user_input":true}}"#),
-        _ => None,
+/// Plan mode unless this feature is on. `model_instructions_file` takes the
+/// place of its own prompt, a coding agent's (17,000 characters with 0.160).
+fn codex_config(prompt_file: Option<&Path>) -> String {
+    let mut config = serde_json::json!({ "features": { "default_mode_request_user_input": true } });
+    if let Some(file) = prompt_file {
+        config["model_instructions_file"] = file.to_string_lossy().into();
     }
+    config.to_string()
+}
+
+/// The app's system prompt as a file, for the programs that read theirs from
+/// one (Codex, Gemini CLI). Written whole through a temporary file, so another
+/// window's program never reads half of it. None: it couldn't be written.
+fn write_prompt_file(text: &str) -> Option<PathBuf> {
+    let dir = assistants_dir().unwrap_or_else(std::env::temp_dir);
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join("foreword-prompt.md");
+    let tmp = dir.join(format!(".foreword-prompt-{}.md", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&tmp, text).ok()?;
+    if std::fs::rename(&tmp, &path).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return None;
+    }
+    Some(path)
 }
 
 /// Start an assistant in the book's folder. Its stdout lines (JSON-RPC
 /// messages) go to `on_message`; when it exits, `{"$exit": <code>}`.
+/// `system`: the app's system prompt, for a program that takes one in place
+/// of its own (Codex, Gemini CLI; Claude Code takes it with each conversation).
 #[tauri::command]
 pub async fn acp_start(
     state: Win,
     kind: String,
     on_message: Channel<InvokeResponseBody>,
+    system: Option<String>,
 ) -> CmdResult<AcpInfo> {
     let root = state.root()?;
     let (program, args) = launch(&kind)?;
@@ -735,9 +759,16 @@ pub async fn acp_start(
     if let Some(mut old) = guard.take() {
         old.kill();
     }
+    let prompt_file = match (kind.as_str(), system.as_deref()) {
+        ("codex" | "gemini", Some(text)) => write_prompt_file(text),
+        _ => None,
+    };
     let mut command = Command::new(&program);
-    if let Some(config) = config_for(&kind) {
-        command.env("CODEX_CONFIG", config);
+    if kind == "codex" {
+        command.env("CODEX_CONFIG", codex_config(prompt_file.as_deref()));
+    }
+    if let (Some(file), "gemini") = (&prompt_file, kind.as_str()) {
+        command.env("GEMINI_SYSTEM_MD", file);
     }
     let mut child = command
         .args(&args)
@@ -791,6 +822,7 @@ pub async fn acp_start(
     Ok(AcpInfo {
         program: program.to_string_lossy().into_owned(),
         args,
+        own_prompt: prompt_file.is_some(),
     })
 }
 
@@ -821,6 +853,19 @@ pub async fn acp_stop(state: Win) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn codex_takes_the_prompt_file_in_place_of_its_own() {
+        let plain: serde_json::Value = serde_json::from_str(&codex_config(None)).unwrap();
+        assert_eq!(
+            plain,
+            serde_json::json!({ "features": { "default_mode_request_user_input": true } })
+        );
+        let file = Path::new("/Users/ada/Library/Application Support/x/foreword-prompt.md");
+        let own: serde_json::Value = serde_json::from_str(&codex_config(Some(file))).unwrap();
+        assert_eq!(own["model_instructions_file"], file.to_string_lossy().as_ref());
+        assert_eq!(own["features"]["default_mode_request_user_input"], true);
+    }
 
     #[test]
     fn accounts_are_read_from_what_the_programs_say() {

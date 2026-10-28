@@ -2,10 +2,12 @@
 // Gemini CLI, Codex and Antigravity, each through its ACP program, which the Rust side runs
 // in the book's folder (acp.rs). JSON-RPC lines both ways. What OpenCode keeps
 // on its server, the app keeps here: each conversation's transcript, its
-// instructions (Claude Code's system prompt, the others' next message, when
-// they change), its permission rules (the agent asks; the rules answer, or the
-// author does), the questions it asks the author (form elicitations), and
-// messages queued while a turn runs.
+// instructions (in Claude Code's system prompt; the others get them as it
+// starts and with the next message when they change), its permission rules
+// (the agent asks; the rules answer, or the author does), the questions it
+// asks the author (form elicitations), and messages queued while a turn runs.
+// Claude Code, Codex and Gemini CLI have Foreword's system prompt
+// (FOREWORD_PROMPT) in place of their own; Antigravity keeps its own.
 import { Channel, ipc } from '../../lib/ipc';
 import { appTool, conversationTitle, decide, INSTRUCTIONS_URI, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
 import { FOREWORD_PROMPT } from './instructions';
@@ -58,16 +60,17 @@ type Pending = { resolve: (v: any) => void; reject: (e: Error) => void };
 
 /** How messages reach the agent's program: the Rust side's, or a test's. */
 export type AcpTransport = {
-  start(kind: AcpKind, onMessage: (m: any) => void): Promise<unknown>;
+  /** `system`: Foreword's system prompt, for a program that takes it in place of its own; resolves to `{ ownPrompt }` when it did. */
+  start(kind: AcpKind, onMessage: (m: any) => void, system?: string): Promise<unknown>;
   send(line: string): Promise<void>;
   stop(): Promise<void>;
 };
 
 const tauriTransport: AcpTransport = {
-  start: (kind, onMessage) => {
+  start: (kind, onMessage, system) => {
     const channel = new Channel<any>();
     channel.onmessage = onMessage;
-    return ipc.acpStart(kind, channel);
+    return ipc.acpStart(kind, channel, system);
   },
   send: (line) => ipc.acpSend(line),
   stop: () => ipc.acpStop(),
@@ -174,8 +177,15 @@ export class AcpAdapter implements AgentAdapter {
     return this.mcpServers().length > 0;
   }
 
-  /** Claude Code's system prompt is Foreword's: its custom prompt (sessionMeta), changed by a resume (systemPromptFor). */
+  /** Its system prompt is Foreword's (FOREWORD_PROMPT): Claude Code's custom prompt; Codex's and Gemini CLI's, from a file, when it was written (start). */
+  private ownPrompt = false;
+
   ownsSystemPrompt() {
+    return this.ownPrompt;
+  }
+
+  /** Claude Code: the instructions are in the system prompt itself (sessionMeta), changed by a resume (systemPromptFor). */
+  private promptHasInstructions() {
     return this.kind === 'claude';
   }
 
@@ -192,7 +202,10 @@ export class AcpAdapter implements AgentAdapter {
   // ---- the connection ------------------------------------------------------------------
 
   async start() {
-    await this.transport.start(this.kind, (m) => this.receive(m));
+    // Codex and Gemini CLI read theirs from a file (acp.rs); Claude Code gets it with each conversation.
+    const fromFile = this.kind === 'codex' || this.kind === 'gemini';
+    const started = await this.transport.start(this.kind, (m) => this.receive(m), fromFile ? FOREWORD_PROMPT : undefined);
+    this.ownPrompt = this.kind === 'claude' || (fromFile && !!(started as { ownPrompt?: boolean } | undefined)?.ownPrompt);
     this.emit({ type: 'connection', status: 'open' });
     const init = await this.request('initialize', {
       protocolVersion: 1,
@@ -286,12 +299,26 @@ export class AcpAdapter implements AgentAdapter {
 
   // ---- sessions and their settings -----------------------------------------------------
 
-  private async newSession(): Promise<Session> {
-    const system = this.ownsSystemPrompt() ? this.systemFor(new Map()) : '';
-    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system) });
+  /** `startWith`: the instructions it starts with, where the agent takes them only then (startsWithInstructions). */
+  private async newSession(startWith?: Map<string, string>): Promise<Session> {
+    const system = this.promptHasInstructions() ? this.systemFor(new Map()) : '';
+    const first = startWith?.size && this.startsWithInstructions() ? [...startWith.values()].join('\n\n') : '';
+    const res = await this.request('session/new', { cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system, first) });
     const s = this.track(res.sessionId, res);
     s.systemPrompt = system;
+    // As if sent: the first message goes without them.
+    if (first) Object.assign(s, { instructions: new Map(startWith), sentInstructions: first });
     return s;
+  }
+
+  /**
+   * Codex and Antigravity take a conversation's instructions above it only as
+   * it starts (later changes go with a message): Codex as its developer
+   * instructions, Antigravity added to its system prompt (verified 2026-10-29,
+   * codex-acp 2.2.2 on Luna and Antigravity 1.4.1, each with a codeword).
+   */
+  private startsWithInstructions() {
+    return this.kind === 'codex' || this.kind === 'antigravity';
   }
 
   /**
@@ -310,8 +337,13 @@ export class AcpAdapter implements AgentAdapter {
    * and keeps when it's resumed. Not recorded (`snapshot: false`), a resume
    * with another prompt gives the conversation that one (verified with
    * claude-agent-acp 0.93.0: the instructions changed, the model kept).
+   *
+   * `first`: the instructions a Codex or Antigravity conversation starts with
+   * (startsWithInstructions), in each connector's own `_meta` key.
    */
-  private sessionMeta(system: string) {
+  private sessionMeta(system: string, first = '') {
+    if (this.kind === 'codex') return first ? { _meta: { jetbrains: { air: { customInstructions: first } } } } : {};
+    if (this.kind === 'antigravity') return first ? { _meta: { antigravity: { systemPrompt: { append: first } } } } : {};
     if (this.kind !== 'claude') return {};
     return {
       _meta: {
@@ -395,11 +427,20 @@ export class AcpAdapter implements AgentAdapter {
 
   async createSession(
     model: ModelRef | null,
-    { permissions = DEFAULT_PERMISSIONS as AgentPermissions, readOnly = false, rules = [] as PermissionRule[], effort = null as string | null } = {},
+    {
+      permissions = DEFAULT_PERMISSIONS as AgentPermissions,
+      readOnly = false,
+      rules = [] as PermissionRule[],
+      effort = null as string | null,
+      instructions = [] as [string, string][],
+    } = {},
   ) {
-    const warm = this.warm ? await this.warm : null;
-    this.warm = null;
-    const s = warm ?? (await this.newSession());
+    // With instructions it takes only as it starts: a conversation of its own, not the one made at start
+    // (which stays for the models; Codex doesn't list a conversation with no messages).
+    const startWith = this.startsWithInstructions() && instructions.length ? new Map(instructions) : null;
+    const warm = !startWith && this.warm ? await this.warm : null;
+    if (!startWith) this.warm = null;
+    const s = warm ?? (await this.newSession(startWith ?? undefined));
     Object.assign(s, { permissions, readOnly, rules });
     if (model && model.providerID === this.kind) await this.switchModel(s.id, model).catch(() => {});
     // After the model: a model sets its own effort (Claude Code's Haiku starts at high).
@@ -523,7 +564,7 @@ export class AcpAdapter implements AgentAdapter {
       s.replaying = true;
       try {
         // Its instructions come later (Studio sets them): until then, Foreword's prompt alone.
-        const system = this.ownsSystemPrompt() ? this.systemFor(s.instructions) : '';
+        const system = this.promptHasInstructions() ? this.systemFor(s.instructions) : '';
         const res = await this.request('session/load', { sessionId, cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system) });
         s.systemPrompt = system;
         s.config = Array.isArray(res?.configOptions) ? res.configOptions : [];
@@ -613,7 +654,7 @@ export class AcpAdapter implements AgentAdapter {
    */
   private async prompt(s: Session, text: string, { record = true, command = false } = {}) {
     // A slash command must come first, so the instructions wait for the next message.
-    const instructions = command || this.ownsSystemPrompt() ? s.sentInstructions : [...s.instructions.values()].join('\n\n');
+    const instructions = command || this.promptHasInstructions() ? s.sentInstructions : [...s.instructions.values()].join('\n\n');
     const changed = instructions !== s.sentInstructions;
     const block = changed && instructions ? `${INSTRUCTIONS_OPEN}\n${instructions}\n${INSTRUCTIONS_CLOSE}` : '';
     const prompt = !block
@@ -626,7 +667,7 @@ export class AcpAdapter implements AgentAdapter {
     if (record) s.transcript.user(`${s.id}:u${s.turn}`, text);
     s.running = true;
     this.emit({ type: 'turn-started', sessionId: s.id });
-    if (this.ownsSystemPrompt() && this.systemFor(s.instructions) !== s.systemPrompt) {
+    if (this.promptHasInstructions() && this.systemFor(s.instructions) !== s.systemPrompt) {
       try {
         await this.systemPromptFor(s);
       } catch (e) {
