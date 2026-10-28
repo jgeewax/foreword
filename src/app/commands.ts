@@ -10,7 +10,7 @@ import { wordMatch } from '../lib/fuzzy';
 import { baseName, tildePath } from '../lib/paths';
 import { AGENT_MODES, modeConfig } from '../services/agent/modes';
 import { effectiveBookColor, randomBookColor } from './book-color';
-import { uncommitted } from './source-control';
+import { uncommitted, unstaged } from './source-control';
 import type { Studio } from './studio';
 
 export type Command = {
@@ -259,17 +259,22 @@ export function paletteCommands(studio: Studio): Command[] {
           title: 'Commit…',
           keywords: ['git'],
           when: () => gitIdle() && uncommitted(repo()) > 0,
-          run: async () => {
-            const staged = (repo()?.staged.length ?? 0) > 0;
-            const message = await studio.prompt({ title: staged ? 'Commit the staged changes' : 'Commit every change in the book', label: 'Message', okLabel: 'Commit' });
-            if (message?.trim()) await studio.git.commit(message);
-          },
+          // The message box's words, as VS Code's Git: Commit; asked for when it's empty.
+          run: () => studio.git.commitAsking(),
         },
+        { id: 'git-commit-amend', title: 'Commit (Amend)', keywords: ['git', 'amend'], when: () => gitIdle() && s().git.log.some((c) => c.head), run: () => studio.git.commitAsking({ amend: true }) },
+        { id: 'git-undo-commit', title: 'Undo Last Commit', keywords: ['git', 'reset'], when: () => gitIdle() && s().git.log.some((c) => c.head), run: () => studio.git.undoLastCommit() },
         { id: 'git-stage-all', title: 'Stage All Changes', keywords: ['git add'], when: () => gitIdle() && (repo()?.files.length ?? 0) > 0, run: () => studio.git.stage(['.']) },
         { id: 'git-unstage-all', title: 'Unstage All Changes', when: () => gitIdle() && (repo()?.staged.length ?? 0) > 0, run: () => studio.git.unstage(['.']) },
+        { id: 'git-discard-all', title: 'Discard All Changes', keywords: ['git', 'revert', 'clean'], when: () => gitIdle() && unstaged(repo()!).length > 0, run: () => studio.git.discard(unstaged(repo()!), true) },
         { id: 'git-changes', title: 'What Changed', keywords: ['diff', 'git'], when: () => (repo()?.files.length ?? 0) > 0, run: () => studio.git.showWorking() },
         { id: 'git-pull', title: 'Pull', keywords: ['git'], when: () => gitIdle() && !!repo()?.upstream, run: () => studio.git.pull() },
         { id: 'git-push', title: 'Push', keywords: ['git'], when: () => gitIdle() && (!repo()!.upstream || repo()!.ahead > 0), run: () => studio.git.push() },
+        { id: 'git-sync', title: 'Sync', keywords: ['git', 'pull', 'push'], when: () => gitIdle() && !!repo()!.branch, run: () => studio.git.sync() },
+        { id: 'git-fetch', title: 'Fetch', keywords: ['git'], when: () => gitIdle() && !!repo()!.upstream, run: () => studio.git.fetch() },
+        { id: 'git-checkout', title: 'Checkout to…', keywords: ['git', 'branch', 'switch'], when: () => gitIdle(), run: () => studio.git.pickBranch() },
+        { id: 'git-create-branch', title: 'Create Branch…', keywords: ['git', 'branch', 'new'], when: () => gitIdle(), run: () => studio.git.createBranch() },
+        { id: 'git-publish', title: 'Publish Branch', keywords: ['git', 'push'], when: () => gitIdle() && !!repo()!.branch && !repo()!.upstream, run: () => studio.git.publish() },
         { id: 'git-refresh', title: 'Refresh', keywords: ['git status'], when: () => !!repo(), run: () => studio.git.refresh() },
         { id: 'git-copy-branch', title: 'Copy Branch Name', when: () => !!repo()?.branch, run: () => studio.copy(repo()!.branch!, 'Branch name copied') },
       ],

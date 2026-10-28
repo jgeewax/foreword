@@ -130,6 +130,8 @@ export type GitFile = { path: string; status: 'M' | 'A' | 'D' | 'R' | '?' | 'U' 
 /** `staged`: Staged Changes; `files`: changed and not staged (a file staged and changed again is in both). */
 export type GitStatus = { root: string; prefix: string; branch: string | null; upstream: string | null; ahead: number; behind: number; staged: GitFile[]; files: GitFile[] };
 export type GitRef = { name: string; kind: 'head' | 'branch' | 'remote' | 'tag' };
+/** A branch to check out: "main", or a remote's "origin/main". */
+export type GitBranch = { name: string; kind: 'local' | 'remote'; current: boolean };
 /** `parents`: the commits before it that touched the book (none for the first). */
 export type GitCommit = { hash: string; short: string; subject: string; author: string; time: number; parents: string[]; head: boolean; refs: GitRef[] };
 export type Bounds = { x: number; y: number; width: number; height: number };
@@ -157,12 +159,21 @@ export const ipc = {
   gitFile: (rev: string, path: string) => invoke<string | null>('git_file', { rev, path }),
   gitLog: (limit: number) => invoke<GitCommit[]>('git_log', { limit }),
   gitCommitFiles: (hash: string) => invoke<GitFile[]>('git_commit_files', { hash }),
-  gitCommit: (message: string) => invoke<string>('git_commit', { message }),
+  /** `amend`: into the last commit (an empty message keeps its own). */
+  gitCommit: (message: string, amend = false) => invoke<string>('git_commit', { message, amend }),
   /** Stage or unstage book files (`.`: all of them). */
   gitStage: (paths: string[]) => invoke<void>('git_stage', { paths }),
   gitUnstage: (paths: string[]) => invoke<void>('git_unstage', { paths }),
   gitPull: () => invoke<string>('git_pull'),
   gitPush: () => invoke<string>('git_push'),
+  gitFetch: () => invoke<string>('git_fetch'),
+  /** Tracked book files back as staged (as committed, when nothing is). */
+  gitDiscard: (paths: string[]) => invoke<void>('git_discard', { paths }),
+  /** Undo Last Commit: its changes staged again; its message. */
+  gitUndoCommit: () => invoke<string>('git_undo_commit'),
+  gitBranches: () => invoke<GitBranch[]>('git_branches'),
+  gitCheckout: (branch: string, remote = false) => invoke<void>('git_checkout', { branch, remote }),
+  gitCreateBranch: (name: string) => invoke<void>('git_create_branch', { name }),
   /** Whether another window has this book open (it comes to the front if so). */
   workspaceElsewhere: (path: string) => invoke<boolean>('workspace_elsewhere', { path }),
   workspaceOpen: (path: string, onChange: Channel<string[]>) => invoke<WorkspaceInfo>('workspace_open', { path, onChange }),

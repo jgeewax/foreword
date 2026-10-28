@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { uncommitted } from '../app/source-control';
+import { uncommitted, unstaged } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
+import type { GitStatus } from '../lib/ipc';
 import { isPicture } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
@@ -110,31 +111,68 @@ const RefreshButton = () => (
   </button>
 );
 
+/** Source Control's ⋯, as VS Code's: Pull, Push, Checkout to…, Fetch, then Commit, Changes, Pull and Push, and Branch. */
+function sourceControlMenu(repo: GitStatus, busy: boolean, hasCommit: boolean): MenuEntry[] {
+  const git = studio.git;
+  const changed = unstaged(repo);
+  const canCommit = !busy && (repo.staged.length > 0 || repo.files.length > 0);
+  const canPush = !busy && (!repo.upstream || repo.ahead > 0);
+  const pull: MenuEntry = !!repo.upstream && { label: 'Pull', enabled: !busy, action: () => void git.pull() };
+  const push: MenuEntry = { label: 'Push', enabled: canPush, action: () => void git.push() };
+  const fetch: MenuEntry = !!repo.upstream && { label: 'Fetch', enabled: !busy, action: () => void git.fetch() };
+  return [
+    pull,
+    push,
+    { label: 'Checkout to…', enabled: !busy, action: () => void git.pickBranch() },
+    fetch,
+    'separator',
+    {
+      label: 'Commit',
+      items: [
+        { label: 'Commit', enabled: canCommit, action: () => void git.commitAsking() },
+        { label: 'Commit (Amend)', enabled: !busy && hasCommit, action: () => void git.commitAsking({ amend: true }) },
+        { label: 'Commit & Push', enabled: canCommit, action: () => void git.commitAsking({ then: 'push' }) },
+        { label: 'Commit & Sync', enabled: canCommit, action: () => void git.commitAsking({ then: 'sync' }) },
+        'separator',
+        { label: 'Undo Last Commit', enabled: !busy && hasCommit, action: () => void git.undoLastCommit() },
+      ],
+    },
+    {
+      label: 'Changes',
+      items: [
+        { label: 'Stage All Changes', enabled: !busy && repo.files.length > 0, action: () => void git.stage(['.']) },
+        { label: 'Unstage All Changes', enabled: !busy && repo.staged.length > 0, action: () => void git.unstage(['.']) },
+        { label: 'Discard All Changes', enabled: !busy && changed.length > 0, action: () => void git.discard(changed, true) },
+      ],
+    },
+    {
+      label: 'Pull, Push',
+      items: [{ label: repo.upstream ? 'Sync' : 'Sync (Publish Branch)', enabled: !busy && !!repo.branch, action: () => void git.sync() }, 'separator', pull, push, fetch],
+    },
+    {
+      label: 'Branch',
+      items: [
+        { label: 'Create Branch…', enabled: !busy, action: () => void git.createBranch() },
+        { label: 'Publish Branch', enabled: !busy && !!repo.branch && !repo.upstream, action: () => void git.publish() },
+      ],
+    },
+    'separator',
+    { label: 'What Changed', enabled: repo.files.length > 0, action: () => void git.showWorking() },
+    !!repo.branch && { label: 'Copy Branch Name', action: () => studio.copy(repo.branch!, 'Branch name copied') },
+  ];
+}
+
 /** Source Control's title bar, as VS Code's: Refresh, and the rest under ⋯. */
 function SourceControlActions() {
   const repo = useStore(studio.store, (s) => s.git.repo);
   const busy = useStore(studio.store, (s) => !!s.git.busy);
+  const hasCommit = useStore(studio.store, (s) => s.git.log.some((c) => c.head));
   return (
     <>
       <button className="icon pane-action" title="Check again (commits made elsewhere)" aria-label="Refresh" onClick={() => void studio.git.refresh()}>
         <Icon name="refresh" size={16} />
       </button>
-      <button
-        className="icon pane-action"
-        title="More actions"
-        aria-label="More actions"
-        disabled={!repo}
-        onClick={() =>
-          repo &&
-          void showContextMenu([
-            !!repo.upstream && { label: 'Pull', enabled: !busy, action: () => void studio.git.pull() },
-            { label: 'Push', enabled: !busy && (!repo.upstream || repo.ahead > 0), action: () => void studio.git.push() },
-            'separator',
-            { label: 'What Changed', enabled: repo.files.length > 0, action: () => void studio.git.showWorking() },
-            !!repo.branch && { label: 'Copy Branch Name', action: () => studio.copy(repo.branch!, 'Branch name copied') },
-          ])
-        }
-      >
+      <button className="icon pane-action" title="More actions" aria-label="More actions" disabled={!repo} onClick={() => repo && void showContextMenu(sourceControlMenu(repo, busy, hasCommit))}>
         <Icon name="more" size={16} />
       </button>
     </>

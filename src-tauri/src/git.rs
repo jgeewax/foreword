@@ -1,9 +1,11 @@
 //! The author's own Git repository, when the book is in one (Source Control).
 //! Unlike History's snapshot repo, this is the author's: their config, hooks,
-//! signing and credentials apply. What it does is limited to what a writer
-//! needs (status, what changed, commit, pull, push, the log), all scoped to the
-//! book's folder. Nothing that throws work away (reset, checkout of files,
-//! clean) is offered, and Git never waits on a terminal prompt.
+//! signing and credentials apply. What it does is VS Code's Source Control
+//! (status, what changed, stage, discard, commit and amend, undo the last
+//! commit, pull, push, fetch, branches, the log), scoped to the book's folder.
+//! Discard puts files back as staged or committed; the page has History keep
+//! the book first and sends new files to the Trash, never `git clean`. Git
+//! never waits on a terminal prompt.
 use std::{
     path::{Path, PathBuf},
     process::{Output, Stdio},
@@ -398,15 +400,26 @@ pub async fn git_commit_files(state: Win, hash: String) -> CmdResult<Vec<GitFile
 
 /// Commit with `message`, as VS Code does: what's staged in the book if
 /// anything is, otherwise every change in the book's folder (new files too).
+/// `amend`: into the last commit instead (an empty message keeps its own).
 #[tauri::command]
-pub async fn git_commit(state: Win, message: String) -> CmdResult<String> {
-    commit_book(&state.root()?, &message).await
+pub async fn git_commit(state: Win, message: String, amend: Option<bool>) -> CmdResult<String> {
+    commit_book(&state.root()?, &message, amend.unwrap_or(false)).await
 }
 
-async fn commit_book(book: &Path, message: &str) -> CmdResult<String> {
+async fn commit_book(book: &Path, message: &str, amend: bool) -> CmdResult<String> {
     let message = message.trim();
-    if message.is_empty() {
+    if message.is_empty() && !amend {
         return Err(CmdError::Invalid("A commit needs a message.".into()));
+    }
+    // `git commit` and how it's told the message: `--amend` keeps the last one's when there's none.
+    let mut commit = vec!["commit"];
+    if amend {
+        commit.push("--amend");
+    }
+    if message.is_empty() {
+        commit.push("--no-edit");
+    } else {
+        commit.extend(["-m", message]);
     }
     let prefix = git_ok(book, &["rev-parse", "--show-prefix"], READ_TIMEOUT).await?;
     let staged = git_ok(
@@ -422,14 +435,16 @@ async fn commit_book(book: &Path, message: &str) -> CmdResult<String> {
     if inside.is_empty() {
         git_ok(book, &["add", "--all", "--", "."], WRITE_TIMEOUT).await?;
         // Only the book's folder, even if other things are staged elsewhere in the repo.
-        git_ok(book, &["commit", "-m", message, "--", "."], WRITE_TIMEOUT).await?;
+        let mut args = commit.clone();
+        args.extend(["--", "."]);
+        git_ok(book, &args, WRITE_TIMEOUT).await?;
     } else if let Some(other) = outside.first() {
         // A commit of what's staged would take those too.
         return Err(CmdError::Invalid(format!(
             "{other} is staged too, and it isn't in the book. Commit or unstage it in a terminal first."
         )));
     } else {
-        git_ok(book, &["commit", "-m", message], WRITE_TIMEOUT).await?;
+        git_ok(book, &commit, WRITE_TIMEOUT).await?;
     }
     Ok(
         git_ok(book, &["rev-parse", "--short", "HEAD"], READ_TIMEOUT)
@@ -489,6 +504,176 @@ async fn unstage(book: &Path, paths: &[String]) -> CmdResult<()> {
     };
     args.extend(book_paths(paths)?);
     git_ok(book, &args, WRITE_TIMEOUT).await.map(drop)
+}
+
+/// Discard Changes, as VS Code's: tracked book files back as they're staged
+/// (as committed, when nothing is), `git restore`. New files aren't touched
+/// here: the page moves them to the Trash.
+#[tauri::command]
+pub async fn git_discard(state: Win, paths: Vec<String>) -> CmdResult<()> {
+    discard(&state.root()?, &paths).await
+}
+
+async fn discard(book: &Path, paths: &[String]) -> CmdResult<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut args = vec!["--literal-pathspecs", "restore", "--worktree", "--"];
+    args.extend(book_paths(paths)?);
+    git_ok(book, &args, WRITE_TIMEOUT).await.map(drop)
+}
+
+/// Undo Last Commit, as VS Code's: the branch goes back one commit, and what
+/// it changed is staged again (`reset --soft`). Its message, for the box.
+/// Only a commit of the book's own files, with one before it.
+#[tauri::command]
+pub async fn git_undo_commit(state: Win) -> CmdResult<String> {
+    undo_commit(&state.root()?).await
+}
+
+async fn undo_commit(book: &Path) -> CmdResult<String> {
+    let parent = git(
+        book,
+        &["rev-parse", "--verify", "-q", "HEAD^"],
+        READ_TIMEOUT,
+    )
+    .await?;
+    if !parent.status.success() {
+        return Err(CmdError::Invalid(
+            "That's the first commit: there's no commit before it to go back to.".into(),
+        ));
+    }
+    let prefix = git_ok(book, &["rev-parse", "--show-prefix"], READ_TIMEOUT).await?;
+    let changed = git_ok(
+        book,
+        &["diff", "--name-only", "-z", "HEAD^", "HEAD"],
+        READ_TIMEOUT,
+    )
+    .await?;
+    if let Some(other) = changed
+        .split('\0')
+        .find(|p| !p.is_empty() && !p.starts_with(prefix.trim()))
+    {
+        return Err(CmdError::Invalid(format!(
+            "The last commit changed {other} too, which isn't in the book. Undo it in a terminal."
+        )));
+    }
+    let message = git_ok(book, &["log", "-1", "--format=%B", "HEAD"], READ_TIMEOUT).await?;
+    git_ok(book, &["reset", "--soft", "HEAD^"], WRITE_TIMEOUT).await?;
+    Ok(message.trim().to_string())
+}
+
+/// Fetch: what's new on the remote, without changing the book.
+#[tauri::command]
+pub async fn git_fetch(state: Win) -> CmdResult<String> {
+    let book = state.root()?;
+    git_ok(&book, &["fetch"], WRITE_TIMEOUT)
+        .await
+        .map_err(|e| CmdError::Io(format!("Couldn't fetch: {e}")))
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct GitBranch {
+    /// "main", or a remote's "origin/main".
+    name: String,
+    /// "local" or "remote".
+    kind: &'static str,
+    /// The branch checked out.
+    current: bool,
+}
+
+/// `git for-each-ref --format=%(refname)%1f%(HEAD)`, one per line.
+fn parse_branches(out: &str) -> Vec<GitBranch> {
+    out.lines()
+        .filter_map(|line| {
+            let (refname, head) = line.split_once('\x1f')?;
+            let (name, kind) = if let Some(n) = refname.strip_prefix("refs/heads/") {
+                (n, "local")
+            } else {
+                let n = refname.strip_prefix("refs/remotes/")?;
+                if n.ends_with("/HEAD") {
+                    return None;
+                }
+                (n, "remote")
+            };
+            Some(GitBranch {
+                name: name.into(),
+                kind,
+                current: head == "*",
+            })
+        })
+        .collect()
+}
+
+/// The repository's branches, the last committed to first (as VS Code lists them).
+#[tauri::command]
+pub async fn git_branches(state: Win) -> CmdResult<Vec<GitBranch>> {
+    let book = state.root()?;
+    let out = git_ok(
+        &book,
+        &[
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname)%1f%(HEAD)",
+            "refs/heads",
+            "refs/remotes",
+        ],
+        READ_TIMEOUT,
+    )
+    .await?;
+    Ok(parse_branches(&out))
+}
+
+/// A branch name Git takes (never an option).
+async fn check_branch<'a>(book: &Path, name: &'a str) -> CmdResult<&'a str> {
+    let ok = !name.is_empty()
+        && !name.starts_with('-')
+        && git(book, &["check-ref-format", "--branch", name], READ_TIMEOUT)
+            .await?
+            .status
+            .success();
+    if ok {
+        Ok(name)
+    } else {
+        Err(CmdError::Invalid(format!(
+            "“{name}” can't be a branch's name (no spaces, and none of ~^:?*[\\)."
+        )))
+    }
+}
+
+/// Checkout to a branch, as VS Code's: a remote's ("origin/draft") is checked
+/// out as a branch of its own that follows it. Git refuses if a change in the
+/// book would be lost.
+#[tauri::command]
+pub async fn git_checkout(state: Win, branch: String, remote: Option<bool>) -> CmdResult<()> {
+    checkout(&state.root()?, &branch, remote.unwrap_or(false)).await
+}
+
+async fn checkout(book: &Path, branch: &str, remote: bool) -> CmdResult<()> {
+    let branch = check_branch(book, branch).await?;
+    let args: &[&str] = if remote {
+        &["switch", "--track", branch]
+    } else {
+        &["switch", branch]
+    };
+    git_ok(book, args, WRITE_TIMEOUT)
+        .await
+        .map(drop)
+        .map_err(|e| CmdError::Io(format!("Couldn't switch to {branch}: {e}")))
+}
+
+/// Create Branch, as VS Code's: from where the book is now, and checked out.
+#[tauri::command]
+pub async fn git_create_branch(state: Win, name: String) -> CmdResult<()> {
+    create_branch(&state.root()?, name.trim()).await
+}
+
+async fn create_branch(book: &Path, name: &str) -> CmdResult<()> {
+    let name = check_branch(book, name).await?;
+    git_ok(book, &["switch", "-c", name], WRITE_TIMEOUT)
+        .await
+        .map(drop)
+        .map_err(|e| CmdError::Io(format!("Couldn't create {name}: {e}")))
 }
 
 /// Bring in commits from the remote, only when that needs no merge.
@@ -760,14 +945,14 @@ mod tests {
         assert_eq!(status().await.0, Vec::<String>::new());
 
         // Nothing staged: every change in the book.
-        commit_book(&book, "First").await.unwrap();
+        commit_book(&book, "First", false).await.unwrap();
         assert_eq!(committed(), "book/a.typ\nbook/b.typ");
 
         // Something staged: just that, and the rest stays changed.
         write("book/a.typ", "a2\n");
         write("book/b.typ", "b2\n");
         stage(&book, &["a.typ".into()]).await.unwrap();
-        commit_book(&book, "Only a").await.unwrap();
+        commit_book(&book, "Only a", false).await.unwrap();
         assert_eq!(committed(), "book/a.typ");
         assert_eq!(status().await, (vec![], vec!["M b.typ".to_string()]));
 
@@ -775,7 +960,7 @@ mod tests {
         write("README.md", "changed\n");
         run(&["add", "README.md"]);
         stage(&book, &[".".into()]).await.unwrap();
-        let refused = commit_book(&book, "Both").await.unwrap_err();
+        let refused = commit_book(&book, "Both", false).await.unwrap_err();
         assert!(format!("{refused:?}").contains("README.md"), "{refused:?}");
         unstage(&book, &[".".into()]).await.unwrap();
         assert_eq!(status().await, (vec![], vec!["M b.typ".to_string()]));
@@ -785,6 +970,171 @@ mod tests {
             "README.md",
             "outside the book stays staged"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_branches_local_and_remote() {
+        let out = "refs/heads/main\x1f*\nrefs/heads/draft\x1f \nrefs/remotes/origin/HEAD\x1f \nrefs/remotes/origin/main\x1f \nrefs/tags/v1\x1f \n";
+        let b = |name: &str, kind, current| GitBranch {
+            name: name.into(),
+            kind,
+            current,
+        };
+        assert_eq!(
+            parse_branches(out),
+            [
+                b("main", "local", true),
+                b("draft", "local", false),
+                b("origin/main", "remote", false)
+            ]
+        );
+    }
+
+    /// A repository with the book in `book/` and a file outside it, one commit made.
+    fn scratch_repo(name: &str) -> (PathBuf, PathBuf) {
+        let dir =
+            std::env::temp_dir().join(format!("foreword-{name}-{}", uuid::Uuid::new_v4().simple()));
+        let book = dir.join("book");
+        std::fs::create_dir_all(&book).unwrap();
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &["config", "user.email", "test@example.invalid"],
+            &["config", "user.name", "Test"],
+            &["config", "commit.gpgSign", "false"],
+        ] {
+            run_in(&dir, args);
+        }
+        std::fs::write(book.join("a.typ"), "a\n").unwrap();
+        std::fs::write(dir.join("README.md"), "outside the book\n").unwrap();
+        run_in(&dir, &["add", "--all"]);
+        run_in(&dir, &["commit", "-qm", "First"]);
+        (dir, book)
+    }
+
+    fn run_in(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    #[tokio::test]
+    async fn discards_back_to_whats_staged_and_leaves_new_files() {
+        if git_bin().is_err() {
+            return;
+        }
+        let (dir, book) = scratch_repo("discard");
+        let read = |p: &str| std::fs::read_to_string(book.join(p)).unwrap();
+        // Staged, then changed again: Discard goes back to what's staged.
+        std::fs::write(book.join("a.typ"), "a staged\n").unwrap();
+        stage(&book, &["a.typ".into()]).await.unwrap();
+        std::fs::write(book.join("a.typ"), "a staged, then more\n").unwrap();
+        std::fs::write(book.join("new.typ"), "new\n").unwrap();
+        discard(&book, &["a.typ".into()]).await.unwrap();
+        assert_eq!(read("a.typ"), "a staged\n");
+        assert_eq!(
+            read("new.typ"),
+            "new\n",
+            "a new file is the page's (the Trash)"
+        );
+        // Unstaged, then discarded: as committed. A deleted file comes back.
+        unstage(&book, &["a.typ".into()]).await.unwrap();
+        std::fs::remove_file(book.join("a.typ")).unwrap();
+        discard(&book, &["a.typ".into()]).await.unwrap();
+        assert_eq!(read("a.typ"), "a\n");
+        assert!(discard(&book, &["../README.md".into()]).await.is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn amends_and_undoes_the_last_commit() {
+        if git_bin().is_err() {
+            return;
+        }
+        let (dir, book) = scratch_repo("amend");
+        let subjects = || run_in(&dir, &["log", "--format=%s"]);
+        std::fs::write(book.join("a.typ"), "a2\n").unwrap();
+        commit_book(&book, "Second", false).await.unwrap();
+        // Amend with nothing changed and no message: the same commit, its message kept.
+        commit_book(&book, "", true).await.unwrap();
+        assert_eq!(subjects(), "Second\nFirst");
+        // Amend with a change and a new message: still one commit on top.
+        std::fs::write(book.join("b.typ"), "b\n").unwrap();
+        commit_book(&book, "Second, with b", true).await.unwrap();
+        assert_eq!(subjects(), "Second, with b\nFirst");
+        assert_eq!(
+            run_in(&dir, &["show", "--name-only", "--format=", "HEAD"]),
+            "book/a.typ\nbook/b.typ"
+        );
+        assert!(
+            commit_book(&book, " ", false).await.is_err(),
+            "a commit needs a message"
+        );
+        // Undo: the message back, its changes staged again.
+        assert_eq!(undo_commit(&book).await.unwrap(), "Second, with b");
+        assert_eq!(subjects(), "First");
+        assert_eq!(
+            run_in(&dir, &["diff", "--cached", "--name-only"]),
+            "book/a.typ\nbook/b.typ"
+        );
+        // Not the first commit, and not one that changed something outside the book.
+        assert!(format!("{:?}", undo_commit(&book).await.unwrap_err()).contains("first commit"));
+        std::fs::write(dir.join("README.md"), "changed\n").unwrap();
+        run_in(&dir, &["commit", "-qam", "Outside too"]);
+        assert!(format!("{:?}", undo_commit(&book).await.unwrap_err()).contains("README.md"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn creates_and_switches_branches() {
+        if git_bin().is_err() {
+            return;
+        }
+        let (dir, book) = scratch_repo("branch");
+        let current = || run_in(&dir, &["branch", "--show-current"]);
+        create_branch(&book, "draft-2").await.unwrap();
+        assert_eq!(current(), "draft-2");
+        assert!(create_branch(&book, "has space").await.is_err());
+        assert!(create_branch(&book, "-f").await.is_err());
+        checkout(&book, "main", false).await.unwrap();
+        assert_eq!(current(), "main");
+        // A remote's branch, checked out as one of its own that follows it.
+        run_in(
+            &dir,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://example.invalid/book.git",
+            ],
+        );
+        run_in(&dir, &["update-ref", "refs/remotes/origin/ideas", "HEAD"]);
+        checkout(&book, "origin/ideas", true).await.unwrap();
+        assert_eq!(current(), "ideas");
+        assert_eq!(
+            run_in(&dir, &["rev-parse", "--abbrev-ref", "@{upstream}"]),
+            "origin/ideas"
+        );
+        let out = git_ok(
+            &book,
+            &[
+                "for-each-ref",
+                "--format=%(refname)%1f%(HEAD)",
+                "refs/heads",
+            ],
+            READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+        let names: Vec<String> = parse_branches(&out)
+            .into_iter()
+            .map(|b| format!("{}{}", b.name, if b.current { "*" } else { "" }))
+            .collect();
+        assert_eq!(names, ["draft-2", "ideas*", "main"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

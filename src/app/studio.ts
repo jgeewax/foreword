@@ -749,6 +749,33 @@ export class Studio {
       if ('view' in patch) this.followChanges(GIT_TAB, patch.view, patch.view?.files === null);
     },
     report: (text, tone) => this.toast(text, tone),
+    confirm: (message, title, ok) => this.confirmAction(message, title, ok),
+    prompt: (request) => this.prompt(request),
+    keep: async (paths) => {
+      // Unsaved words in an open file are part of what's discarded: saved first, so History has them.
+      for (const p of paths) if (this.state.dirty[p]) await this.docs?.save(p);
+      await this.history.checkpoint();
+    },
+    trash: async (path) => {
+      this.store.set((s) => ({ dirty: { ...s.dirty, [path]: false } }));
+      for (const t of this.tabsUnder(path)) await this.closeTab(t);
+      await ipc.fsTrash(path);
+    },
+    discarded: async (paths, trashed) => {
+      // One step for ⌘Z in each open file, as Revert File is.
+      for (const p of paths) if (this.docs?.get(p)) await this.reloadFromDisk(p);
+      await this.refreshFiles();
+      const all = [...paths, ...trashed];
+      const what = all.length === 1 ? all[0].slice(all[0].lastIndexOf('/') + 1) : `${all.length} files`;
+      await this.history.checkpoint('restore', `Discarded the changes in ${what}`);
+    },
+    ignore: async (path) => {
+      const line = `/${path}`;
+      const add = (text: string) => (text.split('\n').includes(line) ? text : `${text}${text && !text.endsWith('\n') ? '\n' : ''}${line}\n`);
+      const hash = await ipc.fsHash('.gitignore').catch(() => null);
+      if (hash || this.docs?.get('.gitignore')) await this.editFile('.gitignore', add);
+      else await ipc.fsWrite('.gitignore', add(''), null);
+    },
   });
   private gitTimer: number | undefined;
 

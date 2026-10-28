@@ -170,6 +170,8 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .statusbar-side:first-child :is(.indicator, .status-file) { flex-shrink: 1; min-width: 0; }
 .statusbar-side:first-child :is(.status-file, .status-dir) { flex-shrink: 1000; }
 .statusbar .perf .indicator { opacity: 0.7; }
+/* Sync with nothing to pull or push: just its icon, as VS Code's. */
+.statusbar .indicator-label:empty { display: none; }
 .statusbar .indicator.ok .icon-svg { color: var(--good); }
 .statusbar .indicator.busy .icon-svg { color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .statusbar .indicator.warn { color: var(--warn); }
@@ -1730,7 +1732,9 @@ img.typst-page { display: block; max-width: 100%; height: auto; }
 .scm-section-header:hover .twisty { color: var(--fg); }
 .scm-section-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scm-actions { display: flex; align-items: center; gap: 1px; min-width: 0; text-transform: none; letter-spacing: 0; font-weight: 400; }
-.scm-branch { display: inline-flex; align-items: center; gap: 3px; min-width: 0; padding-right: 4px; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scm-branch { display: inline-flex; align-items: center; gap: 3px; min-width: 0; height: 20px; padding: 0 5px 0 3px; border: none; border-radius: 4px; background: transparent; color: var(--muted); font: inherit; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A click on the branch is Checkout to…, as on VS Code's status bar. */
+button.scm-branch:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 9%, transparent); color: var(--fg); }
 .scm-branch .icon-svg { flex: none; }
 /* button.icon pads 6px a side: these are square, the icon centred. */
 button.icon.scm-action, button.icon.pane-action { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 22px; height: 22px; padding: 0 3px; color: var(--muted); }
@@ -1751,6 +1755,11 @@ button.icon.scm-action:hover:not(:disabled), button.icon.pane-action:hover:not(:
 .scm-commit-button button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 26px; border-radius: 4px 0 0 4px; }
 .scm-commit-button button:first-child { flex: 1; }
 .scm-commit-button button:disabled { opacity: 0.55; }
+/* Sync Changes 2↓ 1↑, or Publish Branch, in Commit's place when there's nothing to commit. */
+.scm-commit-button .scm-sync { min-width: 0; white-space: nowrap; }
+.scm-commit-button .scm-sync .icon-svg, .scm-sync-count { flex: none; }
+.scm-sync-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.scm-sync-count { font-variant-numeric: tabular-nums; opacity: 0.9; }
 .scm-commit-button .scm-commit-more { flex: none; width: 28px; padding: 0; border-radius: 0 4px 4px 0; border-left: 1px solid color-mix(in srgb, var(--accent-fg) 35%, transparent); }
 
 /* The Changes group and its files, VS Code's tree rows. */

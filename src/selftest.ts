@@ -5573,6 +5573,116 @@ async function gitChecks() {
   await waitFor(() => !!g().view?.files, 10000, 'commit diff');
   out.commitView = { title: g().view?.title, files: g().view?.files?.map((f) => `${f.status} ${f.path}`) };
   studio.git.closeView();
+
+  // ---- What VS Code does besides: Discard, Undo Last Commit, Amend, Sync, branches, the status bar ----
+  const { confirmAction, prompt } = studio;
+  const asked: string[] = [];
+  studio.confirmAction = async (message, title, ok) => (asked.push(`${title} [${ok}]: ${message}`), true);
+  let menu: Exclude<MenuEntry, null | false | undefined>[] = [];
+  menuRecorder.record = (entries) => (menu = entries);
+  const labels = () => menu.map((e) => (typeof e === 'string' ? `[${e}]` : `${e.label}${'checked' in e && e.checked ? ' ✓' : ''}${e.enabled === false ? ' (disabled)' : ''}`));
+  const statusItems = () => [...document.querySelectorAll<HTMLElement>('.statusbar .statusbar-side:first-child .indicator')].slice(0, 2).map((e) => `${e.querySelector('.icon-svg') ? '◆ ' : ''}${e.textContent}`);
+  try {
+    // Discard on an open file with words saved and words not: History keeps both, the file is as committed, ⌘Z brings them back.
+    const committed = (await ipc.fsRead(file)).text;
+    await studio.openFile(file);
+    const m = studio.editor!.getModel()!;
+    const end = () => m.getFullModelRange().getEndPosition();
+    m.pushEditOperations([], [{ range: monaco.Range.fromPositions(end()), text: 'Saved words.\n' }], () => null);
+    await studio.docs!.save(file);
+    m.pushEditOperations([], [{ range: monaco.Range.fromPositions(end()), text: 'Unsaved words.\n' }], () => null);
+    await waitFor(() => !!g().repo?.files.some((f) => f.path === file), 10000, 'changed on disk').catch(() => {});
+    await sleep(300);
+    const showRows = document.head.appendChild(document.createElement('style'));
+    showRows.textContent = 'button.icon.scm-hover { display: inline-grid !important; }';
+    out.discardButtons = { row: action(file, false, 'Discard Changes')?.title, group: document.querySelector<HTMLButtonElement>('.scm-group button[aria-label="Discard All Changes"]')?.title };
+    out.snapshotDiscard = await snap('git-discard-buttons');
+    showRows.remove();
+    action(file, false, 'Discard Changes')?.click();
+    await waitFor(() => !g().busy && !g().repo?.files.some((f) => f.path === file), 10000, 'discarded').catch(() => {});
+    await sleep(300);
+    out.discarded = {
+      asked: asked.splice(0),
+      disk: (await ipc.fsRead(file)).text === committed,
+      editor: m.getValue() === committed,
+      dirty: !!studio.state.dirty[file],
+      toast: studio.state.toast?.text,
+      history: studio.state.history.versions.slice(0, 2).map((v) => v.label),
+    };
+    studio.editor!.trigger('selftest', 'undo', null);
+    await sleep(200);
+    out.discardUndone = m.getValue().includes('Saved words.') && m.getValue().includes('Unsaved words.');
+    await studio.reloadFromDisk(file);
+    // Discard All Changes (the group's ↶): both chapters back.
+    for (const p of [file, 'src/chapters/two.typ']) {
+      const r = await ipc.fsRead(p);
+      await ipc.fsWrite(p, `${r.text}More.\n`, r.hash);
+    }
+    await waitFor(() => (g().repo?.files.length ?? 0) === 2, 10000, 'two changed').catch(() => {});
+    await sleep(300);
+    document.querySelector<HTMLButtonElement>('.scm-group button[aria-label="Discard All Changes"]')?.click();
+    await waitFor(() => !g().busy && g().repo?.files.length === 0, 10000, 'all discarded').catch(() => {});
+    out.discardedAll = { asked: asked.splice(0), files: list(g().repo?.files) };
+
+    // Commit, Undo Last Commit (the message back in the box, the change staged again), commit again, then amend it.
+    const two = 'src/chapters/two.typ';
+    const r2 = await ipc.fsRead(two);
+    await ipc.fsWrite(two, `${r2.text}A third paragraph.\n`, r2.hash);
+    await waitFor(() => (g().repo?.files.length ?? 0) === 1, 10000, 'third').catch(() => {});
+    await type('Third paragraph');
+    commitButton().click();
+    await waitFor(() => g().log[0]?.subject === 'Third paragraph' && !g().busy, 15000, 'third commit').catch(() => {});
+    out.beforeUndo = { ahead: g().repo?.ahead, box: box().value };
+    await studio.git.undoLastCommit();
+    await sleep(300);
+    out.undone = { asked: asked.splice(0), box: box().value, staged: list(g().repo?.staged), top: g().log[0]?.subject, ahead: g().repo?.ahead, toast: studio.state.toast?.text };
+    commitButton().click();
+    await waitFor(() => g().log[0]?.subject === 'Third paragraph' && !g().busy, 15000, 'third again').catch(() => {});
+    const r3 = await ipc.fsRead(two);
+    await ipc.fsWrite(two, r3.text.replace('A third paragraph.', 'A third paragraph, amended.'), r3.hash);
+    await waitFor(() => (g().repo?.files.length ?? 0) === 1, 10000, 'to amend').catch(() => {});
+    await type('Third paragraph, amended');
+    document.querySelector<HTMLButtonElement>('.scm-commit-more')?.click();
+    await sleep(150);
+    out.commitMenu = labels();
+    menu.find((e): e is Extract<MenuEntry, { action: () => void }> => typeof e === 'object' && e.label === 'Commit (Amend)')?.action();
+    await waitFor(() => g().log[0]?.subject === 'Third paragraph, amended' && !g().busy, 15000, 'amended').catch(() => {});
+    out.amended = { top: g().log.slice(0, 2).map((c) => c.subject), ahead: g().repo?.ahead, files: g().repo?.files.length, box: box().value };
+
+    // Nothing to commit, one to push: Sync Changes takes Commit's place, and the status bar has the branch and 0↓ 1↑.
+    await sleep(300);
+    const sync = document.querySelector<HTMLButtonElement>('.git-commit .scm-sync');
+    out.syncButton = { text: sync?.textContent, title: sync?.title, status: statusItems() };
+    out.snapshotSync = await snap('git-sync');
+    sync?.click();
+    await waitFor(() => g().repo?.ahead === 0 && !g().busy, 15000, 'synced').catch(() => {});
+    out.synced = { ahead: g().repo?.ahead, toast: studio.state.toast?.text, commitBack: document.querySelector('.git-commit button.primary')?.textContent, status: statusItems() };
+
+    // Branches: Checkout to… lists them; Create Branch… switches to it, and Publish Branch puts it on the remote.
+    await studio.git.pickBranch();
+    out.branchMenu = labels();
+    studio.prompt = async () => 'draft-two';
+    await studio.git.createBranch();
+    await sleep(300);
+    const publish = document.querySelector<HTMLButtonElement>('.git-commit .scm-sync');
+    out.created = { branch: g().repo?.branch, upstream: g().repo?.upstream, button: publish?.textContent, header: document.querySelector('.scm-branch')?.textContent, status: statusItems(), toast: studio.state.toast?.text };
+    out.snapshotPublish = await snap('git-publish');
+    publish?.click();
+    await waitFor(() => !!g().repo?.upstream && !g().busy, 15000, 'published').catch(() => {});
+    out.published = { upstream: g().repo?.upstream, toast: studio.state.toast?.text };
+    await studio.git.pickBranch();
+    menu.find((e): e is Extract<MenuEntry, { action: () => void }> => typeof e === 'object' && e.label === 'main')?.action();
+    await waitFor(() => g().repo?.branch === 'main' && !g().busy, 15000, 'back on main').catch(() => {});
+    out.backOnMain = { branch: g().repo?.branch, toast: studio.state.toast?.text };
+    // The ⋯ menu, as VS Code's.
+    document.querySelector<HTMLButtonElement>('.explorer .pane-header button[aria-label="More actions"]')?.click();
+    await sleep(150);
+    out.moreMenu = menu.map((e) => (typeof e === 'string' ? `[${e}]` : 'items' in e ? `${e.label} ▸ ${e.items.map((i) => (typeof i === 'object' && i ? i.label : '—')).join(', ')}` : e.label));
+  } finally {
+    studio.confirmAction = confirmAction;
+    studio.prompt = prompt;
+    menuRecorder.record = undefined;
+  }
   return out;
 }
 

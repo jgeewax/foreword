@@ -175,6 +175,22 @@ const PATHS: Record<string, ReactNode> = {
   ),
   pull: <path d="M12 4v11.5M7 10.5l5 5 5-5M5 20h14" />,
   push: <path d="M12 20V8.5M7 13.5l5-5 5 5M5 4h14" />,
+  /** Discard Changes, as VS Code's: an arrow turning back. */
+  discard: <path d="M8.5 12.5L4.5 8.5l4-4M4.5 8.5h9.5a5.5 5.5 0 0 1 0 11H9" />,
+  /** Fetch: from the cloud, down. */
+  fetch: (
+    <>
+      <path d="M7.5 16.5a4 4 0 0 1-.6-7.95 5.5 5.5 0 0 1 10.6 1.45 3.25 3.25 0 0 1 .25 6.45" />
+      <path d="M12 11.5v9M9 17.5l3 3 3-3" />
+    </>
+  ),
+  /** Publish Branch: up to the cloud. */
+  cloudUp: (
+    <>
+      <path d="M7.5 18.5a4 4 0 0 1-.6-7.95 5.5 5.5 0 0 1 10.6 1.45 3.25 3.25 0 0 1-.25 6.5" />
+      <path d="M12 20.5v-8M9 15.5l3-3 3 3" />
+    </>
+  ),
   openChanges: (
     <>
       <path d="M6 3.5h8l4 4v13H6z" />

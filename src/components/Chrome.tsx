@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { countsLabel } from '../app/proofing-core';
+import { uncommitted } from '../app/source-control';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Stat } from '../app/studio';
 import { numberedTitle } from '../app/tool-labels';
 import { Icon, type IconName } from './icons';
-import type { ToolInfo } from '../lib/ipc';
+import type { GitStatus, ToolInfo } from '../lib/ipc';
 import { baseName, dirName, tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { useTaskDot } from './TaskMenu';
@@ -94,6 +95,34 @@ function Indicator({ tone, icon, label, title, onClick }: { tone?: Tone; icon?: 
   );
 }
 
+/** The branch (with * when there's something to commit) and how it stands with its remote, as VS Code's status bar has them. */
+function GitStatusItems({ repo, busy }: { repo: GitStatus; busy: string | null }) {
+  const dirty = uncommitted(repo) > 0;
+  const name = repo.branch ?? 'detached';
+  return (
+    <>
+      <Indicator
+        icon="branch"
+        label={`${name}${dirty ? '*' : ''}`}
+        title={`${repo.branch ? `The book is on the branch ${repo.branch}` : 'No branch: a detached commit'}${dirty ? ', with changes not committed' : ''}. Checkout to… (switch branches, or create one)`}
+        onClick={busy ? undefined : () => void studio.git.pickBranch()}
+      />
+      {repo.branch &&
+        (repo.upstream ? (
+          <Indicator
+            tone={busy === 'sync' || busy === 'pull' || busy === 'push' ? 'busy' : undefined}
+            icon="refresh"
+            label={repo.ahead || repo.behind ? `${repo.behind}↓ ${repo.ahead}↑` : ''}
+            title={`Sync Changes with ${repo.upstream}: ${repo.behind} commit${repo.behind === 1 ? '' : 's'} to pull, ${repo.ahead} to push`}
+            onClick={busy ? undefined : () => void studio.git.sync()}
+          />
+        ) : (
+          <Indicator icon="cloudUp" label="" title={`Publish Branch: put ${repo.branch} on the remote (origin)`} onClick={busy ? undefined : () => void studio.git.publish()} />
+        ))}
+    </>
+  );
+}
+
 export function StatusBar() {
   const active = useStore(studio.store, (s) => s.active);
   const cursor = useStore(studio.store, (s) => s.cursor);
@@ -114,6 +143,8 @@ export function StatusBar() {
   const previewTarget = useStore(studio.store, (s) => s.previewTarget);
   // A chapter typeset alone: its pages and words aren't the book's.
   const chapter = useStore(studio.store, (s) => (s.previewTarget === 'book' && s.previewChapter ? (numberedTitle(s.previewChapter, s.names) ?? 'One chapter') : null));
+  const repo = useStore(studio.store, (s) => s.git.repo);
+  const gitBusy = useStore(studio.store, (s) => s.git.busy);
 
   const compileTone: Tone = compile.status === 'ok' ? 'ok' : compile.status === 'compiling' ? 'busy' : compile.status === 'error' ? 'bad' : 'off';
   const compileLabel =
@@ -140,6 +171,8 @@ export function StatusBar() {
   return (
     <footer className="statusbar">
       <div className="statusbar-side">
+        {/* The book's Git branch first, as in VS Code: a click is Checkout to…; then Sync Changes (or Publish Branch). */}
+        {repo && <GitStatusItems repo={repo} busy={gitBusy} />}
         <span className="status-file" title={active ?? undefined}>
           {active ? (
             <>

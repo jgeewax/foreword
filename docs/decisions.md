@@ -4205,6 +4205,73 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   inside the editor each time; ⇧⏎ didn't send, ⏎ sent the whole comment; the
   Ask tab the same; the header's + left of the gear and calling New task).
 
+### Source Control as VS Code's: Discard, Sync, branches, amend and undo (2026-10-28)
+
+- **Asked for:** "git panel has no revert button. lets make the git
+  interaction IDENTICAL to what vs.code does for the core features of
+  managing git?"
+- **Discard Changes** (VS Code's ↶): on each file in Changes (between Open
+  File and +, as VS Code orders them), Discard All Changes on the group, and
+  in the file's menu, the ⋯ menu's Changes and the palette. Tracked files go
+  back as staged, or as committed when nothing is (`git restore --worktree`);
+  a new file, not in Git yet, goes to the Trash (never `git clean`). It asks
+  first, as VS Code does, but says where things go instead of "This is
+  IRREVERSIBLE": "Discard the changes in “one.typ”? It goes back as it was at
+  the last commit. History keeps the book as it is now, so you can go back."
+  Before anything goes, an open file's unsaved words are saved and History
+  keeps the book; if it can't, nothing is discarded. After, open files are
+  reloaded as one step for ⌘Z (as Revert File), and History has a
+  "Discarded the changes in …" version (↺).
+- **Merge Changes:** files with a conflict have their own group at the top,
+  as in VS Code; + stages one as resolved, asking first if Git's conflict
+  markers are still in it.
+- **Commit's menu** is VS Code's: Commit, Commit (Amend), Commit & Push,
+  Commit & Sync, and Undo Last Commit. Amend with an empty box keeps the
+  last message. Undo Last Commit is `reset --soft`: what it changed is staged
+  again and its message is back in the box. It asks first when the commit is
+  on the remote already (Push would be refused), and refuses the first
+  commit and a commit that changed files outside the book. From a menu or
+  the palette with the box empty, Commit asks for a message, as VS Code
+  does.
+- **Sync Changes / Publish Branch:** with nothing to commit, the big button
+  is "Sync Changes 1↓ 2↑" (pull, then push) or "Publish Branch" (its first
+  push, followed from then on), as VS Code's.
+- **Branches:** the branch in Source Control's header and in the status bar
+  opens Checkout to…: Create New Branch…, the branches (the last committed to
+  first, the current one ticked), then a remote's branches that aren't here
+  yet (checked out as one that follows it). `git switch`, so Git refuses if a
+  change would be lost. Create Branch… starts from where the book is.
+- **Status bar:** the branch first (with * when something isn't committed),
+  then Sync (↻, with 1↓ 2↑ when there's something to pull or push) or
+  Publish (☁↑), as at the left of VS Code's.
+- **The ⋯ menu** follows VS Code's: Pull, Push, Checkout to…, Fetch, then
+  Commit ▸, Changes ▸, Pull, Push ▸, Branch ▸. The Graph's header has Fetch
+  beside Pull and Push. A file's menu adds Discard Changes, Add to .gitignore
+  (a new file: a `/path` line in the book's .gitignore), Reveal in Finder and
+  Copy Path.
+- **Left out:** stash, tags, worktrees, remotes, rebase and the editor
+  gutter's per-change revert: VS Code has them, but they aren't the core of
+  committing a book.
+- Verified: Rust tests (Discard goes back to what's staged, then to the
+  commit, and brings a deleted file back, leaving new files alone; amend with
+  no message keeps it, with a change and a message stays one commit; Undo
+  Last Commit returns the message and stages the change, refusing the first
+  commit and one that changed README.md outside the book; branches listed,
+  created, switched, a remote's checked out as one that follows it; names
+  like "has space" and "-f" refused). Unit tests for Discard's questions, the
+  order (History, then Git, then the Trash), nothing done when cancelled or
+  when History can't keep a copy, Sync's pull-then-push, the conflict-marker
+  question and the branch menu. Self-test `git` on a scratch repository with
+  a local bare remote: Discard on an open file with saved and unsaved words
+  (both in History's "Edited one.typ and two.typ", then "Discarded the
+  changes in one.typ"; disk and editor as committed; ⌘Z brought both back),
+  Discard All 2 Files, Undo Last Commit (message back in the box, the file
+  staged), Commit (Amend) with a new message and a change, Sync Changes 1↑
+  then the status bar's `main ↻ 0↓ 1↑` to `main ↻`, Create Branch (Publish
+  Branch in Commit's place, `draft-two` in the status bar), Publish (follows
+  origin/draft-two), back to main from Checkout to…, and the ⋯ menu's
+  submenus.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

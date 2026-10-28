@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
+import { conflicts, mainAction, unstaged } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { layoutGraph, type GraphRow } from '../lib/git-graph';
@@ -54,30 +55,34 @@ function SectionHeader({ title, open, onToggle, children }: { title: string; ope
 
 /**
  * Source Control, as VS Code's: the book's own Git repository. A message and
- * Commit, the changed files, and the Graph of commits with Pull and Push.
- * Files and commits open What changed, in words.
+ * Commit (or Sync Changes, Publish Branch), the changed files to stage,
+ * unstage or discard, the branch to switch, and the Graph of commits with
+ * Fetch, Pull and Push. Files and commits open What changed, in words.
  */
 export function SourceControlPanel() {
   const git = useStore(studio.store, (s) => s.git);
-  const [message, setMessage] = useState(() => studio.git.message);
+  const message = git.message;
   const [changesOpen, toggleChanges] = useOpen('changes');
   const [graphOpen, toggleGraph] = useOpen('graph');
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-scm', storage: localStorage });
   const repo = git.repo;
   if (git.status === 'loading' || git.status === 'off') return <div className="history-empty muted">Looking for a Git repository…</div>;
   if (!repo) return <div className="history-empty muted">This book isn’t in a Git repository.</div>;
-  const write = (text: string) => {
-    studio.git.message = text;
-    setMessage(text);
-  };
+  const write = (text: string) => studio.git.setMessage(text);
   const busy = git.busy;
   const changes = (
     <div className={`scm-section${changesOpen ? ' open' : ''}`}>
       <SectionHeader title={repo.root.slice(repo.root.lastIndexOf('/') + 1)} open={changesOpen} onToggle={toggleChanges}>
-        <span className="scm-branch" title={`${repo.branch ? `On the branch ${repo.branch}` : 'No branch (a detached commit)'}${repo.upstream ? `, which follows ${repo.upstream}` : ', not on a remote yet'}`}>
+        {/* As VS Code's branch in the status bar: a click is Checkout to… */}
+        <button
+          className="scm-branch"
+          disabled={!!busy}
+          title={`${repo.branch ? `On the branch ${repo.branch}` : 'No branch (a detached commit)'}${repo.upstream ? `, which follows ${repo.upstream}` : ', not on a remote yet'}. Click to switch to another branch, or create one.`}
+          onClick={() => void studio.git.pickBranch()}
+        >
           <Icon name="branch" size={14} />
           {repo.branch ?? 'detached'}
-        </span>
+        </button>
       </SectionHeader>
       {changesOpen && <Changes repo={repo} message={message} setMessage={write} />}
     </div>
@@ -85,6 +90,17 @@ export function SourceControlPanel() {
   const graph = (
     <div className={`scm-section scm-graph-section${graphOpen ? ' open' : ''}`}>
       <SectionHeader title="Graph" open={graphOpen} onToggle={toggleGraph}>
+        {repo.upstream && (
+          <button
+            className={`icon scm-action${busy === 'fetch' ? ' running' : ''}`}
+            disabled={!!busy}
+            title={`Fetch: see what's new on ${repo.upstream.slice(0, repo.upstream.indexOf('/'))}, without changing the book`}
+            aria-label="Fetch"
+            onClick={() => void studio.git.fetch()}
+          >
+            <Icon name="fetch" size={16} />
+          </button>
+        )}
         {repo.upstream && (
           <button
             className={`icon scm-action${busy === 'pull' ? ' running' : ''}`}
@@ -133,7 +149,7 @@ export function SourceControlPanel() {
   );
 }
 
-/** The message, Commit, and what's changed since the last commit: Staged Changes, then Changes. */
+/** The message, Commit (or Sync Changes, Publish Branch), and what's changed since the last commit: Merge Changes, Staged Changes, then Changes. */
 function Changes({ repo, message, setMessage }: { repo: GitStatus; message: string; setMessage: (text: string) => void }) {
   const busy = useStore(studio.store, (s) => s.git.busy);
   const [nudge, setNudge] = useState(false);
@@ -146,15 +162,29 @@ function Changes({ repo, message, setMessage }: { repo: GitStatus; message: stri
     if (message) el.style.height = `${Math.min(el.scrollHeight + 2, 180)}px`;
   }, [message]);
   const staged = repo.staged.length > 0;
-  const commit = async (push = false) => {
-    if (!message.trim()) {
+  const merge = conflicts(repo);
+  const changed = unstaged(repo);
+  const commit = async (opts: { amend?: boolean; then?: 'push' | 'sync' } = {}) => {
+    if (!message.trim() && !opts.amend) {
       setNudge(true);
       box.current?.focus();
       return;
     }
-    if (await studio.git.commit(message, push)) setMessage('');
+    await studio.git.commit(message, opts);
   };
   const canCommit = (staged || repo.files.length > 0) && !busy;
+  // With nothing to commit, the button is VS Code's: Sync Changes (↓ to pull, ↑ to push), or Publish Branch.
+  const action = mainAction(repo);
+  const last = useStore(studio.store, (s) => s.git.log.find((c) => c.head)?.subject ?? null);
+  const more = () =>
+    void showContextMenu([
+      { label: 'Commit', enabled: canCommit, action: () => void commit() },
+      { label: 'Commit (Amend)', enabled: !busy && !!last, action: () => void commit({ amend: true }) },
+      { label: 'Commit & Push', enabled: canCommit, action: () => void commit({ then: 'push' }) },
+      { label: 'Commit & Sync', enabled: canCommit, action: () => void commit({ then: 'sync' }) },
+      'separator',
+      { label: 'Undo Last Commit', enabled: !busy && !!last, action: () => void studio.git.undoLastCommit() },
+    ]);
   return (
     <div className="scm-body">
       <div className="git-commit">
@@ -179,37 +209,48 @@ function Changes({ repo, message, setMessage }: { repo: GitStatus; message: stri
           }}
         />
         <div className="scm-commit-button">
-          <button
-            className="primary"
-            disabled={!canCommit}
-            title={staged ? 'Commit the staged changes (⌘⏎)' : repo.files.length ? 'Nothing is staged: commit every change in the book (⌘⏎)' : 'Nothing to commit'}
-            onClick={() => void commit()}
-          >
-            <Icon name="check" size={16} />
-            {busy === 'commit' ? 'Committing…' : 'Commit'}
-          </button>
-          <button
-            className="primary scm-commit-more"
-            disabled={!canCommit}
-            title="More ways to commit"
-            aria-label="More ways to commit"
-            onClick={() =>
-              void showContextMenu([
-                { label: 'Commit', action: () => void commit() },
-                { label: 'Commit & Push', action: () => void commit(true) },
-              ])
-            }
-          >
+          {action === 'sync' ? (
+            <button
+              className="primary scm-sync"
+              disabled={!!busy}
+              title={`Sync Changes with ${repo.upstream}: ${[repo.behind && `pull ${plural(repo.behind, 'commit')}`, repo.ahead && `push ${plural(repo.ahead, 'commit')}`].filter(Boolean).join(', then ')}`}
+              onClick={() => void studio.git.sync()}
+            >
+              <Icon name="refresh" size={15} />
+              <span className="scm-sync-label">{busy === 'sync' ? 'Syncing…' : 'Sync Changes'}</span>
+              {repo.behind > 0 && <span className="scm-sync-count">{repo.behind}↓</span>}
+              {repo.ahead > 0 && <span className="scm-sync-count">{repo.ahead}↑</span>}
+            </button>
+          ) : action === 'publish' ? (
+            <button className="primary scm-sync" disabled={!!busy} title={`Publish Branch: put ${repo.branch} on the remote (origin), and follow it from then on`} onClick={() => void studio.git.publish()}>
+              <Icon name="cloudUp" size={15} />
+              <span className="scm-sync-label">{busy === 'push' ? 'Publishing…' : 'Publish Branch'}</span>
+            </button>
+          ) : (
+            <button
+              className="primary"
+              disabled={!canCommit}
+              title={staged ? 'Commit the staged changes (⌘⏎)' : repo.files.length ? 'Nothing is staged: commit every change in the book (⌘⏎)' : 'Nothing to commit'}
+              onClick={() => void commit()}
+            >
+              <Icon name="check" size={16} />
+              {busy === 'commit' ? 'Committing…' : 'Commit'}
+            </button>
+          )}
+          <button className="primary scm-commit-more" disabled={!!busy} title="More ways to commit" aria-label="More ways to commit" onClick={more}>
             <Icon name="chevronDown" size={16} />
           </button>
         </div>
       </div>
-      {staged && <FileGroup files={repo.staged} staged />}
-      {repo.files.length > 0 && <FileGroup files={repo.files} staged={false} />}
+      {merge.length > 0 && <FileGroup files={merge} kind="merge" />}
+      {staged && <FileGroup files={repo.staged} kind="staged" />}
+      {changed.length > 0 && <FileGroup files={changed} kind="changes" />}
       {!staged && !repo.files.length && <div className="scm-empty muted">Everything is committed.</div>}
     </div>
   );
 }
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 /** A button on a row, shown on hover, as VS Code's inline actions. */
 function RowAction({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
@@ -228,11 +269,23 @@ function RowAction({ icon, label, onClick }: { icon: IconName; label: string; on
   );
 }
 
-/** Staged Changes (− takes a file back out) or Changes (+ stages it); a click shows what changed. */
-function FileGroup({ files, staged }: { files: GitFile[]; staged: boolean }) {
+const GROUPS = {
+  merge: { title: 'Merge Changes', open: 'merge-list' },
+  staged: { title: 'Staged Changes', open: 'staged-list' },
+  changes: { title: 'Changes', open: 'changes-list' },
+} as const;
+
+/**
+ * A group of files, as VS Code's: Merge Changes (+ stages a file whose
+ * conflict is resolved), Staged Changes (− takes one back out), Changes
+ * (↶ discards, + stages). A click shows what changed.
+ */
+function FileGroup({ files, kind }: { files: GitFile[]; kind: keyof typeof GROUPS }) {
   const titles = useStore(studio.store, (s) => s.names.titles);
-  const [open, toggle] = useOpen(staged ? 'staged-list' : 'changes-list');
-  const move = (paths: string[]) => void (staged ? studio.git.unstage(paths) : studio.git.stage(paths));
+  const root = useStore(studio.store, (s) => s.workspace?.root ?? '');
+  const [open, toggle] = useOpen(GROUPS[kind].open);
+  const staged = kind === 'staged';
+  const move = (paths: string[]) => void (staged ? studio.git.unstage(paths) : kind === 'merge' ? studio.git.resolve(paths) : studio.git.stage(paths));
   const moveLabel = staged ? 'Unstage Changes' : 'Stage Changes';
   return (
     <>
@@ -240,10 +293,11 @@ function FileGroup({ files, staged }: { files: GitFile[]; staged: boolean }) {
         <span className={`twisty${open ? ' open' : ''}`}>
           <Icon name="chevronRight" size={16} />
         </span>
-        <span>{staged ? 'Staged Changes' : 'Changes'}</span>
+        <span>{GROUPS[kind].title}</span>
         <span className="spacer" />
-        <RowAction icon="openChanges" label="What changed in all of them" onClick={() => void studio.git.showWorking(undefined, staged)} />
-        <RowAction icon={staged ? 'minus' : 'plus'} label={staged ? 'Unstage All Changes' : 'Stage All Changes'} onClick={() => move(['.'])} />
+        {kind !== 'merge' && <RowAction icon="openChanges" label="What changed in all of them" onClick={() => void studio.git.showWorking(undefined, staged)} />}
+        {kind === 'changes' && <RowAction icon="discard" label="Discard All Changes" onClick={() => void studio.git.discard(files, true)} />}
+        <RowAction icon={staged ? 'minus' : 'plus'} label={staged ? 'Unstage All Changes' : kind === 'merge' ? 'Stage All Merge Changes' : 'Stage All Changes'} onClick={() => move(kind === 'merge' ? files.map((f) => f.path) : ['.'])} />
         <span className="scm-count">{files.length}</span>
       </div>
       {open &&
@@ -262,7 +316,12 @@ function FileGroup({ files, staged }: { files: GitFile[]; staged: boolean }) {
                 f.status !== 'D' && { label: 'Open File', action: () => void studio.openFile(f.path) },
                 'separator',
                 { label: moveLabel, action: () => move([f.path]) },
+                kind === 'changes' && { label: 'Discard Changes', action: () => void studio.git.discard([f]) },
                 'separator',
+                f.status === '?' && { label: 'Add to .gitignore', action: () => void studio.git.ignore(f.path) },
+                'separator',
+                f.status !== 'D' && { label: 'Reveal in Finder', action: () => void studio.reveal(f.path) },
+                { label: 'Copy Path', action: () => studio.copy(`${root}/${f.path}`, 'Path copied') },
                 { label: 'Copy Relative Path', action: () => studio.copy(f.path, 'Path copied') },
               ])}
             >
@@ -272,6 +331,7 @@ function FileGroup({ files, staged }: { files: GitFile[]; staged: boolean }) {
                 {folder && <span className="git-folder">{folder}</span>}
               </span>
               {f.status !== 'D' && <RowAction icon="goToFile" label="Open File" onClick={() => void studio.openFile(f.path)} />}
+              {kind === 'changes' && <RowAction icon="discard" label="Discard Changes" onClick={() => void studio.git.discard([f])} />}
               <RowAction icon={staged ? 'minus' : 'plus'} label={moveLabel} onClick={() => move([f.path])} />
               <span className="git-status">{STATUS[f.status].letter}</span>
             </div>
