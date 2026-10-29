@@ -4,8 +4,10 @@
 # branch, kept with the run for 30 days; or push a version tag that matches
 # tauri.conf.json (v0.1.0) for a GitHub Release with the DMG attached.
 #
-# The app carries OpenCode and Tinymist (scripts/bundle-*.mjs), so a Mac
-# needs nothing else for the preview, or for an assistant to sign in to.
+# The app carries Tinymist (scripts/bundle-tinymist.mjs), so the preview
+# needs nothing else on a Mac. It carries no assistant: each person installs
+# their own (OpenCode, Claude Code, Codex, Gemini CLI), or Settings downloads
+# Antigravity's connector.
 #
 # A release is also an update: the app checks the latest release's
 # latest.json (tauri.conf.json's plugins.updater), and installs the update
@@ -25,10 +27,10 @@
 #   APPLE_ID                    the Apple Account of the developer team
 #   APPLE_PASSWORD              an app-specific password for it (account.apple.com ▸ Sign-In and Security)
 #   APPLE_TEAM_ID               the team's ID (TEAMID above)
-# Then OpenCode and Tinymist, which go in as resources Tauri doesn't sign, are
-# signed first (scripts/sign-bundled.mjs: OpenCode keeps its JIT), Tauri signs
-# the app with the hardened runtime and notarizes it, and a last step checks
-# that Gatekeeper takes it as notarized.
+# Then Tinymist, which goes in as a resource Tauri doesn't sign, is signed
+# first (scripts/sign-bundled.mjs), Tauri signs the app with the hardened
+# runtime and notarizes it, and a last step checks that Gatekeeper takes it as
+# notarized.
 name: Release build
 
 on:
@@ -96,13 +98,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: OpenCode and Tinymist, to go inside the app
-        run: |
-          # The runner's Homebrew is a snapshot (it once had OpenCode 1.x): today's formula, for 2.x.
-          brew update --quiet
-          brew install opencode
-          node scripts/bundle-opencode.mjs
-          node scripts/bundle-tinymist.mjs
+      - name: Tinymist, to go inside the app
+        run: node scripts/bundle-tinymist.mjs
 
       - name: Apple signing, if it's set up
         id: signing
@@ -135,7 +132,7 @@ jobs:
           rm "$RUNNER_TEMP/certificate.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          # OpenCode and Tinymist go in as resources, which Tauri doesn't sign.
+          # Tinymist goes in as a resource, which Tauri doesn't sign.
           node scripts/sign-bundled.mjs "$APPLE_SIGNING_IDENTITY"
           # The app with this identity, in place of tauri.bundle.json's ad hoc one.
           node -e 'require("fs").writeFileSync("src-tauri/tauri.signing.json", JSON.stringify({ bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY, hardenedRuntime: true } } }))'
@@ -174,11 +171,6 @@ jobs:
         run: |
           app=src-tauri/target/release/bundle/macos/Foreword.app
           codesign --verify --deep --strict --verbose=2 "$app"
-          # OpenCode keeps its JIT: signed again without its entitlements, it would run six times slower.
-          if ! codesign -d --entitlements - "$app/Contents/Resources/opencode/opencode" 2>/dev/null | grep -q com.apple.security.cs.allow-jit; then
-            echo "::error::OpenCode inside the app lost its JIT entitlement (src-tauri/entitlements/opencode.plist)."
-            exit 1
-          fi
           xcrun stapler validate "$app"
           assessed=$(spctl --assess --type execute --verbose=2 "$app" 2>&1 || true)
           echo "$assessed"

@@ -8757,25 +8757,18 @@ async function modelPickerChecks() {
 }
 
 /**
- * A release build (npm run app:build): the OpenCode inside the app is listed
- * last among the copies found, and the assistant runs on it when it's chosen;
- * the sample books come from the app's Resources. Settings are put back.
+ * A release build (npm run app:build): Tinymist inside the app is among the
+ * copies found, OpenCode is only the author's own (the app carries no
+ * assistant), and the sample books come from the app's Resources.
  */
 async function bundleChecks() {
   const out: Record<string, unknown> = {};
   await studio.refreshTools();
-  const copies = studio.state.tools?.opencode.copies ?? [];
-  out.copies = copies.map((c) => `${c.version} · ${c.source} · ${c.path}`);
-  const bundled = copies.find((c) => c.source === 'bundled with Foreword');
-  if (bundled) {
-    await studio.setToolPath('opencode', bundled.path);
-    await sleep(1000);
-    await waitFor(() => studio.state.agent.status !== 'starting', 60000, 'agent').catch(() => {});
-    await waitFor(() => studio.state.agent.models.length > 0, 30000, 'models').catch(() => {});
-    out.running = { tool: studio.state.tools?.opencode.path, fromSettings: studio.state.tools?.opencode.fromSettings, status: studio.state.agent.status, error: studio.state.agent.error ?? null, models: studio.state.agent.models.length };
-    await studio.setToolPath('opencode', '');
-    await sleep(500);
-  }
+  const listed = (tool: 'tinymist' | 'opencode') => (studio.state.tools?.[tool].copies ?? []).map((c) => `${c.version} · ${c.source} · ${c.path}`);
+  const opencode = listed('opencode');
+  out.tinymist = listed('tinymist');
+  out.opencode = opencode;
+  out.opencodeInside = opencode.some((c) => c.includes('bundled with Foreword') || c.includes('/Contents/Resources/'));
   const original = studio.state.workspace!.root;
   const parent = `${original.slice(0, original.lastIndexOf('/'))}/bundle-samples-${Date.now().toString(36)}`;
   await studio.openSample('lucas-wonderful-brain', parent);

@@ -192,7 +192,7 @@ Each conversation is its own task, and several can run at once. Switch assistant
 
 ## Download
 
-**[Download Foreword for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/foreword/releases). Open it and drag Foreword to Applications. It carries Tinymist and OpenCode, so it needs nothing else installed. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
+**[Download Foreword for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/foreword/releases). Open it and drag Foreword to Applications. It carries Tinymist, so the preview needs nothing else installed. It doesn't carry an assistant: install the one you want (OpenCode, Claude Code, Codex or Gemini CLI), or pick Antigravity, which Settings downloads for you, and Settings ▸ Assistant says what each needs. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
 
 The app isn't notarized yet, so the first time macOS may ask: open System Settings ▸ Privacy & Security and click **Open Anyway**. A copy fetched with `gh release download` opens without asking.
 
@@ -232,7 +232,7 @@ npm run app             # run it, reloading as you edit (tauri dev)
 npm test                # unit tests (Vitest)
 npm run typecheck       # TypeScript
 npm run check-templates # every template still compiles
-npm run app:build       # the app and its DMG, with OpenCode and Tinymist inside
+npm run app:build       # the app and its DMG, with Tinymist inside
 (cd src-tauri && cargo test)
 ```
 

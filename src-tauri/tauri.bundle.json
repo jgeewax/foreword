@@ -4,7 +4,6 @@
     "targets": ["app", "dmg"],
     "resources": {
       "../samples/": "samples/",
-      "bundled/opencode/": "opencode/",
       "bundled/tinymist/": "tinymist/"
     },
     "macOS": {

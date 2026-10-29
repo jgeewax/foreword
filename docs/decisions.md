@@ -4459,6 +4459,35 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - **Not tried:** a signed run itself, which needs the Developer ID
   certificate (Apple Developer Program).
 
+### No assistant inside the app (2026-10-29)
+
+- **Asked for:** "i dont want to ship the harnesses with the dmg... everyone
+  should be able to install these on their own." The DMG carried OpenCode
+  (since "No assistant installed: OpenCode inside the app"), used only when
+  no other copy was found; the other assistants were never in it (npx
+  downloads Claude Code's, Codex's and Gemini CLI's connectors on their
+  first start, and Settings downloads Antigravity's).
+- **Out:** `scripts/bundle-opencode.mjs`, its line in `npm run app:build`
+  and in the release workflow (with the `brew install opencode` it needed),
+  the resource in tauri.bundle.json, the bundled copy in discover.rs's list,
+  and `src-tauri/entitlements/opencode.plist` with the workflow's JIT check
+  (that was only for the copy we signed; the author's own OpenCode runs
+  under its own signature). Tinymist stays: it's the typesetter, not an
+  assistant, and the preview needs it.
+- **A first start picks an assistant this Mac has** (settings.ts
+  `firstAssistant`), not OpenCode, which it may not have any more: the first
+  signed in, else the first installed and not signed out, in the cards'
+  order; with none, OpenCode, whose Settings page and error say
+  `brew install opencode`. Only with no settings file and no settings kept
+  in the webview, so a choice once made is never changed.
+- **The Welcome screen** said "Writing assistant · OpenCode" whichever
+  assistant was chosen (a release build always had OpenCode). It now shows
+  the chosen one with its card's status ("Claude Code · Signed in with
+  Claude Max"), and what to do when it can't run.
+- Someone on 0.8 who ran the bundled OpenCode and never installed one gets
+  "OpenCode isn't installed" after updating, with the command, or chooses
+  another in Settings. The DMG is about 170 MB smaller.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

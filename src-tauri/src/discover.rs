@@ -192,8 +192,8 @@ fn editor_tinymists() -> Vec<(PathBuf, String)> {
 }
 
 /// A program in the app's own Resources (`Contents/Resources/<name>/<name>`),
-/// which `npm run app:build` puts there (scripts/bundle-opencode.mjs and
-/// scripts/bundle-tinymist.mjs): found only after every other copy.
+/// which `npm run app:build` puts there (scripts/bundle-tinymist.mjs): found
+/// only after every other copy. The app carries no assistant.
 fn bundled(name: &str) -> Vec<(PathBuf, String)> {
     let found = env::current_exe().ok().and_then(|exe| {
         let p = exe
@@ -250,8 +250,8 @@ pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
                 }
             }
         }
-        // A copy inside the app (a release build bundles one): only when nothing else is found.
-        Tool::OpenCode => all.extend(bundled("opencode")),
+        // The author's own: the app doesn't carry one.
+        Tool::OpenCode => {}
     }
     let mut seen = HashSet::new();
     all.retain(|(p, _)| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())));

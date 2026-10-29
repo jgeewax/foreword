@@ -12,6 +12,19 @@ export const ASSISTANT_NAMES: Record<AssistantId, string> = { opencode: 'OpenCod
 // Google's is Antigravity now: Gemini CLI, which it replaced, no longer takes personal Google logins.
 const ASSISTANT_MAKERS: Record<string, AssistantId> = { anthropic: 'claude', google: 'antigravity', agy: 'antigravity', openai: 'codex', chatgpt: 'codex' };
 
+/** How each assistant would run on this Mac, as far as choosing one needs (ipc's AssistantSetup). */
+type Setups = Record<AssistantId, { program: string | null; package: string | null; signedIn: boolean | null }>;
+
+/**
+ * The assistant a first start begins with, since Foreword carries none: the
+ * first one signed in, else the first installed and not signed out, else
+ * OpenCode, whose page in Settings says how to install it.
+ */
+export function firstAssistant(setups: Setups): AssistantId {
+  const runs = (id: AssistantId) => !!(setups[id].program || setups[id].package);
+  return ASSISTANTS.find((id) => setups[id].signedIn === true && runs(id)) ?? ASSISTANTS.find((id) => !!setups[id].program && setups[id].signedIn !== false) ?? 'opencode';
+}
+
 /** The assistants a word could name, for /assistant: the start of an id or name ("claude", "gem", "open"), or the maker. */
 export function assistantsFor(word: string): AssistantId[] {
   const w = word.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -173,6 +186,15 @@ export function loadSettings(): AppSettings {
     return { ...DEFAULT_SETTINGS, ...sanitize(raw) };
   } catch {
     return { ...DEFAULT_SETTINGS };
+  }
+}
+
+/** Foreword has run on this Mac before: it keeps a copy of the settings here. */
+export function settingsSaved(): boolean {
+  try {
+    return localStorage.getItem(KEY) !== null;
+  } catch {
+    return false;
   }
 }
 

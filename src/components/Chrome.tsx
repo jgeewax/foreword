@@ -1,11 +1,12 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { countsLabel } from '../app/proofing-core';
 import { uncommitted } from '../app/source-control';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Stat } from '../app/studio';
 import { numberedTitle } from '../app/tool-labels';
+import { cardStatus } from './AssistantSettings';
 import { Icon, type IconName } from './icons';
-import type { GitStatus, ToolInfo } from '../lib/ipc';
+import { ipc, type AssistantsSetup, type GitStatus, type ToolInfo } from '../lib/ipc';
 import { baseName, dirName, tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { useTaskDot } from './TaskMenu';
@@ -281,6 +282,49 @@ function ToolRow({ label, name, tool, install, purpose }: { label: string; name:
   );
 }
 
+/** The chosen assistant and whether it can run here. Foreword carries none: Settings ▸ Assistant says what each needs. */
+function AssistantRow() {
+  const chosen = useStore(studio.store, (s) => s.settings.assistant);
+  const version = useStore(studio.store, (s) => s.tools?.opencode.version ?? null);
+  const [setups, setSetups] = useState<AssistantsSetup | null>(null);
+  useEffect(() => {
+    // Again on coming back: installed or signed in meanwhile, in Terminal.
+    const refresh = () => void ipc.assistantsStatus().then(setSetups, (e) => console.warn('assistants status', e));
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
+  if (!setups) return <li className="muted">Writing assistant: checking…</li>;
+  const name = ASSISTANT_NAMES[chosen];
+  const { tone, text } = cardStatus(chosen, null, setups[chosen], null, chosen === 'opencode' ? version : null);
+  if (tone === 'ok' || tone === 'off') {
+    return (
+      <li>
+        <span className="ok">✓</span> Writing assistant <span className="muted">· {name} · {text}</span>
+      </li>
+    );
+  }
+  const settings = (
+    <button className="link" onClick={() => studio.openSettings('assistant')}>
+      Settings ▸ Assistant
+    </button>
+  );
+  return (
+    <li className="missing">
+      <span className="bad">✕</span> Writing assistant · {name}: {text[0].toLowerCase() + text.slice(1)}.{' '}
+      {chosen === 'opencode' && !setups.opencode.program ? (
+        <>
+          Install it in Terminal with <code className="selectable">brew install opencode</code>, or choose another in {settings}.
+        </>
+      ) : setups[chosen].signedIn === false ? (
+        <>{settings} signs you in.</>
+      ) : (
+        <>{settings} says what it needs.</>
+      )}
+    </li>
+  );
+}
+
 export function Welcome() {
   const launch = useStore(studio.store, (s) => s.launch);
   const tools = useStore(studio.store, (s) => s.tools);
@@ -331,7 +375,7 @@ export function Welcome() {
           </div>
           <ul className="setup">
             <ToolRow label="Live preview" name="Tinymist" tool={tools?.tinymist} install="brew install tinymist" purpose="It typesets the pages you see as you write." />
-            <ToolRow label="Writing assistant" name="OpenCode" tool={tools?.opencode} install="brew install opencode" purpose="It runs the assistant in the right-hand pane." />
+            <AssistantRow />
           </ul>
         </div>
         {guideOpen && (

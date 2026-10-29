@@ -30,7 +30,7 @@ import {
   validateProjectSettings,
   type ProjectSettings,
 } from './project-settings';
-import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, loadSettings, saveSettings, type AppSettings, type AssistantId, type PreviewScope, type ToolName } from './settings';
+import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, firstAssistant, loadSettings, saveSettings, settingsSaved, type AppSettings, type AssistantId, type PreviewScope, type ToolName } from './settings';
 import { handleMcp, STUDIO_TOOLS, type BookProblem, type CommentRow, type ModelChoice, type PageHeading, type StudioHost } from './studio-tools';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
@@ -6301,6 +6301,8 @@ export class Studio {
   /** The file's last known text (to notice edits made elsewhere) and its parsed object (to keep unknown keys). */
   private config: { text: string | null; raw: Record<string, unknown> } = { text: null, raw: {} };
   private configTimer: number | undefined;
+  /** Foreword's first start on this Mac: no settings kept here yet. */
+  private readonly firstStart = !settingsSaved();
 
   /** Read the settings file; with none yet, write it from the settings this machine had. */
   async loadConfig() {
@@ -6309,6 +6311,11 @@ export class Studio {
       this.store.set({ configFile: { path, error: null } });
       if (text === null) {
         this.config = { text: null, raw: {} };
+        // An assistant this Mac already has, rather than OpenCode, which it may not.
+        if (this.firstStart) {
+          const setups = await ipc.assistantsStatus().catch(() => null);
+          if (setups) this.updateSettings({ assistant: firstAssistant(setups) }, { write: false });
+        }
         this.scheduleConfigWrite(0);
         return;
       }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRESETS } from '../services/agent/permissions';
-import { assistantsFor, composerKeyAction, editorLineHeight, loadSettings, parseRulers, rulersText, saveSettings } from './settings';
+import { assistantsFor, composerKeyAction, editorLineHeight, firstAssistant, loadSettings, parseRulers, rulersText, saveSettings, settingsSaved } from './settings';
 
 const enter = (mods: Partial<{ shift: boolean; meta: boolean; ctrl: boolean; alt: boolean; composing: boolean }> = {}) => ({
   key: 'Enter',
@@ -51,7 +51,9 @@ describe('settings storage', () => {
   it('defaults to Enter and asking before edits, and round-trips', () => {
     expect(loadSettings().sendKey).toBe('enter');
     expect(loadSettings().permissions.edit).toBe('ask');
+    expect(settingsSaved()).toBe(false);
     saveSettings({ ...loadSettings(), sendKey: 'mod-enter', markAiReads: false });
+    expect(settingsSaved()).toBe(true);
     expect(loadSettings().sendKey).toBe('mod-enter');
     expect(loadSettings().markAiReads).toBe(false);
   });
@@ -167,5 +169,26 @@ describe('assistantsFor', () => {
     expect(assistantsFor('c')).toEqual(['claude', 'codex']);
     expect(assistantsFor('')).toEqual([]);
     expect(assistantsFor('gpt')).toEqual([]);
+  });
+});
+
+describe('firstAssistant', () => {
+  const none = { program: null, package: null, signedIn: null };
+  const setups = (over: Partial<Parameters<typeof firstAssistant>[0]> = {}) => ({ opencode: none, claude: none, gemini: none, codex: none, antigravity: none, ...over });
+
+  it('starts with one that’s signed in, over one only installed', () => {
+    const installed = { program: '/opt/homebrew/bin/opencode', package: null, signedIn: null };
+    expect(firstAssistant(setups({ opencode: installed, codex: { program: null, package: 'codex-acp', signedIn: true } }))).toBe('codex');
+    expect(firstAssistant(setups({ claude: { program: '/usr/local/bin/claude', package: null, signedIn: true }, codex: { program: null, package: 'codex-acp', signedIn: true } }))).toBe('claude');
+    expect(firstAssistant(setups({ opencode: installed }))).toBe('opencode');
+  });
+
+  it('passes over one signed in that can’t run, or installed and signed out', () => {
+    expect(firstAssistant(setups({ codex: { program: null, package: null, signedIn: true }, gemini: { program: '/opt/homebrew/bin/gemini', package: null, signedIn: null } }))).toBe('gemini');
+    expect(firstAssistant(setups({ claude: { program: '/usr/local/bin/claude', package: null, signedIn: false } }))).toBe('opencode');
+  });
+
+  it('is OpenCode, whose Settings say how to install it, with none on the Mac', () => {
+    expect(firstAssistant(setups())).toBe('opencode');
   });
 });
