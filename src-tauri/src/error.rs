@@ -10,6 +10,8 @@ pub enum CmdError {
     Invalid(String),
     /// A required tool or process is missing or not running.
     Unavailable(String),
+    /// An assistant that isn't on the Mac yet, which Foreword can install.
+    NotInstalled(String),
     Io(String),
 }
 
@@ -22,6 +24,7 @@ impl std::fmt::Display for CmdError {
             CmdError::NotFound(m) => write!(f, "not found: {m}"),
             CmdError::Invalid(m) => write!(f, "invalid: {m}"),
             CmdError::Unavailable(m) => write!(f, "unavailable: {m}"),
+            CmdError::NotInstalled(m) => write!(f, "not installed: {m}"),
             CmdError::Io(m) => write!(f, "io: {m}"),
         }
     }

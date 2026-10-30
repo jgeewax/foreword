@@ -7,11 +7,7 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::{LazyLock, OnceLock},
-    time::{Duration, Instant},
 };
-
-use futures_util::StreamExt;
 
 use serde::Serialize;
 use tauri::{
@@ -26,61 +22,8 @@ use tokio::{
 use crate::{
     Win, children, discover,
     error::{CmdError, CmdResult},
-    logs,
+    install, logs,
 };
-
-/// The ACP programs, pinned (a newer one may speak a newer protocol).
-pub const CLAUDE_ACP: &str = "@agentclientprotocol/claude-agent-acp@0.93.0";
-pub const GEMINI_CLI: &str = "@google/gemini-cli@0.64.0";
-pub const CODEX_ACP: &str = "@agentclientprotocol/codex-acp@2.2.2";
-/// Google's Antigravity connector (the ACP registry's antigravity-acp). It isn't
-/// on npm: Foreword downloads Google's build of it, once, when asked.
-pub const ANTIGRAVITY_ACP: &str = "1.4.1";
-/// Google LLC's Apple Developer ID team, which the downloaded programs must be signed by.
-const GOOGLE_TEAM: &str = "EQHXZ8M8AV";
-
-/// Antigravity's download for this Mac, and its size in bytes (as dl.google.com says).
-fn antigravity_download() -> (String, u64) {
-    let (arch, bytes) = match std::env::consts::ARCH {
-        "x86_64" => ("x86_64", 118_349_036),
-        _ => ("arm64", 112_737_434),
-    };
-    (
-        format!(
-            "https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-{ANTIGRAVITY_ACP}-darwin-{arch}.zip"
-        ),
-        bytes,
-    )
-}
-
-static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
-
-/// Where downloaded connectors go: the app's data folder (set at startup).
-pub fn init(data_dir: PathBuf) {
-    let _ = DATA_DIR.set(data_dir);
-}
-
-/// The folder of downloaded connectors (FOREWORD_ASSISTANTS_DIR, for self-tests).
-fn assistants_dir() -> Option<PathBuf> {
-    std::env::var_os("FOREWORD_ASSISTANTS_DIR")
-        .map(PathBuf::from)
-        .or_else(|| DATA_DIR.get().map(|d| d.join("assistants")))
-}
-
-fn antigravity_dir() -> Option<PathBuf> {
-    Some(assistants_dir()?.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}")))
-}
-
-/// Antigravity's connector: FOREWORD_ANTIGRAVITY_ACP, or the copy downloaded.
-fn antigravity_program() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("FOREWORD_ANTIGRAVITY_ACP").map(PathBuf::from)
-        && discover::is_executable(&p)
-    {
-        return Some(p);
-    }
-    let p = antigravity_dir()?.join("agy_acp_server.par");
-    discover::is_executable(&p).then_some(p)
-}
 
 pub struct AcpProcess {
     child: Child,
@@ -89,7 +32,7 @@ pub struct AcpProcess {
 }
 
 impl AcpProcess {
-    /// Stop the program and anything it started (npx runs the agent as its child).
+    /// Stop the program and anything it started (the connector runs the assistant as its child).
     pub fn kill(&mut self) {
         self.reader.abort();
         if let Some(pid) = self.child.id() {
@@ -109,66 +52,6 @@ pub struct AcpInfo {
     /// Its system prompt is the app's (`system`) in place of its own: Codex's
     /// `model_instructions_file`, Gemini CLI's `GEMINI_SYSTEM_MD`.
     own_prompt: bool,
-}
-
-/// The npm package npx runs for an assistant that isn't installed.
-fn package(kind: &str) -> Option<&'static str> {
-    match kind {
-        "claude" => Some(CLAUDE_ACP),
-        "gemini" => Some(GEMINI_CLI),
-        "codex" => Some(CODEX_ACP),
-        _ => None,
-    }
-}
-
-/// The assistant's own ACP program, if it's installed.
-fn own_program(kind: &str) -> Option<PathBuf> {
-    match kind {
-        "claude" => discover::find("claude-agent-acp", "FOREWORD_CLAUDE_ACP"),
-        "gemini" => discover::find("gemini", "FOREWORD_GEMINI"),
-        "codex" => discover::find("codex-acp", "FOREWORD_CODEX_ACP"),
-        "antigravity" => antigravity_program(),
-        _ => None,
-    }
-}
-
-fn npx() -> Option<PathBuf> {
-    discover::find("npx", "FOREWORD_NPX")
-}
-
-/// How each assistant is started: its own command if it's installed, otherwise
-/// its npm package through npx (downloaded the first time). Antigravity's is
-/// downloaded from Google beforehand, in Settings ▸ Assistant.
-pub fn launch(kind: &str) -> CmdResult<(PathBuf, Vec<String>)> {
-    if kind == "antigravity" {
-        return antigravity_program()
-            .map(|p| (p, vec![]))
-            .ok_or_else(|| {
-                CmdError::Unavailable(
-                    "its connector isn't downloaded yet. Download it from Google in Settings ▸ Assistant."
-                        .into(),
-                )
-            });
-    }
-    let package =
-        package(kind).ok_or_else(|| CmdError::Invalid(format!("unknown assistant {kind}")))?;
-    // Gemini CLI is its own ACP program, with --acp.
-    let extra: Vec<String> = match kind {
-        "gemini" => vec!["--acp".into()],
-        _ => vec![],
-    };
-    if let Some(bin) = own_program(kind) {
-        return Ok((bin, extra));
-    }
-    let npx = npx().ok_or_else(|| {
-        CmdError::Unavailable(
-            "Node.js isn't installed (it runs the assistant's connector). In Terminal: brew install node"
-                .into(),
-        )
-    })?;
-    let mut args = vec!["-y".to_string(), package.to_string()];
-    args.extend(extra);
-    Ok((npx, args))
 }
 
 fn name_of(kind: &str) -> Option<&'static str> {
@@ -192,62 +75,59 @@ struct SignIn {
     steps: &'static str,
 }
 
-/// The assistant's own command if it's installed, otherwise its npm package
-/// through npx. None: neither can run.
-fn sign_in(kind: &str) -> Option<SignIn> {
-    let text = |p: PathBuf| p.to_string_lossy().into_owned();
-    if kind == "opencode" {
-        return Some(SignIn {
-            shown: "opencode auth login".into(),
-            argv: vec![
-                text(discover::find_opencode()?),
-                "auth".into(),
-                "login".into(),
-            ],
-            steps: "Choose a provider and sign in, or paste its API key. Add as many as you like.",
-        });
+/// A word as typed in Terminal: quoted when it needs to be.
+fn typed(word: &str) -> String {
+    if !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/._-~@+=:".contains(c))
+    {
+        word.into()
+    } else {
+        format!("'{}'", word.replace('\'', r"'\''"))
     }
-    let (cli, package, args, steps): (&str, &str, &[&str], &'static str) = match kind {
+}
+
+/// Signing in with the assistant's program in use: the author's own, or
+/// Foreword's copy. None: it isn't installed yet.
+fn sign_in(kind: &str) -> Option<SignIn> {
+    let text = |p: &Path| p.to_string_lossy().into_owned();
+    let (name, args, steps): (&str, &[&str], &'static str) = match kind {
+        "opencode" => (
+            "opencode",
+            &["auth", "login"],
+            "Choose a provider and sign in, or paste its API key. Add as many as you like.",
+        ),
         "claude" => (
             "claude",
-            "@anthropic-ai/claude-code",
             &["auth", "login"],
             "Your browser opens: sign in to your Claude account there.",
         ),
         // Gemini CLI no longer serves personal Google logins (June 2026): a paid key, or a work account.
         "gemini" => (
             "gemini",
-            GEMINI_CLI,
             &[],
             "Choose Use Gemini API Key and paste a paid key (or Log in with Google for a Gemini Code Assist work account). Then type /quit.",
         ),
         "codex" => (
             "codex",
-            "@openai/codex",
             &["login"],
             "Your browser opens: sign in with ChatGPT there.",
         ),
         _ => return None,
     };
-    let args = args.iter().map(|a| a.to_string());
-    let (shown, argv) = match discover::on_path(cli) {
-        Some(bin) => (
-            [cli.to_string()]
-                .into_iter()
-                .chain(args.clone())
-                .collect::<Vec<_>>(),
-            [text(bin)].into_iter().chain(args).collect(),
-        ),
-        None => (
-            ["npx".into(), package.into()]
-                .into_iter()
-                .chain(args.clone())
-                .collect(),
-            [text(npx()?), "-y".into(), package.into()]
-                .into_iter()
-                .chain(args)
-                .collect(),
-        ),
+    let program = install::program(kind)?;
+    // Foreword's Gemini CLI is a script, which Node.js runs.
+    let mut argv = match kind == "gemini" && install::is_ours(&program) {
+        true => vec![text(&install::node()?), text(&program)],
+        false => vec![text(&program)],
+    };
+    argv.extend(args.iter().map(|a| a.to_string()));
+    // As the author would type it: by name when that's the one on their PATH.
+    let same = |p: &Path| p.canonicalize().ok() == program.canonicalize().ok();
+    let shown: Vec<String> = match discover::on_path(name).is_some_and(|p| same(&p)) {
+        true => [name].iter().chain(args).map(|a| a.to_string()).collect(),
+        false => argv.iter().map(|a| typed(a)).collect(),
     };
     Some(SignIn {
         shown: shown.join(" "),
@@ -284,17 +164,16 @@ fn sign_in_script(name: &str, sign_in: &SignIn, path: &str) -> String {
 pub async fn assistant_sign_in(kind: String) -> CmdResult<()> {
     let name =
         name_of(&kind).ok_or_else(|| CmdError::Invalid(format!("unknown assistant {kind}")))?;
-    let sign_in = sign_in(&kind).ok_or_else(|| {
-        CmdError::Unavailable(match kind.as_str() {
-            "opencode" => "OpenCode isn't installed. In Terminal: brew install opencode".into(),
-            // It signs in over ACP (authenticate): the chat starts it with Google's sign-in.
-            "antigravity" => "Antigravity signs in with Google from Settings ▸ Assistant.".into(),
-            _ => format!(
-                "{name} needs Node.js, which isn't installed. In Terminal: brew install node"
-            ),
-        })
+    let sign_in = sign_in(&kind).ok_or_else(|| match kind.as_str() {
+        // It signs in over ACP (authenticate): the chat starts it with Google's sign-in.
+        "antigravity" => CmdError::Unavailable(
+            "Antigravity signs in with Google from Settings ▸ Assistant.".into(),
+        ),
+        _ => CmdError::NotInstalled(format!(
+            "{name} isn't installed yet: install it from Settings ▸ Assistant first."
+        )),
     })?;
-    let path = discover::search_path();
+    let path = install::path_with(Path::new(&sign_in.argv[0]));
     let file = std::env::temp_dir().join(format!("Sign in to {name}.command"));
     std::fs::write(
         &file,
@@ -314,32 +193,24 @@ pub async fn assistant_sign_in(kind: String) -> CmdResult<()> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Setup {
-    /// Its own program, if it's installed (for OpenCode, the copy in use).
+    /// Its own program in use, if it can run: the author's, or Foreword's copy
+    /// (for OpenCode, the copy in use; for Antigravity, Google's connector).
     program: Option<String>,
-    /// Otherwise the npm package npx runs, downloaded the first time it
-    /// starts. None when Node.js isn't installed either.
-    package: Option<String>,
-    /// What signs in to it, typed in Terminal. None: nothing can run it.
+    /// `program` is Foreword's own copy, not the author's.
+    ours: bool,
+    version: Option<String>,
+    /// What installing it would fetch, while it can't run (install.rs).
+    install: Option<install::Plan>,
+    /// What signs in to it, typed in Terminal. None: it isn't installed yet.
     sign_in: Option<String>,
     /// Whether it's signed in, where that can be told without starting it.
     signed_in: Option<bool>,
     /// The account, in words: "Claude Max", "ChatGPT", "an API key".
     account: Option<String>,
-    /// What Settings downloads to run it (Antigravity's connector, from Google).
-    download: Option<Download>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Download {
-    url: String,
-    bytes: u64,
-    version: String,
 }
 
 #[derive(Serialize)]
 pub struct Setups {
-    node: bool,
     opencode: Setup,
     claude: Setup,
     gemini: Setup,
@@ -419,7 +290,7 @@ fn account(kind: &str) -> Option<(bool, Option<String>)> {
     let home = discover::home()?;
     match kind {
         "claude" => claude_account(&discover::output(
-            &discover::on_path("claude")?,
+            &install::program("claude")?,
             &["auth", "status", "--json"],
         )?),
         "codex" => {
@@ -461,45 +332,29 @@ fn account(kind: &str) -> Option<(bool, Option<String>)> {
     }
 }
 
-fn setup(kind: &str, node: bool) -> Setup {
-    let text = |p: PathBuf| p.to_string_lossy().into_owned();
-    let program = match kind {
-        "opencode" => discover::find_opencode(),
-        _ => own_program(kind),
-    };
+fn setup(kind: &str) -> Setup {
+    let program = install::program(kind);
     let (signed_in, account) = account(kind).map_or((None, None), |(s, a)| (Some(s), a));
     Setup {
-        package: package(kind)
-            .filter(|_| program.is_none() && node)
-            .map(String::from),
-        program: program.map(text),
+        ours: program.as_deref().is_some_and(install::is_ours),
+        version: program.as_deref().and_then(|p| install::version(kind, p)),
+        program: program.map(|p| p.to_string_lossy().into_owned()),
+        install: install::plan(kind),
         sign_in: sign_in(kind).map(|s| s.shown),
         signed_in,
         account,
-        download: (kind == "antigravity").then(|| {
-            let (url, bytes) = antigravity_download();
-            Download {
-                url,
-                bytes,
-                version: ANTIGRAVITY_ACP.into(),
-            }
-        }),
     }
 }
 
 /// Settings ▸ Assistant: each assistant's setup on this Mac.
 #[tauri::command]
 pub async fn assistants_status() -> CmdResult<Setups> {
-    Ok(tauri::async_runtime::spawn_blocking(|| {
-        let node = npx().is_some();
-        Setups {
-            node,
-            opencode: setup("opencode", node),
-            claude: setup("claude", node),
-            gemini: setup("gemini", node),
-            codex: setup("codex", node),
-            antigravity: setup("antigravity", node),
-        }
+    Ok(tauri::async_runtime::spawn_blocking(|| Setups {
+        opencode: setup("opencode"),
+        claude: setup("claude"),
+        gemini: setup("gemini"),
+        codex: setup("codex"),
+        antigravity: setup("antigravity"),
     })
     .await?)
 }
@@ -580,139 +435,6 @@ pub async fn assistant_rule_reveal(kind: String, path: String) -> CmdResult<()> 
 }
 
 /// One download at a time, whichever window asks.
-static DOWNLOADING: LazyLock<tokio::sync::Mutex<()>> =
-    LazyLock::new(|| tokio::sync::Mutex::new(()));
-
-/// Settings ▸ Assistant: download Antigravity's connector from Google, once.
-/// Progress goes to `on_progress` as `{"received", "total"}` (bytes), then
-/// `"unpacking": true`. Both programs in it must be signed by Google, or
-/// nothing is kept. Returns the connector's path.
-#[tauri::command]
-pub async fn assistant_download(
-    kind: String,
-    on_progress: Channel<serde_json::Value>,
-) -> CmdResult<String> {
-    if kind != "antigravity" {
-        return Err(CmdError::Invalid(format!("{kind} isn't downloaded")));
-    }
-    let _one = DOWNLOADING.lock().await;
-    if let Some(p) = antigravity_program() {
-        return Ok(p.to_string_lossy().into_owned());
-    }
-    let dir = antigravity_dir()
-        .ok_or_else(|| CmdError::Unavailable("there's no folder to download it to".into()))?;
-    let parent = dir
-        .parent()
-        .expect("in the assistants folder")
-        .to_path_buf();
-    tokio::fs::create_dir_all(&parent).await?;
-    let zip = parent.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}.zip.part"));
-    let unpacked = parent.join(format!("antigravity-acp-{ANTIGRAVITY_ACP}.part"));
-    let fetched = fetch_and_unpack(&antigravity_download().0, &zip, &unpacked, &on_progress).await;
-    let _ = tokio::fs::remove_file(&zip).await;
-    if let Err(e) = fetched {
-        let _ = tokio::fs::remove_dir_all(&unpacked).await;
-        return Err(e);
-    }
-    let _ = tokio::fs::remove_dir_all(&dir).await;
-    tokio::fs::rename(&unpacked, &dir).await?;
-    // Other versions' copies won't run again.
-    if let Ok(mut entries) = tokio::fs::read_dir(&parent).await {
-        while let Ok(Some(e)) = entries.next_entry().await {
-            if e.file_name()
-                .to_string_lossy()
-                .starts_with("antigravity-acp-")
-                && e.path() != dir
-            {
-                let _ = tokio::fs::remove_dir_all(e.path()).await;
-            }
-        }
-    }
-    antigravity_program()
-        .map(|p| p.to_string_lossy().into_owned())
-        .ok_or_else(|| {
-            CmdError::Io("the download didn't have Antigravity's connector in it".into())
-        })
-}
-
-async fn fetch_and_unpack(
-    url: &str,
-    zip: &Path,
-    unpacked: &Path,
-    on_progress: &Channel<serde_json::Value>,
-) -> CmdResult<()> {
-    let res = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(30))
-        .build()?
-        .get(url)
-        .send()
-        .await?;
-    if !res.status().is_success() {
-        return Err(CmdError::Unavailable(format!(
-            "{url}: HTTP {}",
-            res.status()
-        )));
-    }
-    let total = res.content_length();
-    let mut file = tokio::fs::File::create(zip).await?;
-    let mut received = 0u64;
-    let mut said = Instant::now();
-    let mut body = res.bytes_stream();
-    while let Some(chunk) = body.next().await {
-        let chunk = chunk?;
-        file.write_all(&chunk).await?;
-        received += chunk.len() as u64;
-        if said.elapsed() >= Duration::from_millis(150) {
-            said = Instant::now();
-            let _ = on_progress.send(serde_json::json!({ "received": received, "total": total }));
-        }
-    }
-    file.flush().await?;
-    drop(file);
-    let _ = on_progress
-        .send(serde_json::json!({ "received": received, "total": total, "unpacking": true }));
-    let _ = tokio::fs::remove_dir_all(unpacked).await;
-    let unzipped = Command::new("/usr/bin/ditto")
-        .args(["-x", "-k"])
-        .arg(zip)
-        .arg(unpacked)
-        .status()
-        .await?;
-    if !unzipped.success() {
-        return Err(CmdError::Io("couldn't unpack the download".into()));
-    }
-    for name in ["agy_acp_server.par", "localharness_external"] {
-        if !signed_by_google(&unpacked.join(name)).await {
-            return Err(CmdError::Invalid(format!(
-                "{name} in the download isn't signed by Google, so it wasn't kept"
-            )));
-        }
-    }
-    Ok(())
-}
-
-/// Whether macOS finds a program intact and signed with Google's Developer ID.
-async fn signed_by_google(path: &Path) -> bool {
-    let intact = Command::new("/usr/bin/codesign")
-        .args(["--verify", "--strict"])
-        .arg(path)
-        .status()
-        .await
-        .is_ok_and(|s| s.success());
-    let team = format!("TeamIdentifier={GOOGLE_TEAM}");
-    let google = Command::new("/usr/bin/codesign")
-        .arg("-dv")
-        .arg(path)
-        .output()
-        .await
-        .is_ok_and(|o| {
-            String::from_utf8_lossy(&o.stderr)
-                .lines()
-                .any(|l| l.trim() == team)
-        });
-    intact && google
-}
-
 /// Settings for Codex's connector (codex-acp's `CODEX_CONFIG`, on top of the
 /// author's own config.toml). Codex offers its question tool
 /// (request_user_input, which the chat shows as its question panel) only in
@@ -730,7 +452,7 @@ fn codex_config(prompt_file: Option<&Path>) -> String {
 /// one (Codex, Gemini CLI). Written whole through a temporary file, so another
 /// window's program never reads half of it. None: it couldn't be written.
 fn write_prompt_file(text: &str) -> Option<PathBuf> {
-    let dir = assistants_dir().unwrap_or_else(std::env::temp_dir);
+    let dir = install::assistants_dir().unwrap_or_else(std::env::temp_dir);
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join("foreword-prompt.md");
     let tmp = dir.join(format!(".foreword-prompt-{}.md", uuid::Uuid::new_v4().simple()));
@@ -754,7 +476,12 @@ pub async fn acp_start(
     system: Option<String>,
 ) -> CmdResult<AcpInfo> {
     let root = state.root()?;
-    let (program, args) = launch(&kind)?;
+    let install::Launch {
+        program,
+        args,
+        env,
+        path,
+    } = install::launch(&kind)?;
     let mut guard = state.acp.lock().await;
     if let Some(mut old) = guard.take() {
         old.kill();
@@ -764,6 +491,8 @@ pub async fn acp_start(
         _ => None,
     };
     let mut command = Command::new(&program);
+    // The assistant's program for its connector (CLAUDE_CODE_EXECUTABLE, CODEX_PATH).
+    command.envs(env);
     if kind == "codex" {
         command.env("CODEX_CONFIG", codex_config(prompt_file.as_deref()));
     }
@@ -773,7 +502,7 @@ pub async fn acp_start(
     let mut child = command
         .args(&args)
         .current_dir(&root)
-        .env("PATH", discover::search_path())
+        .env("PATH", path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -950,27 +679,22 @@ mod tests {
     }
 
     #[test]
-    fn assistants_run_their_own_program_or_npx() {
-        assert!(launch("nobody").is_err());
+    fn signing_in_uses_the_program_in_use() {
         assert!(sign_in("nobody").is_none());
-        // Antigravity signs in over ACP, not in Terminal; its download is Google's, for this Mac.
+        // Antigravity signs in over ACP, not in Terminal.
         assert!(sign_in("antigravity").is_none());
-        let (url, bytes) = antigravity_download();
-        assert!(
-            url.starts_with(
-                "https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-1.4.1-darwin-"
-            ),
-            "{url}"
+        // Foreword's own copy is shown by its path, quoted where it has a space.
+        assert_eq!(
+            typed("/Users/a/Library/Application Support/x/claude"),
+            "'/Users/a/Library/Application Support/x/claude'"
         );
-        assert!(bytes > 100_000_000);
-        // The shown command never carries a path: it's what the author would type.
-        for kind in ["claude", "gemini", "codex"] {
+        assert_eq!(
+            typed("/opt/homebrew/bin/opencode"),
+            "/opt/homebrew/bin/opencode"
+        );
+        assert_eq!(typed("it's"), r"'it'\''s'");
+        for kind in ["claude", "gemini", "codex", "opencode"] {
             if let Some(s) = sign_in(kind) {
-                assert!(
-                    !s.shown.contains('/') || s.shown.starts_with("npx @"),
-                    "{}",
-                    s.shown
-                );
                 assert!(s.argv[0].starts_with('/'), "{:?}", s.argv);
             }
         }

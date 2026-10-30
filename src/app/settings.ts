@@ -13,16 +13,22 @@ export const ASSISTANT_NAMES: Record<AssistantId, string> = { opencode: 'OpenCod
 const ASSISTANT_MAKERS: Record<string, AssistantId> = { anthropic: 'claude', google: 'antigravity', agy: 'antigravity', openai: 'codex', chatgpt: 'codex' };
 
 /** How each assistant would run on this Mac, as far as choosing one needs (ipc's AssistantSetup). */
-type Setups = Record<AssistantId, { program: string | null; package: string | null; signedIn: boolean | null }>;
+type Setups = Record<AssistantId, { program: string | null; signedIn: boolean | null }>;
 
 /**
- * The assistant a first start begins with, since Foreword carries none: the
- * first one signed in, else the first installed and not signed out, else
- * OpenCode, whose page in Settings says how to install it.
+ * The assistant a first start begins with: the first one installed and signed
+ * in, else the first installed and not signed out, else the first signed in
+ * (its account is ready, and Foreword installs it), else OpenCode, which
+ * Foreword can install too.
  */
 export function firstAssistant(setups: Setups): AssistantId {
-  const runs = (id: AssistantId) => !!(setups[id].program || setups[id].package);
-  return ASSISTANTS.find((id) => setups[id].signedIn === true && runs(id)) ?? ASSISTANTS.find((id) => !!setups[id].program && setups[id].signedIn !== false) ?? 'opencode';
+  const installed = (id: AssistantId) => !!setups[id].program;
+  return (
+    ASSISTANTS.find((id) => installed(id) && setups[id].signedIn === true) ??
+    ASSISTANTS.find((id) => installed(id) && setups[id].signedIn !== false) ??
+    ASSISTANTS.find((id) => setups[id].signedIn === true) ??
+    'opencode'
+  );
 }
 
 /** The assistants a word could name, for /assistant: the start of an id or name ("claude", "gem", "open"), or the maker. */

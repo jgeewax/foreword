@@ -986,8 +986,20 @@ function Starter() {
   );
 }
 
+const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+
+/** Foreword installing its own copy of the assistant (install.rs), as the status line says it. */
+function installLine(p: { step?: string; received?: number; total?: number | null }): string {
+  if (p.step === 'checking') return 'checking it…';
+  const got = megabytes(p.received ?? 0);
+  return `${p.step === 'node' ? 'Node.js first: ' : ''}${got}${p.total ? ` of ${megabytes(p.total)}` : ''}`;
+}
+
 export function AgentPane() {
   const assistantName = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
+  const chosen = useStore(studio.store, (s) => s.settings.assistant);
+  const install = useStore(studio.store, (s) => (s.assistantDownload?.kind === s.settings.assistant ? s.assistantDownload : null));
+  const installing = !!install && !install.error;
   const agent = useStore(studio.store, (s) => s.agent);
   const asking = pendingQuestion(agent);
   const listRef = useRef<HTMLDivElement>(null);
@@ -1036,12 +1048,27 @@ export function AgentPane() {
                 </>
               ))}
             {agent.status === 'off' && 'The assistant is off.'}
-            {agent.status === 'error' && (
-              // Signed out, Settings says how to sign in (Sign in…).
-              <span className="bad" title={agent.signedOut ? agent.error : undefined}>
-                {agent.signedOut ? `${assistantName} isn’t signed in.` : `${assistantName}: ${agent.error}`}
-              </span>
-            )}
+            {agent.status === 'error' &&
+              (agent.notInstalled ? (
+                // Not on the Mac yet: Install puts Foreword's own copy in, from its maker's release.
+                installing ? (
+                  <>
+                    <ActivityGlyph phase="starting" />
+                    <span className="shimmer">
+                      Installing {assistantName}: {installLine(install)}
+                    </span>
+                  </>
+                ) : install?.error ? (
+                  <span className="bad selectable">Couldn’t install {assistantName}: {install.error}</span>
+                ) : (
+                  <span>{assistantName} isn’t installed yet.</span>
+                )
+              ) : (
+                // Signed out, Settings says how to sign in (Sign in…).
+                <span className="bad" title={agent.signedOut ? agent.error : undefined}>
+                  {agent.signedOut ? `${assistantName} isn’t signed in.` : `${assistantName}: ${agent.error}`}
+                </span>
+              ))}
             {agent.status === 'ready' && agent.connection === 'lost' && <span className="bad">Reconnecting to the assistant…</span>}
             <span className="spacer" />
             {agent.status === 'error' && agent.signedOut && (
@@ -1049,7 +1076,17 @@ export function AgentPane() {
                 Sign in…
               </button>
             )}
-            {agent.status === 'error' && (
+            {agent.status === 'error' && agent.notInstalled && !installing && (
+              <>
+                <button className="link" title="Settings ▸ Assistant: what it installs, or another assistant" onClick={() => studio.openSettings('assistant')}>
+                  Details…
+                </button>
+                <button className="link" onClick={() => void studio.installAssistant(chosen)}>
+                  {install?.error ? 'Try again' : 'Install'}
+                </button>
+              </>
+            )}
+            {agent.status === 'error' && !agent.notInstalled && (
               <button className="link" onClick={() => void studio.startAgent()}>
                 Retry
               </button>

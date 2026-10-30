@@ -282,7 +282,7 @@ function ToolRow({ label, name, tool, install, purpose }: { label: string; name:
   );
 }
 
-/** The chosen assistant and whether it can run here. Foreword carries none: Settings ▸ Assistant says what each needs. */
+/** The chosen assistant and whether it can run here: the author's own or Foreword's copy, or one to install (Settings ▸ Assistant). */
 function AssistantRow() {
   const chosen = useStore(studio.store, (s) => s.settings.assistant);
   const version = useStore(studio.store, (s) => s.tools?.opencode.version ?? null);
@@ -296,7 +296,21 @@ function AssistantRow() {
   }, []);
   if (!setups) return <li className="muted">Writing assistant: checking…</li>;
   const name = ASSISTANT_NAMES[chosen];
-  const { tone, text } = cardStatus(chosen, null, setups[chosen], null, chosen === 'opencode' ? version : null);
+  const setup = setups[chosen];
+  const settings = (
+    <button className="link" onClick={() => studio.openSettings('assistant')}>
+      Settings ▸ Assistant
+    </button>
+  );
+  // Not on the Mac yet: Foreword installs its own copy, from Settings or the chat.
+  if (setup.install) {
+    return (
+      <li className="missing">
+        <span className="muted">○</span> Writing assistant · {name}: not installed yet. Install Foreword’s own copy, or choose another, in {settings}.
+      </li>
+    );
+  }
+  const { tone, text } = cardStatus(chosen, null, setup, null, chosen === 'opencode' ? version : null);
   if (tone === 'ok' || tone === 'off') {
     return (
       <li>
@@ -304,23 +318,9 @@ function AssistantRow() {
       </li>
     );
   }
-  const settings = (
-    <button className="link" onClick={() => studio.openSettings('assistant')}>
-      Settings ▸ Assistant
-    </button>
-  );
   return (
     <li className="missing">
-      <span className="bad">✕</span> Writing assistant · {name}: {text[0].toLowerCase() + text.slice(1)}.{' '}
-      {chosen === 'opencode' && !setups.opencode.program ? (
-        <>
-          Install it in Terminal with <code className="selectable">brew install opencode</code>, or choose another in {settings}.
-        </>
-      ) : setups[chosen].signedIn === false ? (
-        <>{settings} signs you in.</>
-      ) : (
-        <>{settings} says what it needs.</>
-      )}
+      <span className="bad">✕</span> Writing assistant · {name}: {text[0].toLowerCase() + text.slice(1)}. {setup.signedIn === false ? <>{settings} signs you in.</> : <>{settings} says what it needs.</>}
     </li>
   );
 }

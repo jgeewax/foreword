@@ -164,14 +164,14 @@ Or start from a template made for your kind of book, or have it drafted from the
 
 ## Bring the AI you already use
 
-The assistant is a program on your Mac, signed in with your own account, so there's no new subscription. Pick one in **Settings ▸ Assistant**, or from the chat, beside the model.
+The assistant is a program on your Mac, signed in with your own account, so there's no new subscription. Pick one in **Settings ▸ Assistant**, or from the chat, beside the model. If you already have it, Foreword uses yours. If you don't, **Install** puts in Foreword's own copy, from the maker's own release (OpenCode's on GitHub, Anthropic's, OpenAI's and Google's packages on npm, Google's servers for Antigravity), in Foreword's own folder: nothing else on your Mac changes, and nothing you installed yourself is touched.
 
 | Assistant | From | Runs on | How Foreword talks to it |
 | :-- | :-- | :-- | :-- |
 | **OpenCode** | Open source | Any model you've set up in it: OpenAI, Anthropic, Google, or one on your Mac | Its own server |
 | **Claude Code** | Anthropic | Your Claude plan or an API key | Agent Client Protocol |
 | **Codex** | OpenAI | Your ChatGPT plan or an API key | Agent Client Protocol |
-| **Antigravity** | Google | Your Google account, a Gemini API key or Gemini Enterprise | Agent Client Protocol, through Google's connector (Settings downloads it) |
+| **Antigravity** | Google | Your Google account, a Gemini API key or Gemini Enterprise | Agent Client Protocol, through Google's connector |
 | **Gemini CLI** | Google | A paid Gemini API key or a Gemini Code Assist work account | Agent Client Protocol |
 
 Each conversation is its own task, and several can run at once. Switch assistants halfway through one and the chat carries on, as it does when you change model; the Tasks view in the sidebar shows which need you, which are at work, and what each one changed. Choose the model, and how hard it thinks (Claude Code's effort, Codex's reasoning effort, an OpenCode model's variants), beside the message box, and each mode keeps its own: Discuss with one, Write with another. Or just ask: *"switch me to Claude Code with its default model"*, *"make the text bigger"*, and the assistant changes Foreword's settings itself, asking you first if you'd like it to (it can never change its own permissions). Settings ▸ Assistant says what each one needs on your Mac and signs you in.
@@ -192,7 +192,7 @@ Each conversation is its own task, and several can run at once. Switch assistant
 
 ## Download
 
-**[Download Foreword for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/foreword/releases). Open it and drag Foreword to Applications. It carries Tinymist, so the preview needs nothing else installed. It doesn't carry an assistant: install the one you want (OpenCode, Claude Code, Codex or Gemini CLI), or pick Antigravity, which Settings downloads for you, and Settings ▸ Assistant says what each needs. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
+**[Download Foreword for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** (Apple Silicon, macOS 13 or later), or pick a version from the [releases](https://github.com/jgeewax/foreword/releases). Open it and drag Foreword to Applications. It carries Tinymist, so the preview needs nothing else installed. It doesn't carry an assistant: it uses the one you have, or installs its own copy of the one you pick, from the maker's own release, when you click Install. To build one from any branch, run **Actions ▸ Release build ▸ Run workflow**; the DMG is kept with the run.
 
 The app isn't notarized yet, so the first time macOS may ask: open System Settings ▸ Privacy & Security and click **Open Anyway**. A copy fetched with `gh release download` opens without asking.
 
@@ -213,7 +213,7 @@ npm install
 npm run app
 ```
 
-Then choose **New Book**, or open one of the samples. For the assistant, install one of OpenCode, Claude Code, Codex or Gemini CLI and sign in once (`brew install opencode` is the quickest), or pick Antigravity, which Settings downloads for you.
+Then choose **New Book**, or open one of the samples. For the assistant, Foreword uses your own OpenCode, Claude Code, Codex or Gemini CLI if you have one; otherwise pick one in Settings ▸ Assistant and click Install, then sign in once.
 
 ## Working on it
 

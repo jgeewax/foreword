@@ -2,12 +2,13 @@
 //! (/usr/bin:/bin:/usr/sbin:/sbin), so well-known install locations are added
 //! both for lookup and for the PATH handed to child processes.
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
     ffi::OsString,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::{LazyLock, Mutex},
     time::{Duration, Instant},
 };
 
@@ -131,9 +132,14 @@ impl Tool {
             .find(|t| t.key() == key)
     }
 
-    /// Found without the settings: the first of its copies.
+    /// Found without the settings: the first of its copies that can run
+    /// (an OpenCode older than 2.x speaks an API Foreword doesn't).
     fn automatic(self) -> Option<PathBuf> {
-        copies(self).into_iter().next().map(|c| c.0)
+        let usable = |p: &PathBuf| match self {
+            Tool::OpenCode => version_of(p).is_some_and(|v| v.starts_with("2.")),
+            _ => true,
+        };
+        copies(self).into_iter().map(|c| c.0).find(usable)
     }
 }
 
@@ -213,6 +219,10 @@ fn bundled(name: &str) -> Vec<(PathBuf, String)> {
 /// Every copy of `tool` on this Mac, each once, in the order the automatic
 /// choice takes them: `$ENV_VAR`, the search path, then other known places.
 pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
+    // Self-tests (FOREWORD_ONLY_OURS): as on a Mac with no OpenCode of the author's.
+    if matches!(tool, Tool::OpenCode) && crate::install::only_ours() {
+        return crate::install::opencode_copy().into_iter().collect();
+    }
     let mut all = vec![];
     if let Some(p) = env::var_os(tool.env_var()).map(PathBuf::from)
         && is_executable(&p)
@@ -250,8 +260,8 @@ pub fn copies(tool: Tool) -> Vec<(PathBuf, String)> {
                 }
             }
         }
-        // The author's own: the app doesn't carry one.
-        Tool::OpenCode => {}
+        // The author's own first; then Foreword's, if it installed one (install.rs).
+        Tool::OpenCode => all.extend(crate::install::opencode_copy()),
     }
     let mut seen = HashSet::new();
     all.retain(|(p, _)| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())));
@@ -362,11 +372,23 @@ pub fn output(bin: &Path, args: &[&str]) -> Option<String> {
     ))
 }
 
-fn version_of(bin: &Path) -> Option<String> {
-    version_output(bin)
+/// A program's version, as `--version` says. Kept for each file as it is (its
+/// path, size and time), since choosing an assistant's program asks often.
+pub fn version_of(bin: &Path) -> Option<String> {
+    type Key = (PathBuf, u64, Option<std::time::SystemTime>);
+    static SEEN: LazyLock<Mutex<HashMap<Key, Option<String>>>> = LazyLock::new(Default::default);
+    let real = bin.canonicalize().ok()?;
+    let meta = real.metadata().ok()?;
+    let key = (real.clone(), meta.len(), meta.modified().ok());
+    if let Some(v) = SEEN.lock().ok()?.get(&key) {
+        return v.clone();
+    }
+    let version = version_output(bin)
         .and_then(|text| clean_version(&text))
         // Homebrew's tinymist doesn't know its own version; its Cellar path does.
-        .or_else(|| bin.canonicalize().ok().and_then(|p| cellar_version(&p)))
+        .or_else(|| cellar_version(&real));
+    SEEN.lock().ok()?.insert(key, version.clone());
+    version
 }
 
 /// "0.15.8" from `--version` output: tinymist prints a block with

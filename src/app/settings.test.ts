@@ -173,22 +173,26 @@ describe('assistantsFor', () => {
 });
 
 describe('firstAssistant', () => {
-  const none = { program: null, package: null, signedIn: null };
+  const none = { program: null, signedIn: null };
   const setups = (over: Partial<Parameters<typeof firstAssistant>[0]> = {}) => ({ opencode: none, claude: none, gemini: none, codex: none, antigravity: none, ...over });
+  const at = (program: string, signedIn: boolean | null = null) => ({ program, signedIn });
 
-  it('starts with one that’s signed in, over one only installed', () => {
-    const installed = { program: '/opt/homebrew/bin/opencode', package: null, signedIn: null };
-    expect(firstAssistant(setups({ opencode: installed, codex: { program: null, package: 'codex-acp', signedIn: true } }))).toBe('codex');
-    expect(firstAssistant(setups({ claude: { program: '/usr/local/bin/claude', package: null, signedIn: true }, codex: { program: null, package: 'codex-acp', signedIn: true } }))).toBe('claude');
-    expect(firstAssistant(setups({ opencode: installed }))).toBe('opencode');
+  it('starts with one installed and signed in, over one only installed', () => {
+    expect(firstAssistant(setups({ opencode: at('/opt/homebrew/bin/opencode'), codex: at('/usr/local/bin/codex', true) }))).toBe('codex');
+    expect(firstAssistant(setups({ claude: at('/Users/a/.local/bin/claude', true), codex: at('/usr/local/bin/codex', true) }))).toBe('claude');
+    expect(firstAssistant(setups({ opencode: at('/opt/homebrew/bin/opencode') }))).toBe('opencode');
   });
 
-  it('passes over one signed in that can’t run, or installed and signed out', () => {
-    expect(firstAssistant(setups({ codex: { program: null, package: null, signedIn: true }, gemini: { program: '/opt/homebrew/bin/gemini', package: null, signedIn: null } }))).toBe('gemini');
-    expect(firstAssistant(setups({ claude: { program: '/usr/local/bin/claude', package: null, signedIn: false } }))).toBe('opencode');
+  it('passes over one installed and signed out', () => {
+    expect(firstAssistant(setups({ claude: at('/Users/a/.local/bin/claude', false), gemini: at('/opt/homebrew/bin/gemini') }))).toBe('gemini');
   });
 
-  it('is OpenCode, whose Settings say how to install it, with none on the Mac', () => {
+  it('takes one signed in but not installed, which Foreword installs, before OpenCode', () => {
+    expect(firstAssistant(setups({ codex: { program: null, signedIn: true } }))).toBe('codex');
+    expect(firstAssistant(setups({ claude: at('/Users/a/.local/bin/claude', false) }))).toBe('opencode');
+  });
+
+  it('is OpenCode, which Foreword can install, with none on the Mac', () => {
     expect(firstAssistant(setups())).toBe('opencode');
   });
 });

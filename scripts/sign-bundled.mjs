@@ -6,7 +6,7 @@
 //
 // It's signed with the hardened runtime and a secure timestamp, as notarizing
 // requires, then run once, to be sure it still starts. The assistants aren't
-// in the app: each person installs their own.
+// in the app: Foreword installs its own copy of one when asked (install.rs).
 //
 // Usage: node scripts/sign-bundled.mjs "Developer ID Application: Name (TEAMID)"
 //        node scripts/sign-bundled.mjs -     (ad hoc: to try the hardened runtime on this Mac)

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { studio, type StudioState } from '../app/studio';
 import { ASSISTANT_NAMES, ASSISTANTS, type AssistantId } from '../app/settings';
-import { errorMessage, ipc, type AssistantSetup, type AssistantsSetup, type ToolInfo } from '../lib/ipc';
+import { errorMessage, ipc, type AssistantSetup, type AssistantsSetup, type InstallPlan, type ToolInfo } from '../lib/ipc';
 import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
@@ -47,17 +47,17 @@ export type Tone = 'ok' | 'busy' | 'warn' | 'bad' | 'off';
 type Agent = StudioState['agent'];
 
 /** Where the chosen assistant is. */
-export type Now = 'no-book' | 'starting' | 'signing-in' | 'running' | 'signed-out' | 'no-node' | 'not-installed' | 'failed' | 'off';
+export type Now = 'no-book' | 'starting' | 'installing' | 'signing-in' | 'running' | 'signed-out' | 'not-installed' | 'failed' | 'off';
 
-export function nowOf(id: AssistantId, agent: Agent, setup: AssistantSetup | undefined, hasBook: boolean): Now {
-  if (!hasBook) return 'no-book';
+export function nowOf(_id: AssistantId, agent: Agent, setup: AssistantSetup | undefined, hasBook: boolean, installing = false): Now {
+  if (installing) return 'installing';
+  if (!hasBook) return setup?.install ? 'not-installed' : 'no-book';
   if (agent.status === 'starting') return agent.signingIn ? 'signing-in' : 'starting';
   if (agent.status === 'ready') return 'running';
+  // Not on the Mac yet: Foreword installs its own copy.
+  if (agent.notInstalled || setup?.install) return 'not-installed';
   if (agent.status !== 'error') return 'off';
   if (agent.signedOut) return 'signed-out';
-  // OpenCode isn't installed, or Antigravity's connector isn't downloaded.
-  if (setup && (id === 'opencode' || id === 'antigravity') && !setup.program) return 'not-installed';
-  if (setup && id !== 'opencode' && !setup.program && !setup.package) return 'no-node';
   return 'failed';
 }
 
@@ -65,35 +65,44 @@ const ARROWS: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft:
 
 const signedInWith = (s: AssistantSetup) => (s.account ? `Signed in with ${s.account}` : 'Signed in');
 
+/** Where Foreword's own copy of each comes from (install.rs): always the maker's own release. */
+export const FROM: Record<AssistantId, string> = {
+  opencode: 'OpenCode’s own release, from GitHub',
+  claude: 'Anthropic’s Claude Code with the connector editors use, from npm',
+  codex: 'OpenAI’s Codex with the connector editors use, from npm',
+  gemini: 'Google’s Gemini CLI, from npm',
+  antigravity: 'Google’s connector for editors, from dl.google.com',
+};
+const SOURCE: Record<InstallPlan['source'], string> = { github: 'from GitHub', npm: 'from npm', google: 'from Google' };
+
 /** A card's status line: how the chosen one is now; for the others, how they'd run. */
-export function cardStatus(id: AssistantId, now: Now | null, setup: AssistantSetup | undefined, model: string | null, version: string | null): { tone: Tone; text: string } {
+export function cardStatus(_id: AssistantId, now: Now | null, setup: AssistantSetup | undefined, model: string | null, version: string | null): { tone: Tone; text: string } {
   switch (now) {
     case 'no-book':
       return { tone: 'off', text: 'Starts when you open a book' };
     case 'starting':
       return { tone: 'busy', text: 'Starting…' };
+    case 'installing':
+      return { tone: 'busy', text: 'Installing…' };
     case 'signing-in':
       return { tone: 'busy', text: 'Signing in, in your browser…' };
     case 'running':
       return { tone: 'ok', text: model ? `Running · ${model}` : 'Running' };
     case 'signed-out':
       return { tone: 'warn', text: 'Not signed in' };
-    case 'no-node':
-      return { tone: 'bad', text: 'Needs Node.js' };
     case 'not-installed':
-      return id === 'antigravity' ? { tone: 'warn', text: 'Not downloaded yet' } : { tone: 'bad', text: 'Not installed' };
+      return { tone: 'warn', text: setup?.install?.update ? 'Update to install' : 'Not installed' };
     case 'failed':
       return { tone: 'bad', text: 'Didn’t start' };
     case 'off':
       return { tone: 'off', text: 'Off' };
   }
   if (!setup) return { tone: 'off', text: 'Looking…' };
-  if (id === 'opencode') return setup.program ? { tone: 'off', text: version ? `Installed · ${version}` : 'Installed' } : { tone: 'warn', text: 'Not installed' };
-  if (id === 'antigravity' && !setup.program) return { tone: 'off', text: setup.download ? `Downloads from Google · ${megabytes(setup.download.bytes)}` : 'Downloads from Google' };
-  if (!setup.program && !setup.package) return { tone: 'bad', text: 'Needs Node.js' };
+  if (setup.install) return { tone: 'off', text: `Not installed · ${megabytes(setup.install.bytes)} ${SOURCE[setup.install.source]}` };
   if (setup.signedIn === false) return { tone: 'warn', text: 'Not signed in' };
   if (setup.signedIn) return { tone: 'ok', text: signedInWith(setup) };
-  return { tone: 'off', text: setup.program ? 'Installed' : 'Downloads the first time' };
+  const v = setup.version ?? version;
+  return { tone: 'off', text: v ? `Installed · ${v}` : 'Installed' };
 }
 
 /** A command to type in Terminal, with Copy. */
@@ -144,7 +153,8 @@ export function AssistantPage() {
   }, [refresh, waiting]);
 
   const setup = setups?.[chosen];
-  const now = nowOf(chosen, agent, setup, hasBook);
+  const installing = download?.kind === chosen && !download.error;
+  const now = nowOf(chosen, agent, setup, hasBook, installing);
   const current = agent.model ? agent.models.find((m) => m.providerID === agent.model?.providerID && m.id === agent.model?.id) : undefined;
   const modelName = current?.name ?? agent.model?.id ?? null;
   const name = ASSISTANT_NAMES[chosen];
@@ -169,22 +179,22 @@ export function AssistantPage() {
   const headline: Record<Now, string> = {
     'no-book': `${name} starts when you open a book.`,
     starting: `Starting ${name}…`,
+    installing: `Installing ${name}…`,
     'signing-in': 'Sign in with Google, in your browser.',
     running: `${name} is running.`,
     'signed-out': `${name} isn’t signed in.`,
-    'no-node': `${name} needs Node.js.`,
-    'not-installed': chosen === 'antigravity' ? 'Antigravity isn’t downloaded yet.' : 'OpenCode isn’t installed.',
+    'not-installed': setup?.install?.update ? `${name} has an update to install.` : `${name} isn’t installed yet.`,
     failed: `${name} didn’t start.`,
     off: `${name} is off.`,
   };
   const tone: Record<Now, Tone> = {
     'no-book': 'off',
     starting: 'busy',
+    installing: 'busy',
     'signing-in': 'busy',
     running: 'ok',
     'signed-out': 'warn',
-    'no-node': 'bad',
-    'not-installed': chosen === 'antigravity' ? 'warn' : 'bad',
+    'not-installed': 'warn',
     failed: 'bad',
     off: 'off',
   };
@@ -234,16 +244,13 @@ export function AssistantPage() {
             <span className="assistant-dot" />
             <span className="assistant-now-title">{headline[now]}</span>
             <span className="spacer" />
-            {hasBook && now !== 'starting' && now !== 'signing-in' && (
+            {hasBook && now !== 'starting' && now !== 'signing-in' && now !== 'installing' && now !== 'not-installed' && (
               <button className="small assistant-restart" onClick={() => void studio.restartAgent()}>
                 <Icon name="refresh" size={12} /> Start again
               </button>
             )}
           </div>
 
-          {now === 'starting' && setup && chosen !== 'opencode' && !setup.program && setup.package && (
-            <p className="assistant-now-note">The first start downloads it, which can take a minute.</p>
-          )}
           {now === 'signing-in' && (
             <div className="assistant-fix">
               <p>Your browser has opened Google’s sign-in page. Sign in there, and Antigravity starts. It keeps the login, so this is once.</p>
@@ -294,21 +301,7 @@ export function AssistantPage() {
               )}
             </div>
           )}
-          {now === 'no-node' && (
-            <div className="assistant-fix">
-              <p>
-                Its connector runs on Node.js, which isn’t installed. In Terminal: <Command text="brew install node" />, then Start again.
-              </p>
-            </div>
-          )}
-          {now === 'not-installed' && chosen === 'antigravity' && <ConnectorDownload setup={setup} download={download?.kind === 'antigravity' ? download : null} />}
-          {now === 'not-installed' && chosen === 'opencode' && (
-            <div className="assistant-fix">
-              <p>
-                In Terminal: <Command text="brew install opencode" />, then Start again. Or choose a copy you have, under Program below.
-              </p>
-            </div>
-          )}
+          {(now === 'not-installed' || now === 'installing') && <InstallPanel id={chosen} setup={setup} download={download?.kind === chosen ? download : null} />}
           {now === 'failed' && agent.error && <p className="assistant-error selectable">{agent.error}</p>}
 
           <div className="assistant-rows">
@@ -370,62 +363,48 @@ export function AssistantPage() {
   );
 }
 
-/** The program that runs it: OpenCode's, to choose (as Tinymist's and Git's in Tools); the others' installed, run by npx, or missing. */
+/** The program that runs it: OpenCode's, to choose (as Tinymist's and Git's in Tools); the others', the author's own or Foreword's copy. */
 function ProgramRow({ id, setup, opencode }: { id: AssistantId; setup: AssistantSetup | undefined; opencode: ToolInfo | undefined }) {
   if (id === 'opencode') {
     return (
       <>
         <div className="assistant-tool">
-          <ToolPicker tool="opencode" label="OpenCode" info={opencode} install="brew install opencode" notInstalled={null} />
+          <ToolPicker tool="opencode" label="OpenCode" info={opencode} install="" notInstalled={null} />
         </div>
-        <span className="assistant-row-help">Choose another and OpenCode starts again with it.</span>
+        <span className="assistant-row-help">Yours if you have OpenCode 2, otherwise Foreword’s own copy. Choose another and OpenCode starts again with it.</span>
       </>
     );
   }
   if (!setup) return <span className="muted">Looking…</span>;
-  if (id === 'antigravity') {
-    return setup.program ? (
-      <>
-        <span className="assistant-program">
-          <span>Google’s connector{setup.download ? `, ${setup.download.version}` : ''}</span>
-          <code className="selectable">{tildePath(setup.program)}</code>
-        </span>
-        <span className="assistant-row-help">
-          Downloaded from Google; Foreword talks to it over the Agent Client Protocol. Using it, you agree to <TermsLink />.
-        </span>
-      </>
-    ) : (
-      <>
-        <span>Not downloaded yet</span>
-        <span className="assistant-row-help">Google’s connector for editors{setup.download ? `, ${megabytes(setup.download.bytes)} from dl.google.com` : ''}. It needs nothing else installed.</span>
-      </>
-    );
-  }
-  if (setup.program) {
+  if (!setup.program) {
     return (
       <>
-        <span className="assistant-program">
-          <span>Installed</span>
-          <code className="selectable">{tildePath(setup.program)}</code>
-        </span>
-        <span className="assistant-row-help">Foreword talks to it over the Agent Client Protocol.</span>
-      </>
-    );
-  }
-  if (setup.package) {
-    return (
-      <>
-        <span className="assistant-program">
-          <span>Run by Node.js</span>
-          <code className="selectable">npx {setup.package}</code>
-        </span>
+        <span>Not installed yet</span>
         <span className="assistant-row-help">
-          {id === 'gemini' ? 'It isn’t installed' : 'Its connector isn’t installed'}, so the first start downloads it. Foreword talks to it over the Agent Client Protocol.
+          Foreword installs its own copy: {FROM[id]}
+          {setup.install ? `, about ${megabytes(setup.install.bytes)}` : ''}.
         </span>
       </>
     );
   }
-  return <span className="bad">Needs Node.js, which isn’t installed</span>;
+  const version = setup.version ? `, ${setup.version}` : '';
+  return (
+    <>
+      <span className="assistant-program">
+        <span>{setup.ours ? `Foreword’s copy${version}` : `Yours${version}`}</span>
+        <code className="selectable">{tildePath(setup.program)}</code>
+      </span>
+      <span className="assistant-row-help">
+        {setup.ours ? `Installed by Foreword in its own folder: ${FROM[id]}.` : `Your own ${ASSISTANT_NAMES[id]}${id === 'claude' || id === 'codex' ? ', with Foreword’s copy of the connector editors use' : ''}.`} Foreword talks to it over the Agent Client Protocol.
+        {id === 'antigravity' && (
+          <>
+            {' '}
+            Using it, you agree to <TermsLink />.
+          </>
+        )}
+      </span>
+    </>
+  );
 }
 
 function TermsLink() {
@@ -437,33 +416,50 @@ function TermsLink() {
 }
 
 /**
- * Antigravity's connector isn't on npm: it's downloaded from Google, once, and
- * kept only if Google signed it. The download is the studio's, so it carries
- * on with Settings closed; Antigravity starts when it's done.
+ * Foreword's own copy of an assistant, installed when the author asks: what
+ * it is, where it comes from and how big; then its progress. The install is
+ * the studio's, so it carries on with Settings closed; the assistant starts
+ * when it's done.
  */
-function ConnectorDownload({ setup, download }: { setup: AssistantSetup | undefined; download: StudioState['assistantDownload'] }) {
-  const size = setup?.download ? megabytes(setup.download.bytes) : null;
+export function InstallPanel({ id, setup, download }: { id: AssistantId; setup: AssistantSetup | undefined; download: StudioState['assistantDownload'] }) {
+  const plan = setup?.install;
+  const name = ASSISTANT_NAMES[id];
   const working = !!download && !download.error;
-  const total = download?.total ?? setup?.download?.bytes ?? 0;
+  const total = download?.total ?? plan?.bytes ?? 0;
   const pct = working && total ? Math.min(100, Math.round(((download.received ?? 0) / total) * 100)) : 0;
+  const checking = download?.step === 'checking';
+  const program = id === 'claude' ? 'Claude Code' : 'Codex';
   return (
     <div className="assistant-fix">
-      <p>Foreword talks to Antigravity through Google’s connector for editors. Download it once from Google{size ? `, ${size}` : ''}; it needs nothing else installed.</p>
+      <p>
+        {plan?.update ? `This release of Foreword uses a newer ${name}. ` : ''}Foreword installs its own copy of {name}: {FROM[id]}
+        {plan ? `, about ${megabytes(plan.bytes)}` : ''}. It goes in Foreword’s own folder, and nothing else on your Mac changes.
+        {plan?.yours && ` It runs your own ${program} (${tildePath(plan.yours)}), so it doesn’t download another.`}
+        {plan?.node && ' Node.js, which runs its connector, comes too, from nodejs.org.'}
+      </p>
       {working ? (
-        <div className="download-progress" role="progressbar" aria-label="Downloading Antigravity’s connector" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+        <div className="download-progress" role="progressbar" aria-label={`Installing ${name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <span className="download-bar">
-            <span className={download.unpacking ? 'checking' : ''} style={{ width: `${download.unpacking ? 100 : pct}%` }} />
+            <span className={checking ? 'checking' : ''} style={{ width: `${checking ? 100 : pct}%` }} />
           </span>
-          <span className="download-text">{download.unpacking ? 'Checking Google’s signature…' : `${megabytes(download.received ?? 0)}${size ? ` of ${size}` : ''}`}</span>
+          <span className="download-text">
+            {checking
+              ? id === 'antigravity'
+                ? 'Checking Google’s signature…'
+                : 'Checking it…'
+              : `${download.step === 'node' ? 'Node.js: ' : ''}${megabytes(download.received ?? 0)}${total ? ` of ${download.step === 'node' ? '' : 'about '}${megabytes(total)}` : ''}`}
+          </span>
         </div>
       ) : (
         <div className="assistant-fix-actions">
-          <button className="primary" onClick={() => void studio.downloadAssistant('antigravity')}>
-            <Icon name="pull" size={14} /> Download from Google
+          <button className="primary" onClick={() => void studio.installAssistant(id)}>
+            <Icon name="pull" size={14} /> {plan?.update ? `Update ${name}` : `Install ${name}`}
           </button>
-          <span className="muted">
-            Using it, you agree to <TermsLink />.
-          </span>
+          {id === 'antigravity' && (
+            <span className="muted">
+              Using it, you agree to <TermsLink />.
+            </span>
+          )}
         </div>
       )}
       {download?.error && <p className="assistant-error selectable">{download.error}</p>}

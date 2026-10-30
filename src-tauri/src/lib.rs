@@ -11,6 +11,7 @@ mod export;
 mod files;
 mod git;
 mod history;
+mod install;
 mod logs;
 mod lsp;
 mod mcp;
@@ -528,7 +529,7 @@ pub fn run() {
         .manage(proof::ProofState::default())
         .setup(|app| {
             children::init(app.path().app_data_dir()?);
-            acp::init(app.path().app_data_dir()?);
+            install::init(app.path().app_data_dir()?);
 
             // SIGTERM/SIGINT/SIGHUP (kill, Ctrl+C on `tauri dev`, logout) go through
             // the normal exit path so helper processes are stopped too.
@@ -635,7 +636,8 @@ pub fn run() {
             acp::assistant_rule_files,
             acp::assistant_rule_reveal,
             acp::assistant_sign_in,
-            acp::assistant_download,
+            install::assistant_install,
+            install::assistant_plan,
             mcp::mcp_serve,
             epub::epub_html,
             epub::epub_pages,

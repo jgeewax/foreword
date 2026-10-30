@@ -5,9 +5,9 @@
 # tauri.conf.json (v0.1.0) for a GitHub Release with the DMG attached.
 #
 # The app carries Tinymist (scripts/bundle-tinymist.mjs), so the preview
-# needs nothing else on a Mac. It carries no assistant: each person installs
-# their own (OpenCode, Claude Code, Codex, Gemini CLI), or Settings downloads
-# Antigravity's connector.
+# needs nothing else on a Mac. It carries no assistant: it uses the author's
+# own, or installs its own copy from the maker's release when asked
+# (src-tauri/src/install.rs).
 #
 # A release is also an update: the app checks the latest release's
 # latest.json (tauri.conf.json's plugins.updater), and installs the update

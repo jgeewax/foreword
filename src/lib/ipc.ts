@@ -2,12 +2,15 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type { PdfInfo } from '../print';
 
-export type CmdErrorKind = 'conflict' | 'notFound' | 'invalid' | 'unavailable' | 'io';
+export type CmdErrorKind = 'conflict' | 'notFound' | 'invalid' | 'unavailable' | 'notInstalled' | 'io';
 export type CmdError = { kind: CmdErrorKind; message: string };
 
 export function isCmdError(e: unknown): e is CmdError {
   return typeof e === 'object' && e !== null && 'kind' in e && 'message' in e;
 }
+
+/** An assistant that isn't on the Mac yet, which Foreword can install (install.rs). */
+export const isNotInstalled = (e: unknown) => isCmdError(e) && e.kind === 'notInstalled';
 
 export function errorMessage(e: unknown): string {
   if (isCmdError(e)) return e.message;
@@ -75,22 +78,37 @@ export type ToolCopy = { path: string; version: string | null; source: string };
 /** What a typed or pasted path for a tool holds: its version, or why it can't be used. */
 export type ToolProbe = { path: string; version: string | null; problem: string | null };
 export type ToolsStatus = { tinymist: ToolInfo; opencode: ToolInfo; git: ToolInfo };
+/** What installing an assistant would fetch (install.rs Plan), shown before it's asked for. */
+export type InstallPlan = {
+  /** Where from: OpenCode's GitHub releases, npm, or Google's servers (Antigravity). */
+  source: 'github' | 'npm' | 'google';
+  version: string;
+  /** About how much it downloads, Node.js included. */
+  bytes: number;
+  /** Node.js comes too: the Mac has none new enough. */
+  node: boolean;
+  /** The author's own program it runs, in place of the one in the connector. */
+  yours: string | null;
+  /** Foreword has an older copy of its own: this replaces it (an update, done without asking). */
+  update: boolean;
+};
 /** How an assistant would run on this Mac (Settings ▸ Assistant). */
 export type AssistantSetup = {
-  /** Its own program, if it's installed (for OpenCode, the copy in use). */
+  /** Its own program in use, if it can run: the author's, or Foreword's copy (for OpenCode, the copy in use). */
   program: string | null;
-  /** Otherwise the npm package npx runs, downloaded the first time; null without Node.js. */
-  package: string | null;
-  /** What signs in to it, typed in Terminal; null: nothing can run it. */
+  /** `program` is Foreword's own copy, not the author's. */
+  ours: boolean;
+  version: string | null;
+  /** What installing it would fetch, while it can't run. */
+  install: InstallPlan | null;
+  /** What signs in to it, typed in Terminal; null: it isn't installed yet. */
   signIn: string | null;
   /** Signed in, where that can be told without starting it (null: unknown). */
   signedIn: boolean | null;
   /** The account in words: "Claude Max", "ChatGPT", "an API key". */
   account: string | null;
-  /** What Settings downloads to run it: Antigravity's connector, from Google. */
-  download: { url: string; bytes: number; version: string } | null;
 };
-export type AssistantsSetup = { node: boolean; opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup; antigravity: AssistantSetup };
+export type AssistantsSetup = { opencode: AssistantSetup; claude: AssistantSetup; gemini: AssistantSetup; codex: AssistantSetup; antigravity: AssistantSetup };
 /** Foreword's own update, the same in every window (updater.rs). */
 export type UpdateState = {
   status: 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'restarting' | 'error';
@@ -112,8 +130,8 @@ export type UpdateState = {
   /** When the last check finished (ms). */
   checkedAt: number | null;
 };
-/** A download's progress, in bytes; `unpacking` once it's all here. */
-export type DownloadProgress = { received: number; total: number | null; unpacking?: boolean };
+/** An install's progress (install.rs): Node.js first if it's needed, then the assistant, then checking it. */
+export type DownloadProgress = { step?: 'node' | 'download' | 'checking'; received: number; total: number | null };
 export type LaunchOptions = {
   workspace: string | null;
   sampleBook: string | null;
@@ -297,7 +315,8 @@ export const ipc = {
   updateInstallOnQuit: () => invoke<UpdateState>('update_install_on_quit'),
   updateCancelOnQuit: () => invoke<UpdateState>('update_cancel_on_quit'),
   /** Download an assistant's connector (Antigravity's, from Google): progress on `onProgress`; the program's path. */
-  assistantDownload: (kind: string, onProgress: Channel<DownloadProgress>) => invoke<string>('assistant_download', { kind, onProgress }),
+  assistantInstall: (kind: string, onProgress: Channel<DownloadProgress>) => invoke<void>('assistant_install', { kind, onProgress }),
+  assistantPlan: (kind: string) => invoke<InstallPlan | null>('assistant_plan', { kind }),
 
   historyInit: (exclude: string[]) => invoke<{ gitDir: string; git: string }>('history_init', { exclude }),
   historyReveal: () => invoke<void>('history_reveal'),

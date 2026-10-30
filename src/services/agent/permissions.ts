@@ -183,6 +183,9 @@ export function sessionRules(p: AgentPermissions, readOnly = false, extra: reado
     // servers in code mode; Foreword's own are plain tools). Denied, the tool and its catalog
     // leave the prompt: 8,700 of its 24,000 characters (2.0.20).
     { action: 'execute', resource: '*', effect: 'deny' },
+    // 2.2 offers those browser tools directly, checked as `browser`: its own default deny is undone by the
+    // catch-all ask above, which offered the model 45 of them. Not a writer's.
+    { action: 'browser', resource: '*', effect: 'deny' },
     { action: 'question', resource: '*', effect: 'allow' },
     // Foreword's own tools: changing its settings is the author's call (never these rules: the tools can't);
     // looking at them, and opening Settings for the author, never needs asking. Never is the tools' own to

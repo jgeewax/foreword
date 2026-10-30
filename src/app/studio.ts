@@ -16,7 +16,7 @@ import { rippleAt } from '../editor/ripple';
 import { followLine, splitLines } from '../lib/diff';
 import type { OutlineItem, SourceJump } from '../services/typst';
 import { captureSelection, selectionLabel, type SourceSelection } from '../editor/selection';
-import { Channel, errorMessage, ipc, isCmdError, type Bounds, type DialectHint, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
+import { Channel, errorMessage, ipc, isCmdError, isNotInstalled, type Bounds, type DialectHint, type DownloadProgress, type LaunchOptions, type ToolsStatus, type UpdateState, type Version, type WorkspaceInfo } from '../lib/ipc';
 import { clock, PerfTracker } from '../lib/perf';
 import { Emitter, Store } from '../lib/store';
 import type { SnippetBook } from '../lib/typst-render';
@@ -387,6 +387,8 @@ export type StudioState = {
     error?: string;
     /** It didn't start because it isn't signed in (Settings ▸ Assistant signs in). */
     signedOut?: boolean;
+    /** It didn't start because it isn't on the Mac yet: Foreword can install its own copy. */
+    notInstalled?: boolean;
     /** Starting with its own sign-in (Antigravity's, with Google): waiting for the author, in the browser. */
     signingIn?: boolean;
     connection: 'open' | 'lost' | 'unknown';
@@ -498,7 +500,7 @@ export type StudioState = {
   quickOpen: false | 'files' | 'commands';
   /** The settings file: where it is, and why it can't be used (if so). */
   configFile: { path: string; error: string | null } | null;
-  /** An assistant's connector downloading (Antigravity's, from Google), or why it didn't. */
+  /** Foreword installing its own copy of an assistant (install.rs), or why it couldn't. */
   assistantDownload: ({ kind: AssistantId; error?: string } & Partial<DownloadProgress>) | null;
   /** Bumped when the assistant's marks change (the editor repaints them). */
   aiMarks: number;
@@ -3936,7 +3938,7 @@ export class Studio {
     const switched = this.agentKind !== which;
     this.agentKind = which;
     this.agent = agent;
-    this.setAgent({ status: 'starting', error: undefined, signedOut: false, signingIn: !!signIn, background: {}, ...(switched ? { models: [], model: null } : {}) });
+    this.setAgent({ status: 'starting', error: undefined, signedOut: false, notInstalled: false, signingIn: !!signIn, background: {}, ...(switched ? { models: [], model: null } : {}) });
     this.unsubscribeAgent?.();
     this.unsubscribeAgent = agent.subscribe((e) => this.onAgentEvent(e));
     window.clearInterval(this.backgroundPoll);
@@ -3956,22 +3958,29 @@ export class Studio {
       if (open && this.agent === agent) await this.switchTask(open);
     } catch (e) {
       if (this.agent !== agent) return;
-      this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e), signingIn: false });
+      this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e), notInstalled: isNotInstalled(e), signingIn: false });
+      // An older copy of Foreword's own (a release that pins a newer version): the author installed
+      // this assistant once already, so its update goes in without asking.
+      if (isNotInstalled(e) && !this.state.assistantDownload) {
+        const plan = await ipc.assistantPlan(which).catch(() => null);
+        if (plan?.update && this.state.settings.assistant === which) void this.installAssistant(which);
+      }
     }
   }
 
   /**
-   * Settings ▸ Assistant: download an assistant's connector (Antigravity's, from
-   * Google), once; then, if it's the assistant, start it. Kept here, not in
-   * Settings, so closing Settings doesn't lose it.
+   * The chat or Settings ▸ Assistant: install Foreword's own copy of an
+   * assistant, from its maker's release (install.rs); then, if it's the
+   * assistant, start it. Kept here, not in Settings, so closing Settings
+   * doesn't lose it.
    */
-  async downloadAssistant(kind: AssistantId) {
+  async installAssistant(kind: AssistantId) {
     if (this.state.assistantDownload && !this.state.assistantDownload.error) return;
     this.store.set({ assistantDownload: { kind, received: 0, total: null } });
     const progress = new Channel<DownloadProgress>();
     progress.onmessage = (p) => this.store.set({ assistantDownload: { kind, ...p } });
     try {
-      await ipc.assistantDownload(kind, progress);
+      await ipc.assistantInstall(kind, progress);
       this.store.set({ assistantDownload: null });
       if (this.state.settings.assistant === kind && this.state.workspace) await this.restartAgent();
     } catch (e) {

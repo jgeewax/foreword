@@ -4488,6 +4488,70 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   "OpenCode isn't installed" after updating, with the command, or chooses
   another in Settings. The DMG is about 170 MB smaller.
 
+### Yours, or Foreword's own copy from the maker (2026-10-30)
+
+- **Asked for:** "if you have a version installed, lets TRY to use it. if
+  you dont lets try to fetch it… lets try to NEVER fuck w the users global
+  installations of things, and always have our own copy, but always fetch
+  that copy from the authoritative source." Pinned versions are fine ("we'll
+  re-push every so often to bump the versions").
+- **What it was:** OpenCode only if installed (else `brew install
+  opencode`); Claude Code, Codex and Gemini CLI through `npx`, so only with
+  Node.js (else `brew install node`, which needs Homebrew too), into the
+  author's own npm cache; Claude Code and Codex ignored the author's
+  `claude`/`codex` and ran the copies inside their connectors.
+- **Now (src-tauri/src/install.rs):** the author's own when it's new enough,
+  else Foreword's copy in its data folder (`assistants/`), installed when the
+  author clicks Install, in the chat or Settings ▸ Assistant:
+  - OpenCode 2.2.2 from its GitHub release (OpenCode publishes 2.x Mac
+    builds since 2.2.0; signed by its team 5NZ4Q7NXJ4), SHA-256 pinned. Any
+    2.x of the author's comes first; a 1.x is passed over.
+  - Claude Code's and Codex's connectors (claude-agent-acp 0.93.0, codex-acp
+    2.2.2 with Codex 0.160.1 named, since codex-acp asks for ^0.160.1) and
+    Gemini CLI 0.64.0 from the npm registry: `npm install --prefix
+    <assistants>/<name>-<version>` with its own cache, empty user and global
+    npmrc files, `--registry=https://registry.npmjs.org/` and
+    `--ignore-scripts` (none of them has install scripts). The author's
+    `claude` (≥ 2.1.300, the Claude Code inside claude-agent-sdk 0.3.300) or
+    `codex` (≥ 0.160.1) runs in place of the connector's, through
+    `CLAUDE_CODE_EXECUTABLE` / `CODEX_PATH`, and then `--omit=optional`
+    leaves the big platform packages out: Claude Code 41 MB instead of 153,
+    Codex 27 instead of 155. The author's `gemini` ≥ 0.64.0 runs as before.
+  - Node.js to run the connectors: the author's if it's 22 or newer (the
+    Claude connector's minimum) and has its npm beside it, else Node 24.22.2
+    from nodejs.org, SHA-256 from its SHASUMS256.txt, 28 MB.
+  - Antigravity as before (Google's build, kept only if Google signed it),
+    moved here from acp.rs.
+- **Not Homebrew,** though the author suggested it when present: `brew
+  install` writes the global install, and `brew fetch` would give
+  Homebrew's build rather than the maker's. Every assistant has an official
+  download Foreword can fetch itself, so no one is stuck without Homebrew.
+- **Install is a click, not automatic:** choosing a card in Settings starts
+  that assistant, so an automatic install would download 100–330 MB from
+  just looking. A later release that bumps a pin finds Foreword's older copy
+  and installs the new one without asking (`Plan.update`), since the author
+  asked for that assistant once already.
+- Each copy goes in as `<name>.part` and is renamed when whole, then other
+  versions' folders go. npm's download progress is its cache folder's size
+  against the known size.
+- **OpenCode 2.2** offers its 45 browser tools directly (2.0.20 had them
+  behind Code Mode's `execute`), checked as the `browser` permission.
+  OpenCode denies it by default, but the session rules' first entry, a
+  catch-all `ask`, undid that: with the app's 181 rules, 2.2.2 offered the
+  model 63 tools, 45 of them `browser_*`; with a `browser` deny, 18 and none
+  (mock model, isolated XDG). 2.0.20 doesn't know the action.
+- Verified: the Rust and unit tests; `installs_for_real` (ignored; run it
+  when the pins change) installed all five into a scratch folder as on a
+  Mac with none (`FOREWORD_ONLY_OURS`), Node.js included, and each connector
+  answered ACP's initialize; then one real turn each through Foreword's
+  copies, Claude Code (Haiku) and Codex (gpt-6-luna), replied. OpenCode
+  2.2.2 ran the `agent` self-test (a read tool call, the reply) against a
+  mock model. Not yet seen: the install panel and the chat's status line in
+  the app (the self-test group `install-<kind>` is written; the screen was
+  locked, and WebKit pauses a page then, whatever its window).
+- Sign-in runs the program in use (the author's, or Foreword's copy by its
+  quoted path). `claude auth status` uses it too.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

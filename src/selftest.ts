@@ -8,6 +8,7 @@ const listen: ReturnType<typeof getCurrentWebview>['listen'] = (event, handler) 
 // agent edit requests are rejected.
 import { bookPalette } from './app/book-color';
 import { available, commandLabel, paletteCommands, rankCommands } from './app/commands';
+import { ASSISTANTS, type AssistantId } from './app/settings';
 import { studio, type ChatItem } from './app/studio';
 import type { TaskSummary } from './app/tasks';
 import { chapterNumber } from './app/tool-labels';
@@ -7798,39 +7799,44 @@ async function updaterChecks(onQuit: boolean) {
 }
 
 /**
- * Antigravity in Settings ▸ Assistant: its card, Download from Google with
- * progress, then a start that's signed out with Sign in with Google (not
- * clicked: that opens the browser). Downloads 113 MB: only when asked for,
- * with FOREWORD_ASSISTANTS_DIR set to a scratch folder so the app's own
- * stays as it was.
+ * Installing an assistant from Settings ▸ Assistant: chosen, it isn't on the
+ * Mac, so the chat and the panel offer Install; then progress, Foreword's own
+ * copy in place, and a start. Signed in (Claude Code, Codex, or OpenCode with
+ * a mock provider), one short real turn on the cheapest model; signed out
+ * (Gemini CLI, Antigravity), how the panel says to sign in (Sign in with
+ * Google is never clicked: it opens the browser). Downloads up to 160 MB:
+ * only when asked for, with FOREWORD_ASSISTANTS_DIR set to a scratch folder
+ * (the app's own stays as it was) and FOREWORD_ONLY_OURS (as on a Mac with
+ * none of the author's own).
  */
-async function antigravityChecks() {
+async function installChecks(kind: AssistantId) {
   const out: Record<string, unknown> = {};
   const saved = studio.state.settings.assistant;
   const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
   const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*, *::before { animation: none !important; transition: none !important; }' }));
-  const card = () => document.querySelector('.assistant-card[data-assistant="antigravity"]');
+  const card = () => document.querySelector(`.assistant-card[data-assistant="${kind}"]`);
   const panel = () => ({ headline: text(document.querySelector('.assistant-now-title')), fix: text(document.querySelector('.assistant-fix')), rows: text(document.querySelector('.assistant-rows')) });
   studio.openSettings('assistant');
   await sleep(1500);
   out.cardBefore = text(card());
-  out.setup = (await ipc.assistantsStatus()).antigravity;
+  out.plan = (await ipc.assistantsStatus())[kind].install;
 
-  // Chosen: its connector isn't here yet, so the panel offers the download.
-  studio.switchAssistant('antigravity');
-  await waitFor(() => studio.state.agent.status === 'error', 30000, 'antigravity start').catch(() => {});
-  await sleep(800);
-  out.notDownloaded = { error: studio.state.agent.error, ...panel(), chat: text(document.querySelector('.agent-status')), snapshot: await snap('antigravity-download') };
+  // Chosen: it isn't here yet, so the chat and the panel offer Install.
+  studio.switchAssistant(kind);
+  await waitFor(() => studio.state.agent.status === 'error', 30000, `${kind} start`).catch(() => {});
+  await sleep(1200);
+  out.notInstalled = { flag: studio.state.agent.notInstalled, error: studio.state.agent.error, ...panel(), chat: text(document.querySelector('.agent-status')), snapshot: await snap(`install-${kind}-offer`) };
 
-  [...document.querySelectorAll<HTMLButtonElement>('.assistant-fix button')].find((b) => b.textContent?.includes('Download from Google'))?.click();
-  await waitFor(() => (studio.state.assistantDownload?.received ?? 0) > 20e6, 120000, 'download progress').catch(() => {});
-  out.downloading = { state: studio.state.assistantDownload, bar: document.querySelector('.download-progress')?.getAttribute('aria-valuenow'), text: text(document.querySelector('.download-text')), snapshot: await snap('antigravity-downloading') };
   const t0 = Date.now();
-  await waitFor(() => !studio.state.assistantDownload || studio.state.assistantDownload.error, 600000, 'download').catch(() => {});
-  out.downloaded = { seconds: Math.round((Date.now() - t0) / 1000), error: studio.state.assistantDownload?.error ?? null, program: (await ipc.assistantsStatus()).antigravity.program };
+  [...document.querySelectorAll<HTMLButtonElement>('.assistant-fix button')].find((b) => /^\s*(Install|Update) /.test(b.textContent ?? ''))?.click();
+  await waitFor(() => (studio.state.assistantDownload?.received ?? 0) > 5e6 || !!studio.state.assistantDownload?.error, 120000, 'install progress').catch(() => {});
+  out.installing = { state: studio.state.assistantDownload, bar: document.querySelector('.download-progress')?.getAttribute('aria-valuenow'), text: text(document.querySelector('.download-text')), chat: text(document.querySelector('.agent-status')), snapshot: await snap(`install-${kind}-progress`) };
+  await waitFor(() => !studio.state.assistantDownload || !!studio.state.assistantDownload.error, 600000, 'install').catch(() => {});
+  const after = (await ipc.assistantsStatus())[kind];
+  out.installed = { seconds: Math.round((Date.now() - t0) / 1000), error: studio.state.assistantDownload?.error ?? null, program: after.program, ours: after.ours, version: after.version, plan: after.install, signIn: after.signIn };
 
-  // Then it starts, and isn't signed in (no browser opened here).
-  await waitFor(() => studio.state.agent.status === 'error' || studio.state.agent.status === 'ready', 90000, 'antigravity start').catch(() => {});
+  // Then it starts.
+  await waitFor(() => studio.state.agent.status === 'error' || studio.state.agent.status === 'ready', 120000, `${kind} start`).catch(() => {});
   await sleep(1500);
   out.started = {
     status: studio.state.agent.status,
@@ -7839,9 +7845,31 @@ async function antigravityChecks() {
     card: text(card()),
     ...panel(),
     chat: text(document.querySelector('.agent-status')),
-    signInButton: [...document.querySelectorAll('.assistant-fix button')].some((b) => b.textContent === 'Sign in with Google'),
-    snapshot: await snap('antigravity-signed-out'),
+    signInButton: [...document.querySelectorAll('.assistant-fix button')].map((b) => b.textContent),
+    snapshot: await snap(`install-${kind}-started`),
   };
+
+  // Signed in: one short turn on the cheapest model, which runs the program inside.
+  if (studio.state.agent.status === 'ready') {
+    studio.closeSettings();
+    await waitFor(() => studio.state.agent.models.length > 0, 30000, 'models').catch(() => {});
+    const cheap = studio.state.agent.models.find((m) => /haiku|luna|mini|mock/i.test(`${m.id} ${m.name}`));
+    if (cheap) await studio.selectModel(cheap);
+    out.model = studio.state.agent.model;
+    const before = studio.state.agent.items.length;
+    const off = studio.agent!.subscribe((e) => {
+      if (e.type === 'permission-asked') void studio.replyPermission(e.requestId, 'reject');
+    });
+    await studio.send('Reply with just the word: installed. Use no tools.');
+    await sleep(1000);
+    await waitFor(() => !studio.state.agent.running, 180000, 'turn').catch((e) => (out.turnError = errorMessage(e)));
+    off();
+    const items = studio.state.agent.items.slice(before);
+    out.reply = items.filter((i) => i.kind === 'assistant').map((i) => (i.kind === 'assistant' ? i.text : '')).join('\n');
+    out.notices = items.filter((i) => i.kind === 'notice').map((i) => (i.kind === 'notice' ? i.text : ''));
+    studio.openSettings('assistant');
+    await sleep(800);
+  }
 
   studio.switchAssistant(saved);
   await sleep(500);
@@ -9722,7 +9750,8 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('closebutton')) result.closebutton = await closeButtonChecks();
     if (want('about')) result.about = await aboutChecks();
     // Downloads Antigravity's connector (113 MB): only when asked for, into FOREWORD_ASSISTANTS_DIR.
-    if (only?.includes('antigravity')) result.antigravity = await antigravityChecks();
+    // Each downloads its assistant: only when asked for (install-opencode, install-claude…).
+    for (const kind of ASSISTANTS) if (only?.includes(`install-${kind}`)) result[`install-${kind}`] = await installChecks(kind);
     // A release build with FOREWORD_UPDATE_URL at a local feed: it installs over itself.
     if (only?.includes('updater')) result.updater = await updaterChecks(false);
     if (only?.includes('updater-quit')) result.updaterQuit = await updaterChecks(true);
