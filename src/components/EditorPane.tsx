@@ -153,7 +153,7 @@ export function EditorPane() {
         'separator',
         hasSelection && { label: 'Add to Chat', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
         hasSelection && ready && { label: 'Revise…', action: () => studio.events.emit('selection-card', 'revise') },
-        hasSelection && ready && { label: 'Three Options to Pick From…', action: () => studio.events.emit('selection-card', 'options') },
+        hasSelection && ready && { label: 'Options to Pick From…', action: () => studio.events.emit('selection-card', 'options') },
         hasSelection && ready && { label: 'Ask About This…', action: () => studio.events.emit('selection-card', 'ask') },
         hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
         hasSelection && !!path?.endsWith('.typ') && { label: 'Set Language', items: languageEntries() },

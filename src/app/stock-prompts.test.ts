@@ -35,7 +35,12 @@ describe('what a button asked for, read back from its message', () => {
     expect(stockAction(revisePrompt('Tighten it: fewer words, the same meaning'))).toMatchObject({ verb: 'Revise this passage', rows: [{ text: 'Tighten it: fewer words, the same meaning' }], tone: 'change' });
     expect(stockAction(revisePrompt('  Keep his voice.\n'))?.rows).toEqual([{ text: 'Keep his voice.' }]);
     expect(stockAction(optionsPrompt('More vivid'))).toMatchObject({ verb: 'Three options for this passage', rows: [{ text: 'More vivid' }], mode: 'options' });
+    expect(stockAction(optionsPrompt('More vivid', 1))).toMatchObject({ verb: 'One option for this passage', rows: [{ text: 'More vivid' }], mode: 'options' });
+    expect(stockAction(optionsPrompt('Shorter', 4))).toMatchObject({ verb: 'Four options for this passage', rows: [{ text: 'Shorter' }], mode: 'options' });
+    expect(stockTitle(`${optionsPrompt('Shorter', 2)} Selected in the editor: ch1.typ`)).toBe('Two options for this passage: “Shorter”');
     expect(stockAction(OPTIONS_AGAIN_PROMPT)).toMatchObject({ verb: 'New options for this passage', note: 'as I’ve changed it', mode: 'options' });
+    // As it was sent before the count could be chosen.
+    expect(stockAction(OPTIONS_AGAIN_PROMPT.replace('Write new', 'Write three new'))).toMatchObject({ verb: 'New options for this passage', mode: 'options' });
     expect(stockAction(askPrompt('Why is everything after it bold?'))).toMatchObject({ verb: 'Ask about this passage', rows: [{ text: 'Why is everything after it bold?' }], tone: 'look', mode: 'ask' });
     expect(stockAction('Revise the selected passage: shorter')).toBeNull();
   });

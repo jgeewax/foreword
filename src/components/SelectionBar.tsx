@@ -6,8 +6,9 @@ import { studio } from '../app/studio';
 import { looksLikeProse, trimPieces } from '../app/trace';
 import { monaco } from '../editor/monaco';
 import { modeConfig } from '../services/agent/modes';
-import { OPTION_COUNT } from '../services/agent/options-mode';
+import { DEFAULT_OPTION_COUNT, optionsLabel } from '../services/agent/options-mode';
 import { Icon } from './icons';
+import { OptionCount } from './OptionCount';
 import { DiffText } from './Trace';
 
 const OPTIONS_GLYPH = modeConfig('options').icon;
@@ -21,18 +22,19 @@ const AUTHORS = ['mouse', 'keyboard', 'preview'];
 
 type Act = BarKind | 'comment' | 'chat' | 'fix';
 
-/** Each of the card's tabs: its name, the box's question, the button that sends it, and its note's words while it waits and works. */
-const TABS: Record<BarKind, { label: string; box: string; go: string; dialog: string; waits: string; working: string }> = {
-  revise: { label: 'Revise', box: 'How should it change?', go: 'Revise', dialog: 'Revise the selection', waits: 'Revise waits for the current reply', working: 'Revising…' },
+/** Each of the card's tabs: its name, the box's question, the button that sends it, and its note's words while it waits and works (Options: how many). */
+const TABS: Record<BarKind, { label: string; box: string; go: string; dialog: string; waits: string; working: (optionCount: number) => string }> = {
+  revise: { label: 'Revise', box: 'How should it change?', go: 'Revise', dialog: 'Revise the selection', waits: 'Revise waits for the current reply', working: () => 'Revising…' },
   options: {
     label: 'Options',
     box: 'What should the options try?',
-    go: `Show ${OPTION_COUNT} options`,
+    // After the count ("3 options"), beside it.
+    go: 'Show',
     dialog: 'Options for the selection',
     waits: 'Options wait for the current reply',
-    working: `Writing ${OPTION_COUNT} options…`,
+    working: (n) => `Writing ${optionsLabel(n)}…`,
   },
-  ask: { label: 'Ask', box: 'What do you want to know?', go: 'Ask', dialog: 'Ask about the selection', waits: 'Your question waits for the current reply', working: 'Answering…' },
+  ask: { label: 'Ask', box: 'What do you want to know?', go: 'Ask', dialog: 'Ask about the selection', waits: 'Your question waits for the current reply', working: () => 'Answering…' },
 };
 
 /** A tab's mark: Revise the assistant's edit, Options and Ask their modes' glyphs. */
@@ -46,7 +48,7 @@ function KindIcon({ kind, size }: { kind: BarKind; size: number }) {
 }
 
 /** The bar under a selection: what you do to a passage, then the chat. In a narrow pane all but the first show only their icons. */
-function Bar({ compact, error, ready, chatMode, act }: { compact: boolean; error: boolean; ready: boolean; chatMode: string; act: (what: Act) => void }) {
+function Bar({ compact, error, ready, chatMode, optionCount, act }: { compact: boolean; error: boolean; ready: boolean; chatMode: string; optionCount: number; act: (what: Act) => void }) {
   const title = (text: string) => (ready ? text : NOT_READY);
   const word = (text: string) => (compact ? null : text);
   const iconOnly = compact ? ' icon-only' : '';
@@ -62,7 +64,7 @@ function Bar({ compact, error, ready, chatMode, act }: { compact: boolean; error
         <Icon name="edit" size={14} />
         Revise
       </button>
-      <button className={`sel-btn sel-options${iconOnly}`} disabled={!ready} aria-label={compact ? 'Options' : undefined} title={title(`${OPTION_COUNT} versions of it to pick from`)} onClick={() => act('options')}>
+      <button className={`sel-btn sel-options${iconOnly}`} disabled={!ready} aria-label={compact ? 'Options' : undefined} title={title(`${optionCount === 1 ? 'A version' : `${optionCount} versions`} of it to pick from`)} onClick={() => act('options')}>
         <KindIcon kind="options" size={14} />
         {word('Options')}
       </button>
@@ -185,12 +187,14 @@ function Card(props: {
         ))}
       </div>
       <div className="sel-card-foot">
-        <button className="sel-to-chat" title="Take it to the chat, with the passage, to say more" onClick={() => toChat(kind, draft)}>
+        {/* In a narrow editor, its icon, so the count of options and the button that sends fit beside it. */}
+        <button className={`sel-to-chat${narrow ? ' icon-only' : ''}`} aria-label={narrow ? 'Continue in chat' : undefined} title="Take it to the chat, with the passage, to say more" onClick={() => toChat(kind, draft)}>
           <Icon name="sparkle" size={13} />
-          Continue in chat
+          {!narrow && 'Continue in chat'}
         </button>
         <span className="spacer" />
         <span className="sel-hint">{draft.includes('\n') || draft.length > 50 ? '⇧⏎ new line · esc to close' : 'esc to close'}</span>
+        {kind === 'options' && <OptionCount className="sel-option-count" onPicked={() => input.current?.focus()} />}
         <button className="sel-go" disabled={!draft.trim()} onClick={go}>
           {tab.go}
           <kbd>⏎</kbd>
@@ -205,6 +209,8 @@ type Change = ReturnType<typeof passageChange>;
 /** How a request from the bar is getting on, under its passage: it waits, it works, it's done (and can be undone). */
 function Note(props: {
   kind: BarKind;
+  /** Options: how many it asked for. */
+  optionCount: number;
   progress: BarProgress;
   change: Change;
   showChange: boolean;
@@ -214,7 +220,7 @@ function Note(props: {
   /** Held back for a reply in another mode: it's not sent after all. */
   callOff: () => void;
 }) {
-  const { kind, progress, change, showChange, toggleChange, undo, dismiss, callOff } = props;
+  const { kind, optionCount, progress, change, showChange, toggleChange, undo, dismiss, callOff } = props;
   const revise = kind === 'revise';
   const tab = TABS[kind];
   const chat = () => studio.events.emit('show-agent-pane');
@@ -243,7 +249,7 @@ function Note(props: {
     return (
       <div className={`selection-note sel-${kind}`} role="status">
         <span className="sel-spin" aria-hidden />
-        <span>{tab.working}</span>
+        <span>{tab.working(optionCount)}</span>
         <button className="sel-btn sel-quiet sel-in-chat" title="Show the chat" onClick={chat}>
           in the chat
         </button>
@@ -261,7 +267,9 @@ function Note(props: {
         <span className="sel-glyph" aria-hidden>
           {OPTIONS_GLYPH}
         </span>
-        <span>{OPTION_COUNT} options are in the chat</span>
+        <span>
+          {optionsLabel(progress.count)} {progress.count === 1 ? 'is' : 'are'} in the chat
+        </span>
         <span className="sel-sep" />
         <button className="sel-btn" onClick={chat}>
           Pick one
@@ -316,9 +324,9 @@ function endOf(model: monaco.editor.ITextModel, r: monaco.IRange): monaco.IPosit
   return { lineNumber: r.endLineNumber, column: r.endColumn };
 }
 
-/** Clicks keep the editor's focus and selection (but the card's box takes the keys). */
+/** Clicks keep the editor's focus and selection (but the card's box takes the keys, and its count of options opens). */
 const keepFocus = (e: MouseEvent) => {
-  if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault();
+  if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) e.preventDefault();
 };
 
 /**
@@ -357,7 +365,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     if (view.kind === 'bar') {
       const sel = selection();
       const chatMode = modeConfig(studio.state.agent.mode).label;
-      return <Bar compact={editor.getLayoutInfo().contentWidth < COMPACT_BELOW} error={!!sel && !!studio.errorIn(sel)} ready={ready} chatMode={chatMode} act={act} />;
+      return <Bar compact={editor.getLayoutInfo().contentWidth < COMPACT_BELOW} error={!!sel && !!studio.errorIn(sel)} ready={ready} chatMode={chatMode} optionCount={studio.state.settings.optionCount} act={act} />;
     }
     const sel = selection();
     const model = editor.getModel();
@@ -376,7 +384,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     flushSync(() => barRoot.render(barNow()));
     editor.layoutContentWidget(barWidget);
   };
-  const keyOfBar = () => `${view?.kind}:${view?.kind === 'card' ? view.tab : ''}:${studio.state.agent.status}:${studio.state.agent.mode}:${studio.state.styleGuide.exists}`;
+  const keyOfBar = () => `${view?.kind}:${view?.kind === 'card' ? view.tab : ''}:${studio.state.agent.status}:${studio.state.agent.mode}:${studio.state.styleGuide.exists}:${studio.state.settings.optionCount}`;
   const showBar = (next: typeof view) => {
     clearTimeout(showTimer);
     const sel = selection();
@@ -489,6 +497,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     const note = (
       <Note
         kind={t.req.kind}
+        optionCount={t.req.optionCount ?? DEFAULT_OPTION_COUNT}
         progress={progress}
         change={change}
         showChange={t.showChange}
@@ -517,7 +526,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     hideBar();
     editor.focus();
     untrack();
-    const req: BarRequest = { kind, message: barMessage(kind, instruction), since: Date.now() };
+    const { optionCount } = studio.state.settings;
+    const req: BarRequest = { kind, message: barMessage(kind, instruction, optionCount), since: Date.now(), optionCount };
     const decoration = model.deltaDecorations([], [{ range: sel, options: { stickiness: GROWS } }])[0];
     const t: Tracked = { req, model, decoration, pending: false, original: model.getValueInRange(sel), starting: true, abort: new AbortController(), showChange: false };
     tracked = t;

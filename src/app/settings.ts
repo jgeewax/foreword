@@ -2,6 +2,7 @@
 // .foreword.json instead.
 import { DEFAULT_PERMISSIONS, PRESETS, sanitizePermissions, type AgentPermissions } from '../services/agent/permissions';
 import { rulesFrom } from '../services/agent/command-rules';
+import { DEFAULT_OPTION_COUNT, isOptionCount } from '../services/agent/options-mode';
 
 export type SendKey = 'enter' | 'mod-enter';
 
@@ -104,6 +105,8 @@ export type AppSettings = {
   toolPaths: Partial<Record<ToolName, string>>;
   /** Which program runs the writing assistant. */
   assistant: AssistantId;
+  /** How many versions Options mode (and the selection bar's Options) asks for. */
+  optionCount: number;
   /** Check spelling while typing: red squiggles (Edit ▸ Spelling and Grammar). */
   checkSpelling: boolean;
   /** Check grammar with spelling: blue squiggles. */
@@ -146,6 +149,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   previewScope: 'book',
   toolPaths: {},
   assistant: 'opencode',
+  optionCount: DEFAULT_OPTION_COUNT,
   checkSpelling: true,
   checkGrammar: true,
   checkStyle: false,
@@ -250,6 +254,7 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
   if (raw.previewScope === 'book' || raw.previewScope === 'chapter') out.previewScope = raw.previewScope;
   if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
   if (ASSISTANTS.includes(raw.assistant as AssistantId)) out.assistant = raw.assistant as AssistantId;
+  if (isOptionCount(raw.optionCount)) out.optionCount = raw.optionCount;
   for (const k of ['checkSpelling', 'checkGrammar', 'checkStyle', 'checkCode', 'ignoreUppercase', 'ignoreNumbers'] as const) {
     if (typeof raw[k] === 'boolean') out[k] = raw[k];
   }

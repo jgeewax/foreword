@@ -1,6 +1,6 @@
 // Agent modes for a conversation: Write (edits the book), Ask (questions about
 // the book), Discuss (think a direction through, before writing), Options
-// (three alternatives to choose from) and Figures (diagrams, charts,
+// (alternatives to choose from, as many as the author chose) and Figures (diagrams, charts,
 // illustrations as code). Each mode is the app's own: the agent stays in its
 // usual mode (never Claude Code's or Codex's plan mode, which write their
 // answer to a file and ask to leave), the app's rules block changes when it's
@@ -128,11 +128,12 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         instructions: OPTIONS_INSTRUCTIONS,
         label: 'Options',
         icon: '⑂',
-        description: 'Three versions of the selected text to pick from. Can’t change files.',
+        description: 'Versions of the selected text to pick from, as many as you choose. Can’t change files.',
         placeholder: 'Select text, then say what to change (e.g. “make it punchier”)…',
-        notice: 'Options mode: select text and ask for a change; you’ll get three versions to choose from.',
+        notice: 'Options mode: select text and ask for a change; you’ll get versions to choose from (how many is beside the mode).',
         carryOut: null,
-        go: 'Show three versions',
+        go: 'Show versions',
+        // How many to write: studio's modeReminder (optionsReminder), from the settings.
         reminder: null,
       };
     case 'figures':

@@ -1,15 +1,30 @@
-// Options mode: the agent offers three alternative versions of the selected
-// passage instead of editing. Edits are blocked by permission rules; the reply
-// format below is parsed into option cards, and the one the author picks
-// replaces the selection in the editor (an ordinary, undoable buffer edit).
+// Options mode: the agent offers alternative versions of the selected passage
+// (as many as the author chose: optionCount in settings) instead of editing.
+// Edits are blocked by permission rules; the reply format below is parsed into
+// option cards, and the one the author picks replaces the selection in the
+// editor (an ordinary, undoable buffer edit).
 
-export const OPTION_COUNT = 3;
+/** How many options the author can ask for, and how many until they choose. */
+export const OPTION_COUNTS = [1, 2, 3, 4, 5];
+export const DEFAULT_OPTION_COUNT = 3;
 
+export const isOptionCount = (n: unknown): n is number => typeof n === 'number' && OPTION_COUNTS.includes(n);
+
+const NUMBER_WORDS = ['one', 'two', 'three', 'four', 'five'];
+
+/** "three options", "one option": in the words of a message. */
+export const optionsInWords = (n: number) => `${NUMBER_WORDS[n - 1] ?? n} ${n === 1 ? 'option' : 'options'}`;
+
+/** "3 options", "1 option": on a button or a note. */
+export const optionsLabel = (n: number) => `${n} ${n === 1 ? 'option' : 'options'}`;
+
+// The count isn't in these (they're the session's instructions, and changing
+// them means a new system prompt): each message says it (optionsReminder).
 export const OPTIONS_INSTRUCTIONS = `# Options mode
 
 The author wants choices, not edits. In this mode you must not edit, create, or delete files (edits are blocked); reading files is fine. The app shows each option as a card, and the one the author picks replaces the passage they selected.
 
-For each request, reply with exactly ${OPTION_COUNT} alternative versions of the selected passage (or, with no selection, of what they ask for: a title, a sentence to insert at the cursor, and so on). Use exactly this format:
+For each request, reply with exactly as many alternative versions of the selected passage (or, with no selection, of what they ask for: a title, a sentence to insert at the cursor, and so on) as the author chose: the app says how many with each message (${optionsInWords(DEFAULT_OPTION_COUNT)} if it doesn't). Use exactly this format:
 
 One short sentence about your approach (optional).
 
@@ -22,14 +37,17 @@ One short sentence about your approach (optional).
 ### Option 2: <label>
 …
 
-### Option 3: <label>
-…
+and so on, one section for each option.
 
 Rules:
 - Each code block replaces the whole selected passage, so it must be complete Typst markup that can be pasted in its place. Keep everything the author didn't ask to change: labels like <eq-name>, citations like @key, math, and markup. Match the passage's line breaks and indentation.
-- Make the options meaningfully different from each other (for example in tone, length, or structure), and make every one follow the style guide.
+- Make the options meaningfully different from each other (for example in tone, length, or structure), and make every one follow the style guide. Asked for one option, write the best version you can.
 - Write nothing after the last option.
 - If the message isn't something to give options for (a question, say), answer it briefly and normally instead.`;
+
+/** Sent with every message in Options mode, after the author's words: how many options to write. */
+export const optionsReminder = (n: number) =>
+  `(Foreword, Options mode: write exactly ${optionsInWords(n)}${n > 1 ? `, Option 1 to Option ${n}` : ''}, in the format your Options mode instructions give.)`;
 
 export type ParsedOption = {
   /** 1-based number as the agent wrote it. */

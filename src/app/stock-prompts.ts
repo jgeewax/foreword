@@ -5,6 +5,7 @@
 // task named after its first message) shows the same.
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
 import { AGENT_MODES, modeConfig, type AgentMode } from '../services/agent/modes';
+import { DEFAULT_OPTION_COUNT, OPTION_COUNTS, optionsInWords } from '../services/agent/options-mode';
 import { STYLE_DRAFT_MESSAGE, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE } from '../services/agent/style-guide';
 
 /** The icons an action can have (all of them the chat's own). */
@@ -37,12 +38,17 @@ export const EXPLAIN_PROMPT = "Explain this passage in plain words, including wh
 export const revisePrompt = (instruction: string) =>
   `Revise the selected passage: ${instruction.trim()}\n\nChange only that passage, in place. Keep what I didn't ask to change: labels, citations, math and markup. Then say in a sentence what you changed.`;
 
-/** "Options" on a selection (the selection bar), sent in Options mode: three versions to pick from. */
-export const optionsPrompt = (instruction: string) => `Three options for the selected passage: ${instruction.trim()}`;
+const capitalized = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** "Options" on a selection (the selection bar), sent in Options mode: as many versions to pick from as the author chose. */
+export const optionsPrompt = (instruction: string, count = DEFAULT_OPTION_COUNT) => `${capitalized(optionsInWords(count))} for the selected passage: ${instruction.trim()}`;
 
 /** "New options for it as it is", when the author changed a passage after asking for options: the passage goes with it as it is now. */
 export const OPTIONS_AGAIN_PROMPT =
-  "I've changed the passage since you wrote those options; the selection is the passage as it is now. Write three new options for it, for what I asked before, starting from my version.";
+  "I've changed the passage since you wrote those options; the selection is the passage as it is now. Write new options for it, for what I asked before, starting from my version.";
+
+/** As it was until the author could choose how many options (still read back, for conversations from then). */
+const OPTIONS_AGAIN_THREE = OPTIONS_AGAIN_PROMPT.replace('Write new options', 'Write three new options');
 
 /** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
 export const askPrompt = (question: string) => `About the selected passage: ${question.trim()}`;
@@ -91,7 +97,7 @@ const EXAMPLES = new RegExp(`^${esc(failingExamplesPrompt(['\0'])).replace('\0',
 const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
 // Also on one line, as Claude Code names a task after it.
 const REVISE_SELECTION = new RegExp(`^${esc(revisePrompt('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
-const OPTIONS_SELECTION = new RegExp(`^${esc(optionsPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
+const OPTIONS_SELECTION = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for the selected passage: ([\\s\\S]+)$`);
 const ASK_SELECTION = new RegExp(`^${esc(askPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
 
 /** Each kind of message, read back: what it asked for, or null if it isn't that one. */
@@ -112,9 +118,9 @@ const READERS: ((text: string) => StockAction | null)[] = [
   },
   (text) => {
     const m = OPTIONS_SELECTION.exec(text);
-    return m ? { verb: 'Three options for this passage', rows: [{ text: m[1] }], tone: 'other', icon: 'check', mode: 'options' } : null;
+    return m ? { verb: `${m[1]} for this passage`, rows: [{ text: m[2] }], tone: 'other', icon: 'check', mode: 'options' } : null;
   },
-  (text) => (text === OPTIONS_AGAIN_PROMPT ? { verb: 'New options for this passage', note: 'as I’ve changed it', tone: 'other', icon: 'check', mode: 'options' } : null),
+  (text) => (text === OPTIONS_AGAIN_PROMPT || text === OPTIONS_AGAIN_THREE ? { verb: 'New options for this passage', note: 'as I’ve changed it', tone: 'other', icon: 'check', mode: 'options' } : null),
   (text) => {
     const m = ASK_SELECTION.exec(text);
     return m ? { verb: 'Ask about this passage', rows: [{ text: m[1] }], tone: 'look', icon: 'help', mode: 'ask' } : null;
@@ -217,7 +223,7 @@ const TITLE_OPENINGS: [string, string][] = [
   ['Please address these review comments on the book.', 'Fix review comments'],
   ['These code examples fail when Foreword runs them:', 'Fix the failing code examples'],
   ['Revise the selected passage: ', 'Revise this passage'],
-  ['Three options for the selected passage: ', 'Three options for this passage'],
+  ...OPTION_COUNTS.map((n): [string, string] => [`${capitalized(optionsInWords(n))} for the selected passage: `, `${capitalized(optionsInWords(n))} for this passage`]),
   ['About the selected passage: ', 'Ask about this passage'],
 ];
 const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)})[\\s\\S]*$`);

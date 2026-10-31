@@ -72,7 +72,7 @@ describe('settings storage', () => {
 
   it('ignores corrupt or unknown values', () => {
     store.set('studio.settings', '{"sendKey":"space","agentEdits":"always","junk":1,"markAiEdits":"yes"}');
-    expect(loadSettings()).toEqual({ theme: 'system', sendKey: 'enter', permissions: PRESETS.ask.permissions, markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', alwaysAllow: [], neverAllow: [], formatOnSave: true, autoSaveMinutes: 5, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], previewPages: 'nearby', previewScope: 'book', toolPaths: {}, assistant: 'opencode', checkSpelling: true, checkGrammar: true, checkStyle: false, checkCode: true, ignoreUppercase: true, ignoreNumbers: true, spellingLanguage: '', proofRules: {}, checkForUpdates: true, skippedUpdate: '' });
+    expect(loadSettings()).toEqual({ theme: 'system', sendKey: 'enter', permissions: PRESETS.ask.permissions, markAiEdits: true, markAiReads: true, aiEditColor: '#a371f7', aiReadColor: '#58a6ff', alwaysAllow: [], neverAllow: [], formatOnSave: true, autoSaveMinutes: 5, editorFontSize: 12, wordWrap: 'window', wordWrapColumn: 80, rulers: [], previewPages: 'nearby', previewScope: 'book', toolPaths: {}, assistant: 'opencode', optionCount: 3, checkSpelling: true, checkGrammar: true, checkStyle: false, checkCode: true, ignoreUppercase: true, ignoreNumbers: true, spellingLanguage: '', proofRules: {}, checkForUpdates: true, skippedUpdate: '' });
     store.set('studio.settings', '{"theme":"light"}');
     expect(loadSettings().theme).toBe('light');
     store.set('studio.settings', '{"theme":"sepia"}');
@@ -85,6 +85,12 @@ describe('settings storage', () => {
     expect(loadSettings().formatOnSave).toBe(false);
     store.set('studio.settings', '{"formatOnSave":"no"}');
     expect(loadSettings().formatOnSave).toBe(true);
+    store.set('studio.settings', '{"optionCount":1}');
+    expect(loadSettings().optionCount).toBe(1);
+    for (const bad of ['0', '6', '2.5', '"2"']) {
+      store.set('studio.settings', `{"optionCount":${bad}}`);
+      expect(loadSettings().optionCount).toBe(3);
+    }
     store.set('studio.settings', '{"autoSaveMinutes":0}');
     expect(loadSettings().autoSaveMinutes).toBe(0);
     for (const bad of ['"5"', '-1', '2.5', '500', 'null']) {

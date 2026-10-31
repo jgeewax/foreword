@@ -77,7 +77,7 @@ import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructi
 import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
 import { answerOf, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
 import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
-import { parseOptions } from '../services/agent/options-mode';
+import { optionsReminder, parseOptions } from '../services/agent/options-mode';
 import { closestOurs, locatePassage, type PassageAt } from './option-passage';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
@@ -410,7 +410,7 @@ export type StudioState = {
     selection: { attachment: Attachment; from: 'editor' | 'preview' } | null;
     /** A selection the author dismissed for now (key: label + text; until it changes). */
     selectionDismissed: string | null;
-    /** Write (default), Ask, Discuss (think it through first), Options (three versions to pick from) or Figures. */
+    /** Write (default), Ask, Discuss (think it through first), Options (versions to pick from) or Figures. */
     mode: AgentMode;
     /** The assistant, model and effort each mode was last used with (mode-setups.ts; kept on this Mac). */
     modeSetups: ModeSetups;
@@ -1819,11 +1819,11 @@ export class Studio {
   /**
    * A request from the selection bar's card, in its mode: Revise changes the
    * passage in place (that changes the book, so it's done in Write mode),
-   * Options writes three versions to pick from, Ask answers the author's
-   * question about it and changes nothing.
+   * Options writes as many versions to pick from as the author chose, Ask
+   * answers the author's question about it and changes nothing.
    */
   sendFromBar(kind: BarKind, instruction: string, signal?: AbortSignal): Promise<boolean> {
-    return this.sendAboutSelection(BAR_MODE[kind], barMessage(kind, instruction), signal);
+    return this.sendAboutSelection(BAR_MODE[kind], barMessage(kind, instruction, this.state.settings.optionCount), signal);
   }
 
   /**
@@ -4381,9 +4381,9 @@ export class Studio {
     await this.send(modeChoiceMessage(s, go));
   }
 
-  /** The mode's reminder of how to reply, to go with a message (Ask's answer card). */
+  /** The mode's reminder of how to reply, to go with a message (Ask's answer card, how many options). */
   private modeReminder(mode: AgentMode): MessageContext[] {
-    const reminder = modeConfig(mode).reminder;
+    const reminder = mode === 'options' ? optionsReminder(this.state.settings.optionCount) : modeConfig(mode).reminder;
     return reminder ? [{ reminder }] : [];
   }
 

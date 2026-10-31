@@ -54,7 +54,7 @@ describe('modeConfig', () => {
     const s = { mode: 'discuss', from: 'write', there: 'Weigh Sam against Ada with you.', here: 'Go with Sam and rewrite chapter 1.' } as const;
     expect(modeChoiceMessage(s, true)).toBe('Go on in Discuss mode, as you offered: “Weigh Sam against Ada with you.”');
     expect(modeChoiceMessage(s, false)).toBe('Stay in Write mode, as you offered: “Go with Sam and rewrite chapter 1.”');
-    expect(AGENT_MODES.map((m) => modeConfig(m).go)).toEqual(['Write it', 'Just answer', 'Talk it through', 'Show three versions', 'Draw it']);
+    expect(AGENT_MODES.map((m) => modeConfig(m).go)).toEqual(['Write it', 'Just answer', 'Talk it through', 'Show versions', 'Draw it']);
   });
 
   it('reads a reply’s offer of another mode, and leaves it out of the reply shown', () => {

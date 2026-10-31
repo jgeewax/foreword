@@ -60,6 +60,7 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     previewScope: settings.previewScope,
     toolPaths: settings.toolPaths,
     assistant: settings.assistant,
+    optionCount: settings.optionCount,
     checkSpelling: settings.checkSpelling,
     checkGrammar: settings.checkGrammar,
     checkStyle: settings.checkStyle,

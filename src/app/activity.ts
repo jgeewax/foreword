@@ -87,7 +87,7 @@ export const WAITING_TIPS = [
   'You can keep writing meanwhile: History keeps a version from before its changes.',
   'A message you send now waits for this turn; ⌥⏎ hands it over at the next step.',
   'Select a passage and press ⌘I to ask about just that.',
-  'Options mode gives you three versions of a passage to pick from.',
+  'Options mode gives you versions of a passage to pick from: one to five, as you choose beside the mode.',
   'Discuss mode weighs an idea with you, and argues back, before anything is written.',
   'Ask mode answers questions in the chat, and changes nothing.',
   'Finished? Done keeps a named version in History and starts a new task.',

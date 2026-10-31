@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { OPTIONS_INSTRUCTIONS, parseOptions } from './options-mode';
+import { isOptionCount, OPTIONS_INSTRUCTIONS, optionsReminder, parseOptions } from './options-mode';
+import { REMINDER_START } from './message-context';
 
 const REPLY = `Three ways to tighten it.
 
@@ -52,10 +53,22 @@ describe('parseOptions', () => {
 });
 
 describe('OPTIONS_INSTRUCTIONS', () => {
-  it('forbids edits and asks for three complete replacements in the parsable format', () => {
+  it('forbids edits and asks for as many complete replacements as the author chose, in the parsable format', () => {
     expect(OPTIONS_INSTRUCTIONS).toMatch(/must not edit, create, or delete files/);
-    expect(OPTIONS_INSTRUCTIONS).toMatch(/exactly 3 alternative versions/);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/exactly as many alternative versions .* as the author chose: the app says how many with each message \(three options if it doesn't\)/);
     expect(OPTIONS_INSTRUCTIONS).toContain('### Option 1: <a two to five word label>\n```typst');
     expect(parseOptions(OPTIONS_INSTRUCTIONS.split('Use exactly this format:')[1]).options.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('how many options', () => {
+  it('each message says, as a reminder the chat leaves out', () => {
+    expect(optionsReminder(3)).toBe('(Foreword, Options mode: write exactly three options, Option 1 to Option 3, in the format your Options mode instructions give.)');
+    expect(optionsReminder(1)).toBe('(Foreword, Options mode: write exactly one option, in the format your Options mode instructions give.)');
+    expect(optionsReminder(5).startsWith(REMINDER_START)).toBe(true);
+  });
+
+  it('one to five', () => {
+    expect([0, 1, 3, 5, 6, 2.5, '3'].map(isOptionCount)).toEqual([false, true, true, true, false, false, false]);
   });
 });

@@ -7,18 +7,18 @@ import { askPrompt, optionsPrompt, revisePrompt } from './stock-prompts';
 import type { ChatItem, QueuedMessage } from './studio';
 import { turnsOf, type UserItem } from './trace';
 import type { AgentMode } from '../services/agent/modes';
-import { parseOptions } from '../services/agent/options-mode';
+import { DEFAULT_OPTION_COUNT, parseOptions } from '../services/agent/options-mode';
 
-/** Revise changes the passage in place (Write mode); Options writes three to pick from (Options mode); Ask answers a question about it (Ask mode). */
+/** Revise changes the passage in place (Write mode); Options writes some to pick from (Options mode); Ask answers a question about it (Ask mode). */
 export type BarKind = 'revise' | 'options' | 'ask';
 
 /** The mode each one is sent in. */
 export const BAR_MODE: Record<BarKind, AgentMode> = { revise: 'write', options: 'options', ask: 'ask' };
 
-/** The message a request from the card sends: the author's words, or a preset's. */
-export function barMessage(kind: BarKind, instruction: string): string {
+/** The message a request from the card sends: the author's words, or a preset's (Options: as many as they chose). */
+export function barMessage(kind: BarKind, instruction: string, optionCount = DEFAULT_OPTION_COUNT): string {
   if (kind === 'revise') return revisePrompt(instruction);
-  return kind === 'options' ? optionsPrompt(instruction) : askPrompt(instruction);
+  return kind === 'options' ? optionsPrompt(instruction, optionCount) : askPrompt(instruction);
 }
 
 /** One of the usual requests, a click away: its word on the button, and what it asks. */
@@ -55,8 +55,8 @@ export const presetsFor = (kind: BarKind, hasStyleGuide: boolean) => PRESETS[kin
 /** Narrower than this (the editor's text, in px), the bar's buttons but Revise show only their icons. */
 export const COMPACT_BELOW = 560;
 
-/** A request made from the bar: the message it sent, from when. */
-export type BarRequest = { kind: BarKind; message: string; since: number };
+/** A request made from the bar: the message it sent, from when (Options: how many it asked for). */
+export type BarRequest = { kind: BarKind; message: string; since: number; optionCount?: number };
 
 export type BarProgress =
   /** Waiting for the reply that's running (the author can send it now, or take it back). */
@@ -64,8 +64,8 @@ export type BarProgress =
   | { phase: 'working' }
   /** Its turn is over: for Revise, what changed is in the passage itself (passageChange); for Ask, the answer is in the chat. */
   | { phase: 'ended' }
-  /** Options, done: they're in the chat to pick from (`picked`: one is in the book). */
-  | { phase: 'options'; picked: boolean }
+  /** Options, done: `count` are in the chat to pick from (`picked`: one is in the book). */
+  | { phase: 'options'; count: number; picked: boolean }
   /** Not in this conversation (another task is showing, or it wasn't sent). */
   | { phase: 'gone' };
 
@@ -81,8 +81,9 @@ export function barProgress(agent: Agent, req: BarRequest): BarProgress {
   if (agent.running && users[users.length - 1] === user && !user.ended) return { phase: 'working' };
   if (req.kind !== 'options') return { phase: 'ended' };
   const reply = turnsOf(agent.items).find((t) => t.key === user.id)?.reply;
-  if (!reply || !parseOptions(reply.text).options.some((o) => o.complete && o.text !== null)) return { phase: 'ended' };
-  return { phase: 'options', picked: reply.options?.applied != null };
+  const count = reply ? parseOptions(reply.text).options.filter((o) => o.complete && o.text !== null).length : 0;
+  if (!reply || !count) return { phase: 'ended' };
+  return { phase: 'options', count, picked: reply.options?.applied != null };
 }
 
 /** What a revision did to the passage, word by word, and how many words longer it got; null if it's the same. */

@@ -777,6 +777,7 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-card-foot { padding-top: 7px; border-top: 1px solid var(--border); }
 .sel-to-chat { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 7px; white-space: nowrap; border: none; border-radius: 5px; background: transparent; color: var(--muted); }
 .sel-to-chat:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.sel-to-chat.icon-only { width: 26px; padding: 0; justify-content: center; }
 .sel-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted); }
 .sel-go { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border: 1px solid var(--tone); border-radius: 6px; background: color-mix(in srgb, var(--tone) 22%, var(--bg)); font-weight: 600; }
 .sel-go:hover:not(:disabled) { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 32%, var(--bg)); }
@@ -1148,6 +1149,13 @@ button.link.quiet { color: var(--muted); }
 .effort-meter { flex: none; display: inline-flex; align-items: flex-end; gap: 1.5px; width: 22px; height: 12px; }
 .effort-meter span { width: 2.5px; border-radius: 1px; background: var(--border); }
 .effort-meter span.on { background: var(--accent); }
+/* How many options: beside Options mode under the message box, and in the selection bar's Options card. A native menu, drawn as the triggers beside it. */
+.option-count { position: relative; flex: none; display: inline-flex; align-items: center; }
+.option-count select { -webkit-appearance: none; appearance: none; height: 24px; margin: 0; padding: 0 19px 0 7px; font: inherit; font-size: 11.5px; font-weight: 500; color: var(--muted); background: transparent; border: none; border-radius: 6px; white-space: nowrap; }
+.option-count select:hover { background: var(--bg-3); color: var(--fg); }
+.option-count .icon-svg { position: absolute; right: 6px; color: var(--muted); pointer-events: none; }
+.option-count.sel-option-count select { height: 26px; border: 1px solid var(--border); color: var(--fg); }
+.option-count.sel-option-count select:hover { border-color: color-mix(in srgb, var(--tone) 55%, var(--border)); background: color-mix(in srgb, var(--tone) 10%, transparent); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
 /* Each mode's colour: its button under the message box, the assistant's offer of it, and your pick of it (Trace.tsx). */

@@ -142,7 +142,7 @@ ${ctx.codeExamples ? CODE_SECTION : ''}`;
  * (modes.ts, modeOffer).
  */
 export const MODES_SECTION = `## Another mode for this?
-The chat's modes: Write (edits the book), Ask (answers questions about it), Discuss (weighs a direction, changes nothing), Options (three versions of a passage) and Figures (diagrams, charts, illustrations). It's in Write unless a mode section says otherwise.
+The chat's modes: Write (edits the book), Ask (answers questions about it), Discuss (weighs a direction, changes nothing), Options (versions of a passage to pick from) and Figures (diagrams, charts, illustrations). It's in Write unless a mode section says otherwise.
 - When the author's message would go better in another mode, offer it instead of pressing on, and before asking them to decide. In Write: an open question of direction ("should…", "which is better…", "is it worth…") suits Discuss; "a few versions" suits Options; a diagram or chart suits Figures. In Ask: a question that turns into what to do suits Discuss.
 - To offer, say why in a sentence, start on neither way, and end your reply with this block. The author sees two choices, and their pick comes back as their next message:
 \`\`\`mode

@@ -29,8 +29,11 @@ describe('how a request from the selection bar is getting on', () => {
   });
 
   it('Options: in the chat to pick from, until one is picked; a reply without them is just over', () => {
-    expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', THREE)], queued: [], running: false }, options)).toEqual({ phase: 'options', picked: false });
-    expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', THREE, 2)], queued: [], running: false }, options)).toEqual({ phase: 'options', picked: true });
+    expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', THREE)], queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: false });
+    expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', THREE, 2)], queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: true });
+    // As many as came back, whatever was asked for.
+    const two = THREE.split('\n### Option 3')[0];
+    expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', two)], queued: [], running: false }, options)).toEqual({ phase: 'options', count: 2, picked: false });
     expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', 'Which passage?')], queued: [], running: false }, options)).toEqual({ phase: 'ended' });
   });
 
@@ -72,6 +75,8 @@ describe('what the card sends, and in which mode', () => {
     expect(barMessage('ask', ' Why is this bold? ')).toBe(askPrompt('Why is this bold?'));
     expect(barMessage('revise', 'Tighten it')).toBe(revisePrompt('Tighten it'));
     expect(barMessage('options', 'Shorter')).toBe(optionsPrompt('Shorter'));
+    expect(barMessage('options', 'Shorter', 1)).toBe('One option for the selected passage: Shorter');
+    expect(barMessage('options', 'Shorter', 5)).toBe('Five options for the selected passage: Shorter');
     expect(BAR_MODE).toEqual({ revise: 'write', options: 'options', ask: 'ask' });
   });
 });

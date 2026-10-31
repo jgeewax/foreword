@@ -3493,7 +3493,7 @@ async function menuChecks() {
   out.editor = await right(editor.getDomNode()!.querySelector('.view-lines'), host.left + p.left, host.top + p.top + 5);
   out.monacoMenuShown = !!document.querySelector('.monaco-menu-container, .context-view .monaco-menu');
   // Options… opens the selection bar's card, on Options, with the cursor in its box.
-  action('Three Options to Pick From…')?.();
+  action('Options to Pick From…')?.();
   await sleep(500);
   out.threeOptions = { card: !!document.querySelector('.selection-card.sel-options'), focused: !!document.activeElement?.matches('.selection-card .sel-input') };
   document.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();

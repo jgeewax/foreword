@@ -223,7 +223,7 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('ask-selection', 'Add Selection to Chat', { keys: '⌘I', keywords: ['ask', 'attach'], when: file }),
         { id: 'ask-about-selection', title: 'Ask About the Selection…', keywords: ['explain', 'question'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'ask') },
         { id: 'revise-selection', title: 'Revise the Selection…', keywords: ['rewrite', 'tighten', 'proofread'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'revise') },
-        { id: 'options-for-selection', title: 'Three Options for the Selection…', keywords: ['versions', 'rewrite'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'options') },
+        { id: 'options-for-selection', title: 'Options for the Selection…', keywords: ['versions', 'rewrite'], when: () => selection() && agentReady(), run: () => studio.events.emit('selection-card', 'options') },
         menu('fix-comments', 'Fix Review Comments', { when: () => idle() && s().review.comments.some((c) => c.status === 'open') }),
         menu('stop', 'Stop', { when: () => s().agent.running }),
         { id: 'resume', title: 'Resume', keywords: ['continue'], when: () => s().agent.stopped && !s().agent.running && !!s().agent.sessionId, run: () => studio.resume() },

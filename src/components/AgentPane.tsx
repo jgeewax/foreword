@@ -12,6 +12,7 @@ import { Icon } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
 import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
+import { OptionCount } from './OptionCount';
 import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu, useContextUse } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
@@ -723,6 +724,7 @@ function Composer() {
         />
         <div className="composer-controls">
           <ModeMenu />
+          {mode === 'options' && <OptionCount />}
           <AssistantMenu />
           <ModelPicker placement="up" />
           <EffortPicker />
@@ -911,7 +913,7 @@ const TIPS: ReactNode[] = [
     <kbd>Tab</kbd> switches mode. <strong>Discuss</strong> thinks a direction through with you before anything is written.
   </>,
   <>
-    <strong>Options</strong> writes three versions of a passage for you to pick from.
+    <strong>Options</strong> writes versions of a passage for you to pick from, as many as you choose.
   </>,
   <>
     Type <kbd>/</kbd> in the message box for commands.
