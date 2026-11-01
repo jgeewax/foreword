@@ -50,6 +50,20 @@ export const OPTIONS_AGAIN_PROMPT =
 /** As it was until the author could choose how many options (still read back, for conversations from then). */
 const OPTIONS_AGAIN_THREE = OPTIONS_AGAIN_PROMPT.replace('Write new options', 'Write three new options');
 
+/** "Three more options", "One more option". */
+const moreInWords = (count: number) => capitalized(optionsInWords(count).replace(/ (options?)$/, ' more $1'));
+
+/**
+ * "More like this" on an option: as many new options again, for the same
+ * passage, starting from that one. Its words go with it, so they're there
+ * however long ago it was written (in a fence longer than any in it).
+ */
+export const moreLikePrompt = (option: { n: number; label: string; text: string }, count = DEFAULT_OPTION_COUNT) => {
+  const fence = '`'.repeat(Math.max(3, ...(option.text.match(/`+/g) ?? []).map((run) => run.length + 1)));
+  const label = option.label ? ` (“${option.label}”)` : '';
+  return `${moreInWords(count)} like Option ${option.n}${label}. That one is closest to what I want: write new options that start from it and take it further, each in its own way, rather than going back toward the others. They replace the selected passage, as before.\n\nOption ${option.n} was:\n\n${fence}typst\n${option.text}\n${fence}`;
+};
+
 /** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
 export const askPrompt = (question: string) => `About the selected passage: ${question.trim()}`;
 
@@ -99,6 +113,7 @@ const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
 const REVISE_SELECTION = new RegExp(`^${esc(revisePrompt('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
 const OPTIONS_SELECTION = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for the selected passage: ([\\s\\S]+)$`);
 const ASK_SELECTION = new RegExp(`^${esc(askPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
+const MORE_LIKE = new RegExp(`^(${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (\\d+)(?: \\(“([^\\n]*)”\\))?\\. That one is closest to what I want: [\\s\\S]*?\\n\\nOption \\d+ was:\\n\\n(\`{3,})typst\\n([\\s\\S]*)\\n\\4$`);
 
 /** Each kind of message, read back: what it asked for, or null if it isn't that one. */
 const READERS: ((text: string) => StockAction | null)[] = [
@@ -121,6 +136,12 @@ const READERS: ((text: string) => StockAction | null)[] = [
     return m ? { verb: `${m[1]} for this passage`, rows: [{ text: m[2] }], tone: 'other', icon: 'check', mode: 'options' } : null;
   },
   (text) => (text === OPTIONS_AGAIN_PROMPT || text === OPTIONS_AGAIN_THREE ? { verb: 'New options for this passage', note: 'as I’ve changed it', tone: 'other', icon: 'check', mode: 'options' } : null),
+  (text) => {
+    // "Three more like Option 2", and its label (or, without one, its first line).
+    const m = MORE_LIKE.exec(text);
+    const what = m && (m[3] || m[5].trim().split('\n')[0]);
+    return m ? { verb: `${m[1].replace(/ options?$/, '')} like Option ${m[2]}`, ...(what ? { rows: [{ text: what }] } : {}), tone: 'other', icon: 'check', mode: 'options' } : null;
+  },
   (text) => {
     const m = ASK_SELECTION.exec(text);
     return m ? { verb: 'Ask about this passage', rows: [{ text: m[1] }], tone: 'look', icon: 'help', mode: 'ask' } : null;

@@ -2061,6 +2061,27 @@ async function optionsLiveChecks() {
     out.followUp = { attachments: user?.attachments, samePassage: !!second && second !== first && second.options.passage === first?.options?.passage, options: options2.map((o) => o.text) };
     await use(1);
     out.followUpUsed = { inPlace: !!options2[1]?.text && model.getLineContent(line + 1) === options2[1].text, firstNoLongerInUse: (studio.state.agent.items.find((i) => i.id === first?.id) as any)?.options?.applied ?? null };
+    // More like this on the first of those: as many again, for the same sentence, from that one.
+    editor.setPosition({ lineNumber: 30, column: 1 });
+    const more = [...(lastReply()?.querySelectorAll('.option-card')[0]?.querySelectorAll<HTMLButtonElement>('.option-actions button') ?? [])].find((b) => b.textContent === 'More like this');
+    out.moreButton = { found: !!more, title: more?.title, disabled: more?.disabled };
+    more?.click();
+    await waitFor(() => studio.state.agent.running, 30000, 'more like this to start').catch(() => {});
+    await waitFor(() => !studio.state.agent.running, 180000, 'more like this').catch(() => {});
+    await sleep(500);
+    const asked = [...studio.state.agent.items].reverse().find((i) => i.kind === 'user') as { text: string; attachments: string[] } | undefined;
+    const third = replyOf();
+    const options3 = third && third !== second ? parseOptions(third.text).options : [];
+    out.moreLikeThis = {
+      shown: [...document.querySelectorAll('.msg.user.by-button .step-verb')].at(-1)?.textContent,
+      row: [...document.querySelectorAll('.msg.user.by-button .user-action-rows li')].at(-1)?.textContent,
+      carriesOption: !!options2[0]?.text && !!asked?.text.includes(options2[0].text),
+      attachments: asked?.attachments,
+      samePassage: !!third && third !== second && third.options.passage === first?.options?.passage,
+      options: options3.map((o) => o.text),
+    };
+    await use(2);
+    out.moreLikeThisUsed = { inPlace: !!options3[2]?.text && model.getLineContent(line + 1) === options3[2].text };
   } finally {
     await ipc.fsWrite(file, original, await ipc.fsHash(file));
     await studio.reloadFromDisk(file);

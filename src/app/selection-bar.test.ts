@@ -37,6 +37,18 @@ describe('how a request from the selection bar is getting on', () => {
     expect(barProgress({ items: [user('u1', options.message, 2000, 9000), said('a1', 'Which passage?')], queued: [], running: false }, options)).toEqual({ phase: 'ended' });
   });
 
+  it('Options: picked from a later reply about the same passage (More like this) counts, but not from one before it or about another', () => {
+    const about = (item: ChatItem, passage: string, applied: number | null = null): ChatItem =>
+      item.kind === 'assistant' ? { ...item, options: { target: null, original: null, applied, passage } } : item;
+    const asked = user('u1', options.message, 2000, 9000);
+    const more = (passage: string, applied: number | null) => [asked, about(said('a1', THREE), 'p1'), user('u2', 'Three more options like Option 2.', 9100, 9900), about(said('a2', THREE), passage, applied)];
+    expect(barProgress({ items: more('p1', 0), queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: true });
+    expect(barProgress({ items: more('p1', null), queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: false });
+    expect(barProgress({ items: more('p2', 0), queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: false });
+    const before = [about(said('a0', THREE), 'p1', 1), asked, about(said('a1', THREE), 'p1')];
+    expect(barProgress({ items: before, queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: false });
+  });
+
   it('Ask: answered once its turn is over, even when the answer happens to hold options', () => {
     expect(barProgress({ items: [user('u1', ask.message)], queued: [], running: true }, ask)).toEqual({ phase: 'working' });
     expect(barProgress({ items: [user('u1', ask.message, 2000, 9000), said('a1', THREE)], queued: [], running: false }, ask)).toEqual({ phase: 'ended' });

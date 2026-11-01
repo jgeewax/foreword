@@ -547,6 +547,7 @@ function OptionsReply({ item }: { item: AssistantItem }) {
   const parsed = useMemo(() => parseOptions(item.text), [item.text]);
   const { target, applied, conflict } = item.options!;
   const [view, setView] = useState<OptionsView>(lastOptionsView);
+  const optionCount = useStore(studio.store, (s) => s.settings.optionCount);
   if (!parsed.options.some((o) => o.text != null)) {
     return (
       <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
@@ -626,6 +627,9 @@ function OptionsReply({ item }: { item: AssistantItem }) {
                 {applied === i ? 'In use ✓' : applied != null ? 'Use this instead' : target.text ? 'Use this' : 'Insert'}
               </button>
             )}
+            <button disabled={!item.done || !o.complete || o.text == null} title={`${optionCount === 1 ? 'A new option that starts' : `${optionCount} new options that start`} from this one and take it further`} onClick={() => void studio.moreLikeOption(item.id, i)}>
+              More like this
+            </button>
             <button disabled={!o.complete || o.text == null} onClick={() => copyText(o.text ?? '')}>
               Copy
             </button>

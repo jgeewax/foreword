@@ -4552,6 +4552,41 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - Sign-in runs the program in use (the author's, or Foreword's copy by its
   quoted path). `claude auth status` uses it too.
 
+### More like this, on an option (2026-11-01)
+
+- **Asked for:** "i often find myself thinking that none of the 3 options is
+  right, but one of them is headed in the right direction... so id like to
+  head down that pathway and pick again. then continue until we get closer to
+  something i like."
+- **The button:** *More like this*, between Use this and Copy on each option
+  card (the words people know from image search; "3 more options based on
+  this one" was too long). Its tooltip says how many ("3 new options that
+  start from this one and take it further"): the author's count, as for any
+  Options message. It works until one is right: each new reply's cards have
+  it too.
+- **It doesn't put the option in.** The passage stays as it is until the
+  author picks, so Keep mine still means theirs. The new options are for the
+  same followed passage (`OptionPassage`), as it is now, so Use this from any
+  round swaps out whichever option is in, as a typed follow-up does.
+- **The message carries the option's words** (`moreLikePrompt`), not just
+  its number: "Option 2" from a reply long ago, after a handover to another
+  assistant or a compacted conversation, would be a guess. The fence is
+  longer than any backtick run in the option, so a Typst raw block in it
+  can't close it early. The chat reads it back as "Three more like Option 2"
+  with the option's label (or its first line), like the other buttons.
+- **The selection bar's note** under the passage ("3 options are in the chat
+  · Pick one") now goes when an option is picked from a later reply about the
+  same passage, not only from its own: before, picking from a More like this
+  round (or a typed follow-up) left it asking.
+- Verified: unit tests for the message and its read-back (counts, no label, a
+  raw block inside) and for the note; two turns with Claude Code on Haiku
+  (scratch copy of the sample book, the Options instructions appended): three
+  options, then More like this on Option 2. All three new ones kept Option 2's
+  example-first opening and went three ways (a geometric picture, the "one
+  recipe" idea, a contrast with dependent vectors), in the format the cards
+  read. The `optionslive` self-test group now clicks it too; not yet run (the
+  screen was locked).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

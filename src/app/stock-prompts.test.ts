@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, OPTIONS_AGAIN_PROMPT, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
+import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
 import { addressPrompt, makeComment } from './review';
 import { todoPrompt } from './todos';
 import { modeChoiceMessage, modeConfig } from '../services/agent/modes';
@@ -41,6 +41,13 @@ describe('what a button asked for, read back from its message', () => {
     expect(stockAction(OPTIONS_AGAIN_PROMPT)).toMatchObject({ verb: 'New options for this passage', note: 'as I’ve changed it', mode: 'options' });
     // As it was sent before the count could be chosen.
     expect(stockAction(OPTIONS_AGAIN_PROMPT.replace('Write new', 'Write three new'))).toMatchObject({ verb: 'New options for this passage', mode: 'options' });
+    expect(stockAction(moreLikePrompt({ n: 2, label: 'Warmer', text: 'She smiled.\nThen left.' }))).toMatchObject({ verb: 'Three more like Option 2', rows: [{ text: 'Warmer' }], mode: 'options' });
+    expect(stockAction(moreLikePrompt({ n: 1, label: '', text: '  The title\nand more' }, 1))).toMatchObject({ verb: 'One more like Option 1', rows: [{ text: 'The title' }], mode: 'options' });
+    expect(messageLine(moreLikePrompt({ n: 3, label: 'Plain', text: 'A.' }, 5))).toBe('Five more like Option 3: “Plain”');
+    // An option with Typst's own raw block in it: the fence round it is longer.
+    const raw = moreLikePrompt({ n: 2, label: '', text: 'Run:\n```rust\nfn main() {}\n```' });
+    expect(raw).toContain('\n````typst\nRun:\n```rust\nfn main() {}\n```\n````');
+    expect(stockAction(raw)).toMatchObject({ verb: 'Three more like Option 2', rows: [{ text: 'Run:' }] });
     expect(stockAction(askPrompt('Why is everything after it bold?'))).toMatchObject({ verb: 'Ask about this passage', rows: [{ text: 'Why is everything after it bold?' }], tone: 'look', mode: 'ask' });
     expect(stockAction('Revise the selected passage: shorter')).toBeNull();
   });

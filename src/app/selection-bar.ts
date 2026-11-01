@@ -83,7 +83,11 @@ export function barProgress(agent: Agent, req: BarRequest): BarProgress {
   const reply = turnsOf(agent.items).find((t) => t.key === user.id)?.reply;
   const count = reply ? parseOptions(reply.text).options.filter((o) => o.complete && o.text !== null).length : 0;
   if (!reply || !count) return { phase: 'ended' };
-  return { phase: 'options', count, picked: reply.options?.applied != null };
+  // Picked from it, or from a later reply about the same passage (More like this, a follow-up).
+  const passage = reply.options?.passage;
+  const later = agent.items.slice(agent.items.indexOf(reply));
+  const picked = later.some((it) => it.kind === 'assistant' && it.options?.applied != null && (it === reply || (!!passage && it.options.passage === passage)));
+  return { phase: 'options', count, picked };
 }
 
 /** What a revision did to the passage, word by word, and how many words longer it got; null if it's the same. */
