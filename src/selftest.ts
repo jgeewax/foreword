@@ -5231,6 +5231,21 @@ async function proofingChecks() {
     await sleep(800);
     out.hoverLearn = { ...(out.hoverLearn as object), stillGone: !shown().includes('spelling:Quimblewick') };
 
+    // A hover at the editor's right edge stays in the editor: the preview beside it is a native view drawn over the page.
+    const cols = Math.floor(editor.getLayoutInfo().contentWidth / editor.getOption(monaco.editor.EditorOption.fontInfo).typicalHalfwidthCharacterWidth);
+    const edgeLine = `${'a '.repeat(Math.floor((cols - 12) / 2))}Vexnorbel\n\n`;
+    editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: edgeLine }]);
+    editor.setPosition(model.getFullModelRange().getEndPosition());
+    await waitFor(() => shown().includes('spelling:Vexnorbel'), 10000, 'the word at the edge');
+    editor.revealLineInCenter(2);
+    editor.setPosition(model.getPositionAt(offsetOf('Vexnorbel') + 2));
+    editor.trigger('selftest', 'editor.action.showHover', {});
+    await sleep(600);
+    const edgeHover = document.querySelector('.monaco-hover:not(.hidden)')?.getBoundingClientRect();
+    const editorBox = editor.getDomNode()!.getBoundingClientRect();
+    out.edgeHover = edgeHover ? { inside: edgeHover.left >= editorBox.left && edgeHover.right <= editorBox.right, hover: [Math.round(edgeHover.left), Math.round(edgeHover.right)], editor: [Math.round(editorBox.left), Math.round(editorBox.right)] } : null;
+    editor.trigger('selftest', 'editor.action.hideHover', {});
+
     // The right-click menu: the fixes first; one replaces the word, ⌘Z puts it back.
     out.menu = (await right(offsetOf('teh'))).slice(0, 7);
     action('the')?.();

@@ -13,6 +13,7 @@ import { attachTodoHover } from './TodoHover';
 import { attachSelectionBar } from './SelectionBar';
 import { attachProofing, languageEntries, proofEntries } from './ProofingHover';
 import { headings, type Heading } from '../editor/outline';
+import { keepWidgetsInside } from '../editor/overflow-widgets';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -257,6 +258,8 @@ export function EditorPane() {
     const offTodoHover = attachTodoHover(editor);
     // Spelling and grammar: the hover, ⌘. and the caret that holds back the word being typed.
     const offProofing = attachProofing(editor);
+    // Its hover and suggestions stop at its right edge, short of the preview (a native view drawn over the page).
+    const offWidgets = keepWidgetsInside(editor);
     // The headings, for the path bar (the cursor's own line comes from the store).
     const readOutline = () => {
       const model = editor.getModel();
@@ -459,6 +462,7 @@ export function EditorPane() {
       showVersion.dispose();
       offTodoHover();
       offProofing();
+      offWidgets();
       offReview();
       clearTimeout(commentTimer);
       offSelectionBar();
