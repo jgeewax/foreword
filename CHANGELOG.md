@@ -2,6 +2,36 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.9.0 · 3 November 2026
+
+### The assistant
+
+- **It sees your pages.** The assistant can look at the pages as they're typeset now, as the preview shows them, along with the book's outline (the page each heading lands on), the problems the editor has marked, and your open comments. It looks before and after a change to how the pages look, so it notices a figure that landed two pages late, a table running off the page, or a heading left alone at the foot of one.
+- **Briefed for a book, not for code.** Claude Code, Codex, OpenCode and Gemini CLI start a task with Foreword's own instructions, written for working on a book with its author, in place of their makers' instructions for writing software. Your book's own instructions come after. Antigravity gets Foreword's added to its own.
+- **Options: as many as you like, and More like this.** Choose how many versions Options writes, one to five, beside Options under the message box or in the selection bar's Options card (three until you change it). Each option has **More like this**: when one is close but not quite there, it writes that many again, starting from that one and taking it further, as often as you like. Nothing goes into your text until you pick one.
+- **Make all the changes at once.** When Ask's answer card has two or more changes, *Make all 3 changes* at the top of *What I'd change* makes them all, each as *Make this change* would. ⌘Z takes back a file's changes in one step, and each change's own Undo still works. Any it can't find in your text go to Write mode together.
+- **New task at the top.** A + in the assistant pane's header starts a new task, where Claude Code has it. The New task above the message box stays.
+- **The Revise box grows as you type.** In the bar under a selection, a long request wraps onto more lines, up to about eight, rather than scrolling out of sight. ⏎ sends, and ⇧⏎ starts a new line. The card is as wide as the editor's text, so beside the preview it's no longer cut off at the edge.
+- **Reading and changing outside the book are two settings.** Settings ▸ Permissions has *Read files outside this book* and *Change files outside this book*, so the assistant can look in your other folders without asking and still show you each change there first. Your setting from before applies to both.
+
+### Your assistant
+
+- **Foreword uses the assistant you have**: OpenCode, Claude Code, Codex or Gemini CLI, when it's new enough. If you don't have one, **Install** (in the chat or in Settings ▸ Assistant) puts in Foreword's own copy, fetched from its maker. It goes in Foreword's own folder, nothing else on your Mac changes, and you don't need Homebrew. Foreword keeps its copy up to date as Foreword updates.
+- **Used the OpenCode that came with Foreword?** Foreword no longer comes with an assistant inside, so after this update the chat says OpenCode isn't installed yet. Click **Install** once, and your accounts and models in OpenCode carry over.
+- **The first time you open Foreword**, it picks an assistant your Mac already has, and the Welcome screen says how the one you chose stands.
+
+### Source Control
+
+- **Source Control works as VS Code's.** **Discard Changes** (↶) on a file, or *Discard All Changes*, puts it back as it was last committed; a new file goes to the Trash. It asks first, and History keeps the book as it was, so you can always get it back.
+- **More ways to commit.** Commit's menu has *Commit (Amend)*, *Commit & Push*, *Commit & Sync* and *Undo Last Commit*, which puts the change and its message back to commit again. With nothing to commit, the button is **Sync Changes**, with how many to pull and push, or **Publish Branch**.
+- **Branches.** The branch shows in Source Control's header and at the left of the status bar; click it to switch to another branch or start a new one. There's also *Fetch*, a *Merge Changes* group for conflicts, and *Add to .gitignore*, *Reveal in Finder* and *Copy Path* on a file.
+
+### Fixes
+
+- Claude Code keeps its notes about your book in a folder of its own outside the book, so every look there asked you first. That folder counts as the book's own now.
+- *Add to Dictionary* sometimes did nothing, and the squiggle stayed, when a check came in while the suggestions were open. It works every time now, and the word's squiggles go at once.
+- Spelling suggestions and other pop-ups near the editor's right edge were partly hidden under the preview. They stay inside the editor now.
+
 ## 0.8.2 · 24 October 2026
 
 ### The assistant

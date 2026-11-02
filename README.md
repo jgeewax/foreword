@@ -16,11 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.8.2:** switch assistants halfway through a task, as you would models: the chat carries on with the new one · every task in one list, whichever assistant it was with
-
-**New in 0.8.1:** Ask mode answers as a card: your question as it understood it, the answer and how sure it is, the places in your book that show it, and what it would change · charts in the chat
-
-**New in 0.8:** spelling and grammar as you type, as Word does it, checked on your Mac · a Tasks view: what needs you, what's at work, what each task changed · ask about a selection in your own words · <kbd>⌘</kbd>-click a reference to go to what it points to · a reference that points nowhere shows in red, and the preview carries on
+**New in 0.9:** the assistant sees your pages, so it checks how its changes look · Options writes one to five versions, and *More like this* takes the closest further · make all of an answer's changes at once · Source Control as VS Code's: discard, branches, sync, amend and undo · Foreword uses the assistant you have, or installs its own copy from the maker
 
 <br>
 
@@ -79,7 +75,7 @@ It redraws only the pages in view: in a 491-page book, a change shows up in abou
 
 AI is a great writing partner, but a code editor is the wrong place to write a book. Here the assistant works on chapters and passages. Select some text and a bar under it offers **Revise**, **Options** and **Ask**: say what you want changed or what you want to know, or pick one of the usual ones. It edits the book itself, then tells you what it did in a sentence or two, and a line it points to is a link to that line. Its steps read as sentences, like *Read "Story of the Door" (chapter 1)*, never as shell commands, and the formulas and Typst in its replies are drawn as your book sets them, in the book's own notation.
 
-It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Ask** answers questions in the chat and changes nothing. **Discuss** thinks a direction through with you before anything is written: it says what it would do, and argues back. **Options** gives you three versions of a passage to pick from, as text or set as they'd print. When another mode would suit what you asked, it says so and offers it, with what it would do either way. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking: before a command runs, it says what the command does, and an “always” is a rule you can read and take back.
+It reads the chapters it needs and follows your book's style guide, and the lines it changed stay marked, so you know what's yours. **Ask** answers questions in the chat and changes nothing. **Discuss** thinks a direction through with you before anything is written: it says what it would do, and argues back. **Options** gives you versions of a passage to pick from (three, or as many as five), as text or set as they'd print, and *More like this* when one is close but not there yet. When another mode would suit what you asked, it says so and offers it, with what it would do either way. When it needs you to decide something, it asks in a panel where you type, with answers to pick from. You decide what it may do without asking: before a command runs, it says what the command does, and an “always” is a rule you can read and take back.
 
 </td>
 </tr>
@@ -139,7 +135,7 @@ Comments sit beside the text, never in it.
 
 Engineers keep every version in Git. Most writers keep *chapter-3-final-v2-REAL.docx*. Foreword keeps the versions for you, as you work and around every change the assistant makes, in a repository of its own outside the book's folder.
 
-History is a timeline of them, coloured by who made each one. Click a version to see what changed, line by line or word by word, then undo just that change or put the whole book back. Name a version, like “Draft sent to my editor”. Already keep your book in Git? Source Control stages, commits, pulls and pushes it.
+History is a timeline of them, coloured by who made each one. Click a version to see what changed, line by line or word by word, then undo just that change or put the whole book back. Name a version, like “Draft sent to my editor”. Already keep your book in Git? Source Control works as VS Code's: stage, commit, discard, switch branches, pull, push and sync.
 
 </td>
 </tr>
