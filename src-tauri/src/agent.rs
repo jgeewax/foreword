@@ -18,7 +18,7 @@ use tokio::{
 use crate::{
     Win, children, discover,
     error::{CmdError, CmdResult},
-    logs,
+    install, logs,
 };
 
 pub struct AgentServer {
@@ -72,11 +72,7 @@ pub async fn agent_start(state: Win, config: Option<String>) -> CmdResult<AgentI
     {
         return Ok(server.info.clone());
     }
-    let bin = discover::find_opencode().ok_or_else(|| {
-        CmdError::Unavailable(
-            "opencode not found (brew install opencode, or choose it in Settings ▸ Tools)".into(),
-        )
-    })?;
+    let bin = discover::find_opencode().ok_or_else(|| install::not_installed("opencode"))?;
     let port = free_port()?;
     let password = uuid::Uuid::new_v4().simple().to_string();
     let mut command = Command::new(&bin);

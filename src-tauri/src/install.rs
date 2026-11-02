@@ -363,7 +363,8 @@ pub struct Launch {
     pub path: OsString,
 }
 
-fn not_installed(kind: &str) -> CmdError {
+/// The chat offers Install for this error, in place of Retry.
+pub fn not_installed(kind: &str) -> CmdError {
     let name = match kind {
         "claude" => "Claude Code",
         "codex" => "Codex",
