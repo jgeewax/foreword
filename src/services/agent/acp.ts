@@ -814,7 +814,7 @@ export class AcpAdapter implements AgentAdapter {
     const pick = (kinds: string[]) => pickOption(options, kinds);
     if (!s) return this.respond(rpcId, { outcome: { outcome: 'cancelled' } });
     const ask = permissionAsk(params.toolCall as AcpToolCall, this.root);
-    // Read-only: no file changes, outside the book either (the rules see one there as only "outside").
+    // Read-only: no file changes, outside the book either, whatever tool it comes from.
     const effect = s.readOnly && CHANGE_KINDS.has(params.toolCall?.kind) ? 'deny' : decide(ask.action, ask.resources, sessionRules(s.permissions, s.readOnly, s.rules));
     if (effect !== 'ask') {
       const optionId = effect === 'allow' ? pick(['allow_once', 'allow_always']) : pick(['reject_once', 'reject_always']);

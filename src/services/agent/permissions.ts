@@ -5,6 +5,11 @@
 // (any path outside the project), webfetch, websearch, subagent, question.
 // Rules are last-match-wins.
 //
+// Outside the project, OpenCode asks external_directory about the folder
+// first (for a read, an edit, or a path in a command), then the tool's own
+// action with the file's full path: "edit /Users/a/notes.md". Inside, paths
+// are relative. Verified in the 2.0.20 binary (FileAccess.resolve).
+//
 // Shell: OpenCode splits a command line into its commands and checks each one
 // (`ls a && wc -l b; echo x | cat` asks about "ls a", "wc -l b", "echo x",
 // "cat"; `$(…)` and backticks are checked on their own too). Redirections
@@ -22,8 +27,10 @@ export type AgentPermissions = {
   move: Level;
   /** Delete files (rm and friends). */
   delete: Level;
-  /** Read or change files outside the book. */
-  outside: Level;
+  /** Read files outside the book: other folders on this Mac. */
+  outsideRead: Level;
+  /** Change or create files outside the book. */
+  outsideEdit: Level;
   /** Any other terminal command. */
   shell: Level;
   /** Web search and fetching pages. */
@@ -38,7 +45,8 @@ export const PERMISSION_ITEMS: { key: keyof AgentPermissions; label: string; det
   { key: 'edit', label: 'Edit and create files', detail: 'Changes to the book’s files, and new files in it.' },
   { key: 'move', label: 'Rename or move files', detail: 'The mv command.' },
   { key: 'delete', label: 'Delete files', detail: 'rm and similar commands. History keeps a copy.' },
-  { key: 'outside', label: 'Files outside this book', detail: 'Reading or changing other folders on this Mac.' },
+  { key: 'outsideRead', label: 'Read files outside this book', detail: 'Looking in other folders on this Mac.' },
+  { key: 'outsideEdit', label: 'Change files outside this book', detail: 'Editing or creating files in other folders on this Mac.' },
   { key: 'shell', label: 'Run other commands', detail: 'Anything else in a terminal. Commands that only look (ls, cat, grep, git status…) always run; building the book is always blocked.' },
   { key: 'web', label: 'Search and read the web', detail: 'Web search and fetching pages.' },
   {
@@ -54,17 +62,17 @@ export const PRESETS: Record<PresetId, { label: string; description: string; per
   ask: {
     label: 'Ask first',
     description: 'Asks before every change. You see each edit first.',
-    permissions: { edit: 'ask', move: 'ask', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask', settings: 'ask' },
+    permissions: { edit: 'ask', move: 'ask', delete: 'ask', outsideRead: 'ask', outsideEdit: 'ask', shell: 'ask', web: 'ask', settings: 'ask' },
   },
   edit: {
     label: 'Edit freely',
     description: 'Edits, creates and renames files in the book, and changes Foreword’s settings, without asking; asks for the rest.',
-    permissions: { edit: 'allow', move: 'allow', delete: 'ask', outside: 'ask', shell: 'ask', web: 'ask', settings: 'allow' },
+    permissions: { edit: 'allow', move: 'allow', delete: 'ask', outsideRead: 'ask', outsideEdit: 'ask', shell: 'ask', web: 'ask', settings: 'allow' },
   },
   readonly: {
     label: 'Read-only',
     description: 'Reads and answers, never changes anything.',
-    permissions: { edit: 'deny', move: 'deny', delete: 'deny', outside: 'deny', shell: 'deny', web: 'ask', settings: 'deny' },
+    permissions: { edit: 'deny', move: 'deny', delete: 'deny', outsideRead: 'deny', outsideEdit: 'deny', shell: 'deny', web: 'ask', settings: 'deny' },
   },
 };
 
@@ -80,13 +88,15 @@ export function presetOf(p: AgentPermissions): PresetId | 'custom' {
 const LEVELS: Level[] = ['allow', 'ask', 'deny'];
 export function sanitizePermissions(raw: unknown): AgentPermissions | null {
   if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
   const out = { ...DEFAULT_PERMISSIONS };
   for (const k of Object.keys(out) as (keyof AgentPermissions)[]) {
-    const v = (raw as Record<string, unknown>)[k];
-    if (LEVELS.includes(v as Level)) out[k] = v as Level;
+    if (LEVELS.includes(r[k] as Level)) out[k] = r[k] as Level;
   }
   // From before there was a settings permission: as for editing files.
-  if (!LEVELS.includes((raw as Record<string, unknown>).settings as Level)) out.settings = out.edit;
+  if (!LEVELS.includes(r.settings as Level)) out.settings = out.edit;
+  // From before reading and changing outside the book were apart: one setting for both.
+  for (const k of ['outsideRead', 'outsideEdit'] as const) if (!LEVELS.includes(r[k] as Level) && LEVELS.includes(r.outside as Level)) out[k] = r.outside as Level;
   return out;
 }
 
@@ -160,7 +170,8 @@ export function sessionRules(p: AgentPermissions, readOnly = false, extra: reado
     { action: 'list', resource: '*', effect: 'allow' },
     { action: 'read', resource: '*.env', effect: 'ask' },
     { action: 'read', resource: '*.env.*', effect: 'ask' },
-    { action: 'external_directory', resource: '*', effect: p.outside },
+    // Another folder: reading there is this setting's to say; a change there asks again, as an edit (below).
+    { action: 'external_directory', resource: '*', effect: p.outsideRead },
     { action: 'edit', resource: '*', effect: p.edit },
     ...(p.edit === 'allow'
       ? ([
@@ -194,8 +205,19 @@ export function sessionRules(p: AgentPermissions, readOnly = false, extra: reado
     ...STUDIO_LOOK_TOOLS.map((t): PermissionRule => ({ action: STUDIO_TOOL_ACTION, resource: t, effect: 'allow' })),
     ...STUDIO_TOOL_NAMES.map((t): PermissionRule => ({ action: `${STUDIO_TOOLS}_${t}`, resource: '*', effect: STUDIO_LOOK_TOOLS.includes(t) ? 'allow' : studioEffect })),
     ...authorRules(extra, p.shell),
+    // A change outside the book (a full path) is for its own setting, whatever "allow for this task" let in
+    // for the book's files; .env files there still ask, and what the task allowed out there holds.
+    { action: 'edit', resource: '/*', effect: p.outsideEdit },
+    ...(p.outsideEdit === 'allow'
+      ? ([
+          { action: 'edit', resource: '/*.env', effect: 'ask' },
+          { action: 'edit', resource: '/*.env.*', effect: 'ask' },
+        ] as PermissionRule[])
+      : []),
+    ...extra.filter((r) => r.action === 'edit' && r.resource.startsWith('/')),
     // Files that say what the assistant may do: changing them is the author's to allow, each time, whatever else is allowed.
     ...PERMISSION_FILES.map((resource): PermissionRule => ({ action: 'edit', resource, effect: p.edit === 'deny' ? 'deny' : 'ask' })),
+    ...(p.outsideEdit === 'deny' ? [{ action: 'edit', resource: '/*', effect: 'deny' } as PermissionRule] : []),
     // Read-only: commands that only look still run; writing forms never do.
     ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny'), ...extra.filter((r) => r.effect === 'deny')] : []),
     ...NO_COMPILE_RULES,

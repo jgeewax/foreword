@@ -141,10 +141,41 @@ describe('fine-grained', () => {
   });
 
   it('separates web access and outside files', () => {
-    const rules = p({ web: 'allow', outside: 'deny' });
+    const rules = p({ web: 'allow', outsideRead: 'deny', outsideEdit: 'deny' });
     expect(effect('websearch', 'typst footnotes', rules)).toBe('allow');
     expect(effect('webfetch', 'https://typst.app/docs', rules)).toBe('allow');
     expect(effect('external_directory', '/Users/x/Documents/other', rules)).toBe('deny');
+    expect(effect('edit', '/Users/x/Documents/other/notes.md', rules)).toBe('deny');
+  });
+
+  it('reads outside the book apart from changes there', () => {
+    // Reading allowed, changes asked: OpenCode passes the folder, then asks about the edit (by its full path).
+    const rules = p({ edit: 'allow', outsideRead: 'allow', outsideEdit: 'ask' });
+    expect(effect('external_directory', '/Users/x/Documents/*', rules)).toBe('allow');
+    expect(effect('read', '/Users/x/Documents/notes.md', rules)).toBe('allow');
+    expect(effect('edit', '/Users/x/Documents/notes.md', rules)).toBe('ask');
+    expect(effect('edit', 'chapters/ch1.typ', rules)).toBe('allow');
+    // Changes allowed out there: .env files and the assistants' settings still ask.
+    const free = p({ outsideRead: 'allow', outsideEdit: 'allow' });
+    expect(effect('edit', '/Users/x/Documents/notes.md', free)).toBe('allow');
+    expect(effect('edit', '/Users/x/app/.env', free)).toBe('ask');
+    expect(effect('edit', '/Users/x/.claude/settings.json', free)).toBe('ask');
+    expect(effect('edit', 'chapters/ch1.typ', free)).toBe('ask');
+    // Never out there, whatever the book's files may.
+    const never = p({ edit: 'allow', outsideEdit: 'deny' });
+    expect(effect('edit', '/Users/x/.claude/settings.json', never)).toBe('deny');
+    expect(effect('edit', '.claude/settings.json', never)).toBe('ask');
+  });
+
+  it('keeps "allow for this task" on the book’s files to the book, and on a file outside to that file', () => {
+    const book = [{ action: 'edit', resource: '*', effect: 'allow' as const }];
+    expect(effect('edit', 'chapters/ch1.typ', sessionRules(PRESETS.ask.permissions, false, book))).toBe('allow');
+    expect(effect('edit', '/Users/x/notes.md', sessionRules(PRESETS.ask.permissions, false, book))).toBe('ask');
+    expect(effect('edit', '/Users/x/notes.md', sessionRules({ ...PRESETS.ask.permissions, outsideEdit: 'deny' }, false, book))).toBe('deny');
+    const file = [{ action: 'edit', resource: '/Users/x/notes.md', effect: 'allow' as const }];
+    expect(effect('edit', '/Users/x/notes.md', sessionRules(PRESETS.ask.permissions, false, file))).toBe('allow');
+    expect(effect('edit', '/Users/x/other.md', sessionRules(PRESETS.ask.permissions, false, file))).toBe('ask');
+    expect(effect('edit', '/Users/x/notes.md', sessionRules(PRESETS.ask.permissions, true, file))).toBe('deny');
   });
 
   it('Ask, Discuss and Options stay read-only whatever the settings', () => {
@@ -161,7 +192,7 @@ describe('presets and descriptions', () => {
     expect(presetOf({ ...PRESETS.ask.permissions, web: 'allow' })).toBe('custom');
     expect(describePermissions(PRESETS.readonly.permissions)).toMatch(/^Permissions: Read-only/);
     expect(describePermissions({ ...PRESETS.ask.permissions, web: 'allow', delete: 'deny' })).toBe(
-      'Permissions changed (allowed: search and read the web; asks first: edit and create files, rename or move files, files outside this book, run other commands, change Foreword’s settings; never: delete files).',
+      'Permissions changed (allowed: search and read the web; asks first: edit and create files, rename or move files, read files outside this book, change files outside this book, run other commands, change Foreword’s settings; never: delete files).',
     );
   });
 
@@ -176,6 +207,12 @@ describe('presets and descriptions', () => {
     expect(presetOf(sanitizePermissions(before)!)).toBe('edit');
     expect(sanitizePermissions({ ...before, edit: 'ask' })!.settings).toBe('ask');
     expect(sanitizePermissions({ ...before, edit: 'deny' })!.settings).toBe('deny');
+  });
+
+  it('gives settings files from before reading and changing outside were apart the one level for both', () => {
+    expect(sanitizePermissions({ ...PRESETS.ask.permissions, outsideRead: undefined, outsideEdit: undefined, outside: 'deny' })).toMatchObject({ outsideRead: 'deny', outsideEdit: 'deny' });
+    expect(sanitizePermissions({ ...PRESETS.ask.permissions, outsideRead: 'allow', outsideEdit: undefined, outside: 'deny' })).toMatchObject({ outsideRead: 'allow', outsideEdit: 'deny' });
+    expect(sanitizePermissions({ ...PRESETS.ask.permissions, outsideRead: undefined, outsideEdit: undefined })).toMatchObject({ outsideRead: 'ask', outsideEdit: 'ask' });
   });
 });
 

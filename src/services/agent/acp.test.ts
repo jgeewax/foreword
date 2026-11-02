@@ -52,8 +52,8 @@ describe('ACP tool calls as the app’s tools', () => {
     const [write, exit] = asks;
     expect(appTool(write)).toMatchObject({ name: 'plan_write', input: { filePath: '/Users/ada/.claude/plans/plan-a-change-rename-fizzy-scroll.md' } });
     expect(String((appTool(write).input as { content: string }).content)).toMatch(/^# Plan: rename chapter heading/);
-    // A write outside the book to the rules, as any other: the author's setting for outside files decides.
-    expect(permissionAsk(write, ROOT)).toMatchObject({ action: 'external_directory', resources: ['/Users/ada/.claude/plans/plan-a-change-rename-fizzy-scroll.md'] });
+    // A write outside the book to the rules, as any other: the author's setting for changes outside decides.
+    expect(permissionAsk(write, ROOT)).toMatchObject({ action: 'edit', resources: ['/Users/ada/.claude/plans/plan-a-change-rename-fizzy-scroll.md'] });
     expect(appTool(exit)).toEqual({ name: 'plan_exit', input: { plan: (exit.rawInput as { plan: string }).plan } });
     expect(permissionAsk(exit, ROOT)).toEqual({ action: 'plan_exit', resources: ['*'], patches: [] });
     // Asked before the plan was written down, it comes without one.
@@ -70,7 +70,9 @@ describe('ACP tool calls as the app’s tools', () => {
     expect(ask.resources).toEqual(['chapters/ch1-vectors.typ']);
     expect(ask.patches[0].file).toBe('chapters/ch1-vectors.typ');
     expect(ask.patches[0].patch.split('\n')).toEqual(['--- chapters/ch1-vectors.typ', '+++ chapters/ch1-vectors.typ', '-Two vectors are orthogonal', '+Two vectors are perpendicular']);
-    expect(permissionAsk({ toolCallId: 'z', kind: 'edit', locations: [{ path: '/etc/hosts' }] }, ROOT).action).toBe('external_directory');
+    // Outside the book: an edit by its full path (the setting for changes there), a read as the folder (the one for reading there).
+    expect(permissionAsk({ toolCallId: 'z', kind: 'edit', locations: [{ path: '/etc/hosts' }] }, ROOT)).toMatchObject({ action: 'edit', resources: ['/etc/hosts'] });
+    expect(permissionAsk({ toolCallId: 'z', kind: 'read', locations: [{ path: '/etc/hosts' }] }, ROOT)).toMatchObject({ action: 'external_directory', resources: ['/etc/hosts'] });
   });
 
   it('the permission rules answer what they can', () => {
@@ -86,6 +88,14 @@ describe('ACP tool calls as the app’s tools', () => {
     expect(decide('shell', ['typst compile main.typ'], edit)).toBe('deny');
     expect(decide('shell', ['ls $(rm x)'], edit)).toBe('ask');
     expect(decide('webfetch', ['https://typst.app'], ask)).toBe('ask');
+    // Reading outside allowed, changes there asked.
+    const reads = sessionRules({ ...PRESETS.edit.permissions, outsideRead: 'allow', outsideEdit: 'ask' });
+    const outside = (kind: string) => {
+      const a = permissionAsk({ toolCallId: kind, kind, locations: [{ path: '/Users/ada/notes.md' }] }, ROOT);
+      return decide(a.action, a.resources, reads);
+    };
+    expect(outside('read')).toBe('allow');
+    expect(outside('edit')).toBe('ask');
   });
 });
 
@@ -149,7 +159,7 @@ describe('AcpAdapter', () => {
     const { adapter, sent, events, deliver } = harness();
     await adapter.start();
     // Edits and files outside the book allowed: read-only still wins.
-    const permissions = { ...PRESETS.edit.permissions, outside: 'allow' as const };
+    const permissions = { ...PRESETS.edit.permissions, outsideRead: 'allow' as const, outsideEdit: 'allow' as const };
     const sessionId = await adapter.createSession(null, { permissions, readOnly: true });
     const options = [
       { optionId: 'yes', kind: 'allow_once' },

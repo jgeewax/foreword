@@ -205,11 +205,13 @@ export function permissionAsk(call: AcpToolCall, root: string): { action: string
   const own = studioToolName(name);
   if (own) return { action: STUDIO_TOOL_ACTION, resources: [own], patches };
   switch (name) {
-    // Its plan written down is a write like any other to the rules: outside the book, as the author's setting says.
+    // Outside the book, an edit by its full path, as OpenCode asks after the folder: the setting for changes
+    // out there says. Its plan written down is a write like any other.
     case PLAN_WRITE:
     case 'edit':
     case 'write':
-      return { action: file.outside ? 'external_directory' : 'edit', resources: [file.path], patches };
+      return { action: 'edit', resources: [file.path], patches };
+    // Outside the book, the folder: the setting for reading out there says.
     case 'read':
     case 'glob':
     case 'grep':

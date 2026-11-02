@@ -684,7 +684,8 @@ export function taskAllowance(action: string, resources: string[]): PermissionRu
   const allow = (resource: string): PermissionRule => ({ action, resource, effect: 'allow' });
   switch (action) {
     case 'edit':
-      // Every change to the book's files, except .env files, which ask each time.
+      // Outside the book (a full path): those files. In it, every change to the book's files, except .env files, which ask each time.
+      if (resources.some((r) => r.startsWith('/'))) return resources.map(allow);
       return [allow('*'), { action, resource: '*.env', effect: 'ask' }, { action, resource: '*.env.*', effect: 'ask' }];
     case 'websearch':
       return [allow('*')];
@@ -706,7 +707,7 @@ export function taskAllowance(action: string, resources: string[]): PermissionRu
 export function taskAllowanceWords(action: string, resources: string[]): string {
   switch (action) {
     case 'edit':
-      return 'changes to the book’s files';
+      return resources.some((r) => r.startsWith('/')) ? `changes to ${resources.join(', ')}` : 'changes to the book’s files';
     case 'websearch':
       return 'web searches';
     case 'webfetch': {

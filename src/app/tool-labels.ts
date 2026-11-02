@@ -335,7 +335,9 @@ export function describePermission(action: string, resources: readonly string[],
       return { what: describeCommand(command, names).ask, code: command };
     }
     case 'edit':
-      return { what: `change ${files()}` };
+      // Claude Code's plan, in its own folder (plan mode).
+      if (resources.length && resources.every(isPlanFile)) return { what: 'write its notes for the plan, which it keeps outside the book' };
+      return { what: `change ${files()}${resources.some((r) => r.startsWith('/') && !bookPath(names.root, r)) ? ', outside the book' : ''}` };
     case 'read':
       return { what: `read ${files()}, which can hold passwords or keys` };
     case 'external_directory':
