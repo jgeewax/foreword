@@ -38,7 +38,7 @@ image: images/f/history-changes.webp
 
 <h2>Where it’s kept</h2>
 <p>History is kept in Foreword’s own folder on your Mac, not in your book’s folder, so the book stays just as you’d send it. It includes every file in the book, pictures too. A version keeps only what changed, so even a long book’s History takes little room.</p>
-<p>It asks nothing of you: no saving copies as <em>chapter-3-final-v2-REAL.docx</em>, no commits, no messages. If you do keep your book in Git, History never reads or writes it, and your Git log stays yours. <strong>Source Control</strong> appears as a view of its own, with commit, push and pull, and nothing in it can throw work away.</p>
+<p>It asks nothing of you: no saving copies as <em>chapter-3-final-v2-REAL.docx</em>, no commits, no messages. If you do keep your book in Git, History never reads or writes it, and your Git log stays yours. <strong>Source Control</strong> appears as a view of its own and works as VS Code’s: stage and commit (or amend, or undo the last commit), discard changes, switch branches or start one, and pull, push and sync. Discarding asks first, a new file goes to the Trash rather than away for good, and History keeps the book as it was, so you can always get it back.</p>
 
 <h2>Your typing and the assistant’s, at once</h2>
 <p>You can keep writing while the assistant works, in the same chapter. When a file you have open changes underneath you (the assistant, Git, another program), Foreword folds the change into what you’re typing instead of making you choose between them. Your unsaved typing stays, their change goes in around it, and <kbd>⌘</kbd><kbd>Z</kbd> takes their change out in one step.</p>
@@ -62,6 +62,6 @@ image: images/f/history-changes.webp
     <li>Moving or renaming the book’s folder starts a new History. The old one is still kept, but the book doesn’t show it.</li>
     <li>You can compare a version with the one before it, or with now, but not any two versions with each other.</li>
     <li>Edits you save while the assistant is in the middle of a request are counted as part of the assistant’s version.</li>
-    <li>Only files open in the editor are combined as you type. Source Control can’t merge when pulling; if your copy and the other one have both changed, pull with Git yourself.</li>
+    <li>Only files open in the editor are combined as you type. Source Control can’t merge when pulling; if your copy and the other one have both changed, pull with Git yourself. It has no stashes, tags or rebasing either.</li>
   </ul>
 </div>

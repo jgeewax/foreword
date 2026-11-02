@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The assistant · Foreword</title>
-<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, three versions to pick from, and questions you answer in a panel.">
+<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, versions to pick from, the pages it can see, and questions you answer in a panel.">
 <meta property="og:title" content="The assistant · Foreword">
-<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, three versions to pick from, and questions you answer in a panel.">
+<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, versions to pick from, the pages it can see, and questions you answer in a panel.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/assistant-trace.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -47,7 +47,7 @@
 
 <h2 id="one-task-one-goal">One task, one goal</h2>
 <p>Each conversation is a <em>task</em>: one thing you want done, like “tighten chapter 3” or “add a section on limits”. The assistant starts by saying the goal back to you in a sentence. When it thinks the goal is met, it ends its reply with <strong>Is this task done?</strong> <span class="ui">Yes, it’s done</span> saves your open files, keeps a named version in History (“Task done: …”), and starts a fresh task. The old one stays in the Tasks view, under Done, and you can go back to it.</p>
-<p>Keeping each conversation to one job keeps the assistant on it. A long conversation that wanders from chapter to chapter gets slower, and loses track of what you asked last. <span class="ui">Done</span> and <span class="ui">New task</span> sit just above the message box. <kbd>⌘</kbd><kbd>T</kbd> starts a new task and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>D</kbd> marks this one done, whenever you like.</p>
+<p>Keeping each conversation to one job keeps the assistant on it. A long conversation that wanders from chapter to chapter gets slower, and loses track of what you asked last. <span class="ui">Done</span> and <span class="ui">New task</span> sit just above the message box, and the + at the top of the assistant pane starts a new task too. <kbd>⌘</kbd><kbd>T</kbd> starts a new task and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>D</kbd> marks this one done, whenever you like.</p>
 <p>Several tasks can run at once. Start a new one while the assistant is working and the first carries on in the background. A notice tells you when it’s finished or needs you.</p>
 
 <h3>The Tasks view</h3>
@@ -80,6 +80,10 @@
 <p>You’ll notice the assistant writes one sentence per line. Typst joins the lines of a paragraph, so the printed book looks exactly the same, and each mark, change and comment covers a sentence rather than a whole paragraph.</p>
 <p>It works the other way too. If you rewrite a sentence the assistant wrote, your next message tells it what you changed. Otherwise, asked to look at that passage again, it would remember its own version, and could quietly put it back.</p>
 
+<h2 id="it-sees-the-pages">It sees the pages</h2>
+<p>The assistant can look at the pages as they’re typeset now, as the preview shows them. So when you ask for something about how the book looks (“start every chapter on a right-hand page”, “keep this table on one page”), it looks before it changes anything and again after, and notices a figure that landed two pages late, a table running off the page, or a heading left alone at the foot of one. It waits for the pages to catch up with the latest change before it looks.</p>
+<p>It can also see the book’s outline, with the page each heading lands on, the problems the editor has marked, and your open <a href="comments.html">comments</a>, where their passages are now. So “what’s on page 40?” or “fix the warnings in chapter 3” needs no explaining.</p>
+
 <h2 id="a-bar-under-what-you-select">A bar under what you select</h2>
 <p>Select a passage, in your text or on the typeset pages, and a bar comes up under it, each button in the colour of what it does.</p>
 <figure class="small">
@@ -87,8 +91,8 @@
   <figcaption>Select a passage and the bar comes up under it.</figcaption>
 </figure>
 <dl class="facts">
-  <dt>Revise</dt><dd>Changes the passage in place. Say how, or pick one of the usual requests: Tighten, Proofread, Clearer, Simpler words, Expand, and Match my style guide when the book has one.</dd>
-  <dt>Options</dt><dd><a href="#three-versions-options">Three versions</a> to pick from, with Shorter, Plainer and More vivid a click away.</dd>
+  <dt>Revise</dt><dd>Changes the passage in place. Say how, or pick one of the usual requests: Tighten, Proofread, Clearer, Simpler words, Expand, and Match my style guide when the book has one. The box grows as you write a longer request, and <kbd>⇧</kbd><kbd>⏎</kbd> starts a new line.</dd>
+  <dt>Options</dt><dd><a href="#versions-to-pick-from-options">Versions</a> to pick from, three or as many as you choose, with Shorter, Plainer and More vivid a click away.</dd>
   <dt>Ask</dt><dd>A question about the passage, in your own words, or one of the usual ones: Explain it, Is it clear?, Check the facts, What’s weakest?, Does it fit?, and Against my style guide when the book has one. The answer comes in the chat, and the passage stays as it is.</dd>
   <dt>Comment</dt><dd>Leaves a <a href="comments.html">comment</a> on it, to come back to.</dd>
   <dt>Add to chat</dt><dd>Takes the passage to the chat, with the cursor in the message box, for anything else (<kbd>⌘</kbd><kbd>I</kbd>).</dd>
@@ -120,7 +124,7 @@
   <dt>Write</dt><dd>Writes and edits the book.</dd>
   <dt>Ask</dt><dd>Answers questions about the book, as <a href="#answers-you-can-check">a card you can check</a>, and changes nothing itself. After an answer, <span class="ui">Go ahead</span> switches to Write and makes the change you talked about.</dd>
   <dt>Discuss</dt><dd>Thinks a direction through with you: two or three real options, what each costs, and which it would pick. It argues against a weaker idea, and points to your own lines. It changes nothing until you press <span class="ui">Write it</span>, and then it says what you agreed before it writes.</dd>
-  <dt>Options</dt><dd>Three versions of the selected passage to choose from. You put one in.</dd>
+  <dt>Options</dt><dd>Versions of the selected passage to choose from, one to five. You put one in.</dd>
   <dt>Figures</dt><dd>Diagrams, charts, illustrations and tables, drawn in Typst, so they appear in the preview.</dd>
 </dl>
 <figure class="small">
@@ -135,7 +139,7 @@
   <img src="../images/f/assistant-ask-card.webp" width="1176" height="1550" alt="A question about Jekyll and Hyde in Ask mode: where does utterson first hear the name hyde? Claude Code's answer card. You asked: In which passage of the book does Mr. Utterson first hear the name Hyde?, with Not quite?. How it found out: searched 1 time, read 1 passage, 11 s. Answer: In Chapter 1, on the Sunday walk with Mr. Enfield; Utterson asks the name of the man who trampled the child, and Enfield tells him: a man of the name of Hyde. Fairly sure, with what it checked. Where in the book: a map of Story of the Door, 145 lines, with two pins near line 110, then the two places quoted from the chapter: Utterson asks the name, lines 107 to 111, and Utterson's reaction, line 113: Hm, said Mr. Utterson. Then Why, its reasoning.">
   <figcaption>“Where does Utterson first hear the name Hyde?” The question as it understood it, the answer, and the two places in chapter 1 that show it, quoted from the book and pinned on the chapter.</figcaption>
 </figure>
-<p>Each place it points to is quoted from your own text, and pinned on a map of the chapter; click one to go there. Its reasoning follows, then what it would change, word by word: <span class="ui">Make this change</span> makes it in your text (<kbd>⌘</kbd><kbd>Z</kbd> undoes it), and <span class="ui">Go ahead</span> makes them all. Under the card, a follow-up or two to ask next, one click each.</p>
+<p>Each place it points to is quoted from your own text, and pinned on a map of the chapter; click one to go there. Its reasoning follows, then what it would change, word by word: <span class="ui">Make this change</span> makes it in your text (<kbd>⌘</kbd><kbd>Z</kbd> undoes it). With two or more, <span class="ui">Make all 3 changes</span> makes every one at once, and any whose words it can’t find go to Write mode together. Under the card, a follow-up or two to ask next, one click each.</p>
 <p>When numbers compare, such as how often a name comes up in each chapter, the assistant can draw them as a chart, with the ones it means in colour.</p>
 <figure class="small">
   <img src="../images/f/assistant-ask-chart.webp" width="1176" height="1180" alt="Asked which chapters talk about Dr Lanyon the most, the card gives the question back, then answers: Chapter 6, Remarkable Incident of Dr. Lanyon, by a wide margin (12 mentions), then Chapter 9, Lanyon's own narrative (8), and Chapter 2 (6). Fairly sure: it counted the name per chapter, which counts mentions, not how much of the page he occupies. Two figures, 12 mentions in chapter 6 and 4 in chapter 10, and a bar chart of mentions of Lanyon by chapter: chapters 6 and 9 in teal, then 2, 10, 3 and 8 in grey.">
@@ -149,8 +153,9 @@
   <figcaption>Asked a question of direction in Write, it offers Discuss, and says what it would do either way.</figcaption>
 </figure>
 
-<h2 id="three-versions-options">Three versions: Options</h2>
-<p>Select a passage and say what should change: “make it punchier”, “less formal”. You get three complete versions side by side, each with a short label and a line on how it differs. <span class="ui">Use this</span> puts one in place, like any edit you’d make, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out. The others then say <span class="ui">Use this instead</span>, so you can swap.</p>
+<h2 id="versions-to-pick-from-options">Versions to pick from: Options</h2>
+<p>Select a passage and say what should change: “make it punchier”, “less formal”. You get three complete versions side by side, each with a short label and a line on how it differs. Want more, or just one? Choose one to five beside Options under the message box, or in the selection bar’s Options card. <span class="ui">Use this</span> puts one in place, like any edit you’d make, so <kbd>⌘</kbd><kbd>Z</kbd> takes it out. The others then say <span class="ui">Use this instead</span>, so you can swap.</p>
+<p>When one is close but not quite there, <span class="ui">More like this</span> on its card writes as many again, starting from that one and taking it further. The new ones have it too, so you can keep going until one is right. Nothing goes into your text until you pick, and <span class="ui">Use this</span> from any round swaps out the one in use.</p>
 <p>The versions stay with their passage. <span class="ui">Use this</span> puts one where the passage is now, even if you’ve since moved the cursor, selected other words, or written above it. A follow-up such as “shorter”, with nothing selected, is about the same passage. If you’ve changed the passage itself since you asked, it won’t write over your changes. The card shows what you changed, and offers <span class="ui">New options for it as it is</span>, <span class="ui">Replace mine anyway</span>, or <span class="ui">Cancel</span>.</p>
 <p>Two tabs switch how the versions look. <span class="ui">Text</span> shows them as you’d write them. <span class="ui">Preview</span> sets each as it would print, with italics, bold and maths, so you compare three passages rather than three lots of markup. Foreword remembers which you used last.</p>
 <figure class="small">
@@ -189,13 +194,14 @@
     <li>With Codex, the account says a file was edited but can’t show the words. History has the full change.</li>
     <li>A formula in the chat is drawn on its own, outside the book, so a reference to another part of the book shows as its label, in grey.</li>
     <li>Marks show in the files you have open in tabs.</li>
+    <li>It looks at up to four pages at a time.</li>
     <li>Which tasks are done is kept on your Mac, not in the book.</li>
   </ul>
 </div>
   </article>
   <nav class="doc-next"><a href="templates.html"><small>← Previous</small><b>Templates and samples</b></a><a class="next" href="permissions.html"><small>Next →</small><b>Permissions</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.7.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.9.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>
