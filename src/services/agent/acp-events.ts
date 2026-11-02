@@ -3,7 +3,7 @@
 // permission checks. Shapes checked against recorded traffic with Claude
 // Code's ACP program (__fixtures__/acp-claude.jsonl).
 import { diff, splitLines } from '../../lib/diff';
-import { ruleEffect, withoutHarmlessRedirects, type Level, type PermissionRule } from './permissions';
+import { claudeProjectFile, ruleEffect, withoutHarmlessRedirects, type Level, type PermissionRule } from './permissions';
 import { isPlanFile, PLAN_ENTER, PLAN_EXIT, PLAN_WRITE } from './plan-mode';
 import { hideQuotedArrows, hidesCommands, splitCommands } from './shell-words';
 import { STUDIO_TOOL_ACTION, STUDIO_TOOLS, studioToolName } from './studio-tool';
@@ -182,10 +182,16 @@ export function unifiedPatch(path: string, before: string, after: string): strin
   return out.join('\n');
 }
 
-/** A path in the book as relative to it; outside it, as it is (with `outside` set). */
+/**
+ * A path in the book as relative to it; one in Claude Code's own folder for the
+ * book (its memory) as the rules name it there, which they take as the book's;
+ * anywhere else, as it is (with `outside` set).
+ */
 function inBook(root: string, path: string | undefined): { path: string; outside: boolean } {
   if (!path) return { path: '*', outside: false };
   if (path === root || path.startsWith(`${root}/`)) return { path: path.slice(root.length + 1) || '.', outside: false };
+  const own = claudeProjectFile(root, path);
+  if (own) return { path: own, outside: false };
   return { path, outside: path.startsWith('/') };
 }
 

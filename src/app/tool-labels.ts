@@ -7,6 +7,7 @@ import { describeCommand } from './command-words';
 import { scanIncludes } from './includes';
 import { resolveRef } from './references';
 import { ASSISTANT_NAMES, type AssistantId } from './settings';
+import { CLAUDE_PROJECT } from '../services/agent/permissions';
 import { isPlanFile, PLAN_ENTER, PLAN_EXIT, PLAN_WRITE } from '../services/agent/plan-mode';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 
@@ -337,6 +338,9 @@ export function describePermission(action: string, resources: readonly string[],
     case 'edit':
       // Claude Code's plan, in its own folder (plan mode).
       if (resources.length && resources.every(isPlanFile)) return { what: 'write its notes for the plan, which it keeps outside the book' };
+      // Claude Code's own folder for the book (its memory): by the file's name in it.
+      if (resources.length && resources.every((r) => r.startsWith(CLAUDE_PROJECT)))
+        return { what: `change ${resources.map((r) => r.slice(CLAUDE_PROJECT.length).replace(/^[^/]*\/?/, '') || 'its files').join(', ')} in its own folder for this book` };
       return { what: `change ${files()}${resources.some((r) => r.startsWith('/') && !bookPath(names.root, r)) ? ', outside the book' : ''}` };
     case 'read':
       return { what: `read ${files()}, which can hold passwords or keys` };

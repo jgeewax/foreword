@@ -120,6 +120,25 @@ export const NO_COMPILE_RULES: readonly PermissionRule[] = [
 /** The book's settings (its command rules) and Claude Code's (its own rules), in the book. */
 const PERMISSION_FILES = ['.foreword.json', '*/.foreword.json', '.claude/*', '*/.claude/*'];
 
+/**
+ * How the rules name a file in Claude Code's own folder for the book, where it
+ * keeps its memory and the tool output it saves to read back:
+ * ~/.claude/projects/<the book's path, all but letters and digits a "-">.
+ * acp-events.ts names files there this way, so the rules take them as the
+ * book's own; every other path outside the book is a full one.
+ */
+export const CLAUDE_PROJECT = '~/.claude/projects/';
+
+/** A full path in Claude Code's folder for the book at `root`, as the rules name it (null: not in it). */
+export function claudeProjectFile(root: string, path: string): string | null {
+  // Named as Claude Code names it (claude-agent-sdk 0.3.300): a name over 200 characters is cut there and given a hash.
+  const name = root.replace(/[^a-zA-Z0-9]/g, '-');
+  const folder = name.length <= 200 ? name : `${name.slice(0, 200)}-[0-9a-z]+`;
+  const m = new RegExp(`^/Users/[^/]+/\\.claude/projects/(${folder})(/.*)?$`).exec(path);
+  if (!m || path.split('/').includes('..')) return null;
+  return `${CLAUDE_PROJECT}${m[1]}${m[2] ?? ''}`;
+}
+
 /** Ask, Discuss and Options modes: no file changes and no commands, whatever the settings. */
 export const READ_ONLY_RULES: readonly PermissionRule[] = [
   { action: 'edit', resource: '*', effect: 'deny' },
@@ -161,7 +180,7 @@ const commandPatterns = (cmds: string[]) => cmds.flatMap((c) => [`${c} *`, `* ${
  */
 export function sessionRules(p: AgentPermissions, readOnly = false, extra: readonly PermissionRule[] = []): PermissionRule[] {
   const studioEffect: Level = p.settings === 'ask' ? 'ask' : 'allow';
-  return [
+  const rules: PermissionRule[] = [
     // Anything not named below asks.
     { action: '*', resource: '*', effect: 'ask' },
     { action: 'read', resource: '*', effect: 'allow' },
@@ -218,6 +237,11 @@ export function sessionRules(p: AgentPermissions, readOnly = false, extra: reado
     // Files that say what the assistant may do: changing them is the author's to allow, each time, whatever else is allowed.
     ...PERMISSION_FILES.map((resource): PermissionRule => ({ action: 'edit', resource, effect: p.edit === 'deny' ? 'deny' : 'ask' })),
     ...(p.outsideEdit === 'deny' ? [{ action: 'edit', resource: '/*', effect: 'deny' } as PermissionRule] : []),
+  ];
+  return [
+    ...rules,
+    // Claude Code's own folder for the book: as the book's files (reads there are already), though its path has .claude in it.
+    { action: 'edit', resource: `${CLAUDE_PROJECT}*`, effect: ruleEffect('edit', 'notes.md', rules) ?? 'ask' },
     // Read-only: commands that only look still run; writing forms never do.
     ...(readOnly ? [...READ_ONLY_RULES, ...lookRules(), ...writingRules('deny'), ...extra.filter((r) => r.effect === 'deny')] : []),
     ...NO_COMPILE_RULES,

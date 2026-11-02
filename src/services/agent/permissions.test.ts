@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { commandPermissionRules } from './command-rules';
 import {
+  claudeProjectFile,
   onlyLooks,
   describePermissions,
   NO_COMPILE_RULES,
@@ -126,6 +127,36 @@ describe('files that say what the assistant may do', () => {
       expect(effect('edit', 'chapters/ch1.typ', rules)).toBe('allow');
     }
     expect(effect('edit', '.foreword.json', ro)).toBe('deny');
+  });
+});
+
+describe('Claude Code’s own folder for the book', () => {
+  it('is named as Claude Code names it', () => {
+    expect(claudeProjectFile('/Users/jjg/Projects/linear-algebra-book', '/Users/jjg/.claude/projects/-Users-jjg-Projects-linear-algebra-book/memory/MEMORY.md')).toBe(
+      '~/.claude/projects/-Users-jjg-Projects-linear-algebra-book/memory/MEMORY.md',
+    );
+    expect(claudeProjectFile('/Users/ada/Books/Linear Algebra', '/Users/ada/.claude/projects/-Users-ada-Books-Linear-Algebra')).toBe('~/.claude/projects/-Users-ada-Books-Linear-Algebra');
+    // Another book's, one whose name only starts the same, or a way out of it: not this book's.
+    expect(claudeProjectFile('/Users/ada/Books/Linear Algebra', '/Users/ada/.claude/projects/-Users-ada-Books-Linear-Algebra-2/memory/a.md')).toBeNull();
+    expect(claudeProjectFile('/Users/ada/Books/Linear Algebra', '/Users/ada/.claude/projects/-Users-ada-Books-Linear-Algebra/../x/a.md')).toBeNull();
+    expect(claudeProjectFile('/Users/ada/Books/Linear Algebra', '/Users/ada/.claude/settings.json')).toBeNull();
+    // A long path: cut at 200 characters, with a hash after.
+    const root = `/Users/ada/${'deep/'.repeat(45)}book`;
+    const cut = root.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 200);
+    expect(claudeProjectFile(root, `/Users/ada/.claude/projects/${cut}-1x9z2k/memory/a.md`)).toBe(`~/.claude/projects/${cut}-1x9z2k/memory/a.md`);
+    expect(claudeProjectFile(root, `/Users/ada/.claude/projects/${cut}/memory/a.md`)).toBeNull();
+  });
+
+  it('is as the book: what the book allows, though its path has .claude in it', () => {
+    const memory = '~/.claude/projects/-Users-ada-Book/memory/MEMORY.md';
+    expect(effect('edit', memory, edit)).toBe('allow');
+    expect(effect('edit', memory, ask)).toBe('ask');
+    expect(effect('edit', memory, ro)).toBe('deny');
+    expect(effect('edit', memory, sessionRules(PRESETS.ask.permissions, false, [{ action: 'edit', resource: '*', effect: 'allow' }]))).toBe('allow');
+    expect(effect('edit', memory, sessionRules(PRESETS.edit.permissions, true))).toBe('deny');
+    expect(effect('read', memory, sessionRules({ ...PRESETS.ask.permissions, outsideRead: 'deny' }))).toBe('allow');
+    // The book's own .claude settings still ask.
+    expect(effect('edit', '.claude/settings.local.json', edit)).toBe('ask');
   });
 });
 

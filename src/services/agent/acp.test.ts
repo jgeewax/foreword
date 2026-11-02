@@ -97,6 +97,24 @@ describe('ACP tool calls as the app’s tools', () => {
     expect(outside('read')).toBe('allow');
     expect(outside('edit')).toBe('ask');
   });
+
+  it('Claude Code’s own folder for the book (its memory) is as the book', () => {
+    const own = '/Users/ada/.claude/projects/-Users-ada-Books-Linear-Algebra';
+    const write = permissionAsk({ toolCallId: 'm', kind: 'edit', rawInput: { file_path: `${own}/memory/MEMORY.md`, content: 'x' }, _meta: { claudeCode: { toolName: 'Write' } } }, ROOT);
+    expect(write).toMatchObject({ action: 'edit', resources: ['~/.claude/projects/-Users-ada-Books-Linear-Algebra/memory/MEMORY.md'] });
+    const read = permissionAsk({ toolCallId: 'r', kind: 'read', rawInput: { file_path: `${own}/s1/tool-results/t1.txt` }, _meta: { claudeCode: { toolName: 'Read' } } }, ROOT);
+    expect(read).toMatchObject({ action: 'read', resources: ['~/.claude/projects/-Users-ada-Books-Linear-Algebra/s1/tool-results/t1.txt'] });
+    // Outside the book asks; there, the book's settings say.
+    const edit = sessionRules(PRESETS.edit.permissions);
+    expect(decide(write.action, write.resources, edit)).toBe('allow');
+    expect(decide(read.action, read.resources, edit)).toBe('allow');
+    expect(decide(write.action, write.resources, sessionRules(PRESETS.ask.permissions))).toBe('ask');
+    expect(decide(write.action, write.resources, sessionRules(PRESETS.edit.permissions, true))).toBe('deny');
+    // Another book's folder is outside this one.
+    const other = permissionAsk({ toolCallId: 'o', kind: 'edit', rawInput: { file_path: '/Users/ada/.claude/projects/-Users-ada-Books-Other/memory/MEMORY.md', content: 'x' }, _meta: { claudeCode: { toolName: 'Write' } } }, ROOT);
+    expect(other.resources).toEqual(['/Users/ada/.claude/projects/-Users-ada-Books-Other/memory/MEMORY.md']);
+    expect(decide(other.action, other.resources, edit)).toBe('ask');
+  });
 });
 
 /** The adapter against the recording: what it sends, what it emits. */

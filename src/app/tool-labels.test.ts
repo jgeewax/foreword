@@ -175,5 +175,6 @@ describe('permission questions in words', () => {
     expect(describePermission('external_directory', ['/Users/a/Downloads/*'], names).what).toBe('use files outside the book (/Users/a/Downloads/*)');
     expect(describePermission('edit', ['/Users/a/notes.md'], names).what).toBe('change /Users/a/notes.md, outside the book');
     expect(describePermission('edit', ['/Users/a/.claude/plans/fizzy-scroll.md'], names).what).toBe('write its notes for the plan, which it keeps outside the book');
+    expect(describePermission('edit', ['~/.claude/projects/-b/memory/MEMORY.md'], names).what).toBe('change memory/MEMORY.md in its own folder for this book');
   });
 });
