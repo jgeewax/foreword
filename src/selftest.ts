@@ -5178,7 +5178,7 @@ async function proofingChecks() {
     return labels();
   };
   try {
-    const planted = 'This is an test of teh system, which Grevlund wrote with `tmie_zone` in it.\n\n';
+    const planted = 'This is an test of teh system, which Grevlund wrote with `tmie_zone` in it.\n\nQuimblewick sent it back.\n\n';
     editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: planted }]);
     editor.setPosition(model.getFullModelRange().getEndPosition());
     const t0 = performance.now();
@@ -5216,6 +5216,21 @@ async function proofingChecks() {
     out.hover = document.querySelector('.monaco-hover:not(.hidden)')?.textContent?.slice(0, 200) ?? null;
     editor.trigger('selftest', 'editor.action.hideHover', {});
 
+    // Add to Dictionary from the hover, with a check landing while it's open (it used to leave the
+    // link naming nothing): the squiggle goes before the word is saved, and the hover closes.
+    const hoverShown = () => [...document.querySelectorAll<HTMLElement>('.monaco-hover:not(.hidden)')].some((h) => h.getBoundingClientRect().top > 0 && getComputedStyle(h.parentElement!).visibility !== 'hidden');
+    editor.setPosition(model.getPositionAt(offsetOf('Quimblewick') + 2));
+    editor.trigger('selftest', 'editor.action.showHover', {});
+    await sleep(600);
+    studio.proofing.recheckAll();
+    await sleep(500);
+    const learnLink = [...document.querySelectorAll<HTMLAnchorElement>('.monaco-hover:not(.hidden) a')].find((a) => a.textContent === 'Add to Book Dictionary');
+    learnLink?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    await sleep(0);
+    out.hoverLearn = { link: !!learnLink, goneAtOnce: !shown().includes('spelling:Quimblewick'), hoverClosed: !hoverShown() };
+    await sleep(800);
+    out.hoverLearn = { ...(out.hoverLearn as object), stillGone: !shown().includes('spelling:Quimblewick') };
+
     // The right-click menu: the fixes first; one replaces the word, ⌘Z puts it back.
     out.menu = (await right(offsetOf('teh'))).slice(0, 7);
     action('the')?.();
@@ -5229,6 +5244,8 @@ async function proofingChecks() {
     out.grevlundMenu = (await right(offsetOf('Grevlund'))).slice(0, 6);
     action('Add to Book Dictionary')?.();
     await waitFor(() => !shown().includes('spelling:Grevlund'), 5000, 'the learned word unflagged');
+    // Unflagged at once, saved a moment after.
+    await sleep(300);
     out.dictionary = (await ipc.fsRead('.foreword/dictionary.txt')).text;
     await sleep(800);
     out.stillLearned = !shown().includes('spelling:Grevlund');
@@ -5288,7 +5305,7 @@ async function proofingChecks() {
   } finally {
     studio.store.set((s) => ({ settings: { ...s.settings, checkSpelling: settings.checkSpelling, checkGrammar: settings.checkGrammar, checkStyle: settings.checkStyle, checkCode: settings.checkCode } }));
     menuRecorder.record = undefined;
-    await ipc.proofWordsEdit('book', [], ['Grevlund']).catch(() => {});
+    await ipc.proofWordsEdit('book', [], ['Grevlund', 'Quimblewick']).catch(() => {});
     if (!hadWords) await ipc.fsTrash('.foreword/dictionary.txt').catch(() => {});
     if (!hadIgnored) await ipc.fsTrash('.foreword/ignored.txt').catch(() => {});
     while (model.getAlternativeVersionId() !== before && model.canUndo()) await model.undo();

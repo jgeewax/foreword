@@ -10,6 +10,7 @@ import {
   heldBack,
   issueMessage,
   languageName,
+  learnedCovers,
   nextIssue,
   normalizeLanguage,
   proofMenu,
@@ -75,6 +76,16 @@ describe('menus', () => {
   it('writes rule names in words', () => {
     expect(ruleTitle('SentenceCapitalization')).toBe('Sentence capitalization');
     expect(ruleTitle('ExpandMemoryShorthands')).toBe('Expand memory shorthands');
+  });
+});
+
+describe('learnedCovers', () => {
+  it('takes away what the dictionary will accept: any capitals for a lowercase word, exact or all capitals otherwise, with ’s', () => {
+    expect(['grevlund', 'Grevlund', 'GREVLUND', "Grevlund's", 'Grevlund’s'].map((w) => learnedCovers('grevlund', w))).toEqual([true, true, true, true, true]);
+    expect(['Grevlund', 'GREVLUND', 'grevlund', 'GrevLund'].map((w) => learnedCovers('Grevlund', w))).toEqual([true, true, false, false]);
+    expect(['iPhone', 'IPHONE', 'Iphone'].map((w) => learnedCovers('iPhone', w))).toEqual([true, true, false]);
+    expect(learnedCovers('grevlund', 'grevlunds')).toBe(false);
+    expect(learnedCovers(' ', 's')).toBe(false);
   });
 });
 

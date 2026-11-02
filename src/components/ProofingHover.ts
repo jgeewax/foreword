@@ -70,6 +70,8 @@ export function attachProofing(editor: monaco.editor.IStandaloneCodeEditor): () 
   const command = monaco.editor.registerCommand(COMMAND, (_accessor, path: string, id: string, action: ProofAction) => {
     const found = studio.proofing.find(path, id);
     if (found) act(found, action);
+    // The hover stays open after a click on its links, still saying what was wrong.
+    editor.trigger('proofing', 'editor.action.hideHover', null);
   });
   const hover = monaco.languages.registerHoverProvider('*', {
     provideHover: (model, position) => {

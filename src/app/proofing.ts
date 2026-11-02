@@ -7,7 +7,7 @@
 import { errorMessage, ipc, type DialectHint, type ProofIssue, type ProofOptions, type WordScope } from '../lib/ipc';
 import type { Doc, Documents } from '../editor/documents';
 import { monaco } from '../editor/monaco';
-import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, nextIssue, ruleTitle, wrapLanguage, type IssueCounts } from './proofing-core';
+import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, learnedCovers, nextIssue, ruleTitle, wrapLanguage, type IssueCounts } from './proofing-core';
 
 /** A moment after the last keystroke, as the other marks wait (EditorPane's 300 ms, the TODO scan's 400). */
 export const CHECK_DELAY_MS = 400;
@@ -50,16 +50,18 @@ export type ProofingHost = {
   openAt(path: string, start: number, end: number): Promise<void>;
 };
 
-/** A mistake shown, and its squiggle (which follows the text as it's edited). */
-type Shown = { issue: ProofIssue; decoration: string };
+/**
+ * A mistake shown, and its squiggle (which follows the text as it's edited).
+ * Its id stays the same through the checks that find it again, so a hover's
+ * links opened before a check still name it.
+ */
+type Shown = { issue: ProofIssue; decoration: string; id: string };
 
 type FileState = {
   /** The last check's mistakes, and the version of the text it checked. */
   issues: ProofIssue[];
   version: number;
   shown: Shown[];
-  /** Bumped at each paint: a hover's links name a mistake as `generation:index`. */
-  generation: number;
   timer?: number;
   /** Where the last edit ended (offset after it), for holding back the word being typed. */
   edited: number | null;
@@ -76,13 +78,17 @@ export class Proofing {
   /** Mistakes ignored this session ("Ignore"), by key. */
   private ignored = new Set<string>();
   private composing = false;
+  /** For the mistakes' ids. */
+  private serial = 0;
+  /** Bumped when a word is learned or a mistake ignored: a check sent before then is out of date. */
+  private learning = 0;
 
   constructor(private readonly host: ProofingHost) {}
 
   private file(path: string): FileState {
     let f = this.files.get(path);
     if (!f) {
-      f = { issues: [], version: -1, shown: [], generation: 0, edited: null, held: null };
+      f = { issues: [], version: -1, shown: [], edited: null, held: null };
       this.files.set(path, f);
     }
     return f;
@@ -193,9 +199,12 @@ export class Proofing {
     // Typing through an input method: wait for the word to be finished.
     if (this.composing) return this.schedule(path);
     const version = doc.model.getVersionId();
+    const learning = this.learning;
     try {
       const res = await ipc.proofCheck(path, version, doc.model.getValue(), { ...options, ignored: [...this.ignored] });
       if (res.stale || doc.model.isDisposed() || doc.model.getVersionId() !== version || !this.subscriptions.has(path)) return;
+      // A word learned while it was checked: it would put back the squiggle just taken away.
+      if (learning !== this.learning) return this.schedule(path, 0);
       this.show(path, res.issues, res.unchecked, version);
       if (res.dialect) this.host.dialect(res.dialect);
     } catch (e) {
@@ -243,6 +252,8 @@ export class Proofing {
         try {
           // Open: its text as edited; else Rust reads it from disk.
           const res = await ipc.proofCheck(path, 0, open ? open.model.getValue() : null, { ...options, ignored: [...this.ignored] }, true);
+          // Started again (a word learned): this file's list may still have it.
+          if (run !== this.bookRun) return;
           batch[path] = res.issues;
         } catch (e) {
           this.host.log(`spelling: book check: ${path}: ${errorMessage(e)}`);
@@ -293,6 +304,13 @@ export class Proofing {
       f.held = i;
       return false;
     });
+    // The mistakes found again where their squiggles are now keep their ids.
+    const same = (i: ProofIssue, start: number) => `${i.kind}\0${i.rule}\0${i.word}\0${start}`;
+    const before = new Map<string, string>();
+    for (const s of f.shown) {
+      const r = model.getDecorationRange(s.decoration);
+      if (r) before.set(same(s.issue, model.getOffsetAt(r.getStartPosition())), s.id);
+    }
     const ids = model.deltaDecorations(
       f.shown.map((s) => s.decoration),
       shown.map((i) => ({
@@ -304,8 +322,7 @@ export class Proofing {
         },
       })),
     );
-    f.shown = shown.map((issue, i) => ({ issue, decoration: ids[i] }));
-    f.generation++;
+    f.shown = shown.map((issue, i) => ({ issue, decoration: ids[i], id: before.get(same(issue, issue.start)) ?? String(++this.serial) }));
   }
 
   /** The mistakes at an offset in a file, the narrowest first. */
@@ -314,23 +331,21 @@ export class Proofing {
     const f = this.files.get(path);
     if (!doc || !f) return [];
     const out: (Found & { size: number })[] = [];
-    f.shown.forEach((s, i) => {
+    for (const s of f.shown) {
       const range = doc.model.getDecorationRange(s.decoration);
-      if (!range || range.isEmpty()) return;
+      if (!range || range.isEmpty()) continue;
       const [a, b] = [doc.model.getOffsetAt(range.getStartPosition()), doc.model.getOffsetAt(range.getEndPosition())];
-      if (a <= offset && offset <= b) out.push({ id: `${f.generation}:${i}`, path, issue: s.issue, range, size: b - a });
-    });
+      if (a <= offset && offset <= b) out.push({ id: s.id, path, issue: s.issue, range, size: b - a });
+    }
     return out.sort((x, y) => x.size - y.size);
   }
 
   /** A mistake named by `at`'s id, if it's still shown. */
   find(path: string, id: string): Found | null {
     const doc = this.host.docs()?.get(path);
-    const f = this.files.get(path);
-    const [gen, index] = id.split(':').map(Number);
-    if (!doc || !f || gen !== f.generation || !f.shown[index]) return null;
-    const range = doc.model.getDecorationRange(f.shown[index].decoration);
-    return range ? { id, path, issue: f.shown[index].issue, range } : null;
+    const s = this.files.get(path)?.shown.find((s) => s.id === id);
+    const range = s && doc?.model.getDecorationRange(s.decoration);
+    return s && range ? { id, path, issue: s.issue, range } : null;
   }
 
   /** Put a fix in place of the mistake, as one undoable step, if the text there is still what was flagged. */
@@ -350,18 +365,23 @@ export class Proofing {
     }
   }
 
-  /** Take mistakes away at once (ignored, a word learned), before the next check. */
+  /**
+   * Take mistakes away at once (ignored, a word learned), before the next
+   * check; and a check already under way when they went doesn't put them back.
+   */
   private drop(which: (i: ProofIssue) => boolean) {
+    this.learning++;
     this.host.set((s) => ({ ...s, book: s.book && { ...s.book, files: Object.fromEntries(Object.entries(s.book.files).map(([p, list]) => [p, list.filter((i) => !which(i))])) } }));
     for (const [path, f] of this.files) {
       const model = this.host.docs()?.get(path)?.model;
+      const issues = f.issues.filter((i) => !which(i));
+      if (f.held && which(f.held)) f.held = null;
+      if (issues.length === f.issues.length) continue;
+      f.issues = issues;
       const gone = f.shown.filter((s) => which(s.issue));
-      if (!model || !gone.length) continue;
-      model.deltaDecorations(gone.map((s) => s.decoration), []);
+      if (model && gone.length) model.deltaDecorations(gone.map((s) => s.decoration), []);
       f.shown = f.shown.filter((s) => !gone.includes(s));
-      f.issues = f.issues.filter((i) => !which(i));
-      f.generation++;
-      this.host.set((s) => ({ ...s, counts: { ...s.counts, [path]: countIssues(f.issues) } }));
+      this.host.set((s) => ({ ...s, counts: { ...s.counts, [path]: countIssues(issues) } }));
     }
   }
 
@@ -374,10 +394,21 @@ export class Proofing {
     void ipc.proofIgnoredEdit([[issue.key, what]], []).catch((e) => this.host.log(`spelling: couldn't save an ignored mistake: ${errorMessage(e)}`));
   }
 
-  /** "Add to Dictionary": the book's or the author's; every window checks again (the proofing:words event). */
+  /**
+   * "Add to Dictionary": the book's or the author's. Its squiggles go at
+   * once, everywhere the dictionary will take it (any capitals a lowercase
+   * word, "Grevlund's"), then the list is saved and every window checks again
+   * (the proofing:words event).
+   */
   async learn(word: string, scope: WordScope) {
-    await ipc.proofWordsEdit(scope, [word], []);
-    this.drop((i) => i.kind === 'spelling' && i.word === word);
+    this.drop((i) => i.kind === 'spelling' && learnedCovers(word, i.word));
+    try {
+      await ipc.proofWordsEdit(scope, [word], []);
+    } catch (e) {
+      this.host.log(`spelling: couldn't add “${word}” to the dictionary: ${errorMessage(e)}`);
+    }
+    // Checks sent while it was saved read the list without it.
+    this.learning++;
     this.recheckAll();
   }
 
@@ -417,7 +448,7 @@ export class Proofing {
     editor.setSelection(range);
     editor.revealRangeInCenterIfOutsideViewport(range);
     editor.focus();
-    return { id: `${f.generation}:${i}`, path, issue: f.shown[i].issue, range };
+    return { id: f.shown[i].id, path, issue: f.shown[i].issue, range };
   }
 
   /** Every mistake shown in a file now, where it is. */
@@ -425,9 +456,9 @@ export class Proofing {
     const doc = this.host.docs()?.get(path);
     const f = this.files.get(path);
     if (!doc || !f) return [];
-    return f.shown.flatMap((s, i) => {
+    return f.shown.flatMap((s) => {
       const range = doc.model.getDecorationRange(s.decoration);
-      return range ? [{ id: `${f.generation}:${i}`, path, issue: s.issue, range }] : [];
+      return range ? [{ id: s.id, path, issue: s.issue, range }] : [];
     });
   }
 

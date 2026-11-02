@@ -154,6 +154,20 @@ export function nextIssue(issues: Pick<ProofIssue, 'start'>[], offset: number, b
   return i === -1 ? 0 : i;
 }
 
+/**
+ * Whether a word added to a dictionary takes away a misspelling, as the
+ * dictionary reads it (Words::knows in proof/words.rs): a word in lowercase
+ * however it's capitalised, one with capitals exactly so or in capitals, and
+ * either with 's.
+ */
+export function learnedCovers(entry: string, word: string): boolean {
+  const learned = entry.trim();
+  const w = word.replace(/(?:'s|’s)+$/, '');
+  if (!learned || !w) return false;
+  if (learned === learned.toLowerCase()) return w.toLowerCase() === learned;
+  return w === learned || (w === w.toUpperCase() && w === learned.toUpperCase());
+}
+
 /** A language's name for menus: "French", "British English"; the tag when unknown. */
 export function languageName(tag: string): string {
   try {
