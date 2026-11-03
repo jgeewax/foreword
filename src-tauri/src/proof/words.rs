@@ -45,18 +45,20 @@ impl Words {
         if self.list.iter().any(|w| w == word) {
             return;
         }
-        if word.chars().any(char::is_uppercase) {
-            self.exact.insert(word.to_string());
-            self.upper.insert(word.to_uppercase());
-        } else {
-            self.any_case.insert(word.to_string());
+        // An entry written as a possessive ("Axler's") is the name: `knows` looks a word up without its 's.
+        let name = possessive_stem(word);
+        if name.chars().any(char::is_uppercase) {
+            self.exact.insert(name.to_string());
+            self.upper.insert(name.to_uppercase());
+        } else if !name.is_empty() {
+            self.any_case.insert(name.to_string());
         }
         self.list.push(word.to_string());
     }
 
     /// Whether a word is one of these (or its possessive: "Grevlund's").
     pub fn knows(&self, word: &str) -> bool {
-        let word = word.trim_end_matches("'s").trim_end_matches("’s");
+        let word = possessive_stem(word);
         if word.is_empty() {
             return false;
         }
@@ -105,6 +107,11 @@ impl Words {
         }
         w
     }
+}
+
+/// A word without its possessive: "Grevlund's" is "Grevlund".
+fn possessive_stem(word: &str) -> &str {
+    word.trim_end_matches("'s").trim_end_matches("’s")
 }
 
 /// Edit distance with transpositions ("tset" is one from "test"), if within `limit`.
@@ -263,6 +270,17 @@ mod tests {
         assert!(!w.knows("mcallister"));
         assert!(w.knows("iPhone") && !w.knows("Iphone"));
         assert!(w.knows("Grevlund's") && w.knows("McAllister’s"));
+    }
+
+    #[test]
+    fn a_possessive_entry_is_its_name() {
+        // Learned from a squiggle under "Axler's": the name and its possessive are both right.
+        let w = Words::parse("Axler's\nGelfand’s\nerdős's\n");
+        assert!(w.knows("Axler's") && w.knows("Axler") && w.knows("Axler’s") && w.knows("AXLER"));
+        assert!(w.knows("Gelfand's") && w.knows("Gelfand"));
+        assert!(w.knows("Erdős's") && w.knows("erdős"));
+        assert!(!w.knows("axler") && !w.knows("Axlers"));
+        assert_eq!(w.list, ["Axler's", "Gelfand’s", "erdős's"]);
     }
 
     #[test]

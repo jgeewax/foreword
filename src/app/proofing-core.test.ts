@@ -13,6 +13,7 @@ import {
   learnedCovers,
   nextIssue,
   normalizeLanguage,
+  possessiveStem,
   proofMenu,
   proofOptions,
   ruleTitle,
@@ -85,6 +86,10 @@ describe('learnedCovers', () => {
     expect(['Grevlund', 'GREVLUND', 'grevlund', 'GrevLund'].map((w) => learnedCovers('Grevlund', w))).toEqual([true, true, false, false]);
     expect(['iPhone', 'IPHONE', 'Iphone'].map((w) => learnedCovers('iPhone', w))).toEqual([true, true, false]);
     expect(learnedCovers('grevlund', 'grevlunds')).toBe(false);
+    // An entry written as a possessive is its name (the dictionary reads it so).
+    expect(["Axler's", 'Axler', 'Axler’s', 'AXLER'].map((w) => learnedCovers("Axler's", w))).toEqual([true, true, true, true]);
+    expect(learnedCovers("Axler's", 'axler')).toBe(false);
+    expect(possessiveStem("Axler's")).toBe('Axler');
     expect(learnedCovers(' ', 's')).toBe(false);
   });
 });

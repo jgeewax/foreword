@@ -5178,7 +5178,7 @@ async function proofingChecks() {
     return labels();
   };
   try {
-    const planted = 'This is an test of teh system, which Grevlund wrote with `tmie_zone` in it.\n\nQuimblewick sent it back.\n\n';
+    const planted = 'This is an test of teh system, which Grevlund wrote with `tmie_zone` in it.\n\nQuimblewick\'s dog sent it back.\n\n';
     editor.executeEdits('selftest', [{ range: new monaco.Range(2, 1, 2, 1), text: planted }]);
     editor.setPosition(model.getFullModelRange().getEndPosition());
     const t0 = performance.now();
@@ -5217,7 +5217,8 @@ async function proofingChecks() {
     editor.trigger('selftest', 'editor.action.hideHover', {});
 
     // Add to Dictionary from the hover, with a check landing while it's open (it used to leave the
-    // link naming nothing): the squiggle goes before the word is saved, and the hover closes.
+    // link naming nothing): the squiggle goes before the word is saved, and the hover closes. The
+    // word is a possessive, which goes in as its name (it used to go in as "Quimblewick's" and stay).
     const hoverShown = () => [...document.querySelectorAll<HTMLElement>('.monaco-hover:not(.hidden)')].some((h) => h.getBoundingClientRect().top > 0 && getComputedStyle(h.parentElement!).visibility !== 'hidden');
     editor.setPosition(model.getPositionAt(offsetOf('Quimblewick') + 2));
     editor.trigger('selftest', 'editor.action.showHover', {});
@@ -5227,9 +5228,9 @@ async function proofingChecks() {
     const learnLink = [...document.querySelectorAll<HTMLAnchorElement>('.monaco-hover:not(.hidden) a')].find((a) => a.textContent === 'Add to Book Dictionary');
     learnLink?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
     await sleep(0);
-    out.hoverLearn = { link: !!learnLink, goneAtOnce: !shown().includes('spelling:Quimblewick'), hoverClosed: !hoverShown() };
+    out.hoverLearn = { link: !!learnLink, goneAtOnce: !shown().includes("spelling:Quimblewick's"), hoverClosed: !hoverShown() };
     await sleep(800);
-    out.hoverLearn = { ...(out.hoverLearn as object), stillGone: !shown().includes('spelling:Quimblewick') };
+    out.hoverLearn = { ...(out.hoverLearn as object), stillGone: !shown().includes("spelling:Quimblewick's") };
 
     // A hover at the editor's right edge stays in the editor: the preview beside it is a native view drawn over the page.
     const cols = Math.floor(editor.getLayoutInfo().contentWidth / editor.getOption(monaco.editor.EditorOption.fontInfo).typicalHalfwidthCharacterWidth);

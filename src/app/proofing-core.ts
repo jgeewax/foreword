@@ -154,15 +154,20 @@ export function nextIssue(issues: Pick<ProofIssue, 'start'>[], offset: number, b
   return i === -1 ? 0 : i;
 }
 
+/** A word without its possessive: "Axler's" is "Axler" (possessive_stem in proof/words.rs). */
+export function possessiveStem(word: string): string {
+  return word.replace(/(?:'s|’s)+$/, '');
+}
+
 /**
  * Whether a word added to a dictionary takes away a misspelling, as the
  * dictionary reads it (Words::knows in proof/words.rs): a word in lowercase
  * however it's capitalised, one with capitals exactly so or in capitals, and
- * either with 's.
+ * either with 's. An entry written with 's ("Axler's") is its name.
  */
 export function learnedCovers(entry: string, word: string): boolean {
-  const learned = entry.trim();
-  const w = word.replace(/(?:'s|’s)+$/, '');
+  const learned = possessiveStem(entry.trim());
+  const w = possessiveStem(word);
   if (!learned || !w) return false;
   if (learned === learned.toLowerCase()) return w.toLowerCase() === learned;
   return w === learned || (w === w.toUpperCase() && w === learned.toUpperCase());

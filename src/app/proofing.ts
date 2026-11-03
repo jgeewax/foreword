@@ -7,7 +7,7 @@
 import { errorMessage, ipc, type DialectHint, type ProofIssue, type ProofOptions, type WordScope } from '../lib/ipc';
 import type { Doc, Documents } from '../editor/documents';
 import { monaco } from '../editor/monaco';
-import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, learnedCovers, nextIssue, ruleTitle, wrapLanguage, type IssueCounts } from './proofing-core';
+import { countIssues, heldBack, ISSUE_CLASS, ISSUE_RULER, learnedCovers, nextIssue, possessiveStem, ruleTitle, wrapLanguage, type IssueCounts } from './proofing-core';
 
 /** A moment after the last keystroke, as the other marks wait (EditorPane's 300 ms, the TODO scan's 400). */
 export const CHECK_DELAY_MS = 400;
@@ -401,11 +401,13 @@ export class Proofing {
    * (the proofing:words event).
    */
   async learn(word: string, scope: WordScope) {
-    this.drop((i) => i.kind === 'spelling' && learnedCovers(word, i.word));
+    // "Axler's" goes in as "Axler": the name, which takes its possessive with it.
+    const entry = possessiveStem(word) || word;
+    this.drop((i) => i.kind === 'spelling' && learnedCovers(entry, i.word));
     try {
-      await ipc.proofWordsEdit(scope, [word], []);
+      await ipc.proofWordsEdit(scope, [entry], []);
     } catch (e) {
-      this.host.log(`spelling: couldn't add “${word}” to the dictionary: ${errorMessage(e)}`);
+      this.host.log(`spelling: couldn't add “${entry}” to the dictionary: ${errorMessage(e)}`);
     }
     // Checks sent while it was saved read the list without it.
     this.learning++;
