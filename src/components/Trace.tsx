@@ -13,7 +13,7 @@ import { actionText, messageLine, stockAction, type StockAction } from '../app/s
 import { withoutMarker } from '../app/tasks';
 import { describePermission, describeTool } from '../app/tool-labels';
 import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnsOf, turnTime, turnWords, verbAndRest, type Edit, type Tone, type ToolItem, type Turn } from '../app/trace';
-import { wordPieces, type Piece } from '../app/prose-diff';
+import { countWords, wordPieces, type Piece } from '../app/prose-diff';
 import { onContextMenu } from '../lib/context-menu';
 import { refNamed, type BookFiles, type SourceRef } from '../lib/source-links';
 import { useStore } from '../lib/store';
@@ -556,6 +556,8 @@ function OptionsReply({ item }: { item: AssistantItem }) {
     );
   }
   const where = target && `${target.path.split('/').pop()}:${target.start.line}`;
+  // The passage as this reply was asked about: what an option that's empty takes out.
+  const asked = (item.options!.original ?? target)?.text ?? '';
   const pick = (v: OptionsView) => {
     setView(v);
     try {
@@ -589,56 +591,95 @@ function OptionsReply({ item }: { item: AssistantItem }) {
           ))}
         </div>
       </div>
-      {parsed.options.map((o, i) => (
-        <div key={i} className={`option-card${applied === i ? ' applied' : ''}`}>
-          <div className="option-head">
-            <span className="option-n">Option {o.n}</span>
-            {o.label && <span className="option-label">{o.label}</span>}
-          </div>
-          {o.text != null &&
-            (view === 'preview' && o.complete ? (
-              <div className="option-preview">
-                <TypstPassage
-                  source={o.text}
-                  failed={(reason) => (
-                    <>
-                      <div className="option-preview-note">Can’t set this one apart from the book ({reason}). As written:</div>
-                      <pre className="option-text">{o.text}</pre>
-                    </>
-                  )}
-                />
-              </div>
-            ) : (
-              <pre className={`option-text${o.complete ? '' : ' streaming'}`}>{o.text}</pre>
-            ))}
-          {o.note && (
-            <div className="option-note md">
-              <Markdown text={o.note} />
+      {parsed.options.map((o, i) => {
+        // Nothing in its place: a cut, shown as what it takes out, in either view (there's nothing to set).
+        const empty = o.complete && o.text != null && !o.text.trim();
+        const cut = empty && !!asked.trim();
+        return (
+          <div key={i} className={`option-card${applied === i ? ' applied' : ''}`}>
+            <div className="option-head">
+              <span className="option-n">Option {o.n}</span>
+              {o.label && <span className="option-label">{o.label}</span>}
             </div>
-          )}
-          <div className="option-actions">
-            {target && (
-              <button
-                className={applied === i ? '' : 'primary'}
-                disabled={!item.done || !o.complete || o.text == null}
-                title={applied === i ? 'This option is in the editor (⌘Z to undo)' : `Put this in place of ${where} (⌘Z to undo)`}
-                onClick={() => void studio.applyOption(item.id, i)}
-              >
-                {applied === i ? 'In use ✓' : applied != null ? 'Use this instead' : target.text ? 'Use this' : 'Insert'}
-              </button>
+            {empty ? (
+              <OptionCut passage={asked} />
+            ) : (
+              o.text != null &&
+              (view === 'preview' && o.complete ? (
+                <div className="option-preview">
+                  <TypstPassage
+                    source={o.text}
+                    failed={(reason) => (
+                      <>
+                        <div className="option-preview-note">Can’t set this one apart from the book ({reason}). As written:</div>
+                        <pre className="option-text">{o.text}</pre>
+                      </>
+                    )}
+                  />
+                </div>
+              ) : (
+                <pre className={`option-text${o.complete ? '' : ' streaming'}`}>{o.text}</pre>
+              ))
             )}
-            <button disabled={!item.done || !o.complete || o.text == null} title={`${optionCount === 1 ? 'A new option that starts' : `${optionCount} new options that start`} from this one and take it further`} onClick={() => void studio.moreLikeOption(item.id, i)}>
-              More like this
-            </button>
-            <button disabled={!o.complete || o.text == null} onClick={() => copyText(o.text ?? '')}>
-              Copy
-            </button>
+            {o.note && (
+              <div className="option-note md">
+                <Markdown text={o.note} />
+              </div>
+            )}
+            <div className="option-actions">
+              {target && (
+                <button
+                  className={applied === i ? '' : 'primary'}
+                  disabled={!item.done || !o.complete || o.text == null || (empty && !cut)}
+                  title={
+                    applied === i
+                      ? cut
+                        ? 'The passage is cut (⌘Z to undo)'
+                        : 'This option is in the editor (⌘Z to undo)'
+                      : cut
+                        ? `Take ${where} out (⌘Z to undo)`
+                        : `Put this in place of ${where} (⌘Z to undo)`
+                  }
+                  onClick={() => void studio.applyOption(item.id, i)}
+                >
+                  {applied === i ? (cut ? 'Cut ✓' : 'In use ✓') : applied != null ? (cut ? 'Cut it instead' : 'Use this instead') : cut ? 'Cut it' : target.text ? 'Use this' : 'Insert'}
+                </button>
+              )}
+              {/* Nothing to take further or to copy. */}
+              {!empty && (
+                <>
+                  <button disabled={!item.done || !o.complete || o.text == null} title={`${optionCount === 1 ? 'A new option that starts' : `${optionCount} new options that start`} from this one and take it further`} onClick={() => void studio.moreLikeOption(item.id, i)}>
+                    More like this
+                  </button>
+                  <button disabled={!o.complete || o.text == null} onClick={() => copyText(o.text ?? '')}>
+                    Copy
+                  </button>
+                </>
+              )}
+            </div>
+            {conflict?.index === i && <OptionConflictNote id={item.id} conflict={conflict} />}
           </div>
-          {conflict?.index === i && <OptionConflictNote id={item.id} conflict={conflict} />}
-        </div>
-      ))}
+        );
+      })}
       {/* Once one is in use: was that it? */}
       {applied != null && item.taskCheck === 'ask' && <TaskCheck id={item.id} question={`Option ${parsed.options[applied]?.n ?? applied + 1} is in. Is this task done?`} />}
+    </div>
+  );
+}
+
+/** An option that puts nothing in its place: the passage it takes out, struck through. */
+function OptionCut({ passage }: { passage: string }) {
+  if (!passage.trim()) return <div className="option-preview-note">Empty: nothing to put in.</div>;
+  const prose = looksLikeProse(passage);
+  // How much, in words for prose (markup's words aren't a reader's).
+  const words = prose ? countWords(passage) : 0;
+  return (
+    <div className="option-cut">
+      <div className="option-cut-head">
+        <Icon name="minus" size={12} />
+        Cuts the whole passage{words ? ` (${words} ${words === 1 ? 'word' : 'words'})` : ''}:
+      </div>
+      <DiffText pieces={[{ kind: 'del', text: passage }]} prose={prose} />
     </div>
   );
 }

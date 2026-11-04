@@ -1477,6 +1477,63 @@ async function optionsDoneChecks() {
 }
 
 /**
+ * Options, a cut: an option with nothing in it shows the passage it takes out,
+ * struck through, in Text and Preview alike; its button says Cut it, with no
+ * More like this or Copy; cutting takes the passage out, and another option
+ * goes in where it was. Made-up reply; saves nothing (the file is put back).
+ */
+async function optionsCutChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const original = (await ipc.fsRead(file)).text;
+  await studio.openFile(file);
+  const model = studio.editor!.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => /^The eigenvalues of/.test(l)) + 1;
+  const text = model.getLineContent(line);
+  const target = { path: file, start: { line, column: 1 }, end: { line, column: text.length + 1 }, text };
+  const reply = 'One cut, one rewrite.\n\n### Option 1: Cut it\n```typst\n\n```\nThe next paragraph says it already.\n\n### Option 2: Shorter\n```typst\nShorter: the eigenvalues of $A$ are the roots.\n```\nHalf as long.';
+  studio.store.set((s) => ({
+    agent: { ...s.agent, sessionId: 'selftest-options', running: false, mode: 'options', items: [{ kind: 'user', id: 'u1', text: 'Cut this?', attachments: [] }, { kind: 'assistant', id: 'a1', text: reply, done: true, options: { target, original: target, applied: null } }] },
+  }));
+  await sleep(200);
+  const cards = () => [...([...document.querySelectorAll('.options-reply')].at(-1)?.querySelectorAll<HTMLElement>('.option-card') ?? [])];
+  const buttons = (card?: HTMLElement) => [...(card?.querySelectorAll<HTMLButtonElement>('.option-actions button') ?? [])];
+  const look = () =>
+    cards().map((c) => ({
+      cut: c.querySelector('.option-cut-head')?.textContent ?? null,
+      struck: c.querySelector('.option-cut del')?.textContent === text,
+      shown: c.querySelectorAll('.option-text, .option-preview').length,
+      buttons: buttons(c).map((b) => b.textContent),
+    }));
+  const view = localStorage.getItem('studio.optionsView');
+  const tab = (name: string) => [...document.querySelectorAll<HTMLButtonElement>('.options-view [role="tab"]')].find((b) => b.textContent === name);
+  tab('Text')?.click();
+  await sleep(100);
+  out.text = look();
+  tab('Preview')?.click();
+  await sleep(300);
+  out.preview = look();
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  out.snapshot = await snap('options-cut');
+  still.remove();
+  tab('Text')?.click();
+  if (view == null) localStorage.removeItem('studio.optionsView');
+  else localStorage.setItem('studio.optionsView', view);
+  buttons(cards()[0])[0]?.click();
+  await sleep(400);
+  out.cut = { line: model.getLineContent(line), gone: !model.getValue().includes(text), buttons: cards().map((c) => buttons(c)[0]?.textContent) };
+  buttons(cards()[1])[0]?.click();
+  await sleep(400);
+  out.instead = { line: model.getLineContent(line), buttons: cards().map((c) => buttons(c)[0]?.textContent) };
+  await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  await studio.reloadFromDisk(file);
+  studio.store.set((s) => ({ agent: { ...s.agent, mode: 'write', sessionId: null, items: [] } }));
+  return out;
+}
+
+/**
  * Options, the passage followed: a picked option goes in where its passage is
  * now, wherever the cursor is, whatever else is selected, and whatever is
  * written before, after or right beside it; picking again and ⌘Z; the
@@ -9850,6 +9907,7 @@ export async function runSelftest(launch: LaunchOptions) {
       still.remove();
     }
     if (only?.includes('optionsdone')) result.optionsdone = await optionsDoneChecks();
+    if (only?.includes('optionscut')) result.optionscut = await optionsCutChecks();
     if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
     if (only?.includes('askcard')) result.askcard = await askCardChecks();
     if (only?.includes('selcard')) result.selcard = await selectionCardChecks();

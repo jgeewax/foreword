@@ -388,6 +388,12 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .option-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; max-height: 240px; overflow: auto; }
 .typst-passage-wait { font-size: 11.5px; color: var(--muted); }
 .option-preview-note { font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
+/* An option that puts nothing in: the passage it cuts, struck through, as an edit's cut words are. */
+.option-cut { background: var(--bg); border: 1px solid color-mix(in srgb, var(--bad) 30%, var(--border)); border-radius: 5px; }
+.option-cut-head { display: flex; align-items: center; gap: 5px; padding: 5px 8px 0; font-size: 11.5px; color: var(--muted); }
+.option-cut-head .icon-svg { flex: none; color: var(--bad); }
+.option-cut .diff-text { padding: 3px 8px 6px; max-height: 160px; overflow-y: auto; }
+.option-cut .diff-text del { padding: 0; background: none; color: color-mix(in srgb, var(--fg) 55%, var(--muted)); text-decoration-color: color-mix(in srgb, var(--bad) 75%, transparent); }
 .option-note { margin-top: 5px; font-size: 12px; color: var(--muted); }
 .option-actions { display: flex; gap: 6px; margin-top: 7px; }
 /* An option that couldn't simply go in: the passage changed (the author's changes shown), was deleted, or can't be found. */
