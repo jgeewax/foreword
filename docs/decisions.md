@@ -3505,7 +3505,8 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   raw text and maths: an equation's lines start with "="), so the chapter keeps
   its number and its figures theirs. A line that only wraps a taken-out include
   (`#book-chapter(include "…")`) goes whole, with its blank pages. An include
-  with a bibliography stays. Around the chapter, references and links to labels
+  with a bibliography stays. (Since 2026-11-09 the main file's own pages go
+  too: see "The chapter preview shows only the chapter".) Around the chapter, references and links to labels
   only in the taken-out files show in grey (the heading's words, else the
   label) instead of stopping the preview. The text is the main file line for
   line, so Tinymist's errors in it are reported against the main file, a click
@@ -4586,6 +4587,54 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   recipe" idea, a contrast with dependent vectors), in the format the cards
   read. The `optionslive` self-test group now clicks it too; not yet run (the
   screen was locked).
+
+### The chapter preview shows only the chapter (2026-11-09)
+
+- **Asked for:** "when previewing a single chapter, im seeing the part pages
+  and frontmatter pages included (eg contents) even though i should just see
+  the current chapter."
+- **Found:** the chapter preview kept everything in the main file but the
+  other chapters, on purpose, so the chapter looked as in the book. On the
+  linear algebra book, chapter 13 came to 45 pages: the contents, five part
+  pages, blank pages and the index around its 29.
+- **Now:** outside the chapter, only what sets the book up stays: imports,
+  `let`, `set` and `show`, and calls that only set counters and state
+  (`#counter(page).update(1)`, the templates' `#start-body()`, which turns
+  the running heads on). Everything else goes, with its lines kept: text and
+  headings written in the main file (their numbers counted, as a taken-out
+  chapter's are), and calls that make something to see (`#outline()`,
+  `#part("…")`, `#title-page`, `#pagebreak(to: "odd")`). A block such as the
+  front matter's `#{ … }` keeps its rules and loses its pages. The chapter's
+  own call goes when it only puts blank pages around it (`#book-chapter`), so
+  the preview doesn't open on two blank pages; one that sets the chapter
+  (`#appendix(include "…")` with its own numbering) stays. The bibliography
+  stays only when the chapter cites something (an `@` that's no label in the
+  book, or a `cite(`): otherwise a template's `#bibliography(…)` added an
+  empty Sources page to every chapter.
+- **How a call is judged:** by its definition, found at the top level of the
+  main file or a file it imports, however deep (`bookTexts(true)` now reads
+  those too). A call is kept if all its body does is update a counter or a
+  state, put metadata, or break the page weakly; a function from a package,
+  or one not found, goes. Typst has no way to typeset something and drop its
+  pages (`page` and `pagebreak` inside any container are errors), so the
+  choice is made in the text. `typst-items.ts` splits Typst into its
+  statements and expressions (brackets, strings, comments, raw text and
+  maths respected); `chapter-preview.ts` walks the main file with it.
+- **Also fixed:** a label put on an equation after a line ending in a colon
+  ("we then have:" then `$ … $ <eq-x-squared>`) was read as one given to a
+  call, so it was never found. The chapter preview of Calculus Made Easy's
+  chapter 5 stopped on "label does not exist" (before this change too), and
+  ⌘-click didn't find it. The colon or bracket now has to be on the label's
+  line (labels.ts).
+- Verified: every chapter of the linear algebra book's test copy (32, the
+  front and back matter included) and of four samples (28) compiles alone
+  through `typst compile` with no errors and no contents, part or index page.
+  Chapter 13 is 29 pages, opens on its first page as "Chapter 13", running
+  heads and page numbers as in the book; the preface keeps its roman numbers.
+  The textbook and nonfiction templates keep their references only in the
+  chapter that cites. Unit tests: typst-items.test.ts, chapter-preview.test.ts,
+  labels.test.ts. The `chapterpreview` self-test wasn't run (the screen was
+  locked).
 
 ### Open questions
 

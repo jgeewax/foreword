@@ -38,7 +38,7 @@ import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from '
 import { parseConfig, serializeConfig } from './config';
 import { chapterNumber, describeTool, fileName, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
 import { CHAPTER_PREVIEW_NAME, chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
-import { scanIncludes } from './includes';
+import { scanImports, scanIncludes } from './includes';
 import { labelPlaces, referenceAt } from './labels';
 import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
 import { nextActivity, waitedFor } from './activity';
@@ -3672,23 +3672,32 @@ export class Studio {
     else await this.restartTypst();
   }
 
-  /** The main file and the files it includes (however deep), as they are now, open buffers included. */
-  private async bookTexts(): Promise<{ main: string; chapters: string[]; files: string[]; read: (path: string) => string | null } | null> {
+  /**
+   * The main file and the files it includes (however deep), as they are now,
+   * open buffers included; with `imports`, `read` has what the main file
+   * imports too (however deep), for the book's definitions.
+   */
+  private async bookTexts(imports = false): Promise<{ main: string; chapters: string[]; files: string[]; read: (path: string) => string | null } | null> {
     const entry = this.state.workspace?.entry;
     const main = entry ? await this.currentText(entry) : null;
     if (!entry || main == null) return null;
     const root = this.typstRoot();
     const texts = new Map<string, string | null>([[entry, main]]);
-    const load = async (path: string): Promise<void> => {
-      if (texts.has(path)) return;
-      texts.set(path, null);
-      const text = await this.currentText(path);
-      texts.set(path, text);
-      if (text) await Promise.all(scanIncludes(text).flatMap(({ spec }) => resolveRef(path, spec, root) ?? []).map(load));
+    const load = (follow: (text: string) => { spec: string }[]) => {
+      const visit = async (path: string): Promise<void> => {
+        if (texts.has(path)) return;
+        texts.set(path, null);
+        const text = await this.currentText(path);
+        texts.set(path, text);
+        if (text) await Promise.all(follow(text).flatMap(({ spec }) => resolveRef(path, spec, root) ?? []).map(visit));
+      };
+      return visit;
     };
     const chapters = mainIncludes(main, entry, root).map((x) => x.file);
-    await Promise.all(chapters.map(load));
-    return { main, chapters, files: [...texts.keys()], read: (path) => texts.get(path) ?? null };
+    await Promise.all(chapters.map(load(scanIncludes)));
+    const files = [...texts.keys()];
+    if (imports) await Promise.all(scanImports(main).flatMap(({ spec }) => resolveRef(entry, spec, root) ?? []).map(load(scanImports)));
+    return { main, chapters, files, read: (path) => texts.get(path) ?? null };
   }
 
   /**
@@ -3698,7 +3707,7 @@ export class Studio {
    */
   private async chapterPreviewFile(): Promise<{ path: string; text: string; chapter: string } | null> {
     const ws = this.state.workspace;
-    const book = await this.bookTexts();
+    const book = await this.bookTexts(true);
     if (!ws?.entry || !book || book.chapters.length < 2) return null;
     const root = this.typstRoot();
     const active = this.state.active ? chapterOf(this.state.active, book.chapters, book.read, root) : null;
