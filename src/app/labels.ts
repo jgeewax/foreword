@@ -5,11 +5,13 @@
 const NAME = /[\p{L}_][\p{L}\p{N}_:.-]*/u.source;
 
 // A label, and what's before it when it's written as an argument (`#ref(<x>, form: "page")`, `link(<x>)`):
-// then it refers to the label instead. (Not a lookbehind: WebKit takes 150 times as long with one.)
-const LABEL = new RegExp(`([(,:]\\s*)?<(${NAME})>`, 'gu');
+// then it refers to the label instead. On the same line: a label under an
+// equation that follows "we have:" is put on it. (Not a lookbehind: WebKit
+// takes 150 times as long with one.)
+const LABEL = new RegExp(`([(,:][ \\t]*)?<(${NAME})>`, 'gu');
 
 // `@name` (Typst leaves a final "." or ":" out of it), or a label given to a call.
-const REFERENCE = new RegExp(`(?<!\\\\)@(${NAME})|(?<=[(,:]\\s*)<(${NAME})>`, 'gu');
+const REFERENCE = new RegExp(`(?<!\\\\)@(${NAME})|(?<=[(,:][ \\t]*)<(${NAME})>`, 'gu');
 
 /**
  * Text with comments, raw blocks and maths blanked, where nothing is a heading

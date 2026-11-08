@@ -53,6 +53,10 @@ See @fig-a and #ref(<fig-a>).`;
     expect(labelPlaces(TEXT, 'ch-vectors')).toHaveLength(1);
     expect(labelPlaces(TEXT, 'nowhere')).toEqual([]);
   });
+
+  it('finds a label on an equation after a line that ends in a colon', () => {
+    expect(labelPlaces('Leaving it out, we then have:\n$ y = x^2. $ <eq-x-squared>\n', 'eq-x-squared')).toHaveLength(1);
+  });
 });
 
 describe('prose', () => {
