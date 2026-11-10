@@ -2,6 +2,21 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.9.1 · 11 November 2026
+
+### The preview
+
+- **Chapter shows just the chapter.** With **Chapter** chosen above the preview, you see only the chapter you're in, from its first page: no title page, contents, part pages, blank pages or index around it. It keeps its number, its running heads and the book's look, and its list of references comes with it when it cites something.
+
+### The assistant
+
+- **An option that cuts shows what it cuts.** When one of the Options takes the passage out altogether, its card shows the passage struck through, with *Cuts the whole passage* above it, and its button says *Cut it*.
+
+### Fixes
+
+- *Add to Dictionary* on a possessive, such as "Axler's", left the squiggle where it was. It learns the name now, and its possessive with it.
+- A label on an equation that follows a line ending in a colon ("we then have:") wasn't found: ⌘-click on a reference to it went nowhere, and a chapter shown alone that referred to it stopped the preview.
+
 ## 0.9.0 · 3 November 2026
 
 ### The assistant

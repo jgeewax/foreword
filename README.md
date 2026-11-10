@@ -16,6 +16,8 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
+**New in 0.9.1:** the preview's Chapter view shows just the chapter you're in, without the contents, parts or index around it · an option that cuts a passage shows what it cuts
+
 **New in 0.9:** the assistant sees your pages, so it checks how its changes look · Options writes one to five versions, and *More like this* takes the closest further · make all of an answer's changes at once · Source Control as VS Code's: discard, branches, sync, amend and undo · Foreword uses the assistant you have, or installs its own copy from the maker
 
 <br>
