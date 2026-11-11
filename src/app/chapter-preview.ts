@@ -87,19 +87,114 @@ export function numberedChapters(text: string): number {
 const quote = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 /**
+ * What a reference to a label reads as in the whole book, typeset
+ * (bookNumbersText): its supplement ("Figure", "Chapter"; null if none), its
+ * number ("3.2"; null if it has none), and the page it's on as the page is
+ * numbered ("214", "xii"; null if unnumbered).
+ */
+export type BookNumber = { supplement: string | null; number: string | null; page: string | null };
+
+/**
  * References to what's only in the chapters taken out would stop the preview
  * (Typst errors on a label the document doesn't have): around the chapter, they
- * show in grey (the heading's words, else the label), and such a link keeps
- * its text. Code to put in the block around the chapter's include.
+ * show in grey, as the whole book has them when that's known ("Figure 6.9",
+ * "page 214", or the reference's own supplement: `@x[Code]`), else the
+ * heading's words, else the label; such a link keeps its text. Code to put in
+ * the block around the chapter's include.
  */
-function guard(gone: Map<string, string | null>): string {
+function guard(gone: Map<string, string | null>, numbers: ReadonlyMap<string, BookNumber>): string {
   if (!gone.size) return '';
-  const dict = `(${[...gone].sort(([a], [b]) => (a < b ? -1 : 1)).map(([l, t]) => `${quote(l)}: ${t == null ? 'none' : quote(t)}`).join(', ')})`;
+  const shown = (l: string, words: string | null) => {
+    const n = numbers.get(l);
+    if (!n) return words == null ? 'none' : quote(words);
+    const or = (s: string | null) => (s == null ? 'none' : quote(s));
+    return `(${or(n.number == null ? null : n.supplement)}, ${quote(n.number ?? words ?? l)}, ${or(n.page)})`;
+  };
+  const dict = `(${[...gone].sort(([a], [b]) => (a < b ? -1 : 1)).map(([l, t]) => `${quote(l)}: ${shown(l, t)}`).join(', ')})`;
   return (
     `let gone = ${dict}; ` +
-    'show ref: it => if str(it.target) in gone { let t = gone.at(str(it.target)); text(fill: luma(150))[#if t == none { str(it.target) } else { t }] } else { it }; ' +
+    'let shown(it, g) = if g == none { str(it.target) } else if type(g) == str { g } else { let (s, n, p) = g; if it.form == "page" and p != none { s = "page"; n = p }; if it.supplement != auto and type(it.supplement) != function { s = it.supplement }; if s in (none, [], "") { n } else { [#s~#n] } }; ' +
+    'show ref: it => if str(it.target) in gone { text(fill: luma(150), shown(it, gone.at(str(it.target)))) } else { it }; ' +
     'show link: it => if type(it.dest) == label and str(it.dest) in gone { it.body } else { it }; '
   );
+}
+
+/** Where the whole book is typeset to learn its numbers (bookNumbersText), beside the main file at `entry`; it's only ever an open document, never on disk. */
+export const NUMBERS_NAME = '.foreword-numbers.typ';
+
+export function bookNumbersPath(entry: string): string {
+  const slash = entry.lastIndexOf('/');
+  return slash < 0 ? NUMBERS_NAME : `${entry.slice(0, slash)}/${NUMBERS_NAME}`;
+}
+
+/** The label bookNumbersText puts on what it records. */
+export const NUMBERS_LABEL = 'foreword-number';
+
+// For each labelled heading, figure and equation, as it's typeset: its label, supplement, number and page.
+const RECORD =
+  `let ${NUMBERS_LABEL}(it, n) = { it; if it.has("label") { context { let s = it.supplement; let p = it.location().page-numbering(); ` +
+  `[#metadata((str(it.label), if type(s) == function { none } else { s }, if it.numbering != none { numbering(it.numbering, ..n()) }, if p != none { numbering(p, ..counter(page).at(it.location())) })) <${NUMBERS_LABEL}>] } } }`;
+const RECORDERS = [
+  `show heading: it => ${NUMBERS_LABEL}(it, () => counter(heading).at(it.location()))`,
+  `show figure: it => ${NUMBERS_LABEL}(it, () => it.counter.at(it.location()))`,
+  `show math.equation: it => if it.block { ${NUMBERS_LABEL}(it, () => counter(math.equation).at(it.location())) } else { it }`,
+];
+
+/**
+ * The main file's text (at `entry`) for typesetting the whole book to learn
+ * what its references read as, which a chapter shown alone can't know: what
+ * number a figure in another chapter has depends on the book's rules and
+ * counters (a template that numbers them by chapter, resetting them at each
+ * one). Around each include, show rules record every labelled heading, figure
+ * and equation's number at its place (a `metadata` with NUMBERS_LABEL); there
+ * they run before the book's own, which can make a heading anew and so hide
+ * it from a rule outside. The same rules at the top catch the main file's own.
+ * `prefix` goes first (the guard against references that go nowhere).
+ */
+export function bookNumbersText(main: string, prefix = ''): string {
+  let out = main;
+  const around = RECORDERS.map((r) => `${r}; `).join('');
+  for (const inc of [...scanIncludes(main)].reverse()) out = `${out.slice(0, inc.start)}{ ${around}${out.slice(inc.start, inc.end)} }${out.slice(inc.end)}`;
+  return `// Foreword typesets this to learn the book's numbers; changes here are lost.\n${prefix}\n${[RECORD, ...RECORDERS].map((r) => `#${r}\n`).join('')}${out}`;
+}
+
+/** What a piece of content typeset from Typst's JSON says, as text. */
+function plainText(c: unknown): string {
+  if (c == null) return '';
+  if (typeof c === 'string' || typeof c === 'number') return String(c);
+  if (Array.isArray(c)) return c.map(plainText).join('');
+  if (typeof c !== 'object') return '';
+  const o = c as Record<string, unknown>;
+  if (o.func === 'space' || o.func === 'linebreak') return ' ';
+  if (o.func === 'smartquote') return o.double === false ? '’' : '”';
+  if (typeof o.text === 'string') return o.text;
+  return plainText(o.children ?? o.body ?? null);
+}
+
+/** The book's numbers, from the `value`s Typst's query gives for bookNumbersText's records: by label, the first of each. */
+export function parseBookNumbers(values: unknown): Map<string, BookNumber> {
+  const out = new Map<string, BookNumber>();
+  if (!Array.isArray(values)) return out;
+  const text = (c: unknown) => (c == null ? null : plainText(c).replace(/\s+/g, ' ').trim() || null);
+  for (const v of values) {
+    if (!Array.isArray(v) || typeof v[0] !== 'string' || out.has(v[0])) continue;
+    out.set(v[0], { supplement: text(v[1]), number: text(v[2]), page: text(v[3]) });
+  }
+  return out;
+}
+
+/** A text's hash, to tell whether it changed (cyrb53). */
+export function textHash(s: string): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
 
 /** A function the book defines at the top level of the main file or a file it imports: its text, its parameters, and its body. */
@@ -210,9 +305,10 @@ const CITE = /(?:^|[^\\\p{L}\p{N}_])@([\p{L}_][\p{L}\p{N}_:.-]*)|\bcite\s*\(/gu;
  * - the bibliography stays if the chapter cites something.
  * The chapter's own call goes if it only puts blank pages around it. Lines
  * stay where they are, so Typst's errors and Tinymist's jumps in this text are
- * at the same lines in the main file.
+ * at the same lines in the main file. References to what's taken out read as
+ * `numbers` (the whole book's) has them.
  */
-export function chapterPreviewText(main: string, entry: string, chapter: string, read: ReadText, root = ''): string {
+export function chapterPreviewText(main: string, entry: string, chapter: string, read: ReadText, root = '', numbers: ReadonlyMap<string, BookNumber> = new Map()): string {
   const includes = scanIncludes(main).flatMap((inc) => {
     const file = resolveRef(entry, inc.spec, root);
     return file ? [{ ...inc, file }] : [];
@@ -285,5 +381,5 @@ export function chapterPreviewText(main: string, entry: string, chapter: string,
   const here = new Set(labelsIn(out).keys());
   for (const { file } of includes) if (kept(file)) for (const f of tree(file)) for (const l of labelsIn(read(f) ?? '').keys()) here.add(l);
   const gone = new Map([...labels].filter(([l]) => !here.has(l)));
-  return `/* Foreword's chapter preview: ${entry} with only ${chapter}. Foreword writes this; changes here are lost. */${out.replace(GUARD, guard(gone))}`;
+  return `/* Foreword's chapter preview: ${entry} with only ${chapter}. Foreword writes this; changes here are lost. */${out.replace(GUARD, guard(gone, numbers))}`;
 }

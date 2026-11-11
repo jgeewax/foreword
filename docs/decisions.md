@@ -3508,7 +3508,8 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   with a bibliography stays. (Since 2026-11-09 the main file's own pages go
   too: see "The chapter preview shows only the chapter".) Around the chapter, references and links to labels
   only in the taken-out files show in grey (the heading's words, else the
-  label) instead of stopping the preview. The text is the main file line for
+  label; since 2026-11-11 as the book has them, see "References out of a
+  chapter shown alone read as in the book") instead of stopping the preview. The text is the main file line for
   line, so Tinymist's errors in it are reported against the main file, a click
   on its own content opens the main file there, and the main file's cursor
   finds its place in it.
@@ -4635,6 +4636,62 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   chapter that cites. Unit tests: typst-items.test.ts, chapter-preview.test.ts,
   labels.test.ts. The `chapterpreview` self-test wasn't run (the screen was
   locked).
+
+### References out of a chapter shown alone read as in the book (2026-11-11)
+
+- **Asked for:** "when im referencing another chapter when in single chapter
+  preview mode, the preview works properly (has the section title). but when
+  i reference something else (listing, figure) im noticing that it just has
+  the @asdfasdfasdfasdf style ID of the reference (not the figure name and
+  ID). is there a better way to do this? can we make chapter preview mode
+  still woprk ?"
+- **Why it showed the label.** A reference to a label only in a chapter left
+  out would stop Typst, so the guard around the chapter set it in grey: a
+  heading's words, which the text gives, else the label. A figure's number
+  isn't in the text. It comes from the book's rules and counters as Typst runs
+  them: the linear algebra book numbers figures, tables and listings by
+  chapter ("Listing 13.1"), resetting the counters in its chapter heading's
+  show rule. A page reference needs the page.
+- **Now:** the whole book is typeset once in the background, beside the
+  chapter, to learn what each reference reads as, and the guard shows that in
+  grey: "Figure 9.7", "Listing 13.1", "Chapter 13", "Section 13.2.1", "page
+  217" for `form: "page"`, and a reference's own supplement before the number
+  (`@fig:x[Picture]`, `#figref(…)`). Until it's known, the guard shows what it
+  did. Headings read as the book has them too ("Chapter 8" where it said
+  "Special matrices you should know"); the book's own `show ref` rule doesn't
+  run on them (the linear algebra book's `book-ref` adds a section's title in
+  brackets).
+- **How:** `bookNumbersText` (chapter-preview.ts) is the main file with show
+  rules for headings, figures and equations around each include, where they
+  run before the book's own (the book's rule for a chapter heading makes a new
+  one, so a rule outside never sees it), and at the top for the main file's
+  own. At each labelled one's place they record, in a `metadata`, its
+  supplement, its number (its numbering with its counter there, so a
+  numbering function reads that chapter's number) and its page. Tinymist
+  typesets that text with `tinymist.exportQuery` (`write: false`) as a
+  document that's only ever open, `.foreword-numbers.typ` beside the main
+  file, never on disk; the preview goes on typesetting the chapter meanwhile.
+- **When:** the numbers are kept per book (localStorage), with the hash of
+  each file's text at the time. A chapter shown alone has the book typeset
+  again only when a file outside it (the main file, another chapter, what the
+  main file imports) has changed since. Its own edits seldom change another
+  chapter's numbers, and count once you move to another chapter. A change on
+  disk (the assistant's) counts too: the chapter preview now follows other
+  chapters' changes on disk, which it didn't. When the book fails to typeset,
+  the numbers stay as they were until a file outside changes again.
+- **Not done:** a book that numbers its figures or equations through the whole
+  book, not by chapter, still has the chapter's own start from 1 in the
+  chapter preview (only headings are counted for the chapters left out).
+- Measured: self-test `chapterrefs` on a copy of the 745-page book, nothing
+  learned yet, chapter 12: the chapter in 0.6 s, its `@fig:ch9-gram-matrix` as
+  the label; the book typeset for its numbers in 12.1 s (862 labels), then
+  "Figure 9.7" on the page, in grey, as "Chapter 8" and "Chapter 9" beside it;
+  8 keystrokes meanwhile reached the preview at 88–106 ms p50, 410 ms at
+  worst; the preview restarted, then chapter 13: nothing typeset again. With
+  `typst compile`, every chapter of that copy (32) and of the samples compiles
+  alone with the numbers, and chapter 12's text has no label left as such.
+  The picture book's story.typ doesn't compile alone (a spread's assertion),
+  before this change too. Unit tests: chapter-preview.test.ts.
 
 ### Open questions
 

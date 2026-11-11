@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chapterOf, chapterPreviewPath, chapterPreviewText, includeTree, numberedChapters } from './chapter-preview';
+import { bookNumbersPath, bookNumbersText, chapterOf, chapterPreviewPath, chapterPreviewText, includeTree, numberedChapters, parseBookNumbers, textHash, type BookNumber } from './chapter-preview';
 
 const files: Record<string, string> = {
   'src/template.typ': [
@@ -99,7 +99,7 @@ describe('the chapter preview', () => {
     // The bibliography goes: this chapter cites nothing.
     expect(lines[13]).toBe('');
     // The chapter, with references to what's taken out shown in grey rather than failing.
-    expect(lines[10]).toMatch(/^#\{ let gone = \(.*\); show ref: .*; show link: .*; include "chapters\/two\.typ" \}$/);
+    expect(lines[10]).toMatch(/^#\{ let gone = \(.*\); let shown\(it, g\) = .*; show ref: .*; show link: .*; include "chapters\/two\.typ" \}$/);
     const gone = /let gone = \(([^)]*)\)/.exec(lines[10])![1];
     expect(gone).toBe('"ch:one": "One", "fig:box": none, "part:later": none, "sec:steps": "First steps"');
     // Its own labels, its sub-file's, and what's only in comments or raw text aren't "gone".
@@ -128,5 +128,60 @@ describe('the chapter preview', () => {
   it('quotes headings safely', () => {
     const out = chapterPreviewText('#include "a.typ"\n#include "b.typ"\n', 'main.typ', 'a.typ', (p) => ({ 'a.typ': 'See @b.', 'b.typ': '= The "Quoted" \\ One <b>\n' })[p] ?? null);
     expect(out).toContain('let gone = ("b": "The \\"Quoted\\" One");');
+  });
+
+  it('reads references out of the chapter as the whole book has them, once it knows', () => {
+    const numbers = new Map<string, BookNumber>([
+      ['fig:box', { supplement: 'Figure', number: '1.1', page: '3' }],
+      ['ch:one', { supplement: 'Chapter', number: '1', page: '2' }],
+      // An unnumbered heading: only its page, and its words if a reference names it.
+      ['part:later', { supplement: 'Section', number: null, page: 'xii' }],
+      // A label the chapter has itself isn't "gone".
+      ['ch:two', { supplement: 'Chapter', number: '2', page: '5' }],
+    ]);
+    const out = chapterPreviewText(MAIN, 'src/main.typ', 'src/chapters/two.typ', read, 'src', numbers);
+    const gone = /let gone = \((.*?)\); let shown/.exec(out)![1];
+    expect(gone).toBe('"ch:one": ("Chapter", "1", "2"), "fig:box": ("Figure", "1.1", "3"), "part:later": (none, "part:later", "xii"), "sec:steps": "First steps"');
+  });
+});
+
+describe('the book typeset for its numbers', () => {
+  it('records what each reference reads as, around every include and at the top', () => {
+    expect(bookNumbersPath('src/main.typ')).toBe('src/.foreword-numbers.typ');
+    const out = bookNumbersText(MAIN, '#show ref: it => it;');
+    const lines = out.split('\n');
+    expect(lines[1]).toBe('#show ref: it => it;');
+    expect(lines[2]).toMatch(/^#let foreword-number\(it, n\) = \{ it; if it.has\("label"\) \{ context .*<foreword-number>\] \} \} \}$/);
+    expect(lines.slice(3, 6).map((l) => l.split(':')[0])).toEqual(['#show heading', '#show figure', '#show math.equation']);
+    // Then the main file, each include in a block with the same rules, where they run before the book's own.
+    const main = lines.slice(6).join('\n');
+    expect(main.split('\n').length).toBe(MAIN.split('\n').length);
+    expect(main).toContain('#book-chapter({ show heading: it => foreword-number(');
+    expect(main).toMatch(/\n#\{ show heading: .*; show math\.equation: .*; include "chapters\/two\.typ" \}\n/);
+    expect(main).toMatch(/\n  \{ show heading: .*; include "front\/preface\.typ" \}\n/);
+    expect(main.match(/foreword-number\(it, \(\) => counter\(heading\)/g)).toHaveLength(5);
+  });
+
+  it('reads Typst’s answer: by label, as text, the first of each', () => {
+    const numbers = parseBookNumbers([
+      ['fig:a', { func: 'text', text: 'Figure' }, '3.2', '41'],
+      ['eq:b', { func: 'sequence', children: [{ func: 'text', text: 'Key' }, { func: 'space' }, { func: 'text', text: 'Equation' }] }, { func: 'text', text: '(4)' }, null],
+      ['sec:c', null, null, 'xii'],
+      ['fig:a', { func: 'text', text: 'Figure' }, '9.9', '99'],
+      'junk',
+      [7, 'x'],
+    ]);
+    expect([...numbers]).toEqual([
+      ['fig:a', { supplement: 'Figure', number: '3.2', page: '41' }],
+      ['eq:b', { supplement: 'Key Equation', number: '(4)', page: null }],
+      ['sec:c', { supplement: null, number: null, page: 'xii' }],
+    ]);
+    expect(parseBookNumbers(null).size).toBe(0);
+  });
+
+  it('tells texts apart by their hash', () => {
+    expect(textHash('= One\n')).toBe(textHash('= One\n'));
+    expect(textHash('= One\n')).not.toBe(textHash('= One \n'));
+    expect(textHash('')).not.toBe(textHash(' '));
   });
 });

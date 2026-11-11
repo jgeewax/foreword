@@ -37,7 +37,21 @@ import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
 import { parseConfig, serializeConfig } from './config';
 import { chapterNumber, describeTool, fileName, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
-import { CHAPTER_PREVIEW_NAME, chapterOf, chapterPreviewPath, chapterPreviewText } from './chapter-preview';
+import {
+  bookNumbersPath,
+  bookNumbersText,
+  CHAPTER_PREVIEW_NAME,
+  chapterOf,
+  chapterPreviewPath,
+  chapterPreviewText,
+  importTree,
+  includeTree,
+  NUMBERS_LABEL,
+  NUMBERS_NAME,
+  parseBookNumbers,
+  textHash,
+  type BookNumber,
+} from './chapter-preview';
 import { scanImports, scanIncludes } from './includes';
 import { labelPlaces, referenceAt } from './labels';
 import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
@@ -641,6 +655,14 @@ const previewPlaceKey = (root: string) => `studio.previewPlace:${root}`;
 type PreviewPlace = { page: number; offset: number };
 /** Per book: the chapter the preview last showed alone. */
 const previewChapterKey = (root: string) => `studio.previewChapter:${root}`;
+/** Per book: its numbers when it was last typeset whole for them (BookNumbers), so a chapter shown alone has them at once. */
+const bookNumbersKey = (root: string) => `studio.bookNumbers:${root}`;
+/**
+ * What the book's references read as, the whole book typeset (bookNumbersText),
+ * and the hash of each of its files' texts then: they're out of date for a
+ * chapter shown alone when a file outside it has changed since.
+ */
+type BookNumbers = { hashes: Record<string, number>; numbers: Map<string, BookNumber> };
 let seq = 0;
 /** This page's, so ids made after a reload never meet a kept chat's (tasks.rs). */
 const PAGE = Date.now().toString(36);
@@ -3017,6 +3039,8 @@ export class Studio {
         void this.scanTodos();
         void this.refreshNames(batch);
         void this.updateRefs(batch);
+        // Another chapter changed on disk (the assistant's edit): its headings, labels and numbers count for a chapter shown alone.
+        if (batch.some((p) => p.endsWith('.typ'))) this.scheduleChapterPreview();
         if (batch.includes(REVIEW_FILE)) void this.loadReview();
         if (batch.includes(VSCODE_SETTINGS)) void this.loadPeacockColor();
         if (this.state.search.query) this.scheduleSearch(300);
@@ -3490,7 +3514,8 @@ export class Studio {
   private onDiagnostics(uri: string, list: LspDiagnostic[]) {
     const root = this.state.workspace?.root;
     const path = root ? this.asWritten(uriToRelative(uri, root)) : null;
-    if (!path) return;
+    // The book typeset for its numbers (learnBookNumbers) is no file of the book's.
+    if (!path || path.endsWith(NUMBERS_NAME)) return;
     if (list.length) this.typstDiagnostics.set(path, list);
     else this.typstDiagnostics.delete(path);
     this.publishDiagnostics([path]);
@@ -3713,8 +3738,69 @@ export class Studio {
     const active = this.state.active ? chapterOf(this.state.active, book.chapters, book.read, root) : null;
     const first = book.chapters.find((c) => chapterNumber(c, this.state.names) != null) ?? book.chapters[0];
     const chapter = [active, this.state.previewChapter, readJson<string>(previewChapterKey(ws.root)), first].find((c): c is string => !!c && book.chapters.includes(c))!;
+    // References out of the chapter read as the whole book has them, once it's typeset for them again if a file outside it changed.
+    const numbers = this.numbersOf(ws.root);
+    const mine = new Set(includeTree(chapter, book.read, root));
+    const hashes = this.bookHashes(book, ws.entry, root);
+    const outside = (f: string) => !mine.has(f);
+    if (!numbers || [...Object.keys(hashes), ...Object.keys(numbers.hashes)].filter(outside).some((f) => hashes[f] !== numbers.hashes[f])) this.scheduleBookNumbers();
     // The guard on its first line, before the main file's: its lines stay where they are.
-    return { path: chapterPreviewPath(ws.entry), chapter, text: refGuard(this.previewKeys) + chapterPreviewText(book.main, ws.entry, chapter, book.read, root) };
+    return { path: chapterPreviewPath(ws.entry), chapter, text: refGuard(this.previewKeys) + chapterPreviewText(book.main, ws.entry, chapter, book.read, root, numbers?.numbers) };
+  }
+
+  /** The hash of the text of each file the book is made of: the main file, what it includes and what it imports. */
+  private bookHashes(book: { files: string[]; read: (path: string) => string | null }, entry: string, root: string): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const f of new Set([...book.files, ...importTree(entry, book.read, root)])) out[f] = textHash(book.read(f) ?? '');
+    return out;
+  }
+
+  /** The book's numbers (BookNumbers), as last learned, for the book at `root`; null if they never were. */
+  private numbersOf(root: string): BookNumbers | null {
+    if (this.bookNumbers?.root !== root) {
+      const kept = readJson<{ hashes: Record<string, number>; numbers: [string, BookNumber][] }>(bookNumbersKey(root));
+      this.bookNumbers = { root, value: kept ? { hashes: kept.hashes, numbers: new Map(kept.numbers) } : null };
+    }
+    return this.bookNumbers.value;
+  }
+
+  private bookNumbers: { root: string; value: BookNumbers | null } | null = null;
+  private numbersTimer: number | undefined;
+  private numbersRun: Promise<void> | null = null;
+
+  /** Typeset the whole book for its numbers soon (bookNumbersText): after the chapter, so it comes first. */
+  private scheduleBookNumbers(delay = 2000) {
+    clearTimeout(this.numbersTimer);
+    this.numbersTimer = window.setTimeout(() => void (this.numbersRun ??= this.learnBookNumbers().finally(() => (this.numbersRun = null))), delay);
+  }
+
+  /**
+   * The whole book typeset in the background, beside the preview, for what its
+   * references read as; then the chapter shown alone again, with them. A few
+   * seconds on a long book, during which the chapter's typesetting can lag.
+   * When it fails (the book has an error), the numbers stay as they were, until
+   * a file outside the chapter changes again.
+   */
+  private async learnBookNumbers() {
+    const ws = this.state.workspace;
+    if (!ws?.entry || !this.chapterPreview || !this.typst.running) return;
+    if (this.state.compile.status === 'compiling') await this.nextCompile(30_000);
+    const book = await this.bookTexts(true);
+    if (!book || this.state.workspace?.root !== ws.root) return;
+    const hashes = this.bookHashes(book, ws.entry, this.typstRoot());
+    let numbers = this.numbersOf(ws.root)?.numbers ?? new Map<string, BookNumber>();
+    try {
+      const values = await this.typst.queryText(bookNumbersPath(ws.entry), bookNumbersText(book.main, refGuard(this.previewKeys)), NUMBERS_LABEL);
+      numbers = parseBookNumbers(values);
+    } catch (e) {
+      // Tinymist restarted or stopped: again when the preview's back.
+      if (!this.typst.running || /^tinymist (restarted|stopped|exited)/.test(errorMessage(e))) return;
+      console.warn('typesetting the book for its numbers failed', e);
+    }
+    if (this.state.workspace?.root !== ws.root) return;
+    this.bookNumbers = { root: ws.root, value: { hashes, numbers } };
+    writeJson(bookNumbersKey(ws.root), { hashes, numbers: [...numbers] });
+    this.scheduleChapterPreview(0);
   }
 
   /**

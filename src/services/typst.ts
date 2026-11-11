@@ -71,6 +71,7 @@ export class TypstService extends Emitter<Events> {
   running = false;
   bin = '';
   private config: Config = CONFIG;
+  private root = '';
   private entryAbs = '';
   /** Where the Tinymist running now sends its messages (null: none, or stopped on purpose). */
   private channel: Channel<any> | null = null;
@@ -117,6 +118,7 @@ export class TypstService extends Emitter<Events> {
     });
     this.notify('initialized', {});
 
+    this.root = root;
     const entryAbs = (this.entryAbs = `${root}/${entry}`);
     this.entryUri = null;
     if (options.entryText != null) {
@@ -218,6 +220,27 @@ export class TypstService extends Emitter<Events> {
     if (!Array.isArray(res?.items)) throw new Error('Tinymist did not return the pages');
     // Its items count pages from 0.
     return { total: Number(res.total_pages) || 0, pages: res.items.filter((i: any) => typeof i?.data === 'string').map((i: any) => ({ page: Number(i.page) + 1, data: i.data as string })) };
+  }
+
+  /**
+   * Typeset `text` as a document of its own at `path` (root-relative; only
+   * ever open, never on disk, and not the preview's), and give the `value` of
+   * each `metadata` labelled `label` in it, in order. The preview goes on
+   * typesetting meanwhile, if more slowly.
+   */
+  async queryText(path: string, text: string, label: string): Promise<unknown[]> {
+    if (!this.running) throw new Error('the preview isn’t running');
+    const uri = relativeToUri(path, this.root);
+    this.didOpen(uri, text, 1);
+    try {
+      const res = await this.executeCommand('tinymist.exportQuery', [`${this.root}/${path}`, { format: 'json', selector: `<${label}>`, field: 'value' }, { write: false }]);
+      if (typeof res?.data !== 'string') throw new Error('Tinymist did not return the query');
+      const bytes = Uint8Array.from(atob(res.data), (c) => c.charCodeAt(0));
+      const values = JSON.parse(new TextDecoder().decode(bytes));
+      return Array.isArray(values) ? values : [];
+    } finally {
+      this.didClose(uri);
+    }
   }
 
   executeCommand(command: string, args: unknown[]) {

@@ -289,6 +289,123 @@ async function chapterPreviewChecks() {
 }
 
 /**
+ * References out of a chapter shown alone (bookNumbersText, chapter-preview.ts):
+ * on a book whose chapters refer to each other's figures. With nothing learned
+ * yet, the chapter is typeset first, then the whole book beside it, and the
+ * reference reads as the book has it ("Figure 6.9"), on the preview's page
+ * too; typing meanwhile still reaches the preview. The preview restarted, or
+ * the next chapter with nothing changed: no more whole-book typesetting. Types
+ * and undoes, never saves.
+ */
+async function chapterRefsChecks() {
+  const out: Record<string, unknown> = {};
+  const ws = studio.state.workspace!;
+  const before = studio.state.settings.previewScope;
+  const s = studio as unknown as { entryText: string; bookNumbers: unknown };
+  const ready = (what: string) =>
+    waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
+  // Each whole-book typeset, and how long it took.
+  const queries: number[] = [];
+  const real = studio.typst.queryText;
+  studio.typst.queryText = async (...args) => {
+    const t = performance.now();
+    try {
+      return await real.apply(studio.typst, args);
+    } finally {
+      queries.push(Math.round(performance.now() - t));
+    }
+  };
+  const key = `studio.bookNumbers:${ws.root}`;
+  try {
+    // A chapter that refers to a figure, listing or table only in another chapter.
+    const texts = await Promise.all(studio.state.names.chapters.map(async (c) => [c, (await ipc.fsRead(c)).text] as const));
+    let found: { chapter: string; label: string; line: number; character: number } | null = null;
+    for (const [c, t] of texts) {
+      for (const m of t.matchAll(/@((?:fig|lst|tab)[\w:.-]*\w)/g)) {
+        if (found || t.includes(`<${m[1]}>`) || !texts.some(([o, ot]) => o !== c && ot.includes(`<${m[1]}>`))) continue;
+        const lines = t.slice(0, m.index).split('\n');
+        found = { chapter: c, label: m[1], line: lines.length - 1, character: lines[lines.length - 1].length };
+      }
+    }
+    if (!found) return { skipped: 'no chapter refers to a figure in another' };
+    out.found = found;
+    const shown = () => new RegExp(`"${found.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}": (\\([^)]*\\)|"[^"]*"|none)`).exec(s.entryText)?.[1] ?? null;
+
+    // Nothing learned yet: the chapter first, then its references once the whole book is typeset.
+    if (before !== 'book') {
+      await studio.showInPreview('book');
+      await sleep(1000);
+    }
+    await ready('the whole book');
+    localStorage.removeItem(key);
+    s.bookNumbers = null;
+    await studio.openFile(found.chapter);
+    await sleep(500);
+    log('chapter refs: chapter on');
+    const t0 = performance.now();
+    await studio.showInPreview('chapter');
+    await sleep(500);
+    await ready('one chapter');
+    out.first = { ms: Math.round(performance.now() - t0), chapter: studio.state.previewChapter, shown: shown(), queries: queries.length };
+
+    // Typing while the book is typeset beside it.
+    const editor = studio.editor!;
+    const model = editor.getModel()!;
+    const original = model.getValue();
+    const prose = model.getLinesContent().findIndex((l) => /^[A-Z][a-z]/.test(l) && l.length > 60) + 1;
+    editor.setPosition({ lineNumber: prose, column: model.getLineMaxColumn(prose) });
+    editor.focus();
+    studio.perf.editToPreview.clear();
+    for (let i = 0; i < 8 && !/^\(/.test(shown() ?? ''); i++) {
+      editor.trigger('selftest', 'type', { text: 'x' });
+      await sleep(1200);
+    }
+    out.typingMeanwhile = summary(studio.perf.editToPreview);
+    for (let i = 0; i < 50 && model.getValue() !== original && model.canUndo(); i++) await model.undo();
+
+    log('chapter refs: numbers');
+    await waitFor(() => /^\(/.test(shown() ?? ''), 180000, 'the book’s numbers');
+    out.numbers = { ms: Math.round(performance.now() - t0), shown: shown(), queries: [...queries], kept: (JSON.parse(localStorage.getItem(key) ?? '{}').numbers ?? []).length };
+    await sleep(500);
+    await ready('the chapter with its numbers');
+
+    // On the page: the preview taken to the reference (Show in Preview), its words as the book has them, in grey.
+    editor.setPosition({ lineNumber: found.line + 1, column: found.character + 2 });
+    await studio.syncPreviewToCursor();
+    await sleep(2500);
+    const [, sup, num] = /^\("([^"]*)", "([^"]*)"/.exec(shown() ?? '') ?? [];
+    out.onPage = await previewState('chapter-refs', (t) => `(() => {
+      const runs = [...document.querySelectorAll('.typst-text')];
+      const all = runs.map((r) => r.textContent || '').join(' ').replace(/\\s+/g, ' ');
+      const at = runs.find((r) => (r.textContent || '').includes(${JSON.stringify(num ?? '?')}));
+      window.__TAURI_INTERNALS__.invoke('preview_report', { report: { tag: ${JSON.stringify(t)}, has: all.includes(${JSON.stringify(`${sup} ${num}`)}) || all.includes(${JSON.stringify(`${sup} ${num}`)}), label: all.includes(${JSON.stringify(found.label)}), fill: at ? getComputedStyle(at).fill : null } });
+    })();`);
+    out.snapshot = await ipc.previewSnapshot('chapter-refs').catch(errorMessage);
+
+    // Again, with nothing changed outside the chapter: the preview restarted, then the next chapter.
+    log('chapter refs: again');
+    const n = queries.length;
+    await studio.restartTypst();
+    await ready('restarted');
+    out.restarted = { shown: shown(), chapter: studio.state.previewChapter };
+    const next = studio.state.names.chapters[studio.state.names.chapters.indexOf(found.chapter) + 1];
+    if (next) {
+      await studio.openFile(next);
+      await waitFor(() => studio.state.previewChapter === next, 15000, 'the next chapter shown');
+      await ready('the next chapter');
+    }
+    await sleep(4000);
+    out.again = { next, typesetAgain: queries.length - n, errors: studio.state.problems.errors };
+  } finally {
+    studio.typst.queryText = real;
+    // The book's numbers are the scratch book's: none of the user's.
+    localStorage.removeItem(key);
+    if (studio.state.settings.previewScope !== before) await studio.showInPreview(before);
+  }
+  return out;
+}
+
+/**
  * A reference that goes nowhere (broken-refs.ts): typed into a chapter, it
  * doesn't stop the preview, which sets it in red and goes on following the
  * typing; the editor marks it; a click on it in the preview goes to it; the
@@ -9884,6 +10001,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
     if (only?.includes('chapterpreview')) result.chapterpreview = await chapterPreviewChecks();
+    if (only?.includes('chapterrefs')) result.chapterrefs = await chapterRefsChecks();
     if (only?.includes('brokenref')) result.brokenref = await brokenRefChecks();
     if (only?.includes('epub')) result.epub = await epubChecks(outDir);
     if (only?.includes('styleredraft')) result.styleredraft = await styleRedraftChecks();
