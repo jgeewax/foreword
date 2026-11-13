@@ -1,5 +1,5 @@
 import { ASSISTANT_NAMES } from '../app/settings';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import { composerKeyAction, sendHint } from '../app/settings';
 import { pendingQuestion, studio, type QuestionItem } from '../app/studio';
 import { setupLine } from '../app/mode-setups';
@@ -16,6 +16,8 @@ import { OptionCount } from './OptionCount';
 import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu, useContextUse } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
+import { AttachedFiles } from './AttachedFiles';
+import { carriesFiles, droppedItems, pastedFiles, pastedName } from '../app/attachments';
 import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
 import { actionLine, STARTERS, stockAction } from '../app/stock-prompts';
 import type { SourceSelection } from '../editor/selection';
@@ -542,6 +544,7 @@ function TaskBar() {
 
 function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
+  const files = useStore(studio.store, (s) => s.agent.files);
   const running = useStore(studio.store, (s) => s.agent.running);
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
@@ -577,7 +580,7 @@ function Composer() {
 
   const stopped = useStore(studio.store, (s) => s.agent.stopped && !!s.agent.sessionId);
   // An empty box after a stop: Send (and ⏎) resume instead.
-  const canResume = stopped && !running && !text.trim();
+  const canResume = stopped && !running && !text.trim() && !files.length;
   // "/…" (at the start, or after a space mid-message): the list of commands, until a space (or Esc).
   const token = slashToken(text, caret);
   const matches = slashMatches(text, caret);
@@ -598,7 +601,7 @@ function Composer() {
   };
   const send = async (delivery: 'queue' | 'steer' = 'queue') => {
     const message = text;
-    if (!message.trim()) {
+    if (!message.trim() && !files.length) {
       if (canResume) void studio.resume();
       return;
     }
@@ -681,6 +684,7 @@ function Composer() {
           }
         }}
       >
+        <AttachedFiles files={files} onRemove={(path) => studio.removeFile(path)} className="in-composer" />
         <textarea
           ref={inputRef}
           value={text}
@@ -691,6 +695,13 @@ function Composer() {
             typed(e.target.value, e.target.selectionStart);
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onPaste={(e) => {
+            // A screenshot, a copied picture or a file copied in Finder is attached; text pastes as usual.
+            const pasted = pastedFiles([...e.clipboardData.files], e.clipboardData.getData('text/plain'));
+            if (!pasted.length) return;
+            e.preventDefault();
+            void studio.attachFiles(pasted.map((f) => (pastedName(f) === f.name ? f : new File([f], pastedName(f), { type: f.type }))));
+          }}
           onKeyDown={(e) => {
             if (showSlash) {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -730,6 +741,9 @@ function Composer() {
           <EffortPicker />
           <PermissionsMenu />
           <span className="spacer" />
+          <button className="composer-attach" aria-label="Attach files" title="Attach pictures, PDFs or other files (or drop them here, or paste)" onClick={() => void studio.pickFiles()}>
+            <Icon name="paperclip" size={15} />
+          </button>
           {!text && (
             <button
               className="composer-slash"
@@ -748,7 +762,7 @@ function Composer() {
               <button className="send-button stop" aria-label="Stop" title="Stop the assistant now" onClick={() => void studio.cancel()}>
                 <Icon name="stop" size={14} />
               </button>
-              {text.trim() && (
+              {(text.trim() || files.length > 0) && (
                 <button className="send-button primary" aria-label="Queue" title={`Queue: sent when the assistant finishes · ${queueKeys}`} onClick={() => void send('queue')}>
                   <Icon name="arrowUp" size={15} />
                 </button>
@@ -759,7 +773,7 @@ function Composer() {
               Resume
             </button>
           ) : (
-            <button className="send-button primary" aria-label="Send" disabled={!ready || !text.trim()} title={`Send · ${keys}`} onClick={() => void send()}>
+            <button className="send-button primary" aria-label="Send" disabled={!ready || (!text.trim() && !files.length)} title={`Send · ${keys}`} onClick={() => void send()}>
               <Icon name="arrowUp" size={15} />
             </button>
           )}
@@ -778,7 +792,8 @@ function QueuedMessages() {
       {queued.map((q) => {
         // A button's request shows as what it asks for, and there's nothing of the author's to edit.
         const action = stockAction(q.text);
-        const words = action ? actionLine(action) : q.text;
+        const attached = q.files?.length ? q.files.map((f) => f.name).join(', ') : '';
+        const words = action ? actionLine(action) : [q.text.trim(), attached && `📎 ${attached}`].filter(Boolean).join(' ');
         return (
           <div key={q.id} className={`queued-item ${q.delivery}`}>
             <span className="queued-state">{q.sending ? 'Sending…' : q.delivery === 'steer' ? 'Next step' : 'Queued'}</span>
@@ -918,6 +933,7 @@ const TIPS: ReactNode[] = [
   <>
     Type <kbd>/</kbd> in the message box for commands.
   </>,
+  <>Drop a picture, a PDF or any file on the chat, or paste a screenshot, and it goes with your message.</>,
   <>
     New to Typst?{' '}
     <button className="link" onClick={() => studio.openGuide()}>
@@ -997,8 +1013,92 @@ function installLine(p: { step?: string; received?: number; total?: number | nul
   return `${p.step === 'node' ? 'Node.js first: ' : ''}${got}${p.total ? ` of ${megabytes(p.total)}` : ''}`;
 }
 
+/**
+ * Files dragged over the chat: from Finder (or another app), or the book's
+ * file tree. Over the pane it lights up in the mode's colour, and a drop
+ * attaches them to the next message; while a drag is anywhere else in the
+ * window the pane shows a faint outline, so you see where to drop.
+ */
+function useFileDrop() {
+  const [over, setOver] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const depth = useRef(0);
+  useEffect(() => {
+    // dragenter and dragleave come in pairs as the pointer goes from element to element.
+    let inWindow = 0;
+    const enter = (e: DragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return;
+      inWindow++;
+      setDragging(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return;
+      inWindow = Math.max(0, inWindow - 1);
+      if (!inWindow) setDragging(false);
+    };
+    const end = () => {
+      inWindow = 0;
+      depth.current = 0;
+      setDragging(false);
+      setOver(false);
+    };
+    // Capturing: the drop guard (installDropGuard) stops these outside the chat.
+    const events = { dragenter: enter, dragleave: leave, drop: end, dragend: end };
+    for (const [type, f] of Object.entries(events)) window.addEventListener(type, f as EventListener, true);
+    return () => {
+      for (const [type, f] of Object.entries(events)) window.removeEventListener(type, f as EventListener, true);
+    };
+  }, []);
+  const handlers = {
+    onDragEnter: (e: ReactDragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      depth.current++;
+      setOver(true);
+    },
+    onDragOver: (e: ReactDragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    },
+    onDragLeave: (e: ReactDragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return;
+      depth.current = Math.max(0, depth.current - 1);
+      if (!depth.current) setOver(false);
+    },
+    onDrop: (e: ReactDragEvent) => {
+      if (!carriesFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      depth.current = 0;
+      setOver(false);
+      const { files, book, folders } = droppedItems(e.dataTransfer);
+      if (folders) studio.toast(`${folders === 1 ? 'A folder' : `${folders} folders`} can't be attached: drop the files in ${folders === 1 ? 'it' : 'them'}.`);
+      if (files.length) void studio.attachFiles(files);
+      if (book.length) void studio.attachPaths(book);
+    },
+  };
+  return { over, dragging, handlers };
+}
+
+/** The chat while files are dragged: an outline in the mode's colour, lit up (`over`) once they're over it. */
+function DropZone({ over }: { over: boolean }) {
+  const mode = useStore(studio.store, (s) => s.agent.mode);
+  return (
+    <div className={`drop-zone mode-${mode}${over ? ' over' : ''}`} aria-hidden>
+      {over && (
+        <div className="drop-zone-card">
+          <Icon name="paperclip" size={22} />
+          <span className="drop-zone-title">Drop to attach</span>
+          <span className="drop-zone-note">Pictures, PDFs and other files go with your next message</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AgentPane() {
   const assistantName = useStore(studio.store, (s) => ASSISTANT_NAMES[s.settings.assistant]);
+  const drop = useFileDrop();
   const chosen = useStore(studio.store, (s) => s.settings.assistant);
   const install = useStore(studio.store, (s) => (s.assistantDownload?.kind === s.settings.assistant ? s.assistantDownload : null));
   const installing = !!install && !install.error;
@@ -1014,7 +1114,8 @@ export function AgentPane() {
   }, [agent.items, agent.activity]);
 
   return (
-    <section className="pane agent-pane">
+    <section className="pane agent-pane" {...drop.handlers}>
+      {(drop.dragging || drop.over) && <DropZone over={drop.over} />}
       <div className="agent-body">
         <header className="pane-header">
           <TaskMenu />

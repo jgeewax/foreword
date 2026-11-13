@@ -11,11 +11,11 @@
 import { Channel, ipc } from '../../lib/ipc';
 import { appTool, conversationTitle, decide, INSTRUCTIONS_URI, optionValues, permissionAsk, toolOutput, Transcript, type AcpConfigOption, type AcpToolCall } from './acp-events';
 import { FOREWORD_PROMPT } from './instructions';
-import { messageText } from './message-context';
+import { inlineFiles, messageText } from './message-context';
 import { DEFAULT_PERMISSIONS, sessionRules, type AgentPermissions, type PermissionRule } from './permissions';
 import { elicitationContent, formFromElicitation, questionToolCall, type ElicitationWire } from './questions';
 import { effortOption } from './models';
-import type { AgentAdapter, AgentEvent, Delivery, Efforts, FilePatch, FormAnswer, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
+import type { AgentAdapter, AgentEvent, Delivery, Efforts, FilePatch, FormAnswer, FormRequest, InlineFile, MessageContext, ModelInfo, ModelRef, PermissionDecision } from './types';
 
 export type AcpKind = 'claude' | 'gemini' | 'codex' | 'antigravity';
 
@@ -94,7 +94,8 @@ type Session = {
   systemPrompt: string;
   /** The turn the author stopped (Claude Code's can be stopped before it's sent, while its prompt changes). */
   stoppedTurn: number;
-  queue: { inboxId: string; text: string }[];
+  /** `files`: the content blocks of files that go beside the text (contentBlocks). */
+  queue: { inboxId: string; text: string; files: unknown[] }[];
   /** Permission requests waiting for the author: our request id → the agent's JSON-RPC id and options. */
   asking: Map<string, { rpcId: number | string; options: { optionId: string; kind: string }[]; ask: { action: string; resources: string[]; patches: FilePatch[] } }>;
   /** Questions waiting for the author (`elicitation/create`): our form id → the agent's JSON-RPC id, and how answers go back. */
@@ -153,6 +154,15 @@ export class AcpError extends Error {
   code?: number;
 }
 
+/** Attached files' bytes as ACP content: a picture as an image block, any other file as an embedded resource (its file:// URI in the book). */
+export function contentBlocks(files: readonly InlineFile[], root: string): unknown[] {
+  return files.map((f) =>
+    f.picture
+      ? { type: 'image', mimeType: f.mime, data: f.data }
+      : { type: 'resource', resource: { uri: `file://${encodeURI(`${root.replace(/\/$/, '')}/${f.path}`)}`, mimeType: f.mime, blob: f.data } },
+  );
+}
+
 export class AcpAdapter implements AgentAdapter {
   private listeners = new Set<(e: AgentEvent) => void>();
   private pending = new Map<number, Pending>();
@@ -182,6 +192,16 @@ export class AcpAdapter implements AgentAdapter {
 
   ownsSystemPrompt() {
     return this.ownPrompt;
+  }
+
+  /**
+   * Pictures, when the agent takes ACP's image blocks (Claude Code, Codex and
+   * Gemini CLI do). Other files too for Gemini CLI, as embedded resources: its
+   * tools won't open a file git ignores, as .foreword/attachments/ is.
+   */
+  takes() {
+    const caps = this.caps.agentCapabilities?.promptCapabilities ?? {};
+    return { pictures: !!caps.image, files: this.kind === 'gemini' && !!caps.embeddedContext };
   }
 
   /** Claude Code: the instructions are in the system prompt itself (sessionMeta), changed by a resume (systemPromptFor). */
@@ -602,16 +622,17 @@ export class AcpAdapter implements AgentAdapter {
   async send(sessionId: string, message: string, context: MessageContext[], delivery?: Delivery) {
     const s = this.session(sessionId);
     const text = messageText(message, context);
+    const files = contentBlocks(inlineFiles(context), this.root);
     if (!s.running) {
-      await this.prompt(s, text);
+      await this.prompt(s, text, { files });
       return null;
     }
     const inboxId = `acp-inbox-${++this.seq}`;
     if (delivery === 'steer' && this.canSteer()) {
-      await this.steerNow(s, inboxId, text);
+      await this.steerNow(s, inboxId, text, files);
       return inboxId;
     }
-    s.queue.push({ inboxId, text });
+    s.queue.push({ inboxId, text, files });
     return inboxId;
   }
 
@@ -620,8 +641,8 @@ export class AcpAdapter implements AgentAdapter {
   }
 
   /** Into the running turn, at its next step (Claude Code's steering). */
-  private async steerNow(s: Session, inboxId: string, text: string) {
-    await this.request('_session/steering', { sessionId: s.id, prompt: [{ type: 'text', text }] });
+  private async steerNow(s: Session, inboxId: string, text: string, files: unknown[]) {
+    await this.request('_session/steering', { sessionId: s.id, prompt: [...files, { type: 'text', text }] });
     s.transcript.user(inboxId, text);
     this.emit({ type: 'inbox-delivered', sessionId: s.id, inboxId });
   }
@@ -631,7 +652,7 @@ export class AcpAdapter implements AgentAdapter {
     const at = s.queue.findIndex((q) => q.inboxId === inboxId);
     if (at < 0 || !this.canSteer() || !s.running) return;
     const [q] = s.queue.splice(at, 1);
-    await this.steerNow(s, q.inboxId, q.text);
+    await this.steerNow(s, q.inboxId, q.text, q.files);
   }
 
   async unqueue(sessionId: string, inboxId: string) {
@@ -652,16 +673,17 @@ export class AcpAdapter implements AgentAdapter {
    * Code's system prompt or the others' message. The request returns when the
    * turn ends; this returns once it's sent.
    */
-  private async prompt(s: Session, text: string, { record = true, command = false } = {}) {
+  private async prompt(s: Session, text: string, { record = true, command = false, files = [] as unknown[] } = {}) {
     // A slash command must come first, so the instructions wait for the next message.
     const instructions = command || this.promptHasInstructions() ? s.sentInstructions : [...s.instructions.values()].join('\n\n');
     const changed = instructions !== s.sentInstructions;
     const block = changed && instructions ? `${INSTRUCTIONS_OPEN}\n${instructions}\n${INSTRUCTIONS_CLOSE}` : '';
+    // Attached pictures and files go before the words about them.
     const prompt = !block
-      ? [{ type: 'text', text }]
+      ? [...files, { type: 'text', text }]
       : this.kind === 'codex'
-        ? [{ type: 'resource', resource: { uri: INSTRUCTIONS_URI, mimeType: 'text/markdown', text: block } }, { type: 'text', text }]
-        : [{ type: 'text', text: `${block}\n\n${text}` }];
+        ? [{ type: 'resource', resource: { uri: INSTRUCTIONS_URI, mimeType: 'text/markdown', text: block } }, ...files, { type: 'text', text }]
+        : [...files, { type: 'text', text: `${block}\n\n${text}` }];
     s.sentInstructions = instructions;
     s.turn++;
     if (record) s.transcript.user(`${s.id}:u${s.turn}`, text);
@@ -705,7 +727,7 @@ export class AcpAdapter implements AgentAdapter {
     const next = s.queue.shift();
     if (next) {
       this.emit({ type: 'inbox-delivered', sessionId: s.id, inboxId: next.inboxId });
-      void this.prompt(s, next.text);
+      void this.prompt(s, next.text, { files: next.files });
     }
   }
 

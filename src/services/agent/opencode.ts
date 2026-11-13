@@ -103,6 +103,11 @@ export class OpenCodeAdapter implements AgentAdapter {
     return this.ownAgent;
   }
 
+  /** Text only: its read tool opens an attached picture or PDF from the book for the model. */
+  takes() {
+    return { pictures: false, files: false };
+  }
+
   async stop() {
     await ipc.agentStop();
   }

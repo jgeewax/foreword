@@ -1,5 +1,6 @@
 mod acp;
 mod agent;
+mod attachments;
 mod children;
 mod clipboard;
 mod code;
@@ -382,11 +383,14 @@ fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Wind
         .to_logical::<f64>(window.scale_factor()?);
     // A click on a window behind another (or in the app you came from) does
     // what it clicks on too, not just bring the window forward: otherwise an
-    // "Always allow" or a Send needs a second click.
+    // "Always allow" or a Send needs a second click. Drags go to the page as
+    // they do in a browser (a file onto the chat, a file from the tree): Tauri's
+    // own handler would take every drag, the page's own ones too.
     window.add_child(
         WebviewBuilder::new(label, WebviewUrl::default())
             .auto_resize()
-            .accept_first_mouse(true),
+            .accept_first_mouse(true)
+            .disable_drag_drop_handler(),
         LogicalPosition::new(0.0, 0.0),
         size,
     )?;
@@ -592,6 +596,9 @@ pub fn run() {
             files::fs_mkdir,
             files::fs_rename,
             files::fs_copy,
+            attachments::attach_paths,
+            attachments::attach_bytes,
+            attachments::fs_read_bytes,
             files::fs_trash,
             clipboard::clipboard_write,
             clipboard::clipboard_read,

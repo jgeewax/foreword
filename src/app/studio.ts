@@ -106,7 +106,9 @@ import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import { BAR_MODE, barMessage, type BarKind } from './selection-bar';
 import { fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockTitle } from './stock-prompts';
 import { clip, plainLine } from './task-list';
-import type { AgentAdapter, AgentEvent, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import type { AgentAdapter, AgentEvent, AttachedFile, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
+import { inlineFiles } from './attachments';
+import { mimeOf } from '../services/agent/attached-files';
 import { answersMessage, splitQuestions } from '../services/agent/questions';
 import { authorEditLabel, authorEdits, type AuthorEdit } from '../services/agent/author-edits';
 import { TypstService } from '../services/typst';
@@ -146,7 +148,7 @@ export type BackgroundTask = {
 };
 
 /** A message sent while the assistant works: `id` is OpenCode's inbox id once it has one. */
-export type QueuedMessage = { id: string; text: string; attachments: string[]; delivery: Delivery; sending: boolean };
+export type QueuedMessage = { id: string; text: string; attachments: string[]; files?: AttachedFile[]; delivery: Delivery; sending: boolean };
 
 /**
  * A running turn's progress: sending, waiting for the model (it has said
@@ -173,6 +175,8 @@ export type ChatItem =
       id: string;
       text: string;
       attachments: string[];
+      /** Files that went with it (dropped, pasted or picked), in the book. */
+      files?: AttachedFile[];
       /** When it was sent, and when the turn it started ended (ms). */
       at?: number;
       ended?: number;
@@ -274,6 +278,9 @@ export function pendingQuestion(a: { items: ChatItem[]; running: boolean }): Que
 
 /** `passage`: an Options passage, as it is now (a follow-up about it, or new options for it). */
 export type Attachment = { id: string; label: string; selection: SourceSelection; passage?: string };
+
+/** What a message says, for a version's name or a task's goal: its words, or (files alone) the files' names. */
+const saidIn = (m: { text: string; files?: AttachedFile[] }) => (m.text.trim() ? m.text : (m.files ?? []).map((f) => f.name).join(', '));
 
 /** Identifies a selection for "leave it out" (same place and same text). */
 const selectionKey = (s: SourceSelection) => `${selectionLabel(s)}|${s.start.column}:${s.end.column}|${s.selectedText.length}`;
@@ -431,6 +438,8 @@ export type StudioState = {
     running: boolean;
     items: ChatItem[];
     attachments: Attachment[];
+    /** Files for the next message (dropped, pasted or picked), already in the book. */
+    files: AttachedFile[];
     /** The current selection (editor, or mapped from the preview): sent with each message unless dismissed. */
     selection: { attachment: Attachment; from: 'editor' | 'preview' } | null;
     /** A selection the author dismissed for now (key: label + text; until it changes). */
@@ -576,6 +585,7 @@ const initialState: StudioState = {
     running: false,
     items: [],
     attachments: [],
+    files: [],
     selection: null,
     selectionDismissed: null,
     mode: 'write',
@@ -2990,6 +3000,7 @@ export class Studio {
     if (!this.state.workspace) return;
     this.keepChat();
     this.composerDraft = '';
+    this.setAgent({ files: [] });
     this.code.reset();
     this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
     await this.history.stop();
@@ -5080,6 +5091,7 @@ export class Studio {
             items,
             contextTokens: sessionId ? contextTokens(messages) : null,
             attachments: [],
+            files: [],
             queued: [],
             running,
             activity: running ? { phase: 'waiting', since: bg?.since ?? Date.now() } : null,
@@ -5277,14 +5289,71 @@ export class Studio {
     this.setAgent((a) => ({ attachments: a.attachments.filter((x) => x.id !== id) }));
   }
 
-  async send(text: string, { delivery = 'queue' as Delivery } = {}): Promise<boolean> {
+  // ---- files attached to the next message ---------------------------------------------
+  // In the book, so every assistant can open them: one already there is used
+  // where it is; others are copied into .foreword/attachments/ (attachments.rs).
+
+  /** Files the page has as bytes (dropped from Finder or another app, or pasted). */
+  async attachFiles(files: readonly File[]) {
+    const added: AttachedFile[] = [];
+    for (const f of files) {
+      try {
+        added.push(await ipc.attachBytes(f.name, await f.arrayBuffer()));
+      } catch (e) {
+        this.toast(`Couldn't attach ${f.name || 'the file'}: ${errorMessage(e)}`, 'error');
+      }
+    }
+    this.addFiles(added);
+  }
+
+  /** Files by path: absolute (the file picker), or the book's own (dragged from the file tree). */
+  async attachPaths(paths: readonly string[]) {
+    const added: AttachedFile[] = [];
+    for (const p of paths) {
+      try {
+        added.push(...(await ipc.attachPaths([p.startsWith('/') ? p : this.absolutePath(p)])));
+      } catch (e) {
+        this.toast(`Couldn't attach ${p.split('/').pop()}: ${errorMessage(e)}`, 'error');
+      }
+    }
+    this.addFiles(added);
+  }
+
+  /** The message box's paperclip: pick files anywhere on the Mac. */
+  async pickFiles() {
+    const picked = await openDialog({ multiple: true, title: 'Attach to the Message', defaultPath: this.state.workspace?.root });
+    if (picked?.length) await this.attachPaths(picked);
+  }
+
+  private addFiles(files: AttachedFile[]) {
+    if (!files.length) return;
+    this.setAgent((a) => ({ files: [...a.files.filter((x) => !files.some((f) => f.path === x.path)), ...files] }));
+    this.events.emit('focus-composer');
+  }
+
+  removeFile(path: string) {
+    this.setAgent((a) => ({ files: a.files.filter((f) => f.path !== path) }));
+  }
+
+  /** Open an attached file: a picture or a PDF in Preview, text in the editor, anything else (or a folder) in Finder. */
+  openAttachment(f: AttachedFile) {
+    const mime = mimeOf(f.name);
+    const opens = mime.startsWith('image/') || mime.startsWith('text/') || /^application\/(pdf|json|xml|yaml|toml)$/.test(mime);
+    if (f.dir || !opens) void this.reveal(f.path);
+    else void this.openFile(f.path);
+  }
+
+  /** `files`: these instead of the message box's (Try again: the same files as before). */
+  async send(text: string, { delivery = 'queue' as Delivery, files: given }: { delivery?: Delivery; files?: AttachedFile[] } = {}): Promise<boolean> {
     // The mode just chosen: its assistant, model and effort first.
     await this.setupReady();
     const { agent, docs } = this;
     const state = this.state.agent;
-    if (!agent || state.status !== 'ready' || !text.trim()) return false;
+    // Files can go on their own, with no words.
+    const files = given ?? state.files;
+    if (!agent || state.status !== 'ready' || (!text.trim() && !files.length)) return false;
     // While a turn runs, the message waits for it (or, "send now", joins it at its next step).
-    if (state.running) return this.queueMessage(text, delivery);
+    if (state.running) return this.queueMessage(text, delivery, given);
     // A reply's questions, passed over: the author wrote something else instead.
     const passedOver = (it: ChatItem): it is QuestionItem => it.kind === 'question' && it.via === 'message' && it.state === 'pending';
     if (state.items.some(passedOver)) this.setAgent((a) => ({ items: a.items.map((it) => (passedOver(it) ? { ...it, state: 'dismissed' as const } : it)) }));
@@ -5303,11 +5372,15 @@ export class Studio {
       running: true,
       stopped: false,
       attachments: [],
+      ...(!given && { files: [] }),
       activity: { phase: 'sending', since: Date.now() },
-      items: [...a.items, { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(earlier ? [EARLIER_CHIP] : [])], at: Date.now(), by: this.turnBy(), mode: a.mode }],
+      items: [
+        ...a.items,
+        { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(earlier ? [EARLIER_CHIP] : [])], ...(files.length && { files }), at: Date.now(), by: this.turnBy(), mode: a.mode },
+      ],
     }));
     const unsend = (why: string) => {
-      this.setAgent((a) => ({ running: false, attachments, items: a.items.filter((it) => it.id !== userId) }));
+      this.setAgent((a) => ({ running: false, attachments, ...(!given && { files }), items: a.items.filter((it) => it.id !== userId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: why });
       return false;
     };
@@ -5319,12 +5392,13 @@ export class Studio {
     if (state.taskId && state.tasks.find((t) => t.id === state.taskId)?.status === 'done') this.reopenTask(state.taskId);
     // Everything up to now is its own version, so the agent's changes can be undone separately.
     await this.history.beforeAgent();
-    this.turnMessage = messageLine(text);
+    this.turnMessage = messageLine(saidIn({ text, files }));
     this.turnErrors.clear();
     // What the author changed in the assistant's text since its last turn goes with the message.
     const edits = state.taskId ? await this.authorEditsSince(state.taskId) : [];
     if (edits.length) this.updateItem(userId, (it) => (it.kind === 'user' ? { ...it, attachments: [...it.attachments, ...edits.map((e) => `${AUTHOR_EDIT_CHIP} ${authorEditLabel(e)}`)] } : it));
     const context: MessageContext[] = [
+      ...(files.length ? [{ files, inline: await inlineFiles(files, agent.takes()) }] : []),
       ...attachments.map((a) => ({
         selection: a.selection,
         stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
@@ -5363,7 +5437,7 @@ export class Studio {
       // For the Tasks view: the mode, the goal (the author's first message, as the chat shows it), how many messages, and who has it now.
       const sent = state.items.filter((it) => it.kind === 'user');
       const taskId = this.state.agent.taskId ?? sessionId;
-      this.updateTaskRecord(taskId, (r) => ({ mode: state.mode, turns: sent.length + 1, asked: r.asked ?? clip(messageLine(sent[0]?.kind === 'user' ? sent[0].text : text), 300), assistant, updated: Date.now() }));
+      this.updateTaskRecord(taskId, (r) => ({ mode: state.mode, turns: sent.length + 1, asked: r.asked ?? clip(messageLine(saidIn(sent[0]?.kind === 'user' ? sent[0] : { text, files })), 300), assistant, updated: Date.now() }));
       if (!sent.length || !this.state.agent.tasks.some((t) => t.id === taskId)) void this.loadTasks();
       return true;
     } catch (e) {
@@ -5446,7 +5520,7 @@ export class Studio {
   /** Inbox ids OpenCode delivered before we knew them (the reply to our request can come after the event). */
   private deliveredEarly = new Set<string>();
 
-  private async queueMessage(text: string, delivery: Delivery): Promise<boolean> {
+  private async queueMessage(text: string, delivery: Delivery, given?: AttachedFile[]): Promise<boolean> {
     const { agent, docs } = this;
     const sessionId = this.state.agent.sessionId;
     if (!agent || !sessionId) return false;
@@ -5455,10 +5529,12 @@ export class Studio {
     if (options && !this.outgoingAttachments().length) await this.attachForOptions();
     const attachments = this.outgoingAttachments();
     const optionsTurn = options ? this.optionsTurnFor(attachments[0]) : null;
+    const files = given ?? this.state.agent.files;
     const tempId = uid('q');
-    this.setAgent((a) => ({ attachments: [], queued: [...a.queued, { id: tempId, text, attachments: attachments.map((x) => x.label), delivery, sending: true }] }));
+    this.setAgent((a) => ({ attachments: [], ...(!given && { files: [] }), queued: [...a.queued, { id: tempId, text, attachments: attachments.map((x) => x.label), ...(files.length && { files }), delivery, sending: true }] }));
     const failures = (await docs?.saveAll()) ?? [];
     const context: MessageContext[] = [
+      ...(files.length ? [{ files, inline: await inlineFiles(files, agent.takes()) }] : []),
       ...attachments.map((x) => ({
         selection: x.selection,
         stale: docs?.get(x.selection.relativePath)?.model.getVersionId() !== x.selection.documentVersion,
@@ -5473,7 +5549,7 @@ export class Studio {
       if (this.deliveredEarly.delete(inboxId)) this.queuedDelivered(inboxId);
       return true;
     } catch (e) {
-      this.setAgent((a) => ({ attachments, queued: a.queued.filter((q) => q.id !== tempId) }));
+      this.setAgent((a) => ({ attachments, ...(!given && { files }), queued: a.queued.filter((q) => q.id !== tempId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Message not sent: ${errorMessage(e)}` });
       return false;
     }
@@ -5488,7 +5564,7 @@ export class Studio {
       if (this.deliveredEarly.size > 50) this.deliveredEarly.delete(this.deliveredEarly.values().next().value!);
       return;
     }
-    this.turnMessage = messageLine(q.text);
+    this.turnMessage = messageLine(saidIn(q));
     // What it's about: the replies from here on answer it.
     if (this.queuedOptions.has(inboxId)) {
       this.optionsTurn = this.queuedOptions.get(inboxId)!;
@@ -5496,7 +5572,7 @@ export class Studio {
     }
     this.setAgent((a) => ({
       queued: a.queued.filter((m) => m.id !== inboxId),
-      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, at: Date.now(), by: this.turnBy(), mode: a.mode }],
+      items: [...a.items, { kind: 'user', id: uid('u'), text: q.text, attachments: q.attachments, ...(q.files?.length && { files: q.files }), at: Date.now(), by: this.turnBy(), mode: a.mode }],
     }));
   }
 
@@ -5527,7 +5603,10 @@ export class Studio {
     }
     this.setAgent((a) => ({ queued: a.queued.filter((m) => m.id !== id) }));
     this.queuedOptions.delete(id);
-    if (edit) this.events.emit('fill-composer', q.text);
+    if (edit) {
+      if (q.files?.length) this.addFiles(q.files);
+      this.events.emit('fill-composer', q.text);
+    }
   }
 
   async cancel() {

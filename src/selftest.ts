@@ -6654,6 +6654,194 @@ async function readToolsChecks() {
   return out;
 }
 
+/** A one-page PDF that says `text` (Helvetica), with its offsets right, so any reader takes it. */
+function textPdf(text: string): Uint8Array<ArrayBuffer> {
+  const content = `BT /F1 28 Tf 40 100 Td (${text}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((o, i) => {
+    const at = pdf.length;
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+    return at;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
+/**
+ * Files attached to a message: while files are dragged the chat is outlined,
+ * and lit up in the mode's colour once they're over it; a drop anywhere else
+ * does nothing; dropped, pasted and file-tree files go with the next message
+ * (copies in .foreword/attachments/, which git ignores; a book file where it
+ * is). With an agent (Claude Code, Haiku): it reads the word in a picture
+ * (sent in the message) and in a PDF (opened from the book), and the message
+ * shows both once the task is opened again. Scratch book only.
+ */
+async function attachmentChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  try {
+    if (withAgent) {
+      studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+      await sleep(500);
+      await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+      if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+      const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+      if (haiku) await studio.selectModel(haiku);
+    }
+    studio.newSession();
+    for (const f of studio.state.agent.files) studio.removeFile(f.path);
+    await sleep(300);
+
+    // A picture with a word in it, and a PDF with another.
+    const canvas = new OffscreenCanvas(520, 160);
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, 520, 160);
+    ctx.fillStyle = '#111';
+    ctx.font = 'bold 56px Helvetica';
+    ctx.fillText('PELICAN 7342', 30, 100);
+    const png = await canvas.convertToBlob({ type: 'image/png' });
+    const picture = new File([png], 'secret word.png', { type: 'image/png' });
+    const pdf = new File([textPdf('OSPREY 5521')], 'brief.pdf', { type: 'application/pdf' });
+
+    const pane = document.querySelector('.agent-pane')!;
+    const transcript = pane.querySelector('.transcript')!;
+    const editorEl = document.querySelector('.monaco-editor .view-lines') ?? document.querySelector('.monaco-editor')!;
+    const drag = (type: string, target: Element, dataTransfer: DataTransfer) => {
+      const e = new DragEvent(type, { dataTransfer, bubbles: true, cancelable: true });
+      target.dispatchEvent(e);
+      return e;
+    };
+    const files = new DataTransfer();
+    files.items.add(picture);
+    files.items.add(pdf);
+    out.dataTransfer = { types: [...files.types], items: files.items.length };
+
+    // Over the window, outside the chat: the chat outlined, where to drop.
+    drag('dragenter', editorEl, files);
+    const refusedOver = drag('dragover', editorEl, files);
+    await sleep(80);
+    out.elsewhere = { outlined: !!document.querySelector('.drop-zone:not(.over)'), refused: refusedOver.defaultPrevented && files.dropEffect === 'none' };
+    // Over the chat: lit up, in the mode's colour.
+    drag('dragenter', transcript, files);
+    drag('dragleave', editorEl, files);
+    drag('dragover', transcript, files);
+    await sleep(120);
+    const zone = document.querySelector<HTMLElement>('.drop-zone.over');
+    out.over = {
+      shown: !!zone,
+      className: zone?.className,
+      text: zone?.textContent,
+      mode: zone && getComputedStyle(zone).getPropertyValue('--mode').trim(),
+      accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+      background: zone && getComputedStyle(zone).backgroundColor,
+    };
+    out.snapshotOver = await snap('attach-over');
+    // Gone again when the drag leaves.
+    drag('dragleave', transcript, files);
+    await sleep(80);
+    out.afterLeave = !!document.querySelector('.drop-zone');
+
+    // Dropped: copies in the book, shown in the message box.
+    drag('dragenter', transcript, files);
+    drag('dragover', transcript, files);
+    drag('drop', transcript, files);
+    await waitFor(() => studio.state.agent.files.length >= 2, 10000, 'dropped files').catch(() => {});
+    out.afterDrop = { zone: !!document.querySelector('.drop-zone'), files: studio.state.agent.files };
+    const [pic] = studio.state.agent.files;
+    if (pic) out.copy = { bytes: (await ipc.fsReadBytes(pic.path)).byteLength, original: png.size };
+    out.gitignore = await ipc.fsRead('.foreword/attachments/.gitignore').then((f) => f.text, errorMessage);
+    out.inFileList = (await ipc.workspaceList()).filter((f) => f.startsWith('.foreword/attachments'));
+    await waitFor(() => (document.querySelector<HTMLImageElement>('.in-composer img')?.naturalWidth ?? 0) > 0, 5000, 'thumbnail').catch(() => {});
+    out.composer = {
+      tiles: [...document.querySelectorAll('.in-composer > *')].map((e) => `${e.className}: ${e.textContent}`),
+      thumbnail: document.querySelector<HTMLImageElement>('.in-composer img')?.naturalWidth,
+      sendEnabled: !document.querySelector<HTMLButtonElement>('.composer .send-button.primary')?.disabled,
+    };
+    out.snapshotComposer = await snap('attach-composer');
+
+    // Dropped on the editor: refused, nothing attached, the text as it was.
+    const stray = new DataTransfer();
+    stray.items.add(new File(['stray words'], 'stray.txt', { type: 'text/plain' }));
+    const before = { files: studio.state.agent.files.length, text: studio.editor?.getValue() };
+    const strayOver = drag('dragover', editorEl, stray);
+    const strayDrop = drag('drop', editorEl, stray);
+    await sleep(300);
+    out.dropOnEditor = { refused: strayOver.defaultPrevented, dropPrevented: strayDrop.defaultPrevented, attached: studio.state.agent.files.length - before.files, textSame: studio.editor?.getValue() === before.text };
+
+    // Pasted: a screenshot is attached with a name of its own; text pastes as text.
+    const textarea = document.querySelector<HTMLTextAreaElement>('.composer textarea')!;
+    const clip = new DataTransfer();
+    clip.items.add(new File([png], 'image.png', { type: 'image/png' }));
+    const paste = new ClipboardEvent('paste', { clipboardData: clip, bubbles: true, cancelable: true });
+    textarea.dispatchEvent(paste);
+    await waitFor(() => studio.state.agent.files.some((f) => f.name.startsWith('Pasted image')), 5000, 'pasted').catch(() => {});
+    const words = new DataTransfer();
+    words.setData('text/plain', 'just words');
+    const textPaste = new ClipboardEvent('paste', { clipboardData: words, bubbles: true, cancelable: true });
+    textarea.dispatchEvent(textPaste);
+    out.paste = { clipboardData: !!paste.clipboardData?.files.length, prevented: paste.defaultPrevented, pasted: studio.state.agent.files.find((f) => f.name.startsWith('Pasted image'))?.name, textLeftAlone: !textPaste.defaultPrevented };
+
+    // From the file tree: a chapter, where it is in the book.
+    out.treeDraggable = document.querySelector('.tree-row')?.getAttribute('draggable');
+    const tree = new DataTransfer();
+    tree.setData('application/x-foreword-paths', JSON.stringify(['chapters/ch1-vectors.typ']));
+    drag('dragenter', transcript, tree);
+    drag('drop', transcript, tree);
+    await waitFor(() => studio.state.agent.files.some((f) => f.path === 'chapters/ch1-vectors.typ'), 5000, 'tree file').catch(() => {});
+    out.fromTree = studio.state.agent.files.find((f) => f.path === 'chapters/ch1-vectors.typ') ?? null;
+
+    // Taken off again with their ×: the pasted picture and the chapter.
+    for (const f of studio.state.agent.files.filter((f) => f.name.startsWith('Pasted image') || f.path.startsWith('chapters/'))) {
+      document.querySelector<HTMLButtonElement>(`.in-composer .attached-remove[aria-label="Remove ${f.name}"]`)?.click();
+    }
+    await sleep(100);
+    out.kept = studio.state.agent.files.map((f) => f.name);
+
+    if (withAgent) {
+      const waited: string[] = [];
+      const reply = await settleTurn('What word is in the picture, and what word is in the PDF? Reply with just the two words, nothing else.', waited);
+      const user = studio.state.agent.items.find((i) => i.kind === 'user');
+      out.turn = {
+        reply: reply.slice(0, 200),
+        sawPicture: /PELICAN\s*7342/i.test(reply),
+        readPdf: /OSPREY\s*5521/i.test(reply),
+        waited,
+        tools: studio.state.agent.items.filter((i) => i.kind === 'tool').map((i) => `${(i as any).name} ${(i as any).summary} → ${(i as any).status}`),
+        userFiles: user?.kind === 'user' ? user.files?.map((f) => f.name) : null,
+        composerEmptied: studio.state.agent.files.length === 0,
+      };
+      await waitFor(() => (document.querySelector<HTMLImageElement>('.msg.user .attached-files img')?.naturalWidth ?? 0) > 0, 5000, 'message picture').catch(() => {});
+      out.message = [...document.querySelectorAll('.msg.user .attached-files > *')].map((e) => `${e.className}: ${e.textContent}`);
+      out.snapshotMessage = await snap('attach-message');
+      // Opened again (the chat as kept), the message still shows its files.
+      const taskId = studio.state.agent.taskId;
+      studio.newSession();
+      await sleep(300);
+      if (taskId) await studio.switchTask(taskId);
+      await waitFor(() => document.querySelector('.msg.user .attached-files'), 10000, 'files after reopening').catch(() => {});
+      out.reopened = [...document.querySelectorAll('.msg.user .attached-files > *')].map((e) => e.className);
+    }
+  } finally {
+    for (const f of studio.state.agent.files) studio.removeFile(f.path);
+    if (withAgent) {
+      studio.updateSettings(saved, { write: false });
+      for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    }
+  }
+  return out;
+}
+
 /** What changed draws the formulas an edit changed (the chapter is put back). */
 async function mathDiffChecks() {
   const out: Record<string, unknown> = {};
@@ -10093,6 +10281,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && want('format')) result.format = await formatChecks();
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
+    if (launch.selftestEdits && want('attachments')) result.attachments = await attachmentChecks(!!launch.selftestAgent);
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('authoredits')) result.authoredits = await authorEditsChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('mathchat')) result.mathchat = await mathChatChecks();

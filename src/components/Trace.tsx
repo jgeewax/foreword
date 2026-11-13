@@ -22,6 +22,7 @@ import { answerOf, answerText as answerPlainText, markedTerms, markPieces, prose
 import { parseOptions } from '../services/agent/options-mode';
 import { answerText, questionText, splitQuestions } from '../services/agent/questions';
 import { AssistantMark } from './AssistantSettings';
+import { AttachedFiles } from './AttachedFiles';
 import { CommandPermission, RuleChip, scopeWords } from './CommandPermission';
 import { FileIcon, Icon, type IconName } from './icons';
 import { ChartBlock } from './Chart';
@@ -936,7 +937,8 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
           </button>
         )}
       </div>
-      {action ? <ActionStep action={action} /> : <div className="msg-text">{item.text}</div>}
+      {action ? <ActionStep action={action} /> : item.text.trim() && <div className="msg-text">{item.text}</div>}
+      {item.files && <AttachedFiles files={item.files} />}
       {item.attachments.length > 0 && (
         <div className="chips">
           {item.attachments.map((a) => {
@@ -988,7 +990,7 @@ function TurnFooter({ turn, last, copy, answered }: { turn: Turn; last: boolean;
         </button>
       )}
       {last && (
-        <button className="icon" aria-label="Try again" title="Send the same message again" disabled={running} onClick={() => void studio.send(user.text)}>
+        <button className="icon" aria-label="Try again" title="Send the same message again" disabled={running} onClick={() => void studio.send(user.text, { files: user.files })}>
           <Icon name="retry" size={13} />
         </button>
       )}
@@ -1011,7 +1013,7 @@ function FoldedTurn({ turn, onOpen }: { turn: Turn; onOpen: () => void }) {
       <Icon name="chevronRight" size={13} />
       <span className="turn-folded-body">
         <span className="turn-who">You{user.at ? ` · ${clock(user.at)}` : ''}</span>
-        <span className="turn-folded-text">{messageLine(user.text)}</span>
+        <span className="turn-folded-text">{messageLine(user.text) || user.files?.map((f) => `📎 ${f.name}`).join(', ')}</span>
         {words && (
           <span className="turn-folded-sum">
             <span className={`turn-dot tone-${tone}`} aria-hidden />

@@ -5,6 +5,7 @@ import { studio } from './app/studio';
 import { typstReady } from './editor/monaco';
 import { installSelectAll } from './editor/select-all';
 import { installUndoRedo } from './editor/undo-redo';
+import { installDropGuard } from './app/attachments';
 import { installDefaultContextMenu } from './lib/context-menu';
 import { ipc } from './lib/ipc';
 import { runSelftest } from './selftest';
@@ -20,6 +21,7 @@ const boot = (step: string) => void ipc.uiLog(`[boot +${Math.round(performance.n
 installDefaultContextMenu();
 installSelectAll();
 installUndoRedo();
+installDropGuard();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

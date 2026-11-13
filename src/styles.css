@@ -485,6 +485,36 @@ button.tool-summary { font-size: inherit; text-align: left; min-width: 0; }
 .model-picker.up .model-popover { top: auto; bottom: calc(100% + 4px); left: 8px; right: 8px; }
 .composer-slash { flex: none; width: 24px; height: 24px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--muted); font: 600 13px/1 "SF Mono", Menlo, monospace; }
 .composer-slash:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.composer-attach { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--muted); }
+.composer-attach:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+
+/* Files that go with a message (AttachedFiles.tsx): pictures as pictures, other files as chips. */
+.attached-files { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.attached-files.in-composer { padding: 8px 8px 0; }
+.turn .msg.user .attached-files { margin-top: 7px; }
+.attached-picture, .attached-file { position: relative; display: inline-flex; min-width: 0; max-width: 100%; }
+.attached-open { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); overflow: hidden; }
+.attached-open:hover:not(:disabled) { border-color: color-mix(in srgb, var(--fg) 30%, var(--border)); }
+.attached-picture .attached-open { background: var(--bg-2); }
+.attached-picture img { display: block; max-width: 100%; max-height: 160px; object-fit: contain; }
+.in-composer .attached-picture img, .in-composer .attached-loading { width: 56px; height: 56px; max-height: none; object-fit: cover; }
+.attached-loading { display: block; width: 96px; height: 72px; background: var(--bg-3); }
+.attached-file .attached-open { height: 30px; padding: 0 9px 0 7px; font-size: 12px; }
+.attached-file .file-icon, .attached-file .icon-svg { flex: none; }
+.attached-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attached-size { flex: none; color: var(--muted); font-size: 11px; }
+.attached-remove { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1.5px solid var(--bg); border-radius: 50%; background: var(--fg); color: var(--bg); opacity: 0; transition: opacity 0.12s; }
+.attached-remove .icon-svg { stroke-width: 2.6; }
+:is(.attached-picture, .attached-file):hover .attached-remove, .attached-remove:focus-visible { opacity: 1; }
+
+/* Files dragged over the window: the chat outlined in the mode's colour, then lit up once they're over it. */
+.agent-pane { position: relative; }
+.drop-zone { position: absolute; inset: 0; z-index: 30; pointer-events: none; display: grid; place-items: center; border-radius: 10px; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mode) 45%, transparent); transition: background-color 0.12s; }
+.drop-zone.over { background: color-mix(in srgb, var(--mode) 16%, color-mix(in srgb, var(--bg) 80%, transparent)); box-shadow: inset 0 0 0 2px var(--mode); }
+.drop-zone.over::before { content: ""; position: absolute; inset: 10px; border: 2px dashed color-mix(in srgb, var(--mode) 60%, transparent); border-radius: 10px; }
+.drop-zone-card { display: flex; flex-direction: column; align-items: center; gap: 5px; max-width: calc(100% - 48px); padding: 16px 20px 14px; border-radius: 12px; background: var(--bg); color: var(--mode); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14); text-align: center; animation: rise-in 0.12s ease-out; }
+.drop-zone-title { font-size: 14px; font-weight: 650; }
+.drop-zone-note { font-size: 12px; color: var(--muted); }
 .send-button { flex: none; display: inline-grid; place-items: center; width: 26px; height: 26px; margin-left: 2px; padding: 0; border-radius: 50%; }
 .send-button .icon-svg { stroke-width: 2.4; }
 .send-button.primary:hover:not(:disabled) { border-color: var(--accent); filter: brightness(1.12); }
@@ -1165,11 +1195,11 @@ button.link.quiet { color: var(--muted); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
 /* Each mode's colour: its button under the message box, the assistant's offer of it, and your pick of it (Trace.tsx). */
-:is(.mode-way, .mode-choice-record, .user-action, .answer-next-q) { --mode: var(--accent); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-ask { --mode: #1f8fa5; }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-discuss { --mode: var(--milestone); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-options { --mode: var(--good); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q).mode-figures { --mode: #a35bd6; }
+:is(.mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone) { --mode: var(--accent); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-ask { --mode: #1f8fa5; }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-discuss { --mode: var(--milestone); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-options { --mode: var(--good); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-figures { --mode: #a35bd6; }
 .mode-icon { width: 14px; text-align: center; }
 .mode-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding-top: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .mode-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; border: none; border-radius: 0; background: transparent; padding: 6px 10px; white-space: normal; height: auto; }

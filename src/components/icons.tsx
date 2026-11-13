@@ -245,6 +245,8 @@ const PATHS: Record<string, ReactNode> = {
   heading: <path d="M4 6.5h16M8 12h12M12 17.5h8" />,
   // Settings ▸ Tools: choose a file, paste a path, type one.
   folder: <path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v9.3A1.5 1.5 0 0 1 19 19.5H5a1.5 1.5 0 0 1-1.5-1.5z" />,
+  // Attach files to the message.
+  paperclip: <path d="M19.5 11.3l-7.4 7.4a4.6 4.6 0 0 1-6.5-6.5l7.7-7.7a3.1 3.1 0 0 1 4.4 4.4l-7.5 7.5a1.6 1.6 0 0 1-2.3-2.3l6.8-6.8" />,
   paste: (
     <>
       <path d="M8.5 5H6.5A1.5 1.5 0 0 0 5 6.5v12A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 17.5 5h-2" />

@@ -1,6 +1,7 @@
 // Typed wrappers for the Rust commands (src-tauri/src/*.rs).
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type { PdfInfo } from '../print';
+import type { AttachedFile } from '../services/agent/types';
 
 export type CmdErrorKind = 'conflict' | 'notFound' | 'invalid' | 'unavailable' | 'notInstalled' | 'io';
 export type CmdError = { kind: CmdErrorKind; message: string };
@@ -237,6 +238,12 @@ export const ipc = {
   /** Rename or move; refuses if the destination exists. */
   fsRename: (from: string, to: string) => invoke<void>('fs_rename', { from, to }),
   fsCopy: (from: string, to: string) => invoke<void>('fs_copy', { from, to }),
+  /** Attach files to a chat message (absolute paths): one in the book is used where it is, others are copied into .foreword/attachments/. */
+  attachPaths: (paths: string[]) => invoke<AttachedFile[]>('attach_paths', { paths }),
+  /** Attach a file the page has as bytes (dropped from Finder, or pasted), copied into .foreword/attachments/. */
+  attachBytes: (name: string, bytes: ArrayBuffer) => invoke<AttachedFile>('attach_bytes', new Uint8Array(bytes), { headers: { 'x-name': encodeURIComponent(name) } }),
+  /** A book file's bytes (at most 64 MB). */
+  fsReadBytes: (path: string) => invoke<ArrayBuffer>('fs_read_bytes', { path }),
   /** Move to the macOS Trash (recoverable). */
   fsTrash: (path: string) => invoke<void>('fs_trash', { path }),
   revealInFinder: (path: string) => invoke<void>('reveal_in_finder', { path }),

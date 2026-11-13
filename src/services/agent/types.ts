@@ -9,8 +9,26 @@ import type { SourceSelection } from '../../editor/selection';
  * to the assistant's text, or the turns of the conversation another assistant
  * had (app/mode-setups.ts).
  */
-/** What goes with a message: a selection, the author's edits, another assistant's turns, or the mode's reminder of how to reply. */
-export type MessageContext = { selection: SourceSelection; stale: boolean } | { authorEdits: AuthorEdit[] } | { earlier: string } | { reminder: string };
+/** What goes with a message: a selection, the author's edits, another assistant's turns, the mode's reminder of how to reply, or files the author attached. */
+export type MessageContext =
+  | { selection: SourceSelection; stale: boolean }
+  | { authorEdits: AuthorEdit[] }
+  | { earlier: string }
+  | { reminder: string }
+  | { files: AttachedFile[]; inline: InlineFile[] };
+
+/**
+ * A file attached to a message (attachments.rs): in the book, where it was
+ * already or copied into .foreword/attachments/. `path` is book-relative.
+ */
+export type AttachedFile = { path: string; name: string; size: number; dir?: boolean };
+
+/**
+ * An attached file's bytes in the message itself, for an agent that takes
+ * them (AgentAdapter.takes): a picture (made small enough for the model), or
+ * any file for one that can't open ignored files with its tools (Gemini CLI).
+ */
+export type InlineFile = { path: string; mime: string; data: string; picture: boolean };
 
 export type ModelRef = { providerID: string; id: string };
 
@@ -117,6 +135,12 @@ export interface AgentAdapter {
    * isn't writing software.
    */
   ownsSystemPrompt(): boolean;
+  /**
+   * What it takes in a message besides text: pictures (ACP's image blocks),
+   * and other files' bytes (embedded resources). Whatever it doesn't take, it
+   * opens from the book with its own tools.
+   */
+  takes(): { pictures: boolean; files: boolean };
   stop(): Promise<void>;
   listModels(): Promise<ModelInfo[]>;
   defaultModel(): Promise<ModelRef | null>;

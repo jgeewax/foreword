@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { BOOK_PATHS } from '../app/attachments';
 import { uncommitted, unstaged } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
@@ -48,6 +49,12 @@ function FileTree() {
           className={`tree-row${n.path === active ? ' active' : ''}`}
           style={{ paddingLeft: 8 + depth * 12 }}
           title={n.path}
+          // Onto the chat: attached to the next message, where it is in the book.
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData(BOOK_PATHS, JSON.stringify([n.path]));
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
           onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
           onContextMenu={onContextMenu((): MenuEntry[] => {
             const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';

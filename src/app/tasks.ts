@@ -14,7 +14,9 @@ import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 import type { AgentMode } from '../services/agent/modes';
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
+import { FILES_INTRO, filesFromText } from '../services/agent/attached-files';
 import { EARLIER_CHIP, EARLIER_INTRO, REMINDER_START } from '../services/agent/message-context';
+import type { AttachedFile } from '../services/agent/types';
 import { questionFromTool, splitQuestions } from '../services/agent/questions';
 
 export const TASK_INSTRUCTIONS_KEY = 'task';
@@ -179,17 +181,20 @@ export function withLatestTurn(kept: readonly ChatItem[], theirs: readonly ChatI
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** The context Foreword appends to a message: selections (editor/selection.ts), the author's edits (agent/author-edits.ts), another assistant's turns (mode-setups.ts) and the mode's reminder (modes.ts). */
-const CONTEXT_TAIL = new RegExp(`\\n\\n(?:Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)}|${escape(REMINDER_START)})[\\s\\S]*$`);
+/** The context Foreword appends to a message: files (agent/attached-files.ts; a message can be files alone), selections (editor/selection.ts), the author's edits (agent/author-edits.ts), another assistant's turns (mode-setups.ts) and the mode's reminder (modes.ts). */
+const CONTEXT_TAIL = new RegExp(
+  `(?:\\n\\n|^(?=${escape(FILES_INTRO)}))(?:${escape(FILES_INTRO)}|Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)}|${escape(REMINDER_START)})[\\s\\S]*$`,
+);
 
-/** User message text as the author typed it, plus the labels of what was attached. */
-export function splitUserText(text: string): { text: string; attachments: string[] } {
+/** User message text as the author typed it, plus the labels of what was attached, and the files. */
+export function splitUserText(text: string): { text: string; attachments: string[]; files?: AttachedFile[] } {
   const attachments = [
     ...[...text.matchAll(/<selection path="([^"]+)" start="(\d+):\d+" end="(\d+):\d+">/g)].map(([, path, a, b]) => (a === b ? `${path}:${a}` : `${path}:${a}–${b}`)),
     ...[...text.matchAll(/<author-edit path="([^"]+)" lines="(\d+)(?:–(\d+)| \(removed\))">/g)].map(([, path, a, b]) => `${AUTHOR_EDIT_CHIP} ${path}:${b && b !== a ? `${a}–${b}` : a}`),
     ...(text.includes(`\n\n${EARLIER_INTRO}`) ? [EARLIER_CHIP] : []),
   ];
-  return { text: text.replace(CONTEXT_TAIL, ''), attachments };
+  const files = text.startsWith(FILES_INTRO) || text.includes(`\n\n${FILES_INTRO}`) ? filesFromText(text) : [];
+  return { text: text.replace(CONTEXT_TAIL, ''), attachments, ...(files.length && { files }) };
 }
 
 type ContextPart = {
@@ -236,8 +241,8 @@ export function itemsFromContext(messages: ContextMessage[], root = ''): ChatIte
       if (m.summary?.trim()) items.push({ kind: 'assistant', id: m.id, text: `**Summary of the conversation so far**\n\n${m.summary}`, done: true });
       if (Array.isArray(m.recent)) items.push(...itemsFromContext(m.recent as ContextMessage[], root));
     } else if (m.type === 'user') {
-      const { text, attachments } = splitUserText(m.text ?? '');
-      items.push({ kind: 'user', id: m.id, text, attachments });
+      const { text, attachments, files } = splitUserText(m.text ?? '');
+      items.push({ kind: 'user', id: m.id, text, attachments, ...(files && { files }) });
     } else if (m.type === 'assistant') {
       // Ids as the live events make them (text and reasoning are numbered per kind within a
       // message), so a reply still being written carries on in the same item after a switch.
