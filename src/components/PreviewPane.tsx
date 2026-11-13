@@ -19,7 +19,7 @@ export function PreviewPane() {
   // The book's chapters (two or more included files) can be shown one at a time.
   const hasChapters = useStore(studio.store, (s) => s.names.chapters.length > 1);
   const scope = useStore(studio.store, (s) => s.settings.previewScope);
-  // Which chapter it shows, short: "ch. 13" (the status bar has its title).
+  // Which chapter it shows, short: "ch. 13" (the status bar has its title), then its pages.
   const chapter = useStore(studio.store, (s) => {
     if (s.previewTarget !== 'book' || !s.previewChapter) return null;
     const n = chapterNumber(s.previewChapter, s.names);
@@ -62,6 +62,8 @@ export function PreviewPane() {
     };
   }, []);
 
+  // What's typeset: the whole book's pages, or the chapter's shown alone.
+  const pages = compile.pages ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}` : null;
   const status =
     preview.status === 'error'
       ? 'error'
@@ -72,10 +74,10 @@ export function PreviewPane() {
           : target === 'cover' && compile.status === 'ok'
             ? 'cover, with guides'
             : chapter && compile.status === 'ok'
-              ? chapter
-            : compile.pages
-              ? `${compile.pages} pages`
-              : preview.status;
+              ? pages
+                ? `${chapter} · ${pages}`
+                : chapter
+            : (pages ?? preview.status);
 
   return (
     <section className="pane preview-pane">

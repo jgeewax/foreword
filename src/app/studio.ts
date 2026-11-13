@@ -3600,7 +3600,8 @@ export class Studio {
           )
         : null;
     this.entryText = chapter?.text ?? book?.text ?? '';
-    this.store.set({ previewChapter: chapter?.chapter ?? null });
+    // Nothing typeset yet: the page count is the last document's (the book's, a chapter's, the cover's) until it is.
+    this.store.set((st) => ({ previewChapter: chapter?.chapter ?? null, compile: { status: 'idle', words: st.compile.words } }));
     if (chapter) writeJson(previewChapterKey(ws.root), chapter.chapter);
     const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : (chapter?.path ?? book?.path ?? ws.entry);
     try {
@@ -3867,7 +3868,8 @@ export class Studio {
     if (!next || !this.chapterPreview) return;
     if (next.text !== this.entryText && this.typst.setEntryText(next.text)) this.entryText = next.text;
     if (next.chapter === this.state.previewChapter) return;
-    this.store.set({ previewChapter: next.chapter });
+    // Its page count comes when it's typeset; until then it would be the last chapter's.
+    this.store.set((st) => ({ previewChapter: next.chapter, compile: { ...st.compile, pages: undefined } }));
     writeJson(previewChapterKey(this.state.workspace!.root), next.chapter);
     // Into the new chapter once it's typeset, where the editor is.
     await this.nextCompile(10_000);

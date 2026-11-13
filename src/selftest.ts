@@ -229,7 +229,15 @@ async function chapterPreviewChecks() {
   const before = studio.state.settings.previewScope;
   const ready = (what: string) =>
     waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
-  const snapshot = () => ({ pages: studio.state.compile.pages, chapter: studio.state.previewChapter, errors: studio.state.problems.errors, status: studio.state.compile.status });
+  // With what the preview's header and the status bar say: the pages of what's shown, a chapter's own.
+  const snapshot = () => ({
+    pages: studio.state.compile.pages,
+    chapter: studio.state.previewChapter,
+    errors: studio.state.problems.errors,
+    status: studio.state.compile.status,
+    pill: document.querySelector('.preview-pane .pane-header .pill')?.textContent,
+    statusBar: document.querySelector('.statusbar .indicator[title^="Typesetting"] .indicator-label')?.textContent,
+  });
   try {
     if (before !== 'book') {
       await studio.showInPreview('book');
@@ -272,6 +280,8 @@ async function chapterPreviewChecks() {
     const url = studio.state.preview.url;
     await studio.openFile(second);
     await waitFor(() => studio.state.previewChapter === second, 15000, 'the next chapter shown');
+    // Before it's typeset: no page count, not the last chapter's.
+    out.followedBefore = snapshot();
     await sleep(500);
     await ready('the next chapter');
     out.followed = { ...snapshot(), wanted: second, samePreview: studio.state.preview.url === url };

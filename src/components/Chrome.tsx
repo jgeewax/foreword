@@ -142,19 +142,22 @@ export function StatusBar() {
   const canAsk = agent === 'ready' && !running;
   const todos = useStore(studio.store, (s) => s.todos.length);
   const previewTarget = useStore(studio.store, (s) => s.previewTarget);
-  // A chapter typeset alone: its pages and words aren't the book's.
+  // A chapter typeset alone: its pages and words are its own, not the book's.
   const chapter = useStore(studio.store, (s) => (s.previewTarget === 'book' && s.previewChapter ? (numberedTitle(s.previewChapter, s.names) ?? 'One chapter') : null));
   const repo = useStore(studio.store, (s) => s.git.repo);
   const gitBusy = useStore(studio.store, (s) => s.git.busy);
 
   const compileTone: Tone = compile.status === 'ok' ? 'ok' : compile.status === 'compiling' ? 'busy' : compile.status === 'error' ? 'bad' : 'off';
+  const pages = compile.pages
+    ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}${compile.words != null ? ` · ${compile.words.toLocaleString()} words` : ''}`
+    : null;
   const compileLabel =
     compile.status === 'ok' && previewTarget === 'cover'
       ? 'Cover'
       : compile.status === 'ok' && chapter
-        ? `${chapter} alone`
+        ? `${chapter} alone${pages ? `: ${pages}` : ''}`
       : compile.status === 'ok'
-      ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}${compile.words != null ? ` · ${compile.words.toLocaleString()} words` : ''}`
+      ? (pages ?? '')
       : compile.status === 'compiling'
         ? 'Typesetting…'
         : compile.status === 'error'
@@ -206,7 +209,9 @@ export function StatusBar() {
             tone={compileTone}
             icon="book"
             label={compileLabel}
-            title={chapter ? 'Typesetting only this chapter, for a quicker preview (Settings ▸ General ▸ Preview)' : 'Typesetting status of the whole book'}
+            title={
+              chapter ? 'Typesetting only this chapter, for a quicker preview (Settings ▸ General ▸ Preview): its pages and words, not the book’s' : 'Typesetting status of the whole book'
+            }
           />
         )}
         {todos > 0 && <Indicator icon="checklist" label={`${todos} to do`} title="TODOs left in the book" onClick={() => studio.showSidebar('todos')} />}
