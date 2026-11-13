@@ -1229,7 +1229,9 @@ function ChangeCard({ change, index, itemId, made, book }: { change: AnswerChang
   const running = useStore(studio.store, (s) => s.agent.running);
   const ref = book && change.at ? refNamed(book, change.at) : null;
   const pieces = useMemo(() => trimPieces(wordPieces(change.find, change.replace), 16), [change.find, change.replace]);
-  const ready = !!itemId && change.complete && !!change.replace;
+  const ready = !!itemId && change.complete;
+  // One that only takes words out: nothing to copy, and Show puts the cursor where they were.
+  const cut = !change.replace;
   return (
     <div className="answer-change">
       <div className="answer-change-head">
@@ -1248,7 +1250,7 @@ function ChangeCard({ change, index, itemId, made, book }: { change: AnswerChang
               <Icon name="check" size={12} />
               Changed
             </span>
-            <button className="small ghost" title="Select the new words in the editor" onClick={() => itemId && void studio.showAnswerChange(itemId, index)}>
+            <button className="small ghost" title={cut ? 'Put the cursor where the words were, in the editor' : 'Select the new words in the editor'} onClick={() => itemId && void studio.showAnswerChange(itemId, index)}>
               Show
             </button>
             <button className="small ghost" title="Put the words back as they were (⌘Z brings the change back)" onClick={() => itemId && void studio.undoAnswerChange(itemId, index)}>
@@ -1267,9 +1269,11 @@ function ChangeCard({ change, index, itemId, made, book }: { change: AnswerChang
             <button className="answer-make" disabled={!ready || running} title="Make it in the editor (⌘Z to undo); if the words have moved, Write mode makes it" onClick={() => itemId && void studio.applyAnswerChange(itemId, index)}>
               Make this change
             </button>
-            <button className="small" disabled={!change.replace} title="Copy the new words" onClick={() => copyText(change.replace)}>
-              Copy
-            </button>
+            {!cut && (
+              <button className="small" title="Copy the new words" onClick={() => copyText(change.replace)}>
+                Copy
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1289,8 +1293,8 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
   const changeItem = useMemo(() => [...turn.steps, ...(turn.reply ? [turn.reply] : [])].findLast((it): it is AssistantItem => it.kind === 'assistant' && (answerOf([it.text])?.changes.length ?? 0) > 0) ?? null, [turn]);
   const madeCount = Object.keys(changeItem?.made ?? {}).length;
   const running = useStore(studio.store, (s) => s.agent.running);
-  // The changes still to make, each with its Make this change (one that only takes words out has none).
-  const unmade = (answer?.changes ?? []).filter((c, i) => !changeItem?.made?.[i] && !!c.replace).length;
+  // The changes still to make, each with its Make this change.
+  const unmade = (answer?.changes ?? []).filter((_, i) => !changeItem?.made?.[i]).length;
   const paths = useMemo(() => {
     const out: string[] = [];
     for (const p of answer?.where ?? []) {

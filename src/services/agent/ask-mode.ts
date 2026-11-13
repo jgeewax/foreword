@@ -70,10 +70,13 @@ export const GO_AHEAD_PROMPT =
 /** "Not quite?" and "Answer that instead": the question as the author meant it. */
 export const meantMessage = (question: string) => `I meant: ${question.trim()}`;
 
+/** A change, in words: replace “a” with “b”, or take out “a” when it only takes words out. */
+const changeWords = (c: { find: string; replace: string }) => (c.replace ? `replace “${c.find}” with “${c.replace}”` : `take out “${c.find}”`);
+
 /** "Make this change", when its words can't be found to change them in the editor: Write mode makes it. */
 export function changePrompt(c: { at: string; find: string; replace: string; why: string }): string {
   const why = c.why.trim().replace(/[.]$/, '');
-  return `Make just this one change from your answer, and nothing else${c.at ? `, in ${c.at}` : ''}: replace “${c.find}” with “${c.replace}”${why ? ` (${why})` : ''}. If those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence what you changed.`;
+  return `Make just this one change from your answer, and nothing else${c.at ? `, in ${c.at}` : ''}: ${changeWords(c)}${why ? ` (${why})` : ''}. If those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence what you changed.`;
 }
 
 /** "Make all changes", for the ones whose words can't be found in the editor: Write mode makes them, in one message. */
@@ -81,7 +84,8 @@ export function changesPrompt(cs: { at: string; find: string; replace: string; w
   if (cs.length === 1) return changePrompt(cs[0]);
   const list = cs.map((c, i) => {
     const why = c.why.trim().replace(/[.]$/, '');
-    return `${i + 1}. ${c.at ? `In ${c.at}, replace` : 'Replace'} “${c.find}” with “${c.replace}”${why ? ` (${why})` : ''}.`;
+    const words = changeWords(c);
+    return `${i + 1}. ${c.at ? `In ${c.at}, ${words}` : words[0].toUpperCase() + words.slice(1)}${why ? ` (${why})` : ''}.`;
   });
   return `Make just these ${cs.length} changes from your answer, and nothing else:\n\n${list.join('\n')}\n\nIf any of those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence or two what you changed.`;
 }

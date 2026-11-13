@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ASK_INSTRUCTIONS, changePrompt, changesPrompt, meantMessage } from './ask-mode';
 import { parseChart } from '../../lib/chart';
-import { answerOf, answerText, hasAnswerBlocks, markedTerms, markPieces, proseAndCharts, quoteOf, segments, sureOf, withoutAnswerBlocks } from './ask-answer';
+import { answerOf, answerText, hasAnswerBlocks, markedTerms, markPieces, proseAndCharts, quoteOf, removalLines, segments, sureOf, withoutAnswerBlocks } from './ask-answer';
 
 const EARLY = '```answer\nasked: Do I use *orthogonal* anywhere in the book before the place where I define it?\n```';
 const REPLY = [
@@ -190,5 +190,22 @@ describe('the instructions', () => {
       'Make just these 2 changes from your answer, and nothing else:\n\n1. In chapters/04-storm.typ:114, replace “a” with “b” (Show him hiding it).\n2. Replace “c” with “d”.\n\nIf any of those words have changed since, make the same change to the passage as it is now. Afterwards, say in a sentence or two what you changed.',
     );
     expect(changesPrompt(two.slice(0, 1))).toBe(changePrompt(two[0]));
+    // One that only takes words out says so.
+    const cut = { at: 'ch18.typ:141', find: '=== A two-dimensional example', replace: '', why: 'One subsection.' };
+    expect(changePrompt(cut)).toContain(', in ch18.typ:141: take out “=== A two-dimensional example” (One subsection). ');
+    expect(changesPrompt([cut, { ...cut, at: '' }])).toContain('\n\n1. In ch18.typ:141, take out “=== A two-dimensional example” (One subsection).\n2. Take out “=== A two-dimensional example” (One subsection).\n\n');
+  });
+
+  it('the lines a cut takes with it', () => {
+    const lines = ['Para one.', '', '=== Heading', '', 'Para two.'];
+    // Between blank lines: one of them goes too.
+    expect(removalLines(lines, 3, 3)).toEqual({ from: 3, to: 4 });
+    // Against text below: only its line.
+    expect(removalLines(['Para one.', '', '=== Heading', 'Para two.'], 3, 3)).toEqual({ from: 3, to: 3 });
+    // At the top, or the end, of the file: the blank line it would leave there.
+    expect(removalLines(['=== Heading', '', 'Text'], 1, 1)).toEqual({ from: 1, to: 2 });
+    expect(removalLines(['Text', '', '=== Heading'], 3, 3)).toEqual({ from: 2, to: 3 });
+    // The whole file: just it.
+    expect(removalLines(['=== Heading'], 1, 1)).toEqual({ from: 1, to: 1 });
   });
 });

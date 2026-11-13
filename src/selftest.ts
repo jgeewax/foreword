@@ -1969,6 +1969,36 @@ async function askCardChecks() {
     reply('m3', 'Chapter 2 never uses it.');
     await sleep(300);
     out.plainReply = { cards: document.querySelectorAll('.answer-card').length, lastIsPlain: [...document.querySelectorAll('.turn')].pop()?.classList.contains('ask-turn') === false };
+    // A change that only takes words out (a heading): made with its line and the blank line it would leave doubled, Show puts the cursor there, Undo puts them back.
+    const heading = model.getLinesContent().indexOf('== Exercises') + 1;
+    studio.store.set((st) => ({ agent: { ...st.agent, items: [...st.agent.items, { kind: 'user', id: 'u3', text: 'do i need the exercises heading', attachments: [], at: Date.now(), ended: Date.now(), mode: 'ask' }] } }));
+    reply('m4', ['```answer', 'answer: No: the numbered list says what it is.', '```', '', '```change', `at: ${file}:${heading}`, 'find: == Exercises', 'replace:', 'why: Cut the heading', '```'].join('\n'));
+    await sleep(300);
+    const cutButtons = () => [...(card()?.querySelectorAll<HTMLButtonElement>('.answer-change button') ?? [])];
+    out.cutCard = cutButtons().map((b) => `${b.textContent}${b.disabled ? ' (disabled)' : ''}`);
+    cutButtons()
+      .find((b) => b.classList.contains('answer-make'))
+      ?.click();
+    await sleep(500);
+    out.cutMade = {
+      heading,
+      lines: model.getLinesContent().slice(heading - 3, heading + 1),
+      twoFewer: model.getLineCount() === original.split('\n').length - 2,
+      cursor: editor.getPosition()?.toString(),
+      toast: studio.state.toast?.text,
+      card: cutButtons().map((b) => b.textContent),
+    };
+    editor.setPosition({ lineNumber: 1, column: 1 });
+    cutButtons()
+      .find((b) => b.textContent === 'Show')
+      ?.click();
+    await sleep(300);
+    out.cutShown = editor.getPosition()?.toString();
+    cutButtons()
+      .find((b) => b.textContent === 'Undo')
+      ?.click();
+    await sleep(500);
+    out.cutUndone = { back: model.getValue() === original, selected: model.getValueInRange(editor.getSelection()!), toast: studio.state.toast?.text, item: studio.state.agent.items.find((i) => i.id === 'm4:0') };
   } finally {
     studio.send = send;
     studio.setMode = setMode;

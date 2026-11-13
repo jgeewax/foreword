@@ -89,7 +89,7 @@ import { OpenCodeAdapter } from '../services/agent/opencode';
 import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
 import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
-import { answerOf, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
+import { answerOf, removalLines, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
 import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
 import { optionsReminder, parseOptions } from '../services/agent/options-mode';
 import { closestOurs, locatePassage, type PassageAt } from './option-passage';
@@ -193,6 +193,8 @@ export type ChatItem =
       modeSuggestion?: ModeSuggestion;
       /** An Ask answer's changes made from its card, by number: in the editor, or sent to Write mode to make. */
       made?: Record<number, 'here' | 'write'>;
+      /** Those made in the editor that only took words out: what they took, and the text either side, so Show and Undo find the place. */
+      removed?: Record<number, Removal>;
     }
   /**
    * The assistant asks (choices, several choices, yes or no, or its own words)
@@ -335,6 +337,15 @@ export type OptionsState = { target: OptionTarget | null; original: OptionTarget
  * comes from, and `now`), deleted it, or it can't be found.
  */
 export type OptionConflict = { index: number; kind: 'changed' | 'deleted' | 'lost'; was: string; now: string };
+
+/** An Ask change that only took words out, made in the editor: the words it took (whole lines with their line break), and up to 40 characters either side. */
+export type Removal = { text: string; before: string; after: string };
+
+/** Where `text` ends, written from `p` (line breaks counted as lines, whatever the file's). */
+const endOf = (p: monaco.IPosition, text: string) => {
+  const lines = text.split('\n');
+  return lines.length === 1 ? new monaco.Position(p.lineNumber, p.column + text.length) : new monaco.Position(p.lineNumber + lines.length - 1, lines[lines.length - 1].length + 1);
+};
 
 /** An Options turn: the passage as it was asked about, and the passage followed (null: nothing to replace). */
 type OptionsTurn = { target: OptionTarget | null; passage: string | null };
@@ -4506,13 +4517,53 @@ export class Studio {
     return this.askNext(meantMessage(question));
   }
 
-  /** Change `index` of an answer, as the reply wrote it, and the book file its `at` names. */
-  private answerChange(itemId: string, index: number): { change: AnswerChange; ref: SourceRef | null } | null {
+  /** Change `index` of an answer, as the reply wrote it, the book file its `at` names, and what it took out once made (if that's all it did). */
+  private answerChange(itemId: string, index: number): { change: AnswerChange; ref: SourceRef | null; removed?: Removal } | null {
     const item = this.state.agent.items.find((i) => i.id === itemId);
-    const change = item?.kind === 'assistant' ? answerOf([item.text])?.changes[index] : undefined;
+    if (item?.kind !== 'assistant') return null;
+    const change = answerOf([item.text])?.changes[index];
     if (!change?.complete) return null;
     const ws = this.state.workspace;
-    return { change, ref: ws && change.at ? refNamed(bookFiles(ws.files, ws.root), change.at) : null };
+    return { change, ref: ws && change.at ? refNamed(bookFiles(ws.files, ws.root), change.at) : null, removed: item.removed?.[index] };
+  }
+
+  /**
+   * An answer's change made in the editor, at its words' `range` (the caller
+   * sets the undo stops): where its new words are, and for one that only
+   * takes words out, what it took. Whole lines go with their line break, and
+   * a blank line they'd leave doubled.
+   */
+  private editAnswerChange(editor: monaco.editor.IStandaloneCodeEditor, model: monaco.editor.ITextModel, range: monaco.Range, replace: string): { range: monaco.Range; removed?: Removal } {
+    let at = range;
+    if (!replace && at.startColumn === 1 && at.endColumn === model.getLineMaxColumn(at.endLineNumber)) {
+      const { from, to } = removalLines(model.getLinesContent(), at.startLineNumber, at.endLineNumber);
+      const n = model.getLineCount();
+      at =
+        to < n
+          ? new monaco.Range(from, 1, to + 1, 1)
+          : from > 1
+            ? new monaco.Range(from - 1, model.getLineMaxColumn(from - 1), to, model.getLineMaxColumn(to))
+            : new monaco.Range(from, 1, to, model.getLineMaxColumn(to));
+    }
+    const lf = monaco.editor.EndOfLinePreference.LF;
+    const start = at.getStartPosition();
+    const offset = (p: monaco.IPosition, by: number) => model.getPositionAt(model.getOffsetAt(p) + by);
+    const removed = replace
+      ? undefined
+      : {
+          text: model.getValueInRange(at, lf),
+          before: model.getValueInRange(monaco.Range.fromPositions(offset(start, -40), start), lf),
+          after: model.getValueInRange(monaco.Range.fromPositions(at.getEndPosition(), offset(at.getEndPosition(), 40)), lf),
+        };
+    editor.executeEdits('ask-change', [{ range: at, text: replace, forceMoveMarkers: true }]);
+    return { range: monaco.Range.fromPositions(start, endOf(start, replace)), removed };
+  }
+
+  /** Where a cut's words were: between the text that was either side of them, if that's in the file once. */
+  private removalAt(model: monaco.editor.ITextModel, cut: Removal): monaco.Position | null {
+    if (!cut.before && !cut.after) return model.getValueLength() ? null : new monaco.Position(1, 1);
+    const found = model.findMatches(cut.before + cut.after, false, false, true, null, false, 2);
+    return found.length === 1 ? endOf(found[0].range.getStartPosition(), cut.before) : null;
   }
 
   /**
@@ -4548,13 +4599,13 @@ export class Studio {
     const found = this.answerChange(itemId, index);
     if (!found) return;
     const { change, ref } = found;
-    const made = (how: 'here' | 'write' | null) =>
+    const made = (how: 'here' | 'write' | null, removed?: Removal) =>
       this.updateItem(itemId, (it) => {
         if (it.kind !== 'assistant') return it;
         const m = { ...it.made };
         if (how) m[index] = how;
         else delete m[index];
-        return { ...it, made: m };
+        return { ...it, made: m, ...(removed && { removed: { ...it.removed, [index]: removed } }) };
       });
     const range = ref ? await this.changeRange(ref, change) : null;
     const editor = this.editor;
@@ -4566,13 +4617,12 @@ export class Studio {
       await this.send(changePrompt(change));
       return;
     }
-    const start = range.getStartPosition();
     editor.pushUndoStop();
-    editor.executeEdits('ask-change', [{ range, text: change.replace, forceMoveMarkers: true }]);
+    const done = this.editAnswerChange(editor, model, range, change.replace);
     editor.pushUndoStop();
-    this.showWords(monaco.Range.fromPositions(start, model.getPositionAt(model.getOffsetAt(start) + change.replace.length)));
-    made('here');
-    this.toast('Changed (⌘Z to undo).');
+    this.showWords(done.range);
+    made('here', done.removed);
+    this.toast(change.replace ? 'Changed (⌘Z to undo).' : 'Taken out (⌘Z to undo).');
   }
 
   /**
@@ -4587,11 +4637,12 @@ export class Studio {
     if (item?.kind !== 'assistant') return;
     const all = answerOf([item.text])?.changes ?? [];
     const todo = all.flatMap((c, i) => {
-      const found = c.complete && c.replace && !item.made?.[i] ? this.answerChange(itemId, i) : null;
+      const found = c.complete && !item.made?.[i] ? this.answerChange(itemId, i) : null;
       return found ? [{ i, ...found }] : [];
     });
     if (!todo.length) return;
     const made: Record<number, 'here' | 'write'> = {};
+    const removed: Record<number, Removal> = {};
     const elsewhere: typeof todo = [];
     // The last one made, selected at the end (nothing is changed in its file after it).
     let last: { path: string; range: monaco.Range } | null = null;
@@ -4609,10 +4660,10 @@ export class Studio {
         }
         if (!open) editor.pushUndoStop();
         open = true;
-        const start = range.getStartPosition();
-        editor.executeEdits('ask-change', [{ range, text: t.change.replace, forceMoveMarkers: true }]);
-        last = { path, range: monaco.Range.fromPositions(start, model.getPositionAt(model.getOffsetAt(start) + t.change.replace.length)) };
+        const done = this.editAnswerChange(editor, model, range, t.change.replace);
+        last = { path, range: done.range };
         made[t.i] = 'here';
+        if (done.removed) removed[t.i] = done.removed;
       }
       if (open) this.editor?.pushUndoStop();
     }
@@ -4623,7 +4674,7 @@ export class Studio {
       write = this.state.agent.mode === 'write';
       if (write) for (const t of elsewhere) made[t.i] = 'write';
     }
-    this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, made: { ...it.made, ...made } } : it));
+    this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, made: { ...it.made, ...made }, removed: { ...it.removed, ...removed } } : it));
     if (last) {
       await this.openFile(last.path);
       if (this.state.active === last.path) this.showWords(last.range);
@@ -4637,19 +4688,48 @@ export class Studio {
   async undoAnswerChange(itemId: string, index: number) {
     const found = this.answerChange(itemId, index);
     if (!found?.ref) return;
-    if (!(await this.undoEdit(found.ref.path, found.change.find, found.change.replace))) return;
+    const { change, ref } = found;
+    if (!(await (change.replace ? this.undoEdit(ref.path, change.find, change.replace) : this.undoRemoval(ref.path, found.removed)))) return;
     this.updateItem(itemId, (it) => {
       if (it.kind !== 'assistant') return it;
       const m = { ...it.made };
+      const r = { ...it.removed };
       delete m[index];
-      return { ...it, made: m };
+      delete r[index];
+      return { ...it, made: m, removed: r };
     });
   }
 
-  /** An answer's change made in the editor: its new words, selected. */
+  /** An answer's cut, taken back from its card: its words put back where they were (⌘Z takes them out again). Whether it could. */
+  private async undoRemoval(path: string, cut: Removal | undefined): Promise<boolean> {
+    await this.openFile(path);
+    const editor = this.editor;
+    const model = editor?.getModel();
+    if (!editor || !model || this.state.active !== path) return false;
+    const at = cut && this.removalAt(model, cut);
+    if (!cut || !at) {
+      this.toast('The text around it has changed since: undo it with ⌘Z, or in History.', 'error');
+      return false;
+    }
+    editor.pushUndoStop();
+    editor.executeEdits('undo-ask-change', [{ range: monaco.Range.fromPositions(at), text: cut.text, forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+    this.showWords(monaco.Range.fromPositions(at, endOf(at, cut.text)));
+    this.toast('Put back (⌘Z to take it out again).');
+    return true;
+  }
+
+  /** An answer's change made in the editor: its new words selected, or for a cut, the cursor where its words were. */
   async showAnswerChange(itemId: string, index: number) {
     const found = this.answerChange(itemId, index);
-    if (found?.ref) await this.showEdit(found.ref.path, found.change.replace);
+    if (!found?.ref) return;
+    if (found.change.replace) return this.showEdit(found.ref.path, found.change.replace);
+    await this.openFile(found.ref.path);
+    const model = this.editor?.getModel();
+    if (!model || this.state.active !== found.ref.path) return;
+    const at = found.removed && this.removalAt(model, found.removed);
+    if (at) this.showWords(monaco.Range.fromPositions(at));
+    else this.toast('The text around it has changed since.');
   }
 
   newSession() {

@@ -258,6 +258,21 @@ export function quoteOf(line: string): string {
     .trim();
 }
 
+/**
+ * The lines (1-based, inclusive) a change that only takes words out takes
+ * with it, when its words are whole lines `from`–`to`: those, and a blank
+ * line either side when there'd be two together (or one at the top or end of
+ * the file). A heading cut from between two paragraphs leaves one blank line.
+ */
+export function removalLines(lines: readonly string[], from: number, to: number): { from: number; to: number } {
+  const blank = (n: number) => n < 1 || n > lines.length || !lines[n - 1].trim();
+  if (blank(from - 1) && blank(to + 1) && (from > 1 || to < lines.length)) {
+    if (to < lines.length) to++;
+    else from--;
+  }
+  return { from, to };
+}
+
 /** A quote cut into pieces, the question's terms marked (a term also marks the longer words it starts: orthogonal, orthogonality). */
 export function markPieces(text: string, terms: readonly string[]): { text: string; mark: boolean }[] {
   const words = terms.map((t) => t.trim()).filter((t) => t.length >= 2);
