@@ -4884,6 +4884,30 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   Ask's while Write stayed on Haiku; Esc closed the menu, not the card;
   `/ask …` switched and was answered.
 
+### Where in the book and Why fold on the answer card (2026-11-14)
+
+- **Asked for:** "when i ask a question, i get the answer but then more about
+  where and why... since our flow has the most important stuff at the
+  bottom, its confusing to have to scroll up to find the answer. can we make
+  the other stuff collapsable and collapsed by default?"
+- **Folded to a line** (Trace.tsx `AnswerFold`), as How it found out folds
+  once it's done: "▸ Where in the book: 2 places in Vectors" (the places and
+  the chapters they're in) and "▸ Why: It comes in the same sentence…" (the
+  reasoning's first words, cut short). A click opens one and scrolls it into
+  view; the line then reads just "Where in the book" or "Why". They start
+  folded every time, while the answer comes in too, so a long Why streams
+  without pushing the answer away.
+- **What stays open:** the answer, how sure, the stats, and any **chart**,
+  which moved from Where in the book up under the answer: it's numbers the
+  assistant counted for the answer, not a place. What I'd change stays open
+  (it's to act on), and so does Ask next. When there's no `answer` line (Write
+  mode's answer to a question, or a reply without the block), the prose is
+  the answer and isn't folded.
+- Verified: the `askcard` self-test (both folds shut with their lines, no
+  place or map drawn, the chart with the answer; then opened, everything
+  before: places quoted and pinned, a place opening the editor, the changes,
+  both themes). `claude-ask` now opens the folds before it reads the places.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

@@ -14,6 +14,7 @@ import { withoutMarker } from '../app/tasks';
 import { describePermission, describeTool } from '../app/tool-labels';
 import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnsOf, turnTime, turnWords, verbAndRest, type Edit, type Tone, type ToolItem, type Turn } from '../app/trace';
 import { countWords, wordPieces, type Piece } from '../app/prose-diff';
+import { plainLine } from '../app/task-list';
 import { onContextMenu } from '../lib/context-menu';
 import { refNamed, type BookFiles, type SourceRef } from '../lib/source-links';
 import { useStore } from '../lib/store';
@@ -1077,9 +1078,10 @@ function PlainTurn({ turn, last, running, onFold }: TurnProps) {
 //
 // The question given back as the assistant understood it (Not quite?, or the
 // other reading it could have meant), how it found out (the steps, folded once
-// it's done), the answer and how sure, the places in the book that show it
-// (quoted from the book, and pinned on a map of the file) with any chart, its
-// reasoning, what it would change (Make this change), and what to ask next.
+// it's done), the answer and how sure with any chart, the places in the book
+// that show it (quoted from the book, and pinned on a map of the file) and its
+// reasoning, each folded to a line, what it would change (Make this change),
+// and what to ask next.
 
 /** What a turn's replies said, in order: before it looked, then its reply. */
 const turnTexts = (turn: Turn) => [...turn.steps, ...(turn.reply ? [turn.reply] : [])].flatMap((it) => (it.kind === 'assistant' ? [it.text] : []));
@@ -1283,6 +1285,31 @@ function ChangeCard({ change, index, itemId, made, book }: { change: AnswerChang
   );
 }
 
+/**
+ * A part of the card folded to a line saying what's in it, so the answer stays
+ * near the bottom of the chat: a click opens it, and brings it into view.
+ */
+function AnswerFold({ name, label, summary, tone, children }: { name: string; label: string; summary: string; tone?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [open]);
+  return (
+    <div ref={box} className={`answer-fold answer-${name}`}>
+      <button className="answer-steps-toggle answer-fold-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} />
+        <span className={`turn-dot${tone ? ` ${tone}` : ''}`} aria-hidden />
+        <span className="answer-fold-line">
+          <strong>{label}</strong>
+          {summary && !open && `: ${summary}`}
+        </span>
+      </button>
+      {open && <div className="answer-fold-body">{children}</div>}
+    </div>
+  );
+}
+
 /** The answer card itself (AskTurn draws the turn around it). */
 function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; answer: AskAnswer | null; prose: string; charts: { body: string; closed: boolean }[]; live: boolean; canAsk: boolean }) {
   const names = useStore(studio.store, (s) => s.names);
@@ -1416,7 +1443,7 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
         </div>
       )}
 
-      {(answer?.answer || prose || live) && (
+      {(answer?.answer || prose || charts.length > 0 || live) && (
         <div className="answer-main">
           <div className="answer-label">Answer</div>
           {answer?.answer ? (
@@ -1428,7 +1455,7 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
               <Markdown text={prose} />
             </div>
           ) : (
-            <div className="answer-skeleton" aria-label="The answer is on its way">
+            !charts.length && <div className="answer-skeleton" aria-label="The answer is on its way">
               <span />
               <span />
               <div className="answer-skeleton-note">{asked ? 'Comes once it has looked.' : 'It’s reading your question.'}</div>
@@ -1457,38 +1484,36 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {(places.length > 0 || charts.length > 0) && (
-        <div className="answer-where">
-          <div className="answer-label">{places.length ? 'Where in the book' : 'What it found'}</div>
+          {/* A chart is numbers it counted for the answer, so it stays open with it. */}
           {charts.map((c, i) => (
             <ChartBlock key={i} source={c.body} open={!c.closed} />
           ))}
+        </div>
+      )}
+
+      {/* Where it found it and why it thinks so, a click away: open, they'd push the answer up out of view. */}
+      {places.length > 0 && (
+        <AnswerFold name="where" label="Where in the book" summary={`${plural(places.length, 'place')} in ${files.map((p) => names.titles[p] ?? basename(p)).join(', ')}`} tone="tone-answer">
           {files.slice(0, 3).map((path) => {
             const text = texts.get(path);
             const total = text == null ? 0 : lineCount(text);
             const on = places.filter((p) => p.ref.path === path);
             return total > 0 && on.some((p) => p.ref.line) ? <PlaceMap key={path} path={path} total={total} places={on} reads={reads(path)} picked={picked} onPick={pick} /> : null;
           })}
-          {places.length > 0 && (
-            <ol className="place-list">
-              {places.map((p) => (
-                <PlaceRow key={p.n} place={p} text={texts.get(p.ref.path)} terms={terms} picked={picked === p.n} file={files.length > 1 ? basename(p.ref.path) : null} onPick={() => pick(p)} />
-              ))}
-            </ol>
-          )}
-        </div>
+          <ol className="place-list">
+            {places.map((p) => (
+              <PlaceRow key={p.n} place={p} text={texts.get(p.ref.path)} terms={terms} picked={picked === p.n} file={files.length > 1 ? basename(p.ref.path) : null} onPick={() => pick(p)} />
+            ))}
+          </ol>
+        </AnswerFold>
       )}
 
       {answer?.answer && prose && (
-        <div className="answer-why">
-          <div className="answer-label">Why</div>
+        <AnswerFold name="why" label="Why" summary={plainLine(prose, 160)}>
           <div className={`msg assistant md${live ? ' streaming' : ''}`}>
             <Markdown text={prose} />
           </div>
-        </div>
+        </AnswerFold>
       )}
 
       {(answer?.changes.length ?? 0) > 0 && (

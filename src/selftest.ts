@@ -1777,8 +1777,9 @@ async function selectionCardChecks() {
 /**
  * Ask mode's answer card, from made-up replies (no model): the card while the
  * answer comes (before and after "You asked"), then done: the answer, how
- * sure, the stats, a chart, the places quoted from the book and pinned on the
- * file, Why, a change made in the editor and undone, one whose words aren't
+ * sure, the stats, a chart, Where in the book and Why folded to a line, then
+ * opened: the places quoted from the book and pinned on the file, and the
+ * reasoning; a change made in the editor and undone, one whose words aren't
  * there (Write makes it), Not quite?, Answer that instead and Ask next (the
  * messages they send), and a reply without blocks drawn as before. In both
  * themes. Edits the buffer only, and puts it back.
@@ -1880,6 +1881,12 @@ async function askCardChecks() {
     await setAppTheme('light');
     await sleep(600);
     const c = card();
+    // Where in the book and Why come folded, each to a line; the chart stays with the answer. Then open, for the rest.
+    const fold = (name: string) => ({ open: c?.querySelector(`.answer-${name} .answer-fold-toggle`)?.getAttribute('aria-expanded') ?? null, line: text(`.answer-${name} .answer-fold-toggle`) });
+    out.folded = { where: fold('where'), why: fold('why'), placesHidden: !c?.querySelector('.place-row, .place-map'), chartWithAnswer: !!c?.querySelector('.answer-main .chart'), snapshot: await pictures('askcard-folded') };
+    c?.querySelectorAll<HTMLButtonElement>('.answer-fold-toggle').forEach((b) => b.click());
+    await sleep(500);
+    out.unfolded = { where: fold('where'), why: fold('why') };
     out.done = {
       cards: document.querySelectorAll('.answer-card').length,
       stepsOpen: c?.querySelector('.answer-steps-toggle')?.getAttribute('aria-expanded'),
@@ -9197,11 +9204,13 @@ async function askModeChecks() {
   await studio.setMode('ask');
   const hashBefore = await ipc.fsHash(file);
   const waited: string[] = [];
-  // The answer card a turn gave: what the replies said in their blocks, and what the card shows.
-  const cardOf = (from: number) => {
+  // The answer card a turn gave: what the replies said in their blocks, and what the card shows (Where in the book and Why opened).
+  const cardOf = async (from: number) => {
     const texts = studio.state.agent.items.slice(from).flatMap((i) => (i.kind === 'assistant' ? [i.text] : []));
     const a = answerOf(texts);
     const card = [...document.querySelectorAll('.answer-card')].pop();
+    card?.querySelectorAll<HTMLButtonElement>('.answer-fold-toggle[aria-expanded="false"]').forEach((b) => b.click());
+    await sleep(300);
     const words = (sel: string) => card?.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
     return {
       blocks: !!a,
@@ -9222,7 +9231,7 @@ async function askModeChecks() {
   {
     const from = studio.state.agent.items.length;
     await settleTurn('where do i talk about orthogonal vectors', waited);
-    out.where = { ...cardOf(from), ...turnTools(from), waited: waited.splice(0) };
+    out.where = { ...(await cardOf(from)), ...turnTools(from), waited: waited.splice(0) };
     try {
       out.whereSnapshot = await ipc.previewSnapshot('ask-card', 'main');
     } catch (e) {
@@ -9234,7 +9243,7 @@ async function askModeChecks() {
 
   const answerFrom = studio.state.agent.items.length;
   const answer = await settleTurn(`Can you check the first paragraph of ${file}? Explain to me what you'd change before changing anything.`, waited);
-  out.answerCard = cardOf(answerFrom);
+  out.answerCard = await cardOf(answerFrom);
   out.answer = {
     model: studio.state.agent.model,
     instructionKeys: (await studio.agent!.getInstructions(studio.state.agent.sessionId!)).map((e) => e.key),
