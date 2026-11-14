@@ -4693,6 +4693,52 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   The picture book's story.typ doesn't compile alone (a spread's assertion),
   before this change too. Unit tests: chapter-preview.test.ts.
 
+### A rewrite rebuilds the passage, as an editor would (2026-11-14)
+
+- **Asked for:** "the assistant in foreword, across all models, seems like its
+  afraid to make changes to my text. i select 3 sentences and ask to rewrite,
+  and it rewrites each sentence slightly but doesnt rearrange/reorder or
+  combine sentences. … i want the agent to be empowered to make REALISTIC
+  changes the way a book's developmental editor would".
+- **Why it held back.** No one line said so, but together they did: "edit the
+  .typ files directly with small, targeted changes" (meant for the edit tool,
+  read as the size of the change); "preserve the author's … formatting", with
+  nothing to say their voice isn't the sentences as they stand; one sentence
+  per line "so each sentence can then be changed … by itself" (a line read as
+  the unit of change); Revise's "Keep what I didn't ask to change"; Options'
+  "Match the passage's line breaks"; and "ask before a large rewrite" and
+  "look before you … overwrite" with nothing to say a rewrite asked for is
+  fine. Under all of it, a coding agent's habit of the smallest diff.
+- **Now:** a Rewriting section in every session's instructions (instructions.ts
+  `REWRITING_SECTION`): edit as a good book editor would, a small diff is no
+  virtue in prose, the sentences are yours to rebuild (reorder, join, split,
+  cut, move the point), a version with the same sentences in the same order is
+  a timid one, keep what it says and how the author sounds (not the number,
+  order or boundaries of the sentences), as deep as the request (a proofread
+  fixes mistakes only), and paragraphs and scenes too on a bigger piece, asking
+  first when that's more than was asked. One before-and-after example. The
+  lines above it now say the lines follow the sentences, and that a rewrite
+  asked for isn't one to ask about. Revise's message says "Go only as deep as
+  I asked: a proofread fixes mistakes and nothing else, while a rewrite can
+  reorder, join, split or cut its sentences"; the old wording is still read
+  back.
+- **Measured** with Claude Code (`claude -p`, the app's system prompt) and
+  Codex (`codex exec`, its instructions file) editing a scratch book: 11
+  rewrites of 3–4 sentence passages (Rewrite it, Make it flow better, Make it
+  clearer, Tighten, and "rewrite this" in the chat), counted as rebuilt when
+  the sentences changed in number or order. Before: Haiku 6/11, Sonnet 5/11,
+  Opus 5/11, Luna 6/11 (on the 3-sentence passages, mostly the same three
+  sentences reworded). The section alone moved Sonnet to 10/11 and left Haiku and Luna
+  where they were (Haiku said "I tightened the opening into one sentence" and
+  kept three lines); the example and Revise's line moved them: Haiku 11/11,
+  Sonnet 11/11, Luna 9/11, Opus 10/11. With "a rewrite can reorder…" alone in
+  Revise's line, Luna joined sentences in a Proofread ("no proofreading errors
+  needed correction"); naming both ends fixed it: 16/16 proofreads light
+  across the four models.
+- **Not done:** an assistant whose own prompt stays (Antigravity) gets the
+  section but not Foreword's system prompt. Gemini CLI wasn't measured (not
+  signed in).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

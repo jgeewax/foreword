@@ -34,6 +34,11 @@ describe('what a button asked for, read back from its message', () => {
   it('Revise and Options from the selection bar: what the author asked for', () => {
     expect(stockAction(revisePrompt('Tighten it: fewer words, the same meaning'))).toMatchObject({ verb: 'Revise this passage', rows: [{ text: 'Tighten it: fewer words, the same meaning' }], tone: 'change' });
     expect(stockAction(revisePrompt('  Keep his voice.\n'))?.rows).toEqual([{ text: 'Keep his voice.' }]);
+    // As it was sent until 0.9.1.
+    const old = "Revise the selected passage: Rewrite it\n\nChange only that passage, in place. Keep what I didn't ask to change: labels, citations, math and markup. Then say in a sentence what you changed.";
+    expect(stockAction(old)).toMatchObject({ verb: 'Revise this passage', rows: [{ text: 'Rewrite it' }] });
+    expect(revisePrompt('x')).not.toContain("Keep what I didn't ask to change");
+    expect(revisePrompt('x')).toContain('a proofread fixes mistakes and nothing else, while a rewrite can reorder, join, split or cut its sentences');
     expect(stockAction(optionsPrompt('More vivid'))).toMatchObject({ verb: 'Three options for this passage', rows: [{ text: 'More vivid' }], mode: 'options' });
     expect(stockAction(optionsPrompt('More vivid', 1))).toMatchObject({ verb: 'One option for this passage', rows: [{ text: 'More vivid' }], mode: 'options' });
     expect(stockAction(optionsPrompt('Shorter', 4))).toMatchObject({ verb: 'Four options for this passage', rows: [{ text: 'Shorter' }], mode: 'options' });

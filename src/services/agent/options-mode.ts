@@ -40,7 +40,7 @@ One short sentence about your approach (optional).
 and so on, one section for each option.
 
 Rules:
-- Each code block replaces the whole selected passage, so it must be complete Typst markup that can be pasted in its place. Keep everything the author didn't ask to change: labels like <eq-name>, citations like @key, math, and markup. Match the passage's line breaks and indentation.
+- Each code block replaces the whole selected passage, so it must be complete Typst markup that can be pasted in its place. Keep its labels like <eq-name>, citations like @key, math and markup, and lay it out as the passage is: one sentence per line, at its indentation.
 - Make the options meaningfully different from each other (for example in tone, length, or structure), and make every one follow the style guide. Asked for one option, write the best version you can.
 - Write nothing after the last option.
 - If the message isn't something to give options for (a question, say), answer it briefly and normally instead.`;

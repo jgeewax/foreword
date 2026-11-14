@@ -42,6 +42,16 @@ describe('buildInstructions', () => {
     expect(text).toMatch(/One sentence per line/);
     expect(text).toMatch(/even where the file's existing paragraphs are wrapped differently/);
     expect(text).toMatch(/Don't rewrap paragraphs you aren't otherwise changing/);
+    expect(text).toMatch(/The lines follow the sentences/);
+  });
+
+  it('rewrites as an editor would, not a sentence at a time, as deep as the request', () => {
+    expect(text).toContain('## Rewriting');
+    expect(text).toMatch(/a small diff is no virtue/);
+    expect(text).toMatch(/Reorder them, join two into one, split a long one, cut one that repeats another/);
+    expect(text).toMatch(/Don't polish each sentence where it stands/);
+    expect(text).toMatch(/Proofread, typos or grammar: fix what's wrong and nothing else/);
+    expect(text).not.toMatch(/small, targeted changes/);
   });
 
   it('says the preview is live and forbids compiling or offering to compile', () => {

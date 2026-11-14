@@ -36,6 +36,10 @@ export const EXPLAIN_PROMPT = "Explain this passage in plain words, including wh
 
 /** "Revise" on a selection (the selection bar): the passage, changed in place as the author asked. */
 export const revisePrompt = (instruction: string) =>
+  `Revise the selected passage: ${instruction.trim()}\n\nChange only that passage, in place, and keep its labels, citations, math and markup. Go only as deep as I asked: a proofread fixes mistakes and nothing else, while a rewrite can reorder, join, split or cut its sentences. Then say in a sentence what you changed.`;
+
+/** As it was until 0.9.1, when its "Keep what I didn't ask to change" held rewrites back: still read back, for conversations from then. */
+const REVISE_UNTIL_091 = (instruction: string) =>
   `Revise the selected passage: ${instruction.trim()}\n\nChange only that passage, in place. Keep what I didn't ask to change: labels, citations, math and markup. Then say in a sentence what you changed.`;
 
 const capitalized = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -110,7 +114,7 @@ const ANSWERS = /^My answers?:\n- /;
 const EXAMPLES = new RegExp(`^${esc(failingExamplesPrompt(['\0'])).replace('\0', '((?:- [^\\n]*\\n?)+)')}$`);
 const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
 // Also on one line, as Claude Code names a task after it.
-const REVISE_SELECTION = new RegExp(`^${esc(revisePrompt('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
+const REVISE_SELECTION = new RegExp(`^(?:${[revisePrompt, REVISE_UNTIL_091].map((p) => esc(p('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')).join('|')})$`);
 const OPTIONS_SELECTION = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for the selected passage: ([\\s\\S]+)$`);
 const ASK_SELECTION = new RegExp(`^${esc(askPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
 const MORE_LIKE = new RegExp(`^(${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (\\d+)(?: \\(“([^\\n]*)”\\))?\\. That one is closest to what I want: [\\s\\S]*?\\n\\nOption \\d+ was:\\n\\n(\`{3,})typst\\n([\\s\\S]*)\\n\\4$`);
@@ -129,7 +133,7 @@ const READERS: ((text: string) => StockAction | null)[] = [
   (text) => (text === EXPLAIN_PROMPT ? { verb: 'Explain this passage', note: 'in plain words', tone: 'look', icon: 'bulb' } : null),
   (text) => {
     const m = REVISE_SELECTION.exec(text);
-    return m ? { verb: 'Revise this passage', rows: [{ text: m[1] }], tone: 'change', icon: 'edit' } : null;
+    return m ? { verb: 'Revise this passage', rows: [{ text: m[1] ?? m[2] }], tone: 'change', icon: 'edit' } : null;
   },
   (text) => {
     const m = OPTIONS_SELECTION.exec(text);
