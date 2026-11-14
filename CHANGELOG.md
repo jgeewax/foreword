@@ -2,6 +2,28 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.10.0 · 14 November 2026
+
+### The assistant
+
+- **Attach files to a message.** Drop pictures, PDFs or other files on the chat, paste a screenshot or a copied picture into the message box (⌘V), pick them with the paperclip beside /, or drag a file or folder from the book's file tree. While you drag, the chat is outlined in the mode's colour, and it says *Drop to attach* once the files are over it. Before you send, each one shows in the message box, a picture as a picture and a file with its size, with a × to take it off. Once sent, they stay on your message, and a click opens one. A message can be files alone. Every assistant can open them, and it sees a picture in the message itself. Each file is copied into the book, in a folder of Foreword's own that's kept out of Git and out of the file tree.
+- **Switching mode keeps your assistant and model.** The chat has one usual assistant, model and effort, whatever the mode. Before, each mode kept whatever was last used in it, so trying a model once in Write made it Write's for good. To give a mode its own, say Ask on Claude Code at low effort, **pin** it: from the mode menu, with /pin, or from the selection bar. Leaving a pinned mode brings your usual ones back, and the chat says so whenever a switch changes what runs. After this update nothing is pinned, and what you last used in Write is your usual one.
+- **The selection bar shows what each request runs on.** Beside Revise, Options and Ask's buttons, the assistant, model and effort the request will use. Click it to choose others there, as under the message box, or to pin the mode.
+- **Ask a question in Write mode and get an answer.** "Do you think this analogy works?" gets the assistant's view in its first sentence, an honest yes when the text works, two or three other ways to put it, and at most one change you can make with *Make this change*. Nothing in the book changes that turn. A request, even one put as a question ("can you tighten this?"), is still made.
+- **Rewrites that edit as an editor would.** Asked to rewrite or tighten a passage, the assistant can reorder, join, split or cut sentences, rather than rewording each one where it stands, while keeping what the passage says and how you sound. It goes as deep as you ask: a proofread fixes mistakes and nothing more. In Options, each version takes a different editor's approach.
+- **Make this change takes words out too.** When an answer's change only cuts something (a heading, a sentence), *Make this change* now works: it takes the words out, without leaving a doubled blank line, and Show and Undo work on it as on any other change.
+
+### The preview
+
+- **A chapter's length.** With **Chapter** chosen above the preview, its header says how many pages the chapter has ("ch. 13 · 29 pages"), and the status bar gives its pages and words.
+- **References to other chapters read as in the book.** In the Chapter view, a reference to a figure, table, listing, equation or heading in another chapter shows what it reads as in the whole book, in grey: "Figure 9.7", "Chapter 8", "page 217". The chapter also follows changes to other chapters made outside the editor, such as the assistant's.
+
+### Fixes
+
+- Claude Code ran the first message after a mode switch at its own effort, not the one chosen under the message box. It keeps your effort now.
+- A mode's command with words after it, such as /write make it shorter, switched mode and dropped the words. It sends them now.
+- In a narrow assistant pane, the model's name could vanish from under the message box. It stays, and the words around it give way first.
+
 ## 0.9.1 · 11 November 2026
 
 ### The preview
