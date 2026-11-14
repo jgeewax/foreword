@@ -9,6 +9,7 @@ import { ASK_INSTRUCTIONS, ASK_REMINDER, GO_AHEAD_PROMPT } from './ask-mode';
 import { DISCUSS_INSTRUCTIONS, WRITE_FROM_DISCUSSION_PROMPT } from './discuss-mode';
 import { FIGURES_INSTRUCTIONS } from './figures-mode';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
+import { WRITE_INSTRUCTIONS, WRITE_REMINDER } from './write-mode';
 
 export type AgentMode = 'write' | 'ask' | 'discuss' | 'options' | 'figures';
 
@@ -152,7 +153,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
     case 'write':
       return {
         readOnly: false,
-        instructions: null,
+        instructions: WRITE_INSTRUCTIONS,
         label: 'Write',
         icon: '✎',
         description: 'Write and edit the book.',
@@ -160,7 +161,7 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         notice: 'Write mode: the agent writes and edits the book.',
         carryOut: null,
         go: 'Write it',
-        reminder: null,
+        reminder: WRITE_REMINDER,
       };
   }
 }

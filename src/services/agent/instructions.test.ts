@@ -54,6 +54,21 @@ describe('buildInstructions', () => {
     expect(text).not.toMatch(/small, targeted changes/);
   });
 
+  it('revises in an editor’s order: read around, find what’s wrong, write it whole, check it in place, report', () => {
+    expect(text).toContain('## How to revise');
+    const steps = ['1. Read around it', "2. Work out what's wrong before you write", '3. Go as deep as the request', '4. Write the new version whole, then put it in with one edit for the passage', '5. Check it where it stands', '6. Report in one to three sentences what wasn'];
+    const at = steps.map((s) => text.indexOf(s));
+    expect(at.every((i) => i > 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    // Announced, they gave Codex a message to end its turn on, the edit unmade.
+    expect(text).toMatch(/Do the steps without announcing them/);
+  });
+
+  it('answers a question in Write mode, and offers Discuss only for a direction that takes several turns', () => {
+    expect(FOREWORD_PROMPT).toMatch(/when the author asks what you think, answer before you change anything/);
+    expect(MODES_SECTION).toMatch(/a question about a passage is answered there/);
+  });
+
   it('says the preview is live and forbids compiling or offering to compile', () => {
     expect(text).toContain('## The preview is live');
     expect(text).toMatch(/Never compile, build, render, or export/);

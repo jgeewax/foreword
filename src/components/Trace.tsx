@@ -1324,7 +1324,8 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
   const reads = (path: string) => steps.flatMap((it) => (it.kind === 'tool' && it.read?.path === path ? [it.read] : []));
   return (
     <section className={`answer-card${live ? ' live' : ''}`} aria-label="The answer">
-      {(asked || live) && (
+      {/* Write mode's answer to a question has no question given back (write-mode.ts), so nothing waits for one. */}
+      {(asked || (live && turn.user?.mode === 'ask')) && (
         <div className="answer-asked">
           <div className="answer-asked-head">
             <span className="answer-glyph" aria-hidden>

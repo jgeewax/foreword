@@ -5,6 +5,8 @@ import { DISCUSS_INSTRUCTIONS } from './discuss-mode';
 import { AGENT_MODES, modeChoiceMessage, modeConfig, modeNamed, modeOffer, nextMode, withoutModeOffer } from './modes';
 import { REMINDER_START } from './message-context';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
+import { WRITE_INSTRUCTIONS } from './write-mode';
+import { answerOf } from './ask-answer';
 
 describe('modeConfig', () => {
   it('only Write and Figures can change files', () => {
@@ -31,11 +33,20 @@ describe('modeConfig', () => {
     expect(FIGURES_INSTRUCTIONS).toMatch(/can't paint or retouch pixels/);
   });
 
-  it('each read-only mode has its own instructions', () => {
+  it('each mode has its own instructions', () => {
     expect(modeConfig('ask')).toMatchObject({ instructions: ASK_INSTRUCTIONS });
     expect(modeConfig('discuss')).toMatchObject({ instructions: DISCUSS_INSTRUCTIONS });
     expect(modeConfig('options')).toMatchObject({ instructions: OPTIONS_INSTRUCTIONS });
-    expect(modeConfig('write')).toMatchObject({ instructions: null });
+    expect(modeConfig('write')).toMatchObject({ instructions: WRITE_INSTRUCTIONS });
+  });
+
+  it('Write answers a question about the text before it changes anything, and makes a request worded as one', () => {
+    expect(WRITE_INSTRUCTIONS).toMatch(/Answer it, and don't change the book in this turn/);
+    expect(WRITE_INSTRUCTIONS).toMatch(/Lead with your view in the first sentence/);
+    expect(WRITE_INSTRUCTIONS).toMatch(/A request asks for a change, however politely it's put: "tighten this", "can you tighten this\?"/);
+    // Its one change is a card the chat draws, as Ask's are.
+    const example = /```change[\s\S]*?```/.exec(WRITE_INSTRUCTIONS)![0];
+    expect(answerOf([example])?.changes).toEqual([expect.objectContaining({ at: 'chapters/04-storm.typ:114', why: 'Show him hiding it', complete: true })]);
   });
 
   it('Ask and Discuss keep everything in the chat, and end in Write', () => {
@@ -88,8 +99,10 @@ describe('modeConfig', () => {
     expect(carryOut?.prompt).toMatch(/If we didn't settle on a change, say so/);
   });
 
-  it('only Ask sends a reminder with each message, and the chat knows where it starts', () => {
-    expect(AGENT_MODES.filter((m) => modeConfig(m).reminder)).toEqual(['ask']);
+  it('Write and Ask send a reminder with each message, and the chat knows where it starts', () => {
+    expect(AGENT_MODES.filter((m) => modeConfig(m).reminder)).toEqual(['write', 'ask']);
     expect(modeConfig('ask').reminder?.startsWith(REMINDER_START)).toBe(true);
+    expect(modeConfig('write').reminder?.startsWith(REMINDER_START)).toBe(true);
+    expect(modeConfig('write').reminder).toMatch(/a request for a change, "can you…" and "could you…" too, is made in the files now; a question about what you think of the text is answered, with nothing changed/);
   });
 });

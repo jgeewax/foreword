@@ -4,6 +4,7 @@
 // it. Each is read back from its text, so a conversation reopened later (or a
 // task named after its first message) shows the same.
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
+import { REMINDER_START } from '../services/agent/message-context';
 import { AGENT_MODES, modeConfig, type AgentMode } from '../services/agent/modes';
 import { DEFAULT_OPTION_COUNT, OPTION_COUNTS, optionsInWords } from '../services/agent/options-mode';
 import { STYLE_DRAFT_MESSAGE, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE } from '../services/agent/style-guide';
@@ -251,7 +252,8 @@ const TITLE_OPENINGS: [string, string][] = [
   ...OPTION_COUNTS.map((n): [string, string] => [`${capitalized(optionsInWords(n))} for the selected passage: `, `${capitalized(optionsInWords(n))} for this passage`]),
   ['About the selected passage: ', 'Ask about this passage'],
 ];
-const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)})[\\s\\S]*$`);
+const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)}|${esc(REMINDER_START)})[\\s\\S]*$`);
+const REMINDER_TAIL = new RegExp(`\\s*${esc(REMINDER_START)}[\\s\\S]*$`);
 
 export function stockTitle(title: string): string {
   const line = title.replace(/\s+/g, ' ').trim();
@@ -259,5 +261,6 @@ export function stockTitle(title: string): string {
   const a = stockAction(text);
   if (a) return actionLine(a);
   if (/^This passage of .+ was changed two ways at once\./.test(text)) return 'Combine both versions';
-  return TITLE_OPENINGS.find(([opening]) => text.startsWith(opening))?.[1] ?? title;
+  // Any other message keeps its title, but not the mode's reminder Foreword put after it.
+  return TITLE_OPENINGS.find(([opening]) => text.startsWith(opening))?.[1] ?? title.replace(REMINDER_TAIL, '');
 }

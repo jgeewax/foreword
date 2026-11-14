@@ -41,7 +41,7 @@ and so on, one section for each option.
 
 Rules:
 - Each code block replaces the whole selected passage, so it must be complete Typst markup that can be pasted in its place. Keep its labels like <eq-name>, citations like @key, math and markup, and lay it out as the passage is: one sentence per line, at its indentation.
-- Make the options meaningfully different from each other (for example in tone, length, or structure), and make every one follow the style guide. Asked for one option, write the best version you can.
+- Work out what the passage needs first (How to revise, steps 1 and 2). Then make each option a different way to give it that, an editor's different move (lead with the point, cut to what matters, recast the rhythm, shift the emphasis, rebuild the order), not the same version reworded; label it by its move. Every one follows the style guide and passes How to revise's check (step 5). Asked for one option, write the best version you can.
 - Write nothing after the last option.
 - If the message isn't something to give options for (a question, say), answer it briefly and normally instead.`;
 

@@ -4739,6 +4739,75 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   section but not Foreword's system prompt. Gemini CLI wasn't measured (not
   signed in).
 
+### A question in Write mode gets an answer; every revision follows an editor's steps (2026-11-14)
+
+- **Asked for:** "sometimes in write mode i ask a question. im looking for an
+  answer, a back-and-forth debate before making writing changes. instead, the
+  agent often just goes off and does it (imagine asking "do you think this
+  analogy is right?" and the agent goes "OK LET ME CHANGE IT" instead of "i
+  think thats the right one, but here are some SUGGESTIONS of others if youre
+  unhappy with it")", and "put some *process* around the modes … id like to
+  codify the revision strategy that models should follow".
+- **Why it went off and did it.** Write mode had no instructions of its own,
+  and everything around it said to act: "When you have what you need, act",
+  the task's "otherwise get going", and the morning's "when they asked for
+  it, write it". Where it didn't act, it dodged: the modes section said an
+  open question ("should…", "which is better…") suits Discuss, and to offer it
+  "starting on neither way", so Sonnet and Opus answered "do you think this
+  analogy is right?" with a Discuss offer and no answer. How to revise was
+  each model's own.
+- **Now:** Write mode's instructions (write-mode.ts) open with a test: a
+  request asks for a change however politely ("can you tighten this?"); a
+  question asks what you think of the text ("is this analogy right?", "should
+  these be one sentence?"), and gets an answer with no change that turn: the
+  view in the first sentence (yes, no or partly), honest when it works, two or
+  three alternatives quoted with which it'd pick, and at most one ```change
+  block for the version it would pick, then it stops. The chat already drew
+  Ask's card, with Make this change, for any reply with change blocks; its
+  "Reading your question…" placeholder is now Ask's only. A reminder goes with
+  every Write message, as Ask's does (`WRITE_REMINDER`): without it Haiku took
+  "could you make this clearer?" for a question in 2 of 3 runs, and twice
+  said "Done" with no edit (once after writing only a change block). The
+  modes section keeps Discuss for a direction that takes several turns (who
+  narrates, a chapter's shape). Task titles drop a mode's reminder.
+- **How to revise** (instructions.ts `REVISING_STEPS`), for every change to
+  the prose and every version of it (an option, a change block), in order:
+  read around it (the paragraphs either side, the style guide, what it sets
+  up; search before cutting a detail that comes back); work out what's wrong
+  before writing, and fix that rather than everything; go as deep as the
+  request; write the version whole and put it in with one edit, not one per
+  sentence; check it in place (says what the reader needs, joins its
+  neighbours, sounds like the author, markup intact, nothing else changed);
+  report what wasn't working and what it did, and mention a bigger problem
+  without fixing it. The steps are done, not announced. Options mode makes
+  each option a different editor's move (lead with the point, cut to what
+  matters, recast the rhythm…), labelled by its move.
+- **Measured** with the headless eval (`claude -p`, `codex exec`, a scratch
+  book, the app's whole Write-mode prompt with the task's instructions): six
+  questions about passages, two of them asked right after an edit in the same
+  session; four requests worded as questions; five rewrites (one whose detail,
+  a red string, comes back two paragraphs on) and two proofreads. Questions
+  answered with no edit and no mode detour, before → after (the after over
+  several runs): Haiku 7/8 → 19/19 (one of the 7 asked to switch to Discuss
+  instead of answering), Sonnet 2/8 → 10/10, Opus 4/8 → 8/8, Luna 4/6 →
+  21/21. Requests made: 4/4 before for each; after, Haiku 19/20 ("could you
+  make this clearer?" once taken for a question), Sonnet 8/8, Opus 4/4, Luna
+  27/28. Rewrites rebuilt, each in one edit, the red string kept and the
+  proofreads light, as before. Opus and Sonnet add a change card to most
+  answers; Haiku and Luna seldom do.
+- **What didn't work.** Without the reminder Haiku made 7 of 12 requests.
+  A longer reminder ("edit the book's files to make it before you say it's
+  done") made Haiku's 12/12 but Luna's 9/12: Luna said what it would do ("I'll
+  read it in context, then make the edit") and ended its turn, as Codex does
+  on a message with no tool call. The steps did that too, now and then (2 of
+  21 changes, once saying "I've made it one sentence" with nothing changed),
+  until they said to do them without announcing them: then 27 of 27.
+- **Not done:** Ask and Discuss keep the steps they had (Ask's four-part
+  answer, Discuss's thinking partner); Figures has its own. The Write-mode
+  answer card wasn't looked at in the running app: the card code doesn't
+  depend on the mode, and a unit test reads the instructions' example as a
+  change. Gemini CLI wasn't measured.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

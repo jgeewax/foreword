@@ -122,6 +122,9 @@ describe('an action in words', () => {
     const review = addressPrompt([{ comment: makeComment('c1', 'chapters/ch1.typ', '= Vectors\n', 1, 1, 'Tighten this.'), line: 1 }]);
     expect(stockTitle(`${review.replace(/\s+/g, ' ').slice(0, 255)}…`)).toBe('Fix this review comment');
     expect(stockTitle(fixErrorPrompt('unknown variable: vect'))).toBe('Fix this error: “unknown variable: vect”');
+    // A mode's reminder after the author's words isn't part of the title.
+    expect(stockTitle(`${revisePrompt('Make it clearer').replace(/\s+/g, ' ')} ${modeConfig('write').reminder}`)).toBe('Revise this passage: “Make it clearer”');
+    expect(stockTitle(`Is the opening too slow? ${modeConfig('write').reminder}`)).toBe('Is the opening too slow?');
     expect(stockTitle(`${revisePrompt('Make it clearer').replace(/\s+/g, ' ')} Selected in the editor: chapters/ch1.typ`)).toBe('Revise this passage: “Make it clearer”');
     expect(stockTitle(`${revisePrompt('x'.repeat(300)).replace(/\s+/g, ' ').slice(0, 255)}…`)).toBe('Revise this passage');
     expect(stockTitle(`${askPrompt('Is it clear?')} Selected in the editor: chapters/ch1.typ`)).toBe('Ask about this passage: “Is it clear?”');
