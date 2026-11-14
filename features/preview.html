@@ -59,7 +59,7 @@
 </figure>
 
 <h2 id="just-this-chapter-for-a-long-book">Just this chapter, for a long book</h2>
-<p>Every change sets the whole book again. For a few hundred pages that’s quick. For a very long book, say 700 pages, the preview starts to trail behind your typing. So it can show just the chapter you’re in: choose <strong>Chapter</strong> above the preview, or in Settings ▸ General ▸ Preview ▸ Shows, and it keeps up as you type. You see that chapter alone, from its first page, without the title page, contents, parts or index around it. Open another chapter and the preview moves to it.</p>
+<p>Every change sets the whole book again. For a few hundred pages that’s quick. For a very long book, say 700 pages, the preview starts to trail behind your typing. So it can show just the chapter you’re in: choose <strong>Chapter</strong> above the preview, or in Settings ▸ General ▸ Preview ▸ Shows, and it keeps up as you type. You see that chapter alone, from its first page, without the title page, contents, parts or index around it, and the header above the preview says how long it is (“ch. 13 · 29 pages”); the status bar gives its pages and words. Open another chapter and the preview moves to it.</p>
 <figure>
   <div class="pair">
     <img src="../images/f/preview-book.webp" width="1300" height="690" alt="Chapter 4 of Calculus Made Easy in the whole book: page 15, where the reference reads as explained above (page 5).">
@@ -67,7 +67,7 @@
   </div>
   <figcaption>Calculus Made Easy, chapter 4: in the whole book (left) and on its own (right). On its own it’s still chapter 4, but its pages start at 1, and the reference to chapter 2 shows in grey instead of a page number.</figcaption>
 </figure>
-<p>The chapter is set with your book’s own design, so apart from the page numbers it looks as it will in the book. Nothing is copied or changed in your files to do it.</p>
+<p>The chapter is set with your book’s own design, so apart from the page numbers it looks as it will in the book. A reference to a figure, table, listing, equation or heading in another chapter reads as it does in the whole book, in grey: “Figure 9.7”, “Chapter 8”, “page 217”. Nothing is copied or changed in your files to do it, and changes made to other chapters outside the editor, such as the assistant’s, show in the chapter too.</p>
 <p>On a long book the preview keeps only the pages near you drawn, and draws the others again as you scroll back to them, so it stays quick even after you’ve read through the whole thing. If it ever has to reload, it comes back to where you were.</p>
 
 <h2 id="export">Export</h2>
@@ -76,7 +76,8 @@
 <div class="limits">
   <h3>What it doesn’t do</h3>
   <ul>
-    <li>With one chapter shown, page numbers and references to other chapters are only right in the whole book.</li>
+    <li>With one chapter shown, its pages are numbered from 1, and so are its figures and equations when the book numbers them through the whole book rather than by chapter.</li>
+    <li>References to other chapters read as in the book once the whole book has been set, in the background. Until then, and for anything but a heading, figure, table, listing or equation, they show their labels.</li>
     <li>Clicking a page finds the words behind it, but not every line of code or maths can be found that way.</li>
     <li>The preview hides while a dialog is open.</li>
     <li>Error messages are Typst’s own. The plain-words version comes from the assistant, when you ask.</li>
@@ -85,7 +86,7 @@
   </article>
   <nav class="doc-next"><a href="editor.html"><small>← Previous</small><b>The editor</b></a><a class="next" href="spelling.html"><small>Next →</small><b>Spelling and grammar</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.9.1</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.10.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>

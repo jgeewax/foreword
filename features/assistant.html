@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The assistant · Foreword</title>
-<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, versions to pick from, the pages it can see, and questions you answer in a panel.">
+<meta name="description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, pictures and files you attach to a message, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures) and pinning one to its own model, answers you can check, with charts, versions to pick from, the pages it can see, and questions you answer in a panel.">
 <meta property="og:title" content="The assistant · Foreword">
-<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures), answers you can check, with charts, versions to pick from, the pages it can see, and questions you answer in a panel.">
+<meta property="og:description" content="How Foreword&#x27;s writing assistant works: a bar under what you select (Revise, Options, Ask, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book&#x27;s terms, the lines it changed marked in your text, pictures and files you attach to a message, formulas in your book&#x27;s notation, five modes (Write, Ask, Discuss, Options, Figures) and pinning one to its own model, answers you can check, with charts, versions to pick from, the pages it can see, and questions you answer in a panel.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/assistant-trace.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -84,6 +84,11 @@
 <p>The assistant can look at the pages as they’re typeset now, as the preview shows them. So when you ask for something about how the book looks (“start every chapter on a right-hand page”, “keep this table on one page”), it looks before it changes anything and again after, and notices a figure that landed two pages late, a table running off the page, or a heading left alone at the foot of one. It waits for the pages to catch up with the latest change before it looks.</p>
 <p>It can also see the book’s outline, with the page each heading lands on, the problems the editor has marked, and your open <a href="comments.html">comments</a>, where their passages are now. So “what’s on page 40?” or “fix the warnings in chapter 3” needs no explaining.</p>
 
+<h2 id="pictures-and-files-with-a-message">Pictures and files with a message</h2>
+<p>A message can carry files: a photo of a page you marked up by hand, a screenshot of a layout you like, a PDF of your editor’s notes, a spreadsheet of figures for a table. Drop them on the chat, paste a screenshot or a copied picture into the message box (<kbd>⌘</kbd><kbd>V</kbd>), pick them with the paperclip beside <span class="ui">/</span>, or drag a file or folder from the book’s file tree. While you drag, the chat is outlined in the mode’s colour, and it says <span class="ui">Drop to attach</span> once the files are over it.</p>
+<p>Before you send, each one shows in the message box, a picture as a picture and a file with its size, with a × to take it off. A message can be files alone. Once sent, they stay on your message, and a click opens one. <span class="ui">Try again</span> sends the same files again.</p>
+<p>Every assistant can open what you attach. Claude Code, Codex and Gemini CLI also see a picture in the message itself, so “set the chapter openings like this”, with a photo of a book you like, is enough to go on. Each file is copied into the book, in a folder of Foreword’s own that’s kept out of Git and out of the file tree. A file that’s already in the book is used where it is.</p>
+
 <h2 id="a-bar-under-what-you-select">A bar under what you select</h2>
 <p>Select a passage, in your text or on the typeset pages, and a bar comes up under it, each button in the colour of what it does.</p>
 <figure class="small">
@@ -101,6 +106,7 @@
   <img src="../images/f/assistant-ask.webp" width="1866" height="770" alt="The same three sentences, and under them the Ask box: Why would a man like Utterson choose his friends this way? typed in, and below it Explain it, Is it clear?, Check the facts, What's weakest?, Does it fit? and Against my style guide, with Continue in chat and an Ask button.">
   <figcaption>Ask, in your own words. The usual questions are a click away.</figcaption>
 </figure>
+<p>Beside the button that sends it, each card shows what the request will run on: the assistant, the model and the effort, with a pin when that mode is <a href="#pinning-a-mode">pinned</a>. Click it to choose others there, as under the message box, or to pin the mode.</p>
 <p>Over a Typst error, <span class="ui">Fix error</span> comes first. The bar sits under the end of the selection, so it never covers what you’re reading, and in a narrow editor all but the first button show just their icons.</p>
 <p>A note under the passage follows a Revise. While the assistant works it says <span class="ui">Revising…</span>, with Stop, and the passage is marked in violet. Then it says how much changed (“Revised −11 words”), with <span class="ui">Undo</span>, which puts the passage back in one step, and <span class="ui">Show change</span>, the words it changed. After an Ask, the note says <span class="ui">Answering…</span> until the answer is in the chat. Revise switches the chat to Write, Options to Options, and Ask to Ask, so a question never changes your text. Add to chat leaves the mode as it is. If a reply is still running, the request waits for it, with <span class="ui">Send now</span> and <span class="ui">Cancel</span>.</p>
 <figure>
@@ -119,9 +125,9 @@
 </figure>
 
 <h2 id="five-modes">Five modes</h2>
-<p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> moves from one to the next. Each mode keeps its own <a href="assistants.html#model-and-effort">assistant, model and effort</a>, so you can discuss with one and write with another.</p>
+<p>The mode button on the message box decides what kind of help you get. <kbd>⇧</kbd><kbd>Tab</kbd> moves from one to the next. Switching mode keeps the <a href="assistants.html#model-and-effort">assistant, model and effort</a> you’re using. To discuss with one and write with another, pin a mode to its own.</p>
 <dl class="facts">
-  <dt>Write</dt><dd>Writes and edits the book.</dd>
+  <dt>Write</dt><dd>Writes and edits the book. Asked to rewrite a passage, it edits as a book editor would: it can reorder, join, split or cut sentences, and keeps what the passage says and how you sound. Ask it a question about your text instead (“does this analogy work?”) and it answers: its honest view first, a few other ways to put it, and at most one change, which you make with a click. Nothing changes until you say so.</dd>
   <dt>Ask</dt><dd>Answers questions about the book, as <a href="#answers-you-can-check">a card you can check</a>, and changes nothing itself. After an answer, <span class="ui">Go ahead</span> switches to Write and makes the change you talked about.</dd>
   <dt>Discuss</dt><dd>Thinks a direction through with you: two or three real options, what each costs, and which it would pick. It argues against a weaker idea, and points to your own lines. It changes nothing until you press <span class="ui">Write it</span>, and then it says what you agreed before it writes.</dd>
   <dt>Options</dt><dd>Versions of the selected passage to choose from, one to five. You put one in.</dd>
@@ -132,6 +138,9 @@
   <figcaption>The mode menu. Each mode says what it can and can’t do.</figcaption>
 </figure>
 <p>In Ask, Discuss and Options, “changes nothing” is enforced by Foreword, not left to the assistant’s good behaviour: any attempt to change a file is refused.</p>
+
+<h3 id="pinning-a-mode">Pinning a mode</h3>
+<p>Say you want quick answers in Ask and your best model in Write. Choose the assistant, model and effort for Ask, then pin it: <span class="ui">Pin Ask mode to these</span> in the mode menu, <code>/pin</code> in the message box, or the pin in the selection bar’s menu. Ask then runs on those whatever the other modes use, and leaving it brings your usual ones back. A pin shows beside the effort while you’re in a pinned mode (click it to unpin), and the mode menu lists what each pinned mode runs on. Whenever a switch changes what runs, the chat says so: “Ask mode is pinned to Claude Code · Haiku 5.5 · Low”.</p>
 
 <h3 id="answers-you-can-check">Answers you can check</h3>
 <p>In Ask, every answer comes as a card. It starts with your question given back as the assistant understood it, so you see at once whether it took you right, and <span class="ui">Not quite?</span> lets you say it again. When a question could mean two things, it answers the likelier one and offers the other, with <span class="ui">Answer that instead</span>. Then the answer, in a sentence or two, and how sure it is: certain, fairly sure or a guess, with what it checked.</p>
@@ -179,7 +188,7 @@
 <dl class="facts">
   <dt>Modes</dt><dd><code>/write</code> <code>/ask</code> <code>/discuss</code> <code>/options</code> <code>/figures</code></dd>
   <dt>Tasks</dt><dd><code>/new</code> <code>/done</code> <code>/stop</code> <code>/resume</code></dd>
-  <dt>Settings</dt><dd><code>/model sonnet</code> <code>/effort high</code> <code>/assistant codex</code></dd>
+  <dt>Settings</dt><dd><code>/model sonnet</code> <code>/effort high</code> <code>/assistant codex</code> <code>/pin</code> <code>/unpin</code></dd>
   <dt>The book</dt><dd><code>/fix</code> (every open review comment) <code>/export</code> <code>/pdf</code></dd>
 </dl>
 
@@ -201,7 +210,7 @@
   </article>
   <nav class="doc-next"><a href="templates.html"><small>← Previous</small><b>Templates and samples</b></a><a class="next" href="permissions.html"><small>Next →</small><b>Permissions</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.9.1</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.10.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>
