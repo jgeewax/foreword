@@ -5,7 +5,7 @@ import { DEFAULT_EFFORT } from '../services/agent/types';
 import { Icon } from './icons';
 
 /** A bar for each of the model's levels (up to six), as many filled as this one is high ("Default" has none filled). */
-function Meter({ rank, of }: { rank: number; of: number }) {
+export function Meter({ rank, of }: { rank: number; of: number }) {
   const bars = Math.min(Math.max(of, 1), 6);
   const filled = rank < 0 ? 0 : Math.max(1, Math.round(((rank + 1) / of) * bars));
   return (
@@ -67,7 +67,7 @@ export function EffortPicker() {
         onClick={() => setOpen((o) => !o)}
       >
         <Icon name="gauge" size={13} />
-        {current?.name ?? 'Effort'}
+        <span className="effort-trigger-label">{current?.name ?? 'Effort'}</span>
       </button>
       {open && (
         <div className="mode-popover effort-popover" role="menu" aria-label="Effort">

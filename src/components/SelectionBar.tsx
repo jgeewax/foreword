@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { barMessage, barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
+import { BAR_MODE, barMessage, barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
 import { studio } from '../app/studio';
 import { looksLikeProse, trimPieces } from '../app/trace';
 import { monaco } from '../editor/monaco';
@@ -9,6 +9,7 @@ import { modeConfig } from '../services/agent/modes';
 import { DEFAULT_OPTION_COUNT, optionsLabel } from '../services/agent/options-mode';
 import { Icon } from './icons';
 import { OptionCount } from './OptionCount';
+import { SetupChip } from './SetupMenu';
 import { DiffText } from './Trace';
 
 const OPTIONS_GLYPH = modeConfig('options').icon;
@@ -193,7 +194,9 @@ function Card(props: {
           {!narrow && 'Continue in chat'}
         </button>
         <span className="spacer" />
-        <span className="sel-hint">{draft.includes('\n') || draft.length > 50 ? '⇧⏎ new line · esc to close' : 'esc to close'}</span>
+        {!narrow && (draft.includes('\n') || draft.length > 50) && <span className="sel-hint">⇧⏎ new line</span>}
+        {/* What it runs on, and a menu to change that (and pin it to the mode). */}
+        <SetupChip mode={BAR_MODE[kind]} verb={tab.label} narrow={narrow} onClosed={() => input.current?.focus()} />
         {kind === 'options' && <OptionCount className="sel-option-count" onPicked={() => input.current?.focus()} />}
         <button className="sel-go" disabled={!draft.trim()} onClick={go}>
           {tab.go}

@@ -81,7 +81,7 @@ import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } 
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
 import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
-import { chatSoFar, readModeSetups, setupLine, type ModeSetup, type ModeSetups } from './mode-setups';
+import { chatSoFar, fromModeSetups, readModeSetups, readSetup, sameSetup, setupLine, setupOf, type ModeSetup, type Setups } from './mode-setups';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
 import { minimalEdit } from '../editor/text-edit';
@@ -446,8 +446,8 @@ export type StudioState = {
     selectionDismissed: string | null;
     /** Write (default), Ask, Discuss (think it through first), Options (versions to pick from) or Figures. */
     mode: AgentMode;
-    /** The assistant, model and effort each mode was last used with (mode-setups.ts; kept on this Mac). */
-    modeSetups: ModeSetups;
+    /** The assistant, model and effort the modes run on: the usual one, and the modes pinned to their own (mode-setups.ts; kept on this Mac). */
+    setups: Setups;
     /** This book's conversations (tasks), newest first. */
     tasks: TaskSummary[];
     /** Input tokens of the latest call: how full the context window is. */
@@ -589,7 +589,8 @@ const initialState: StudioState = {
     selection: null,
     selectionDismissed: null,
     mode: 'write',
-    modeSetups: readModeSetups(readJson('studio.modeSetups')),
+    // Read at init (readSetups).
+    setups: { usual: null, pins: {} },
     tasks: [],
     contextTokens: null,
     compacting: false,
@@ -646,8 +647,15 @@ const LAST_WORKSPACE = 'studio.lastWorkspace';
 const MODEL_KEY = 'studio.model';
 /** The effort chosen for each model (effortKey → level). */
 const EFFORTS_KEY = 'studio.efforts';
-/** What each mode runs on (mode-setups.ts), for every window: each reads it when it needs it. */
-const MODE_SETUPS_KEY = 'studio.modeSetups';
+/** What the modes not pinned run on (mode-setups.ts), for every window: each reads it when it needs it. */
+const USUAL_SETUP_KEY = 'studio.usualSetup';
+/** The modes pinned to their own assistant, model and effort. */
+const MODE_PINS_KEY = 'studio.modePins';
+/** Before pins: each mode's last setup (fromModeSetups), read once. */
+const OLD_SETUPS_KEY = 'studio.modeSetups';
+/** Each assistant's models as last listed, and each model's levels of effort: the selection card's menu offers another assistant's while this one runs. */
+const MODEL_LISTS_KEY = 'studio.modelLists';
+const EFFORT_LISTS_KEY = 'studio.effortLists';
 /** How long ⇧Tab may rest on a mode before its assistant, model and effort come in (ms). */
 const SETUP_DELAY = 350;
 const ZOOM_KEY = 'studio.zoom';
@@ -1182,9 +1190,10 @@ export class Studio {
     if (zoom && zoom !== 1) await this.setZoom(zoom, { persist: false }).catch(() => {});
     // The settings file wins over this machine's cached copy; edits made elsewhere apply on return.
     await this.loadConfig();
+    this.setAgent({ setups: this.readSetups() });
     // Another window changed what a mode runs on: the mode menu says so here too.
     window.addEventListener('storage', (e) => {
-      if (e.key === MODE_SETUPS_KEY) this.setAgent({ modeSetups: readModeSetups(readJson(MODE_SETUPS_KEY)) });
+      if (e.key === USUAL_SETUP_KEY || e.key === MODE_PINS_KEY) this.setAgent({ setups: this.readSetups() });
     });
     window.addEventListener('focus', () => {
       void this.loadConfig();
@@ -1306,7 +1315,7 @@ export class Studio {
     void this.scanTodos();
     void this.loadReview();
     void this.startTypst();
-    // The mode's own assistant, if it has one (mode-setups.ts).
+    // The assistant the mode runs on: its own if it's pinned, else the usual one (mode-setups.ts).
     this.forgetHandover();
     const own = this.setupFor(this.state.agent.mode)?.assistant;
     if (own && own !== this.state.settings.assistant) this.updateSettings({ assistant: own }, { restart: false });
@@ -4180,6 +4189,7 @@ export class Studio {
       const current = this.state.agent.sessionId ? this.state.agent.model : null;
       const chosen = chooseModel(models, { current, saved, serverDefault });
       this.setAgent({ models, model: chosen ? { providerID: chosen.providerID, id: chosen.id } : null });
+      if (this.agentKind && models.length) writeJson(MODEL_LISTS_KEY, { ...readJson<object>(MODEL_LISTS_KEY), [this.agentKind]: models });
       const missingSaved = !!saved && !models.some((m) => m.providerID === saved.providerID && m.id === saved.id);
       const missingPreferred = !models.some((m) => PREFERRED_PROVIDERS.includes(m.providerID));
       if ((missingSaved || missingPreferred) && attempt < 8) setTimeout(() => void this.loadModels(attempt + 1), 1500);
@@ -4190,7 +4200,7 @@ export class Studio {
     }
   }
 
-  /** The model for this conversation; `remember`: the author's choice, kept for this mode (else the mode's own, brought back). */
+  /** The model for this conversation; `remember`: the author's choice, kept as the mode's (its own if pinned, else the usual one); else a mode's, brought back. */
   async selectModel(model: ModelRef, { remember = true } = {}) {
     const { sessionId, models } = this.state.agent;
     const info = models.find((m) => m.providerID === model.providerID && m.id === model.id);
@@ -4234,6 +4244,8 @@ export class Studio {
     const now = this.state.agent;
     if (this.agent !== agent || now.sessionId !== sessionId || !now.model || effortKey(now.model) !== effortKey(model)) return;
     if (!efforts) return this.setAgent({ efforts: [], effort: null });
+    // Kept for the selection card's menu when they're surely the model's own (with no conversation, an ACP assistant may give another's).
+    if (this.agentKind && (sessionId || efforts.current !== null)) writeJson(EFFORT_LISTS_KEY, { ...readJson<object>(EFFORT_LISTS_KEY), [`${this.agentKind}:${effortKey(model)}`]: efforts.options });
     // The mode's effort with its model; else the one last chosen for the model.
     const setup = this.setupFor(now.mode);
     const own = setup?.model && setup.effort && effortKey(setup.model) === effortKey(model) ? setup.effort : null;
@@ -4246,7 +4258,7 @@ export class Studio {
     this.setAgent({ efforts: efforts.options, effort });
   }
 
-  /** The chat's effort menu, or /effort: from the next message on, and remembered for this model and this mode. */
+  /** The chat's effort menu, or /effort: from the next message on, and remembered for this model and as the mode's (its own if pinned, else the usual one). */
   async selectEffort(value: string) {
     const { model, sessionId, efforts } = this.state.agent;
     const option = efforts.find((o) => o.value === value);
@@ -4265,8 +4277,9 @@ export class Studio {
 
   /**
    * Switch between Write, Ask, Discuss, Options and Figures (applies to the
-   * current conversation), and to the assistant, model and effort the mode was
-   * last used with, once the author rests on it (mode-setups.ts).
+   * current conversation). A mode pinned to its own assistant, model and effort
+   * brings them in once the author rests on it, and leaving it brings back the
+   * usual ones; between modes not pinned they stay (mode-setups.ts).
    */
   async setMode(mode: AgentMode) {
     const previous = this.state.agent.mode;
@@ -4298,42 +4311,147 @@ export class Studio {
     }
   }
 
-  // ---- each mode's assistant, model and effort (mode-setups.ts) ----------------------------
+  // ---- what the modes run on: the usual setup, and a pinned mode's own (mode-setups.ts) -----
 
   private setupTimer: number | undefined;
   private setupWaiting: (() => void)[] = [];
   private setupChain: Promise<void> = Promise.resolve();
 
   /** Every window's (another may have changed one since this one started). */
+  private readSetups(): Setups {
+    const old = readJson(OLD_SETUPS_KEY);
+    if (old !== null) {
+      // Once: Write's last setup is the usual one, and no mode is pinned.
+      const usual = fromModeSetups(old).usual;
+      if (usual && !readSetup(readJson(USUAL_SETUP_KEY))) writeJson(USUAL_SETUP_KEY, usual);
+      try {
+        localStorage.removeItem(OLD_SETUPS_KEY);
+      } catch {}
+    }
+    return { usual: readSetup(readJson(USUAL_SETUP_KEY)), pins: readModeSetups(readJson(MODE_PINS_KEY)) };
+  }
+
   private setupFor(mode: AgentMode): ModeSetup | undefined {
-    return readModeSetups(readJson(MODE_SETUPS_KEY))[mode];
+    return setupOf(this.readSetups(), mode);
   }
 
-  private saveSetup(mode: AgentMode, setup: ModeSetup) {
-    const modeSetups = { ...readModeSetups(readJson(MODE_SETUPS_KEY)), [mode]: setup };
-    writeJson(MODE_SETUPS_KEY, modeSetups);
-    this.setAgent({ modeSetups });
+  /** Whose setup `mode` runs on: its own (pinned), or the usual one (null). */
+  private ownerOf(mode: AgentMode): AgentMode | null {
+    return this.readSetups().pins[mode] ? mode : null;
   }
 
-  /** What's in use now, as the mode's (the author chose it there); not while an assistant is still starting. */
-  private rememberSetup(mode = this.state.agent.mode) {
+  /** `mode` runs on what's in use now: it's the mode shown, or neither is pinned. */
+  setupInUse(mode: AgentMode): boolean {
+    return this.ownerOf(mode) === this.ownerOf(this.state.agent.mode);
+  }
+
+  /** Kept as `owner`'s (a pinned mode's own, or null: the usual one); a pin given null is taken out. */
+  private saveSetup(owner: AgentMode | null, setup: ModeSetup | null) {
+    if (owner) {
+      const { [owner]: _, ...pins } = this.readSetups().pins;
+      writeJson(MODE_PINS_KEY, setup ? { ...pins, [owner]: setup } : pins);
+    } else if (setup) writeJson(USUAL_SETUP_KEY, setup);
+    this.setAgent({ setups: this.readSetups() });
+  }
+
+  /** What's in use now, with the names the menus show it by; null while an assistant is still starting. */
+  private setupNow(): ModeSetup | null {
     const a = this.state.agent;
-    if (a.status !== 'ready' || !a.model || this.agentKind !== this.state.settings.assistant) return;
+    if (a.status !== 'ready' || !a.model || this.agentKind !== this.state.settings.assistant) return null;
     const model = a.model;
     const effort = a.efforts.find((o) => o.value === a.effort);
-    this.saveSetup(mode, {
+    return {
       assistant: this.state.settings.assistant,
       model,
       effort: a.effort,
       modelName: a.models.find((m) => m.providerID === model.providerID && m.id === model.id)?.name ?? model.id,
       ...(effort ? { effortName: effort.name } : {}),
-    });
+    };
   }
 
-  /** A mode not used yet keeps what's in use (the mode left, or the one chosen); so does one whose assistant was chosen without a model. */
+  /** What's in use now, as the mode's (the author chose it there): its own if it's pinned, else the usual one. */
+  private rememberSetup(mode = this.state.agent.mode) {
+    const setup = this.setupNow();
+    if (setup) this.saveSetup(this.ownerOf(mode), setup);
+  }
+
+  /** Nothing kept yet for `mode` (or an assistant chosen without a model): what's in use. */
   private keepSetup(mode: AgentMode) {
     const setup = this.setupFor(mode);
     if (!setup || (!setup.model && setup.assistant === this.state.settings.assistant)) this.rememberSetup(mode);
+  }
+
+  /**
+   * Pin `mode` to its own assistant, model and effort (the message box's pin,
+   * the selection card's menu, /pin): what it runs on now, which it then keeps
+   * whatever the other modes run on. Unpinned, it runs on the usual ones again,
+   * at once if it's the mode shown. False if there's nothing to pin it to yet.
+   */
+  async pinMode(mode: AgentMode, pin: boolean): Promise<boolean> {
+    if (!!this.readSetups().pins[mode] === pin) return true;
+    if (pin) {
+      const setup = (this.setupInUse(mode) ? this.setupNow() : null) ?? this.setupFor(mode) ?? this.setupNow();
+      if (!setup) return false;
+      this.saveSetup(mode, setup);
+      return true;
+    }
+    this.saveSetup(mode, null);
+    // Not under a reply at work: a model switched mid-turn could stop it.
+    if (mode !== this.state.agent.mode) return true;
+    await this.untilIdle();
+    if (mode === this.state.agent.mode) await this.settleSetup(0);
+    return true;
+  }
+
+  /**
+   * The selection card's menu: what a request in `mode` runs on, changed there.
+   * In use now, it's as the message box's menus (from the next message on);
+   * else it's kept, for the mode's own or the usual one, until a request goes.
+   */
+  async chooseSetup(mode: AgentMode, choice: { assistant: AssistantId } | { model: ModelInfo } | { effort: EffortOption }) {
+    if (this.setupInUse(mode)) {
+      if ('assistant' in choice) this.switchAssistant(choice.assistant);
+      else if ('model' in choice) await this.selectModel({ providerID: choice.model.providerID, id: choice.model.id });
+      else await this.selectEffort(choice.effort.value);
+      return;
+    }
+    const was = this.setupFor(mode) ?? { assistant: this.state.settings.assistant, model: null, effort: null };
+    let next: ModeSetup;
+    if ('assistant' in choice) next = { assistant: choice.assistant, model: null, effort: null };
+    else if ('model' in choice) {
+      const { providerID, id, name } = choice.model;
+      // Levels differ between models: the effort stays unless this one is known not to have it (then the one kept for the model).
+      const levels = this.effortsOf(was.assistant, choice.model);
+      const keeps = !!was.effort && (!levels || levels.some((o) => o.value === was.effort));
+      next = { assistant: was.assistant, model: { providerID, id }, modelName: name, effort: keeps ? was.effort : null, ...(keeps && was.effortName ? { effortName: was.effortName } : {}) };
+    } else next = { ...was, effort: choice.effort.value, effortName: choice.effort.name };
+    this.saveSetup(this.ownerOf(mode), next);
+  }
+
+  /** An assistant's models, for the selection card's menu: the running one's, else as it last listed them here. */
+  modelsOf(assistant: AssistantId): ModelInfo[] {
+    if (assistant === this.agentKind && this.state.agent.models.length) return this.state.agent.models;
+    return readJson<Partial<Record<AssistantId, ModelInfo[]>>>(MODEL_LISTS_KEY)?.[assistant] ?? [];
+  }
+
+  /** A model's levels of effort: the model in use's, else as last listed here (null: not known yet). */
+  effortsOf(assistant: AssistantId, model: ModelRef): EffortOption[] | null {
+    const a = this.state.agent;
+    if (assistant === this.agentKind && a.model && effortKey(a.model) === effortKey(model)) return a.efforts;
+    return readJson<Record<string, EffortOption[]>>(EFFORT_LISTS_KEY)?.[`${assistant}:${effortKey(model)}`] ?? null;
+  }
+
+  /** After a mode switch changed what's in use (not another assistant's: handOverTo says so): why, in the chat. */
+  private saySetup(setup: ModeSetup) {
+    const { mode, items } = this.state.agent;
+    if (!items.some((it) => it.kind === 'user' || it.kind === 'assistant')) return;
+    this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${this.setupWords(mode, setup)}.` });
+  }
+
+  /** "Figures mode is pinned to Codex · GPT-6 · High", or "Write mode, back to your usual Claude Code · Opus 5.5". */
+  private setupWords(mode: AgentMode, setup: ModeSetup) {
+    const label = modeConfig(mode).label;
+    return this.ownerOf(mode) ? `${label} mode is pinned to ${setupLine(setup)}` : `${label} mode, back to your usual ${setupLine(setup)}`;
   }
 
   /** The mode's setup, once ⇧Tab rests on a mode: it passes through others on the way, each maybe another program to start. */
@@ -4357,7 +4475,7 @@ export class Studio {
     return this.setupTimer !== undefined ? this.settleSetup(0) : this.setupChain;
   }
 
-  /** The mode's assistant, model and effort, brought back; a mode not used yet keeps what's in use. */
+  /** The mode's assistant, model and effort: its own if it's pinned, else the usual ones (none kept yet: what's in use). */
   private async applyModeSetup() {
     const { mode } = this.state.agent;
     const setup = this.setupFor(mode);
@@ -4367,10 +4485,13 @@ export class Studio {
     // Still starting: it takes the mode's model and effort when it's ready (loadModels).
     const { model, models, status } = this.state.agent;
     if (status !== 'ready') return;
+    const before = this.setupNow();
     const want = setup.model;
     const listed = want && models.some((m) => m.supportsTools && m.providerID === want.providerID && m.id === want.id);
     if (want && listed && (want.providerID !== model?.providerID || want.id !== model?.id)) await this.selectModel(want, { remember: false });
     else await this.refreshEfforts();
+    const after = this.setupNow();
+    if (before && after && !sameSetup(before, after)) this.saySetup(after);
   }
 
   /** The turns after `after` (null: all of them) go with the next message: the chat came over from another assistant. */
@@ -4435,9 +4556,9 @@ export class Studio {
     await this.restartAgent();
     const now = this.state.agent;
     if (!turns || why === 'tool' || this.state.settings.assistant !== next || now.status !== 'ready') return;
-    const setup = this.setupFor(now.mode);
+    const setup = this.setupNow() ?? this.setupFor(now.mode);
     const who = setup ? setupLine(setup) : ASSISTANT_NAMES[next];
-    this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${why === 'mode' ? `${label} mode, with ${who}` : `With ${who} now`}: ${this.carryOverWords()}.` });
+    this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${why === 'mode' && setup ? this.setupWords(now.mode, setup) : `With ${who} now`}: ${this.carryOverWords()}.` });
   }
 
   /** What the assistant just handed over to has of the chat: "a new conversation, and the chat so far goes with your next message". */
@@ -5933,7 +6054,30 @@ export class Studio {
       case 'options':
       case 'figures':
         await this.setMode(cmd.name);
+        // "/write make it shorter": that, sent in Write (back in the box if it can't go).
+        if (cmd.arg && this.state.agent.mode === cmd.name && !(await this.send(cmd.arg))) this.fillComposer(cmd.arg);
         break;
+      case 'pin': {
+        const { mode } = this.state.agent;
+        const label = modeConfig(mode).label;
+        const had = this.state.agent.setups.pins[mode];
+        if (!(await this.pinMode(mode, true))) say(`${label} mode can be pinned once the assistant has started.`, 'error');
+        else {
+          const setup = this.setupFor(mode);
+          say(`${label} mode is pinned to ${setup ? setupLine(setup) : 'what’s in use'}${had ? ' already' : ': it keeps them whatever the other modes run on (/unpin to undo)'}.`);
+        }
+        break;
+      }
+      case 'unpin': {
+        const { mode } = this.state.agent;
+        const label = modeConfig(mode).label;
+        if (!this.state.agent.setups.pins[mode]) say(`${label} mode isn’t pinned: it runs on your usual assistant, model and effort.`);
+        else {
+          say(`${label} mode isn’t pinned now: it runs on your usual assistant, model and effort.`);
+          await this.pinMode(mode, false);
+        }
+        break;
+      }
       case 'new':
         this.newTask();
         break;
@@ -6339,8 +6483,8 @@ export class Studio {
       this.toast(`The assistant is working: stop it, or let it finish, then switch to ${ASSISTANT_NAMES[id]}.`, 'error');
       return false;
     }
-    // This mode's assistant from now on, with its own model until one is picked.
-    this.saveSetup(this.state.agent.mode, { assistant: id, model: null, effort: null });
+    // The assistant from now on (this mode's own, if it's pinned), with its own model until one is picked.
+    this.saveSetup(this.ownerOf(this.state.agent.mode), { assistant: id, model: null, effort: null });
     if (this.state.workspace) void this.handOverTo(id, why);
     else this.updateSettings({ assistant: id });
     return true;
@@ -6615,7 +6759,7 @@ export class Studio {
         return;
       }
       this.config = { text, raw: parsed.raw };
-      // A mode with its own assistant keeps it: the file has the one another window's mode switched to.
+      // A window keeps the assistant its mode runs on: the file has the one another window switched to.
       const own = this.setupFor(this.state.agent.mode) ? { assistant: this.state.settings.assistant } : {};
       this.updateSettings({ ...parsed.settings, ...own }, { write: false });
       if (parsed.zoom && Math.abs(parsed.zoom - this.state.zoom) > 0.001) await this.setZoom(parsed.zoom, { persist: false, write: false });

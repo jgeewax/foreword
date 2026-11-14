@@ -199,6 +199,39 @@ describe('AcpAdapter', () => {
     expect(sent.at(-1).result.outcome.optionId).toBe('yes');
   });
 
+  it('keeps the conversation’s model and effort when new instructions resume it (Claude Code starts again at its own)', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    const initial = messages.find((r) => r.id === 2 && r.result).result.configOptions;
+    let config = structuredClone(initial);
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage) => {
+        deliver = onMessage;
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        const reply = (result: any) => queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, result }));
+        if (m.method === 'initialize' || m.method === 'session/new') queueMicrotask(() => deliver(messages.find((r) => r.id === m.id && r.result)));
+        if (m.method === 'session/set_config_option') reply({ configOptions: (config = config.map((o: any) => (o.id === m.params.configId ? { ...o, currentValue: m.params.value } : o))) });
+        // Its program started again: the model and effort it starts with (opus, xhigh).
+        if (m.method === 'session/resume') reply({ configOptions: (config = structuredClone(initial)) });
+      },
+      stop: async () => {},
+    };
+    const adapter = new AcpAdapter(ROOT, 'claude', transport);
+    await adapter.start();
+    const haiku = { providerID: 'claude', id: 'haiku' };
+    const sessionId = await adapter.createSession(haiku, { permissions: PRESETS.ask.permissions, effort: 'low' });
+    expect((await adapter.efforts(sessionId, haiku))?.current).toBe('low');
+    // Another mode's instructions: the next message resumes the conversation with them.
+    await adapter.setInstructions(sessionId, 'mode', 'Ask mode: answer in the chat, change nothing.');
+    await adapter.send(sessionId, 'Is this paragraph clear?', []);
+    const since = sent.slice(sent.findIndex((m) => m.method === 'session/resume'));
+    expect(since.map((m) => (m.method === 'session/set_config_option' ? `${m.params.configId}=${m.params.value}` : m.method))).toEqual(['session/resume', 'model=haiku', 'effort=low', 'session/prompt']);
+    expect((await adapter.efforts(sessionId, haiku))?.current).toBe('low');
+  });
+
   it('runs a turn: instructions in the system prompt, the rules or the author answer, events, transcript, queue', async () => {
     const { adapter, sent, events, deliver } = harness();
     await adapter.start();

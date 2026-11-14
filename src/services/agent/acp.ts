@@ -388,9 +388,15 @@ export class AcpAdapter implements AgentAdapter {
   private async systemPromptFor(s: Session) {
     const system = this.systemFor(s.instructions);
     if (system === s.systemPrompt) return;
+    // Started again, it's at its own model and effort (Claude Code's default effort): the conversation's go back on.
+    const model = this.modelOption(s)?.currentValue;
+    const effort = this.effortOption(s)?.currentValue;
     const res = await this.request('session/resume', { sessionId: s.id, cwd: this.root, mcpServers: this.mcpServers(), ...this.sessionMeta(system) });
     s.systemPrompt = system;
     if (Array.isArray(res?.configOptions)) s.config = res.configOptions;
+    const ref = { providerID: this.kind, id: String(model ?? '') };
+    if (model != null) await this.switchModel(s.id, ref).catch(() => {});
+    if (effort != null) await this.switchEffort(s.id, ref, String(effort)).catch(() => {});
   }
 
   private track(id: string, res: any): Session {

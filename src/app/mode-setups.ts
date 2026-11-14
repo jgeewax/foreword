@@ -1,8 +1,8 @@
-// What each mode runs on: the assistant, model and effort last used in it
-// (Ask on Claude Code's Opus at medium, Figures on Codex at extra high).
-// Switching modes brings back that mode's; changing any of them in a mode
-// changes that mode's only. A mode not used yet keeps what's in use when it's
-// first chosen.
+// What each mode runs on: the chat's usual assistant, model and effort, unless
+// the author pinned the mode to its own (Figures on Codex at extra high).
+// Switching to a pinned mode brings back its own, and leaving it brings back
+// the usual one; between modes not pinned nothing changes. Changing any of
+// them in a pinned mode changes its own, and anywhere else the usual one.
 //
 // A conversation carries over to a mode set to another assistant: that
 // assistant gets the turns it hasn't seen with the next message (chatSoFar),
@@ -29,24 +29,50 @@ export type ModeSetup = {
 
 export type ModeSetups = Partial<Record<AgentMode, ModeSetup>>;
 
-/** What was kept (localStorage): the modes it knows, with an assistant it knows. */
+export type Setups = {
+  /** What every mode not pinned runs on: the last chosen in one of them. */
+  usual: ModeSetup | null;
+  /** The modes pinned to their own. */
+  pins: ModeSetups;
+};
+
+/** One that was kept (localStorage), with an assistant it knows; null if not. */
+export function readSetup(raw: unknown): ModeSetup | null {
+  const s = raw as Record<string, any> | null;
+  if (!s || typeof s !== 'object' || !ASSISTANTS.includes(s.assistant)) return null;
+  const model = s.model && typeof s.model.providerID === 'string' && typeof s.model.id === 'string' ? { providerID: s.model.providerID, id: s.model.id } : null;
+  return {
+    assistant: s.assistant,
+    model,
+    effort: typeof s.effort === 'string' ? s.effort : null,
+    ...(model && typeof s.modelName === 'string' ? { modelName: s.modelName } : {}),
+    ...(typeof s.effort === 'string' && typeof s.effortName === 'string' ? { effortName: s.effortName } : {}),
+  };
+}
+
+/** The modes it knows, each with a setup readSetup takes. */
 export function readModeSetups(raw: unknown): ModeSetups {
   const out: ModeSetups = {};
   if (!raw || typeof raw !== 'object') return out;
   for (const mode of AGENT_MODES) {
-    const s = (raw as Record<string, any>)[mode];
-    if (!s || !ASSISTANTS.includes(s.assistant)) continue;
-    const model = s.model && typeof s.model.providerID === 'string' && typeof s.model.id === 'string' ? { providerID: s.model.providerID, id: s.model.id } : null;
-    out[mode] = {
-      assistant: s.assistant,
-      model,
-      effort: typeof s.effort === 'string' ? s.effort : null,
-      ...(model && typeof s.modelName === 'string' ? { modelName: s.modelName } : {}),
-      ...(typeof s.effort === 'string' && typeof s.effortName === 'string' ? { effortName: s.effortName } : {}),
-    };
+    const s = readSetup((raw as Record<string, unknown>)[mode]);
+    if (s) out[mode] = s;
   }
   return out;
 }
+
+/**
+ * Before pins (until 2026-11-14) every mode kept the setup last used in it,
+ * which a mode switch brought back unasked. Write's is the usual one now (a
+ * window starts in Write, so it's what was running), and no mode is pinned.
+ */
+export const fromModeSetups = (raw: unknown): Setups => ({ usual: readModeSetups(raw).write ?? null, pins: {} });
+
+/** What `mode` runs on: its own if it's pinned, else the usual one (none yet: what's in use). */
+export const setupOf = (s: Setups, mode: AgentMode): ModeSetup | undefined => s.pins[mode] ?? s.usual ?? undefined;
+
+/** The same assistant, model and effort (names aside). */
+export const sameSetup = (a: ModeSetup, b: ModeSetup) => a.assistant === b.assistant && a.model?.providerID === b.model?.providerID && a.model?.id === b.model?.id && (a.effort ?? null) === (b.effort ?? null);
 
 /** The mode menu's line for a mode: "Claude Code · Opus 5.5 · Medium". */
 export function setupLine(s: ModeSetup): string {

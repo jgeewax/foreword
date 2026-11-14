@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatSoFar, readModeSetups, setupLine } from './mode-setups';
+import { chatSoFar, fromModeSetups, readModeSetups, readSetup, sameSetup, setupLine, setupOf } from './mode-setups';
 import type { ChatItem } from './studio';
 import { splitUserText, TASK_MARKER } from './tasks';
 import { EARLIER_CHIP, EARLIER_INTRO, messageText } from '../services/agent/message-context';
@@ -26,6 +26,39 @@ describe('what each mode runs on', () => {
     expect(setupLine({ assistant: 'claude', model: { providerID: 'claude', id: 'opus' }, effort: 'medium', modelName: 'Opus 5.5', effortName: 'Medium' })).toBe('Claude Code · Opus 5.5 · Medium');
     expect(setupLine({ assistant: 'codex', model: { providerID: 'codex', id: 'gpt-6' }, effort: 'default' })).toBe('Codex · gpt-6');
     expect(setupLine({ assistant: 'opencode', model: null, effort: null })).toBe('OpenCode');
+  });
+
+  const opus = { assistant: 'claude', model: { providerID: 'claude', id: 'opus' }, effort: 'medium', modelName: 'Opus 5.5', effortName: 'Medium' } as const;
+  const astra = { assistant: 'codex', model: { providerID: 'codex', id: 'gpt-6-astra' }, effort: 'xhigh' } as const;
+
+  it('runs a pinned mode on its own, and every other on the usual one', () => {
+    const setups = { usual: opus, pins: { figures: astra } };
+    expect(setupOf(setups, 'figures')).toEqual(astra);
+    expect(setupOf(setups, 'write')).toEqual(opus);
+    expect(setupOf(setups, 'ask')).toEqual(opus);
+    // Nothing kept yet: what's in use (the caller's).
+    expect(setupOf({ usual: null, pins: {} }, 'ask')).toBeUndefined();
+  });
+
+  it('takes Write’s last setup as the usual one, and pins nothing, from before pins', () => {
+    expect(fromModeSetups({ write: opus, ask: astra, figures: astra })).toEqual({ usual: opus, pins: {} });
+    expect(fromModeSetups({ ask: astra })).toEqual({ usual: null, pins: {} });
+    expect(fromModeSetups(null)).toEqual({ usual: null, pins: {} });
+  });
+
+  it('reads one kept setup, or nothing', () => {
+    expect(readSetup(opus)).toEqual(opus);
+    expect(readSetup({ assistant: 'nobody' })).toBeNull();
+    expect(readSetup(null)).toBeNull();
+    expect(readSetup('claude')).toBeNull();
+  });
+
+  it('is the same setup when the assistant, model and effort are, whatever the names', () => {
+    expect(sameSetup(opus, { ...opus, modelName: 'Opus', effortName: undefined })).toBe(true);
+    expect(sameSetup(opus, { ...opus, effort: 'high' })).toBe(false);
+    expect(sameSetup(opus, { ...opus, model: { providerID: 'claude', id: 'sonnet' } })).toBe(false);
+    expect(sameSetup(opus, astra)).toBe(false);
+    expect(sameSetup({ assistant: 'opencode', model: null, effort: null }, { assistant: 'opencode', model: null, effort: null })).toBe(true);
   });
 });
 

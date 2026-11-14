@@ -6,6 +6,7 @@ import { setupLine } from '../app/mode-setups';
 import { useStore } from '../lib/store';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
+import { DEFAULT_EFFORT } from '../services/agent/types';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
 import { Icon } from './icons';
@@ -362,14 +363,17 @@ function QuestionPanel({ item }: { item: QuestionItem }) {
   );
 }
 
-/** The mode menu: compact trigger, opens upward with a description per mode, and what each runs on. ⇧Tab cycles. */
+/** The mode menu: compact trigger, opens upward with a description per mode, and what a pinned one runs on. ⇧Tab cycles. */
 function ModeMenu() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
   const running = useStore(studio.store, (s) => s.agent.running);
-  const setups = useStore(studio.store, (s) => s.agent.modeSetups);
+  const pins = useStore(studio.store, (s) => s.agent.setups.pins);
+  const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
+  const inUse = useSetupNow();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = modeConfig(mode);
+  const pinned = !!pins[mode];
 
   useEffect(() => {
     if (!open) return;
@@ -395,13 +399,13 @@ function ModeMenu() {
         onClick={() => setOpen((o) => !o)}
       >
         <span className="mode-icon">{current.icon}</span>
-        {current.label}
+        <span className="mode-trigger-label">{current.label}</span>
       </button>
       {open && (
         <div className="mode-popover" role="menu">
           {AGENT_MODES.map((m) => {
             const c = modeConfig(m);
-            const setup = setups[m];
+            const setup = pins[m];
             return (
               <button
                 key={m}
@@ -417,19 +421,69 @@ function ModeMenu() {
                 <span className="mode-text">
                   <span className="mode-name">{c.label}</span>
                   <span className="mode-description">{c.description}</span>
-                  {setup && <span className="mode-setup">{setupLine(setup)}</span>}
+                  {setup && (
+                    <span className="mode-setup" title={`Pinned: ${c.label} mode runs on these whatever the others run on`}>
+                      <Icon name="pin" size={10} /> {setupLine(setup)}
+                    </span>
+                  )}
                 </span>
                 <span className="model-check">{m === mode ? '✓' : ''}</span>
               </button>
             );
           })}
+          {/* The mode shown, pinned to what's in use (or not): it then keeps them whatever the others run on. */}
+          <label className="mode-pin" title={pinned ? `Unpinned, ${current.label} runs on your usual assistant, model and effort, as the modes not pinned do` : undefined}>
+            <input type="checkbox" checked={pinned} disabled={!ready} onChange={() => void studio.pinMode(mode, !pinned)} />
+            <span className="mode-text">
+              <span className="mode-name">
+                <Icon name="pin" size={12} /> Pin {current.label} mode to {pinned ? 'its own' : 'these'}
+              </span>
+              <span className="mode-description">{pinned ? `${current.label} keeps them whatever the other modes run on.` : `${inUse}: ${current.label} keeps them whatever the other modes run on.`}</span>
+            </span>
+          </label>
           <div className="model-footer">
-            <span className="muted">⇧Tab in the message box switches mode. Each mode keeps the assistant, model and effort last used in it.</span>
+            <span className="muted">⇧Tab in the message box switches mode. Switching keeps the assistant, model and effort, but for a mode pinned to its own.</span>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * Beside the effort while the mode is pinned to the assistant, model and effort
+ * in use (mode-setups.ts), to say why they are what they are; a click unpins.
+ * The mode menu pins (it's there at any width), as do /pin and the selection card.
+ */
+function PinButton() {
+  const mode = useStore(studio.store, (s) => s.agent.mode);
+  const pinned = useStore(studio.store, (s) => !!s.agent.setups.pins[s.agent.mode]);
+  const running = useStore(studio.store, (s) => s.agent.running);
+  if (!pinned) return null;
+  const label = modeConfig(mode).label;
+  return (
+    <button
+      className="composer-pin"
+      aria-pressed
+      aria-label={`Pinned to ${label} mode`}
+      // Unpinned, the usual ones come back: not under a reply at work.
+      disabled={running}
+      title={`${label} mode is pinned to this assistant, model and effort: other modes don’t change them, and coming back to ${label} brings them back. Click to unpin.`}
+      onClick={() => void studio.pinMode(mode, false)}
+    >
+      <Icon name="pin" size={13} />
+    </button>
+  );
+}
+
+/** What's in use now, in words: "Claude Code · Opus 5.5 · Medium". */
+function useSetupNow(): string {
+  return useStore(studio.store, (s) => {
+    const { model, models, effort, efforts } = s.agent;
+    const name = model ? (models.find((m) => m.providerID === model.providerID && m.id === model.id)?.name ?? model.id) : null;
+    const level = effort && effort !== DEFAULT_EFFORT ? efforts.find((o) => o.value === effort)?.name : null;
+    return [ASSISTANT_NAMES[s.settings.assistant], name, level].filter(Boolean).join(' · ');
+  });
 }
 
 /** Shown in Ask and Discuss once the agent has replied: switch to Write and make what was agreed. */
@@ -542,6 +596,37 @@ function TaskBar() {
   );
 }
 
+/** The steps a narrow message box takes, one at a time, until its row fits: the / button goes, then the effort's name, then the mode's (their icons stay), then the pin (the mode menu has it). */
+const FIT_STEPS = 4;
+
+/**
+ * Takes the row's words away (`data-fit` 1…FIT_STEPS) only when it doesn't fit
+ * once the permissions' label and the model's name have shrunk: measured, not
+ * container queries, which WebKit compares after the page zoom, and the
+ * effort's name can be "Low" or "Extra high". Again when the row's width or
+ * what it shows changes (`shows`).
+ */
+function useRowFit(ref: React.RefObject<HTMLDivElement | null>, shows: string) {
+  useLayoutEffect(() => {
+    const row = ref.current;
+    if (!row) return;
+    const fit = () => {
+      let step = 0;
+      row.dataset.fit = '0';
+      while (row.scrollWidth > row.clientWidth + 1 && step < FIT_STEPS) row.dataset.fit = String(++step);
+    };
+    fit();
+    let width = row.clientWidth;
+    const resized = new ResizeObserver(() => {
+      if (row.clientWidth === width) return;
+      width = row.clientWidth;
+      fit();
+    });
+    resized.observe(row);
+    return () => resized.disconnect();
+  }, [ref, shows]);
+}
+
 function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
   const files = useStore(studio.store, (s) => s.agent.files);
@@ -567,6 +652,12 @@ function Composer() {
     caretAfter.current = at;
   };
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // The row of controls fits again when what it shows changes (useRowFit).
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const rowShows = useStore(studio.store, (s) =>
+    [s.agent.mode, s.settings.assistant, s.agent.status, s.agent.model?.id, s.agent.models.length, s.agent.effort, s.agent.efforts.length, !!s.agent.setups.pins[s.agent.mode], JSON.stringify(s.settings.permissions)].join('|'),
+  );
+  useRowFit(controlsRef, `${rowShows}|${running}|${!text}`);
 
   useEffect(() => studio.events.on('focus-composer', () => inputRef.current?.focus()), []);
   useEffect(
@@ -733,12 +824,13 @@ function Composer() {
             }
           }}
         />
-        <div className="composer-controls">
+        <div className="composer-controls" ref={controlsRef}>
           <ModeMenu />
           {mode === 'options' && <OptionCount />}
           <AssistantMenu />
           <ModelPicker placement="up" />
           <EffortPicker />
+          <PinButton />
           <PermissionsMenu />
           <span className="spacer" />
           <button className="composer-attach" aria-label="Attach files" title="Attach pictures, PDFs or other files (or drop them here, or paste)" onClick={() => void studio.pickFiles()}>

@@ -15,7 +15,7 @@ describe('slash commands', () => {
     expect(slashMatches('/').length).toBeGreaterThan(10);
     expect(slashMatches('/d').map((c) => c.name).slice(0, 2)).toEqual(['discuss', 'done']);
     // Old names find their command.
-    expect(slashMatches('/p').map((c) => c.name).slice(0, 3)).toEqual(['discuss', 'permissions', 'pdf']);
+    expect(slashMatches('/p').map((c) => c.name).slice(0, 4)).toEqual(['discuss', 'pin', 'permissions', 'pdf']);
     expect(slashMatches('/plan').map((c) => c.name)).toEqual(['discuss']);
     expect(slashMatches('/mod').map((c) => c.name)).toEqual(['model']);
     expect(slashMatches('/model son')).toEqual([]);
@@ -28,7 +28,7 @@ describe('slash commands', () => {
     expect(slashMatches('rewrite this /opt').map((c) => c.name)).toEqual(['options']);
     expect(slashMatches('rewrite this\n/dis').map((c) => c.name)).toEqual(['discuss']);
     // Arguments need the box to themselves.
-    expect(slashMatches('rewrite this /effort')).toEqual([]);
+    expect(slashMatches('rewrite this /effort').map((c) => c.name)).not.toContain('effort');
     expect(slashMatches('rewrite this /p').map((c) => c.name)).not.toContain('permissions');
     // Before the rest of the message, with the caret after the name.
     const text = 'rewrite /dis this';

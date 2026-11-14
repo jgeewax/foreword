@@ -3568,6 +3568,9 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 
 ### Each mode keeps its own assistant, model and effort
 
+*Replaced on 2026-11-14: modes keep what's in use unless one is pinned (below,
+"A mode switch keeps the assistant, model and effort, unless it's pinned").*
+
 - **Asked for:** "diff modes should be able to be anchored to specific
   providers/models/effort levels. e.g., maybe ask uses opus 5.5 via claude
   code medium, but figures uses gpt6 astra extra high. every time i change
@@ -4807,6 +4810,79 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   answer card wasn't looked at in the running app: the card code doesn't
   depend on the mode, and a unit test reads the instructions' example as a
   change. Gemini CLI wasn't measured.
+
+### A mode switch keeps the assistant, model and effort, unless it's pinned (2026-11-14)
+
+- **Asked for:** "when im revising, asking, etc from all the various surfaces,
+  i dont have a quick way to make sure that the provider+model is right...
+  its especially frustrating when i write something in ask mode, then do
+  /write and then it switches PROVIDER and MODEL as well", and "when i click
+  "ask" or "revise" i want to also be able to say "and make sure to do it in X
+  provider, X model, X thinking mode"".
+- **Why it switched.** Since 2026-10-23 every mode kept whatever was last
+  used in it, without being asked: trying a model once in Write made it
+  Write's for good, and `/write`, ⇧Tab, Write it, Ask next and the selection
+  card's tabs all brought it back unannounced (a model change within one
+  assistant said nothing at all). None of those surfaces showed what would run.
+- **Pinned, not remembered** (the author's choice of three: pins; each mode
+  its own but asking first; each its own and saying so): the chat has one
+  usual setup, and a mode switch changes it only for a mode pinned to its own
+  (`studio.usualSetup`, `studio.modePins`; mode-setups.ts). Leaving a pinned
+  mode brings the usual one back. A change of assistant, model or effort goes
+  to the pinned mode's own while in it, else to the usual one. The old
+  per-mode memory was read once: Write's became the usual one (a window starts
+  in Write) and nothing is pinned, so the author pins again what they meant
+  (Figures on Codex at extra high, as the 2026-10-23 request had it).
+- **Where pins live:** the mode menu has "Pin Write mode to these" for the
+  mode shown (there at any width), a filled pin beside the effort while the
+  mode is pinned (a click unpins), `/pin` and `/unpin`, and the selection
+  card's menu. The mode menu lists what each pinned mode runs on.
+- **Said where it happens:** a switch that changes what runs says so in the
+  chat: "Ask mode is pinned to Codex · 6 Luna · Low: a new conversation, and
+  the chat so far goes with your next message", "Write mode, back to your
+  usual Claude Code · Haiku 5.5 · Low: …" (only once the chat has turns).
+- **The selection card's chip** (SetupMenu.tsx), beside Revise / Show / Ask:
+  the assistant's mark, the model and the effort that tab's request will run
+  on (Revise is Write's, Options Options', Ask Ask's), with a pin when that
+  mode is pinned. It opens a menu (in the page's top layer: the editor would
+  cut it off): the five assistants, the models (searchable, the message box's
+  list), the levels, and "Pin to Ask mode". A change there is as the message
+  box's (the author's choice over "just this request"): in use now, it changes
+  what the chat runs on; for a mode the chat isn't on, it's kept for that mode
+  (or the usual one) and comes in when the request goes. Another assistant's
+  models are as it last listed them here (`studio.modelLists`), and a model's
+  levels as last seen (`studio.effortLists`, only when surely the model's
+  own); one never run here says it uses its own until it has.
+- **Found on the way: Claude Code lost the effort at every mode switch.** A
+  mode's instructions reach Claude Code by `session/resume`, which starts its
+  program again at its own model and effort (xhigh here), and nothing set the
+  chosen ones back, so the first message after a switch ran at xhigh while the
+  menu said Low (the self-test read the conversation's own config). The
+  adapter now puts the model and effort back after the resume (acp.ts
+  `systemPromptFor`, with a unit test against the recording).
+- **The model's name never goes from the message box.** It used to be the only
+  control that shrank, so a narrow pane squeezed it to nothing (the first
+  pictures showed "Write · ✳ · Extra high · Ask first" and no model). Now the
+  permissions' label shrinks first (to its shield), then the model's name (to
+  52 px, "Haiku 5…"), and if the row still doesn't fit, words go whole, one
+  step at a time: the / button, the effort's name (its gauge stays), the
+  mode's (its icon and colour stay), then the pin. The steps are measured
+  (`useRowFit`, `data-fit`), not container queries, which WebKit compares
+  after the page zoom, and the effort's name can be "Low" or "Extra high".
+  The `composerrow` self-test checks 250–400 px, pinned and not, with "Low"
+  and "Extra high": the row fits and the send button stays in it at each.
+- Also: `/write make it shorter` now switches and sends the words (they were
+  dropped).
+- Verified: unit tests (mode-setups, slash, acp); in-app self-tests `selcard`
+  and `mode-setups` in a scratch worktree on its own port, Claude Code's Haiku
+  at low and Codex's 6 Luna at low. Ask not pinned kept Haiku in the same
+  program; pinned and set to Codex it came back on Codex with the notice, and
+  Write came back to Haiku; a codeword told to Claude was known to Codex and
+  back; ⇧Tab passing through Ask started nothing; the card's chip read
+  "Revise runs on Claude Code · Haiku 5.5 · Low" and "Ask runs on Codex · 6
+  Luna · Low, pinned to Ask mode"; a model picked there for Ask was kept as
+  Ask's while Write stayed on Haiku; Esc closed the menu, not the card;
+  `/ask …` switched and was answered.
 
 ### Open questions
 

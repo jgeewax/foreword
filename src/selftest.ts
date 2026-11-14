@@ -2219,7 +2219,7 @@ async function optionsLiveChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
   const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions, mode: studio.state.agent.mode };
-  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.modeSetups'].map((k) => [k, localStorage.getItem(k)] as const);
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.usualSetup', 'studio.modePins'].map((k) => [k, localStorage.getItem(k)] as const);
   const original = (await ipc.fsRead(file)).text;
   try {
     studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
@@ -8765,18 +8765,24 @@ async function modeSuggestChecks() {
 }
 
 /**
- * Each mode's assistant, model and effort (mode-setups.ts): Write on Claude
- * Code's Haiku at low effort, Ask on Codex. Each comes back with its mode; a
- * conversation goes over to the other assistant and back, each told only what
- * it missed; ⇧Tab passing through a mode starts nothing. Nothing is edited
- * (Ask can't, and Write is asked not to). Scratch book only.
+ * What the modes run on (mode-setups.ts): the usual assistant, model and
+ * effort, and a mode pinned to its own. Before pins, Write's setup becomes the
+ * usual one. Write and Ask on Claude Code's Haiku at low, neither pinned:
+ * switching changes nothing and starts nothing. Ask pinned, then on Codex:
+ * Ask comes back on Codex, Write goes back to Haiku, and a conversation goes
+ * over and back, each told only what it missed; ⇧Tab passing through Ask
+ * starts nothing. The selection card's chip says what each tab runs on, and a
+ * model chosen there for a mode not shown is kept for it. "/ask …" switches
+ * and sends. Nothing is edited (Ask can't, and Write is asked not to). Scratch
+ * book only.
  */
 async function modeSetupChecks() {
   const out: Record<string, unknown> = {};
-  const keys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups'];
+  const keys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups', 'studio.usualSetup', 'studio.modePins', 'studio.modelLists', 'studio.effortLists'];
   const saved = keys.map((k) => [k, localStorage.getItem(k)] as const);
   const savedAssistant = studio.state.settings.assistant;
   const waited: string[] = [];
+  const s = studio as any;
   // That assistant's own models (an ACP one's are its own: providerID), and their efforts.
   const ready = (assistant: string) =>
     waitFor(() => {
@@ -8784,7 +8790,8 @@ async function modeSetupChecks() {
       return studio.state.settings.assistant === assistant && a.status === 'ready' && a.models.length > 0 && a.models.every((m) => m.providerID === assistant) && a.model && a.efforts.length > 0;
     }, 180000, `${assistant} ready`);
   const now = () => ({ assistant: studio.state.settings.assistant, model: studio.state.agent.model?.id ?? null, effort: studio.state.agent.effort });
-  const lastNotice = () => (studio.state.agent.items.filter((i) => i.kind === 'notice').at(-1) as { text?: string } | undefined)?.text ?? null;
+  const setups = () => studio.state.agent.setups;
+  const notices = (from: number) => studio.state.agent.items.slice(from).filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text);
   const lastChips = () => (studio.state.agent.items.filter((i) => i.kind === 'user').at(-1) as { attachments?: string[] } | undefined)?.attachments ?? [];
   /** The last message the assistant got in this conversation, as it got it (the ACP transcript keeps what went with it). */
   const lastSent = async () => {
@@ -8793,8 +8800,22 @@ async function modeSetupChecks() {
   };
   /** Where the conversation's effort really is, as the assistant has it. */
   const sessionEffort = async () => (await studio.agent!.efforts(studio.state.agent.sessionId, studio.state.agent.model!))?.current ?? null;
+  /** The model and effort the conversation really runs on (an ACP assistant's own config for it). */
+  const inSession = () => {
+    const config: { id: string; category?: string; currentValue?: unknown }[] = (studio.agent as any)?.sessions?.get(studio.state.agent.sessionId)?.config ?? [];
+    const pick = (f: (o: (typeof config)[number]) => boolean) => config.find(f)?.currentValue ?? null;
+    return { model: pick((o) => o.category === 'model' || o.id === 'model'), effort: pick((o) => o.category === 'thought_level') };
+  };
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
   try {
-    localStorage.removeItem('studio.modeSetups');
+    // Before pins: each mode's last; Write's is the usual one now, nothing is pinned, and the old key goes.
+    for (const k of ['studio.usualSetup', 'studio.modePins']) localStorage.removeItem(k);
+    localStorage.setItem('studio.modeSetups', JSON.stringify({ write: { assistant: 'claude', model: { providerID: 'claude', id: 'haiku' }, effort: 'low', modelName: 'Haiku' }, ask: { assistant: 'codex', model: null, effort: null } }));
+    out.migrated = { setups: s.readSetups(), oldKey: localStorage.getItem('studio.modeSetups') };
+    for (const k of ['studio.usualSetup', 'studio.modePins']) localStorage.removeItem(k);
+    s.setAgent({ setups: s.readSetups() });
+
     studio.newSession();
     await studio.setMode('write');
     if (studio.state.settings.assistant !== 'claude') studio.switchAssistant('claude');
@@ -8802,38 +8823,51 @@ async function modeSetupChecks() {
     const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
     if (haiku) await studio.selectModel(haiku);
     if (studio.state.agent.efforts.some((e) => e.value === 'low')) await studio.selectEffort('low');
-    out.write = now();
+    out.write = { ...now(), usual: setups().usual };
 
-    // Ask, not used yet: it keeps what's in use, until Codex is chosen for it.
+    // Ask, not pinned: the same assistant, model and effort, the same program.
+    let agentBefore = studio.agent;
     await studio.setMode('ask');
-    out.askFirst = studio.state.agent.modeSetups.ask ?? null;
+    out.askUnpinned = { ...now(), sameProgram: studio.agent === agentBefore, pins: setups().pins };
+
+    // Not pinned: no pin beside the effort; the mode menu's row offers one, with what's in use.
+    document.querySelector<HTMLButtonElement>('.mode-trigger')?.click();
+    await sleep(200);
+    out.askUnpinned = { ...(out.askUnpinned as object), pinButton: !!document.querySelector('.composer-pin'), pinRow: document.querySelector('.mode-pin')?.textContent ?? null };
+    // Pinned from there, then set to Codex: that's Ask's own, and the usual one stays Haiku.
+    document.querySelector<HTMLInputElement>('.mode-pin input')?.click();
+    await sleep(200);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await studio.pinMode('ask', true);
+    out.askPinnedAt = setups().pins.ask ?? null;
     studio.switchAssistant('codex');
     await ready('codex');
     const small = studio.state.agent.models.find((m) => /luna|mini/i.test(`${m.id} ${m.name}`));
     if (small) await studio.selectModel(small);
     const effort = studio.state.agent.efforts.find((e) => e.value === 'low') ?? studio.state.agent.efforts[0];
     if (effort) await studio.selectEffort(effort.value);
-    out.ask = now();
+    out.ask = { ...now(), pin: setups().pins.ask ?? null, usual: setups().usual };
 
-    // Back to Write: Claude Code's Haiku at low, again.
+    // Back to Write: the usual Haiku at low.
     await studio.setMode('write');
     await ready('claude');
     out.writeAgain = now();
-    out.setups = studio.state.agent.modeSetups;
 
-    // A turn with Claude Code; then Ask, with Codex, hears what was said.
+    // A turn with Claude Code; then Ask, on Codex (pinned), hears what was said.
     await settleTurn('Remember this codeword for later: PINEAPPLE. Reply with just “OK”. Don’t read or change any files.', waited);
     const claudeSession = studio.state.agent.sessionId;
+    let from = studio.state.agent.items.length;
     await studio.setMode('ask');
     await ready('codex');
-    out.askAgain = { ...now(), notice: lastNotice() };
+    out.askAgain = { ...now(), notices: notices(from) };
     const askReply = await settleTurn('What codeword did I give you earlier in this conversation? Answer with just the word.', waited);
     out.askTurn = { reply: askReply.slice(0, 300), knew: /PINEAPPLE/i.test(askReply), chips: lastChips(), ownConversation: !!studio.state.agent.sessionId && studio.state.agent.sessionId !== claudeSession, effortInSession: await sessionEffort() };
 
-    // Back to Write: Claude Code's own conversation, told only of the Ask turn.
+    // Back to Write: the usual one, Claude Code's own conversation, told only of the Ask turn.
+    from = studio.state.agent.items.length;
     await studio.setMode('write');
     await ready('claude');
-    out.back = { ...now(), resumed: studio.state.agent.sessionId === claudeSession, notice: lastNotice() };
+    out.back = { ...now(), resumed: studio.state.agent.sessionId === claudeSession, notices: notices(from) };
     const backReply = await settleTurn('In one short sentence: what did I just ask the other assistant, and what did it answer? Don’t read or change any files.', waited);
     const sent = await lastSent();
     out.backTurn = {
@@ -8843,33 +8877,164 @@ async function modeSetupChecks() {
       sentTheAskTurn: sent.includes('What codeword did I give you'),
       sentItsOwnTurnAgain: sent.includes('Remember this codeword'),
       effortInSession: await sessionEffort(),
+      inSession: inSession(),
     };
 
-    // ⇧Tab passing through Ask (Codex) to Discuss (not used yet): nothing restarts.
-    const agentBefore = studio.agent;
+    // ⇧Tab passing through Ask (pinned, Codex) to Discuss (not pinned): nothing restarts, and Discuss is on the usual one.
+    agentBefore = studio.agent;
     const passing = studio.setMode('ask');
     await studio.setMode('discuss');
     await passing;
-    out.passThrough = { ...now(), sameProgram: studio.agent === agentBefore, discuss: studio.state.agent.modeSetups.discuss ?? null };
+    out.passThrough = { ...now(), sameProgram: studio.agent === agentBefore, discussPinned: !!setups().pins.discuss };
+    await studio.setMode('write');
 
-    // The mode menu says what each mode runs on.
-    const still = document.createElement('style');
-    still.textContent = '*{animation:none!important;transition:none!important}';
+    // The selection card: its chip says what each tab runs on (Ask: Codex, pinned), and its menu changes Ask's while Write runs.
+    document.head.append(still);
+    await studio.openFile('chapters/ch1-vectors.typ');
+    const editor = studio.editor!;
+    const line = editor.getModel()!.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+    editor.revealLineInCenter(line);
+    editor.setSelection(new monaco.Range(line, 1, line, 30), 'mouse');
+    await sleep(200);
+    studio.events.emit('selection-card', 'revise');
+    await sleep(400);
+    const chip = () => document.querySelector<HTMLButtonElement>('.selection-card .setup-chip');
+    const card: Record<string, unknown> = { revise: chip()?.getAttribute('aria-label') ?? null };
+    document.querySelector<HTMLButtonElement>('.selection-card .sel-tab.sel-ask')?.click();
+    await sleep(300);
+    card.ask = chip()?.getAttribute('aria-label') ?? null;
+    card.askPinGlyph = !!chip()?.querySelector('.setup-chip-pin');
+    chip()?.click();
+    await sleep(400);
+    const pop = () => document.querySelector<HTMLElement>('.setup-popover');
+    card.popover = {
+      about: pop()?.querySelector('.setup-about')?.textContent ?? null,
+      assistant: pop()?.querySelector('.setup-assistant.current')?.getAttribute('data-assistant') ?? null,
+      models: [...(pop()?.querySelectorAll('.model-option-name') ?? [])].map((n) => n.textContent),
+      efforts: [...(pop()?.querySelectorAll('.setup-effort') ?? [])].map((n) => n.textContent),
+      pinned: pop()?.querySelector<HTMLInputElement>('.setup-pin input')?.checked ?? null,
+      inWindow: (() => {
+        const r = pop()?.getBoundingClientRect();
+        return !!r && r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;
+      })(),
+      shot: await snap('setup-popover'),
+    };
+    // Another of Codex's models, for Ask: kept as Ask's own; Write's (in use) doesn't change.
+    const other = [...(pop()?.querySelectorAll<HTMLElement>('.model-option:not(.disabled)') ?? [])].find((o) => o.getAttribute('aria-selected') !== 'true');
+    const otherName = other?.querySelector('.model-option-name')?.textContent ?? null;
+    other?.click();
+    await sleep(300);
+    card.chose = { model: otherName, pin: setups().pins.ask ?? null, live: now(), chip: chip()?.getAttribute('aria-label') ?? null };
+    // Unpinned there: Ask shares the usual one again, and the chip says so.
+    pop()?.querySelector<HTMLInputElement>('.setup-pin input')?.click();
+    await sleep(300);
+    card.unpinned = { pins: setups().pins, chip: chip()?.getAttribute('aria-label') ?? null, about: pop()?.querySelector('.setup-about')?.textContent ?? null };
+    // Esc (in its search box, where the keys go) closes the menu, not the card.
+    (pop()?.querySelector<HTMLElement>('.model-search') ?? pop())?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(200);
+    card.escape = { menu: !!pop(), card: !!document.querySelector('.selection-card') };
+    document.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();
+    still.remove();
+    out.card = card;
+
+    // "/ask …": Ask (not pinned now: still Claude Code, the same conversation), and the question goes.
+    from = studio.state.agent.items.length;
+    agentBefore = studio.agent;
+    await studio.runSlash('/ask What codeword did I give you at the start of this conversation? Answer with just the word.');
+    const slashReply = await settle(waited);
+    // Another mode's instructions resumed Claude Code's conversation: still Haiku at low, as shown.
+    out.slashAsk = { ...now(), inSession: inSession(), mode: studio.state.agent.mode, sameProgram: studio.agent === agentBefore, sent: studio.state.agent.items.slice(from).some((i) => i.kind === 'user'), reply: slashReply.slice(0, 200), knew: /PINEAPPLE/i.test(slashReply) };
+
+    // The mode menu: a pinned mode says what it runs on (Ask again, for the picture).
+    await studio.pinMode('ask', true);
+    await studio.pinMode('figures', true);
     document.head.append(still);
     document.querySelector<HTMLButtonElement>('.mode-trigger')?.click();
     await sleep(300);
+    const controls = document.querySelector<HTMLElement>('.composer-controls');
     out.menu = {
-      lines: [...document.querySelectorAll('.mode-option')].map((o) => `${o.querySelector('.mode-name')?.textContent}: ${o.querySelector('.mode-setup')?.textContent ?? '—'}`),
+      lines: [...document.querySelectorAll('.mode-option')].map((o) => `${o.querySelector('.mode-name')?.textContent}: ${o.querySelector('.mode-setup')?.textContent?.trim() ?? '—'}`),
+      pinRow: { checked: document.querySelector<HTMLInputElement>('.mode-pin input')?.checked ?? null, text: document.querySelector('.mode-pin')?.textContent ?? null },
+      pinButton: document.querySelector('.composer-pin')?.getAttribute('aria-label') ?? null,
+      // The model's name shows beside the pin, in the row as it is.
+      row: { width: controls?.clientWidth, fits: !!controls && controls.scrollWidth <= controls.clientWidth + 1, model: document.querySelector('.composer-controls .model-trigger')?.getBoundingClientRect().width, effort: document.querySelector('.composer-controls .effort-trigger')?.getBoundingClientRect().width },
       shot: await snap('mode-menu'),
     };
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    still.remove();
     out.waited = waited;
   } finally {
+    still.remove();
     for (const [k, v] of saved) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    s.setAgent({ setups: s.readSetups() });
     studio.newSession();
     await studio.setMode('write');
     if (studio.state.settings.assistant !== savedAssistant) studio.updateSettings({ assistant: savedAssistant }, { write: false });
+  }
+  return out;
+}
+
+/**
+ * The message box's row of controls at the widths the assistant pane can have
+ * (260 px at its narrowest), with the mode pinned and not: the model's name
+ * never goes and the send button stays in the row. The permissions' label
+ * gives way first, then the model's name shortens, and in the narrowest the
+ * mode's and the effort's words and the / button go (their icons stay).
+ */
+async function composerRowChecks() {
+  const out: Record<string, unknown> = {};
+  const saved = ['studio.modePins', 'studio.usualSetup', 'studio.efforts'].map((k) => [k, localStorage.getItem(k)] as const);
+  const s = studio as any;
+  await waitFor(() => studio.state.agent.status === 'ready' && studio.state.agent.efforts.length > 0, 180000, 'agent ready').catch(() => {});
+  const controls = document.querySelector<HTMLElement>('.composer-controls');
+  if (!controls) return { error: 'no message box' };
+  const widthOf = (sel: string) => Math.round(controls.querySelector(sel)?.getBoundingClientRect().width ?? -1);
+  const at = async (w: number | null) => {
+    controls.style.width = w ? `${w}px` : '';
+    controls.style.flex = w ? 'none' : '';
+    await sleep(150);
+  };
+  const measure = async () => {
+    const widths: Record<number, unknown> = {};
+    for (const w of [250, 280, 300, 330, 400]) {
+      await at(w);
+      const send = controls.querySelector('.send-button')?.getBoundingClientRect();
+      const box = controls.getBoundingClientRect();
+      widths[w] = {
+        fits: controls.scrollWidth <= controls.clientWidth + 1,
+        sendInside: !!send && send.right <= box.right + 1,
+        step: controls.dataset.fit ?? null,
+        mode: widthOf('.mode-trigger'),
+        model: widthOf('.model-trigger'),
+        effort: widthOf('.effort-trigger'),
+        perm: widthOf('.perm-trigger'),
+        slash: !!controls.querySelector('.composer-slash') && widthOf('.composer-slash') > 0,
+      };
+    }
+    await at(null);
+    return widths;
+  };
+  try {
+    out.setup = { assistant: studio.state.settings.assistant, model: studio.state.agent.model?.id ?? null, effort: studio.state.agent.effort };
+    out.unpinned = await measure();
+    // The shortest effort name too ("Low"), if it has one.
+    const effort = studio.state.agent.effort;
+    if (effort !== 'low' && studio.state.agent.efforts.some((e) => e.value === 'low')) {
+      await studio.selectEffort('low');
+      out.unpinnedLow = await measure();
+      if (effort) await studio.selectEffort(effort);
+    }
+    await studio.pinMode(studio.state.agent.mode, true);
+    await sleep(150);
+    out.pinned = await measure();
+    for (const w of [250, 330]) {
+      await at(w);
+      out[`shot${w}`] = await snap(`composer-row-${w}`);
+    }
+    await at(null);
+  } finally {
+    await at(null);
+    for (const [k, v] of saved) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    s.setAgent({ setups: s.readSetups() });
   }
   return out;
 }
@@ -8883,7 +9048,7 @@ async function modeSetupChecks() {
  */
 async function providerSwitchChecks() {
   const out: Record<string, unknown> = {};
-  const keys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups'];
+  const keys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.usualSetup', 'studio.modePins'];
   const saved = keys.map((k) => [k, localStorage.getItem(k)] as const);
   const savedAssistant = studio.state.settings.assistant;
   const waited: string[] = [];
@@ -8906,7 +9071,7 @@ async function providerSwitchChecks() {
   const turnIds = () => a().items.filter((i) => i.kind === 'user' || i.kind === 'assistant').map((i) => i.id);
   const records = () => JSON.parse(localStorage.getItem(`studio.tasks:${studio.state.workspace?.root}`) ?? '[]') as Record<string, unknown>[];
   try {
-    localStorage.removeItem('studio.modeSetups');
+    for (const k of ['studio.usualSetup', 'studio.modePins']) localStorage.removeItem(k);
     studio.newSession();
     await studio.setMode('write');
     if (studio.state.settings.assistant !== 'claude') studio.switchAssistant('claude');
@@ -9001,7 +9166,7 @@ async function providerSwitchChecks() {
 /** `checks` with Claude Code's Haiku (cheap); the assistant, its model and the settings go back after. */
 async function withClaude(checks: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
   const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
-  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.modeSetups'].map((k) => [k, localStorage.getItem(k)] as const);
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.efforts', 'studio.usualSetup', 'studio.modePins'].map((k) => [k, localStorage.getItem(k)] as const);
   try {
     studio.updateSettings({ assistant: 'claude' }, { write: false });
     await sleep(500);
@@ -10257,6 +10422,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
     if (only?.includes('askcard')) result.askcard = await askCardChecks();
     if (only?.includes('selcard')) result.selcard = await selectionCardChecks();
+    if (only?.includes('composerrow')) result.composerrow = await composerRowChecks();
     if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
