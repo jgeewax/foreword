@@ -18,6 +18,7 @@ import { plainLine } from '../app/task-list';
 import { onContextMenu } from '../lib/context-menu';
 import { refNamed, type BookFiles, type SourceRef } from '../lib/source-links';
 import { useStore } from '../lib/store';
+import { EARLIER_CHIP } from '../services/agent/message-context';
 import { modeConfig, withoutModeOffer, type AgentMode } from '../services/agent/modes';
 import { answerOf, answerText as answerPlainText, markedTerms, markPieces, proseAndCharts, quoteOf, withoutAnswerBlocks, type AnswerChange, type AnswerPlace, type AskAnswer, type Sure } from '../services/agent/ask-answer';
 import { parseOptions } from '../services/agent/options-mode';
@@ -928,6 +929,10 @@ function ActionStep({ action: a }: { action: StockAction }) {
 /** Your message: when you sent it, what you said (or asked for with a button), and what went with it. */
 function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>; onFold?: () => void }) {
   const action = useMemo(() => stockAction(item.text), [item.text]);
+  // The chat handed over to another assistant is said in words under the message, not a chip.
+  const carried = item.attachments.includes(EARLIER_CHIP);
+  const chips = item.attachments.filter((a) => a !== EARLIER_CHIP);
+  const who = item.by && ASSISTANT_NAMES[item.by.assistant];
   return (
     <div className={`msg user${action ? ' by-button' : ''}`} onContextMenu={itemMenu(action ? actionText(action) : item.text, 'Message')}>
       <div className="turn-who">
@@ -940,9 +945,9 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
       </div>
       {action ? <ActionStep action={action} /> : item.text.trim() && <div className="msg-text">{item.text}</div>}
       {item.files && <AttachedFiles files={item.files} />}
-      {item.attachments.length > 0 && (
+      {chips.length > 0 && (
         <div className="chips">
-          {item.attachments.map((a) => {
+          {chips.map((a) => {
             const place = attachmentPlace(a);
             return place ? (
               <span key={a} className="chip place-chip" title={a}>
@@ -956,6 +961,12 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
               </span>
             );
           })}
+        </div>
+      )}
+      {carried && (
+        <div className="msg-carried" title={`${who ?? 'The assistant'} hadn’t seen all of this chat, so the turns it missed went with this message.`}>
+          <Icon name="comments" size={12} />
+          {who ? `${who} got the chat so far` : 'Sent with the chat so far'}
         </div>
       )}
     </div>
