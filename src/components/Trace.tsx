@@ -4,7 +4,8 @@
 // editor marks what it read and changed; grey: it thought; amber: it needs
 // you; red: it didn't work), the words an edit changed, then its reply and how
 // the turn ended. Earlier turns fold to a line each.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { activityWords, clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix, waitingTip, workerName } from '../app/activity';
 import { ASSISTANT_NAMES } from '../app/settings';
 import { studio, type Activity, type ChatItem, type OptionConflict, type QuestionItem, type TurnBy } from '../app/studio';
@@ -926,17 +927,66 @@ function ActionStep({ action: a }: { action: StockAction }) {
   );
 }
 
+/**
+ * The mark beside the time on a message that took the chat to an assistant
+ * that hadn't seen it, and its hover card (in the page, as the activity bar's,
+ * so it zooms with everything else), under it.
+ */
+function CarriedMark({ who }: { who: string | null }) {
+  const [card, setCard] = useState<{ top: number; left: number; arrow: number } | null>(null);
+  const timer = useRef(0);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = (el: HTMLElement, now = false) => {
+    clearTimeout(timer.current);
+    const open = () => {
+      const r = el.getBoundingClientRect();
+      const left = Math.max(8, Math.min(r.left - 10, window.innerWidth - 268));
+      setCard({ top: r.bottom + 7, left, arrow: r.left + r.width / 2 - left });
+    };
+    if (now) open();
+    else timer.current = window.setTimeout(open, 250);
+  };
+  const hide = () => {
+    clearTimeout(timer.current);
+    setCard(null);
+  };
+  const about = `You switched to ${who ?? 'another assistant'}, so the chat so far went with this message.`;
+  return (
+    <>
+      <span
+        className="carried-mark"
+        tabIndex={0}
+        aria-label={`Chat carried over. ${about}`}
+        onMouseEnter={(e) => show(e.currentTarget)}
+        onMouseLeave={hide}
+        onFocus={(e) => e.currentTarget.matches(':focus-visible') && show(e.currentTarget, true)}
+        onBlur={hide}
+      >
+        <Icon name="chat" size={13} />
+      </span>
+      {card &&
+        createPortal(
+          <div className="view-tip below" role="tooltip" style={{ top: card.top, left: card.left, '--arrow': `${card.arrow}px` } as CSSProperties}>
+            <div className="view-tip-name">Chat carried over</div>
+            <div className="view-tip-about">{about}</div>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
 /** Your message: when you sent it, what you said (or asked for with a button), and what went with it. */
 function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>; onFold?: () => void }) {
   const action = useMemo(() => stockAction(item.text), [item.text]);
-  // The chat handed over to another assistant is said in words under the message, not a chip.
+  // The chat handed over to another assistant is a mark beside the time, not a chip.
   const carried = item.attachments.includes(EARLIER_CHIP);
   const chips = item.attachments.filter((a) => a !== EARLIER_CHIP);
-  const who = item.by && ASSISTANT_NAMES[item.by.assistant];
   return (
     <div className={`msg user${action ? ' by-button' : ''}`} onContextMenu={itemMenu(action ? actionText(action) : item.text, 'Message')}>
       <div className="turn-who">
         You{item.at ? ` · ${clock(item.at)}` : ''}
+        {carried && <CarriedMark who={item.by ? ASSISTANT_NAMES[item.by.assistant] : null} />}
         {onFold && (
           <button className="turn-fold icon" aria-label="Fold this turn" aria-expanded title="Fold this turn to a line" onClick={onFold}>
             <Icon name="chevronDown" size={13} />
@@ -961,12 +1011,6 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
               </span>
             );
           })}
-        </div>
-      )}
-      {carried && (
-        <div className="msg-carried" title={`${who ?? 'The assistant'} hadn’t seen all of this chat, so the turns it missed went with this message.`}>
-          <Icon name="comments" size={12} />
-          {who ? `${who} got the chat so far` : 'Sent with the chat so far'}
         </div>
       )}
     </div>

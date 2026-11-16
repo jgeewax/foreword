@@ -99,6 +99,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7 7.5v9M17 9.5c0 4.5-10 3-10 7" />
     </>
   ),
+  // A conversation: two speech bubbles, one behind the other.
+  chat: (
+    <>
+      <path d="M9 8.5V6a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 21 6v6a1.5 1.5 0 0 1-1.5 1.5H19v3l-3-3" />
+      <path d="M4.5 9.5h9A1.5 1.5 0 0 1 15 11v5.5a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 3v-3h-1A1.5 1.5 0 0 1 3 16.5V11a1.5 1.5 0 0 1 1.5-1.5z" />
+    </>
+  ),
   // Review: a comment on the text.
   comments: (
     <>

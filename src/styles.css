@@ -246,6 +246,9 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .view-tip-name kbd { color: var(--muted); }
 .view-tip-about { margin-top: 2px; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
 .view-tip-note { margin-top: 4px; font-size: 11.5px; color: var(--fg); }
+/* Under its icon instead (the chat's marks), the arrow at --arrow from the left. */
+.view-tip.below { transform: none; }
+.view-tip.below::before { left: var(--arrow); top: -5px; margin: 0 0 0 -4px; border-bottom: none; border-top: 1px solid var(--border); }
 /*
  * The book's colour (Settings ▸ This book ▸ Colour, or VS Code's Peacock):
  * the title bar, status bar and dividers between the panes in it, the
@@ -1928,9 +1931,9 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .turn-fold { margin-left: auto; width: 20px; height: 20px; padding: 0; border: none; border-radius: 5px; background: transparent; color: var(--muted); opacity: 0; transition: opacity 0.12s; }
 .msg.user:hover .turn-fold, .turn-fold:focus-visible { opacity: 1; }
 .turn .msg.user .chips { margin: 7px 0 0; }
-/* Handed over from another assistant: a quiet line under the message, not a chip. */
-.msg-carried { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
-.msg-carried .icon-svg { flex: none; opacity: 0.8; }
+/* Handed over from another assistant: a mark beside the time; its card says the chat went too. */
+.carried-mark { display: inline-grid; place-items: center; margin-left: -1px; border-radius: 4px; color: var(--muted); cursor: default; }
+.carried-mark:hover, .carried-mark:focus-visible { color: var(--fg); }
 /* Asked with a button (Write it, Fix This Error…): the request as a step, not the brief sent for it. */
 .user-action { --tone: var(--muted); display: flex; gap: 9px; min-width: 0; margin-top: 5px; }
 .user-action.tone-look { --tone: var(--look); }
