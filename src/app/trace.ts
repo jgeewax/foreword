@@ -39,9 +39,9 @@ export type Turn = {
   user: UserItem | null;
   /** What the assistant did, in order, before its reply. */
   steps: ChatItem[];
-  /** Its reply: the last thing it said, when nothing but the questions in it came after. */
+  /** Its reply: the last thing it said, when nothing but the questions in it, or notices, came after. */
   reply: AssistantItem | null;
-  /** After the reply: the questions it asked in it. */
+  /** After the reply: the questions it asked in it, and notices since (another assistant taking the chat over, say). */
   after: ChatItem[];
 };
 
@@ -64,7 +64,8 @@ export function turnsOf(items: readonly ChatItem[]): Turn[] {
 
 function shape({ key, user, items }: { key: string; user: UserItem | null; items: ChatItem[] }): Turn {
   let r = items.length - 1;
-  while (r >= 0 && items[r].kind === 'question' && (items[r] as Extract<ChatItem, { kind: 'question' }>).via === 'message') r--;
+  // A notice after the reply (the chat handed over, a model changed) leaves it the reply, with its card and buttons.
+  while (r >= 0 && (items[r].kind === 'notice' || (items[r].kind === 'question' && (items[r] as Extract<ChatItem, { kind: 'question' }>).via === 'message'))) r--;
   const reply = r >= 0 && items[r].kind === 'assistant' ? (items[r] as AssistantItem) : null;
   return reply ? { key, user, steps: items.slice(0, r), reply, after: items.slice(r + 1) } : { key, user, steps: items, reply: null, after: [] };
 }

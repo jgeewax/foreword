@@ -21,6 +21,15 @@ describe('the conversation in turns', () => {
     expect(turnsOf([user('u'), said('a'), ask])[0]).toMatchObject({ reply: { id: 'a' }, after: [{ id: 'q' }] });
   });
 
+  it('a notice after the reply (another assistant took the chat over) leaves it the reply', () => {
+    const notice: ChatItem = { kind: 'notice', id: 'n', tone: 'info', text: 'With Codex now: a new conversation.' };
+    const ask: ChatItem = { kind: 'question', id: 'q', title: 'Questions', fields: [], state: 'pending', via: 'message' };
+    expect(turnsOf([user('u'), tool('t', 'read'), said('a'), notice])[0]).toMatchObject({ steps: [{ id: 't' }], reply: { id: 'a' }, after: [{ id: 'n' }] });
+    expect(turnsOf([user('u'), said('a'), ask, notice])[0]).toMatchObject({ reply: { id: 'a' }, after: [{ id: 'q' }, { id: 'n' }] });
+    // Still no reply when it ended on a step.
+    expect(turnsOf([user('u'), tool('t', 'read'), notice])[0]).toMatchObject({ reply: null, steps: [{ id: 't' }, { id: 'n' }] });
+  });
+
   it('anything before the first message is a turn of its own', () => {
     const notice: ChatItem = { kind: 'notice', id: 'n', tone: 'info', text: 'Hi' };
     expect(turnsOf([notice, user('u')]).map((t) => [t.key, t.user?.id ?? null])).toEqual([
