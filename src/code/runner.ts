@@ -7,6 +7,7 @@ import { errorMessage, ipc } from '../lib/ipc';
 import { cellStatus, describeProblem, duplicateNames, HELPER_FILE, OUTPUTS_FILE, parseCells, parseOutputs, serializeOutputs, type CodeCell, type Outputs } from './cells';
 import helperSource from './code.typ?raw';
 import { failingExamplesPrompt } from '../app/stock-prompts';
+import type { RequestMode } from '../services/agent/modes';
 
 export type CodeState = {
   cells: CodeCell[];
@@ -29,8 +30,8 @@ export type CodeHost = {
   editFile(path: string, transform: (text: string) => string): Promise<boolean>;
   confirm(message: string, title: string, okLabel: string): Promise<boolean>;
   toast(text: string, tone?: 'info' | 'error'): void;
-  /** A chat notice, optionally with a button that sends a message to the assistant. */
-  notice(text: string, tone: 'info' | 'error', action?: { label: string; prompt: string }): void;
+  /** A chat notice, optionally with a button that sends a message to the assistant, in `mode`. */
+  notice(text: string, tone: 'info' | 'error', action?: { label: string; prompt: string; mode: RequestMode }): void;
   refreshFiles(): Promise<void>;
 };
 
@@ -184,6 +185,7 @@ export class CodeRunner {
     this.host.notice(`${broken.length} code example${broken.length > 1 ? 's' : ''} failed:\n${lines.join('\n')}`, 'error', {
       label: 'Ask the assistant to fix them',
       prompt: failingExamplesPrompt(lines),
+      mode: 'edit',
     });
   }
 }

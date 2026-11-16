@@ -513,7 +513,7 @@ function StepItem({ item, editOpen }: { item: ChatItem; editOpen: boolean }) {
             {item.text}
             {item.action && (
               <div className="notice-action">
-                <button onClick={() => void (item.action!.resume ? studio.resume() : studio.send(item.action!.prompt ?? ''))}>{item.action.label}</button>
+                <button onClick={() => void (item.action!.resume ? studio.resume() : item.action!.mode ? studio.sendIn(item.action!.mode, item.action!.prompt ?? '') : studio.send(item.action!.prompt ?? ''))}>{item.action.label}</button>
               </div>
             )}
           </div>
@@ -978,7 +978,12 @@ function CarriedMark({ who }: { who: string | null }) {
 
 /** Your message: when you sent it, what you said (or asked for with a button), and what went with it. */
 function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>; onFold?: () => void }) {
-  const action = useMemo(() => stockAction(item.text), [item.text]);
+  const action = useMemo(() => {
+    const a = stockAction(item.text);
+    // A change asked for in another mode than Write (a TODO talked through in Discuss, a fix in Figures): drawn in it.
+    const other = a && !a.mode && a.tone === 'change' && item.mode && item.mode !== 'write' ? item.mode : null;
+    return other ? { ...a!, mode: other, note: a!.note ?? `in ${modeConfig(other).label}` } : a;
+  }, [item.text, item.mode]);
   // The chat handed over to another assistant is a mark beside the time, not a chip.
   const carried = item.attachments.includes(EARLIER_CHIP);
   const chips = item.attachments.filter((a) => a !== EARLIER_CHIP);

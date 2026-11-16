@@ -92,7 +92,9 @@ describe('what a button asked for, read back from its message', () => {
     expect(stockAction(styleReviseMessage('Less formal.'))).toMatchObject({ verb: 'Revise my style guide', rows: [{ text: 'Less formal.' }] });
     expect(stockAction(styleReviseMessage('Less formal.\nNo semicolons.'))?.rows).toEqual([{ text: 'Less formal.\nNo semicolons.' }]);
     expect(stockAction(EDIT_INSTEAD_PROMPT)?.verb).toBe('Edit the file instead');
-    expect(stockAction(STARTERS[1].prompt)).toMatchObject({ verb: 'Proofread the open chapter', tone: 'done' });
+    // Each starter is read back in the mode it goes in, whatever mode the chat was in.
+    expect(stockAction(STARTERS[1].prompt)).toMatchObject({ verb: 'Proofread the open chapter', tone: 'done', mode: 'ask' });
+    expect(stockAction(STARTERS[2].prompt)).toMatchObject({ verb: 'Outline my next chapter', mode: 'discuss' });
   });
 
   it('the author’s own words stay theirs', () => {

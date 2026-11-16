@@ -8,8 +8,9 @@ import { cellStatus } from '../code/cells';
 import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
-import { removable, todoAt } from '../app/todos';
+import { todoAt } from '../app/todos';
 import { attachTodoHover } from './TodoHover';
+import { todoMenu } from './todo-menu';
 import { attachSelectionBar } from './SelectionBar';
 import { attachProofing, languageEntries, proofEntries } from './ProofingHover';
 import { headings, type Heading } from '../editor/outline';
@@ -148,8 +149,7 @@ export function EditorPane() {
         // A misspelling's suggestions first, as TextEdit and Word put them.
         ...(model ? proofEntries(model, pos) : []),
         error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
-        todo && ready && { label: todo.fix ? 'Fix This with the Assistant' : 'Do This TODO with the Assistant', action: () => void studio.askTodo(todo.todo) },
-        todo && removable(todo.todo) && { label: 'Mark as Done', action: () => void studio.todoDone(todo.todo) },
+        ...(todo ? todoMenu(todo.todo, todo.fix) : []),
         mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         'separator',
         hasSelection && { label: 'Add to Chat', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },

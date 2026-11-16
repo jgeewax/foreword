@@ -15,6 +15,13 @@ export type AgentMode = 'write' | 'ask' | 'discuss' | 'options' | 'figures';
 
 export const AGENT_MODES: AgentMode[] = ['write', 'ask', 'discuss', 'options', 'figures'];
 
+/**
+ * The mode a button's request goes in (Fix this error, a TODO…), whatever mode
+ * the chat was left in: one of them, or 'edit', a change to the book, made in
+ * Write, or in Figures if the chat is in it (it edits too).
+ */
+export type RequestMode = AgentMode | 'edit';
+
 /** Old names still understood: Discuss was Plan until 2026-10-22. */
 const MODE_ALIASES: Record<string, AgentMode> = { plan: 'discuss' };
 

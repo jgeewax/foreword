@@ -12,6 +12,7 @@ import { ASSISTANTS, type AssistantId } from './app/settings';
 import { studio, type ChatItem } from './app/studio';
 import type { TaskSummary } from './app/tasks';
 import { chapterNumber } from './app/tool-labels';
+import { todoPrompt } from './app/todos';
 import { handleMcp, pngSize } from './app/studio-tools';
 import { monaco } from './editor/monaco';
 import { selectAll } from './editor/select-all';
@@ -25,6 +26,7 @@ import { parseOptions } from './services/agent/options-mode';
 import { formFromElicitation } from './services/agent/questions';
 import { PRESETS } from './services/agent/permissions';
 import { TEMPLATES } from './templates';
+import { todoMenu } from './components/todo-menu';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const log = (step: string) => void ipc.uiLog(`[selftest +${Math.round(performance.now())}ms] ${step}`);
@@ -2869,6 +2871,117 @@ async function guideChecks() {
   [...document.querySelectorAll('.tab')].find((t) => t.querySelector('.tab-name')?.textContent === 'Typst basics')?.querySelector<HTMLButtonElement>('.tab-close')?.click();
   await sleep(200);
   out.closedWithX = { tabs: tabNames(), guideOpen: studio.state.guideOpen };
+  return out;
+}
+
+/**
+ * A button's request goes in the mode its task is done in, not the mode the
+ * chat was left in: Fix this error after Options goes in Write (and stays in
+ * Figures, which edits too), a TODO goes in Write or the mode picked from its
+ * bar's ▾, a starter in its own, and one asked for while a reply in another
+ * mode runs waits for it and says so. send() is recorded: nothing reaches a
+ * model. The TODO typed into the chapter is undone.
+ */
+async function actionModeChecks(chapter: string) {
+  const out: Record<string, unknown> = {};
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const layout = localStorage.getItem('react-resizable-panels:studio-panes');
+  const s = studio as unknown as { readSetups(): { usual: unknown; pins: Record<string, unknown> }; setAgent(p: Record<string, unknown>): void };
+  const saved = { send: studio.send, state: studio.state.agent, readSetups: s.readSetups };
+  // No mode pinned to another assistant (the author's pins are in this origin's storage too): a switch never starts one.
+  s.readSetups = () => ({ ...saved.readSetups.call(studio), pins: {} });
+  const sent: { text: string; mode: string }[] = [];
+  studio.send = async (text: string) => (sent.push({ text: text.slice(0, 50), mode: studio.state.agent.mode }), true);
+  const last = () => sent[sent.length - 1] ?? null;
+  const notices = () => studio.state.agent.items.flatMap((i) => (i.kind === 'notice' ? [i.text] : []));
+  s.setAgent({ status: 'ready', sessionId: null, taskId: null, items: [], running: false, queued: [] });
+  const error = { path: chapter, d: { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } }, message: 'unknown variable: selftest', severity: 1 } } as unknown as Parameters<typeof studio.fixProblem>[0];
+  try {
+    await studio.setMode('options');
+    await studio.fixProblem(error);
+    out.fixAfterOptions = { mode: studio.state.agent.mode, sent: last() };
+    await studio.setMode('figures');
+    await studio.fixProblem(error);
+    out.fixInFigures = { mode: studio.state.agent.mode, sent: last() };
+
+    // Asked for while a reply in another mode is at work: it waits, and says so.
+    await studio.setMode('ask');
+    s.setAgent({ running: true });
+    const before = sent.length;
+    const waiting = studio.fixProblem(error);
+    await sleep(600);
+    out.whileRunning = { mode: studio.state.agent.mode, sentMeanwhile: sent.length - before, notice: notices().at(-1) ?? null };
+    s.setAgent({ running: false });
+    await waiting;
+    out.afterRunning = { mode: studio.state.agent.mode, sent: last() };
+
+    // A TODO on the chapter's first line: its bar, its ▾, and each way.
+    await studio.openFile(chapter);
+    editor.executeEdits('selftest', [{ range: new monaco.Range(1, 1, 1, 1), text: '// TODO: selftest draw the flow of chapter one\n' }]);
+    const todo = { path: chapter, line: 1, text: 'selftest draw the flow of chapter one', kind: 'line-comment' } as const;
+    await studio.setMode('options');
+    await studio.askTodo(todo);
+    out.todoAfterOptions = { mode: studio.state.agent.mode, sent: last() };
+    await studio.askTodo(todo, 'discuss');
+    out.todoInDiscuss = { mode: studio.state.agent.mode, sent: last() };
+    await studio.setMode('write');
+    out.menuInWrite = JSON.parse(JSON.stringify(todoMenu(todo)));
+    await studio.setMode('figures');
+    out.menuInFigures = JSON.parse(JSON.stringify(todoMenu(todo)));
+    await studio.setMode('options');
+    editor.focus();
+    editor.setPosition({ lineNumber: 1, column: 6 });
+    await waitFor(() => document.querySelector('.todo-hover'), 3000, 'todo bar').catch(() => null);
+    const bar = document.querySelector<HTMLElement>('.todo-hover');
+    let recorded: { label?: string; action?: () => void }[] = [];
+    menuRecorder.record = (entries) => (recorded = entries as typeof recorded);
+    bar?.querySelector<HTMLButtonElement>('.todo-hover-ways')?.click();
+    await sleep(100);
+    menuRecorder.record = undefined;
+    out.todoBar = {
+      shown: !!bar,
+      ask: bar?.querySelector('.todo-hover-ask')?.getAttribute('title') ?? null,
+      ways: recorded.map((e) => e.label),
+      snapshot: bar ? await snap('action-modes-todo-bar') : null,
+    };
+    recorded.find((e) => e.label?.includes('Figures'))?.action?.();
+    await waitFor(() => last()?.mode === 'figures', 5000, 'figures way').catch(() => null);
+    out.todoWayFigures = { mode: studio.state.agent.mode, sent: last(), barGone: !document.querySelector('.todo-hover') };
+
+    // The chat: a change asked for in another mode than Write is drawn in it (one turn at a time: earlier ones fold).
+    const steps: Record<string, unknown> = {};
+    for (const mode of ['discuss', 'write'] as const) {
+      s.setAgent({ items: [{ kind: 'user', id: `selftest-${mode}`, text: todoPrompt(todo), attachments: [], at: Date.now(), mode }] });
+      await sleep(300);
+      const el = document.querySelector('.agent-pane .user-action');
+      steps[mode] = el && { className: el.className, glyph: el.querySelector('.mode-glyph')?.textContent ?? null, words: el.querySelector('.user-action-words')?.textContent };
+    }
+    out.steps = steps;
+
+    // The empty chat's starters, from Options: each in its own mode.
+    s.setAgent({ items: [] });
+    await studio.setMode('options');
+    studio.events.emit('show-agent-pane');
+    await sleep(300);
+    const starters: Record<string, unknown> = {};
+    for (const label of ['Explain how this book fits together', 'Outline my next chapter']) {
+      await studio.setMode('options');
+      const button = [...document.querySelectorAll<HTMLButtonElement>('.starter .suggestion')].find((b) => b.textContent?.includes(label));
+      button?.click();
+      await waitFor(() => last()?.text.startsWith(label.startsWith('Explain') ? 'Explain' : 'Suggest'), 5000, label).catch(() => null);
+      starters[label] = { found: !!button, title: button?.title, mode: studio.state.agent.mode, sent: last() };
+    }
+    out.starters = starters;
+  } finally {
+    menuRecorder.record = undefined;
+    while (model.getValue().startsWith('// TODO: selftest') && model.canUndo()) await model.undo();
+    out.todoUndone = !model.getValue().startsWith('// TODO: selftest');
+    studio.send = saved.send;
+    s.readSetups = saved.readSetups;
+    studio.store.set({ agent: saved.state });
+    if (layout) localStorage.setItem('react-resizable-panels:studio-panes', layout);
+  }
   return out;
 }
 
@@ -10300,6 +10413,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('models')) {
       log('model picker checks');
       result.modelPickerChecks = await modelPickerChecks();
+    }
+    if (want('action-modes')) {
+      log('action modes');
+      result.actionModes = await actionModeChecks(chapter);
     }
 
     if (want('typing')) {

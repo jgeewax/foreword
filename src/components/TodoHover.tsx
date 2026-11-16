@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { studio } from '../app/studio';
 import { removable, todoAt, type Todo } from '../app/todos';
 import { monaco } from '../editor/monaco';
+import { showContextMenu } from '../lib/context-menu';
+import { modeConfig } from '../services/agent/modes';
 import { Icon } from './icons';
+import { otherTodoWays } from './todo-menu';
 
 type Found = { todo: Todo; fix: boolean; from: number };
 
@@ -16,12 +19,19 @@ function TodoActions({ found, close }: { found: Found; close: () => void }) {
     close();
     action();
   };
+  const usual = modeConfig(studio.modeForChanges()).label;
   return (
     <div className="todo-hover" role="toolbar" aria-label="TODO">
-      <button className="todo-hover-ask" disabled={!ready} title={ready ? 'The assistant does it, then takes the TODO out' : 'The assistant isn’t ready yet'} onClick={run(() => void studio.askTodo(todo))}>
-        <Icon name="sparkle" size={14} />
-        Ask the assistant to {fix ? 'fix' : 'do'} it
-      </button>
+      <span className="todo-hover-split">
+        <button className="todo-hover-ask" disabled={!ready} title={ready ? `The assistant does it in ${usual} mode, then takes the TODO out` : 'The assistant isn’t ready yet'} onClick={run(() => void studio.askTodo(todo))}>
+          <Icon name="sparkle" size={14} />
+          Ask the assistant to {fix ? 'fix' : 'do'} it
+        </button>
+        {/* A native menu, at the pointer: nothing to clip at the editor's edge. */}
+        <button className="todo-hover-ways" disabled={!ready} aria-label="Other ways" title="Do it in another mode: ask about it, talk it through, or draw it" onClick={() => void showContextMenu(otherTodoWays(todo, close))}>
+          <Icon name="chevronDown" size={12} />
+        </button>
+      </span>
       {/* The bar stays: the TODO goes, and the next line's comes up under the cursor. */}
       {removable(todo) && (
         <button className="todo-hover-done" title="Take the TODO out (⌘Z puts it back)" onClick={() => void studio.todoDone(todo)}>

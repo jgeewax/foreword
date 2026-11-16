@@ -88,7 +88,7 @@ import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
-import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion } from '../services/agent/modes';
+import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion, type RequestMode } from '../services/agent/modes';
 import { answerOf, removalLines, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
 import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
 import { optionsReminder, parseOptions } from '../services/agent/options-mode';
@@ -104,7 +104,7 @@ import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import { BAR_MODE, barMessage, type BarKind } from './selection-bar';
-import { fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockTitle } from './stock-prompts';
+import { fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockAction, stockTitle } from './stock-prompts';
 import { clip, plainLine } from './task-list';
 import type { AgentAdapter, AgentEvent, AttachedFile, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { inlineFiles } from './attachments';
@@ -259,7 +259,7 @@ export type ChatItem =
       /** Answered by a rule the author made, or a setting they changed, while it waited. */
       byRule?: boolean;
     }
-  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; resume?: boolean } };
+  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; mode?: RequestMode; resume?: boolean } };
 
 export type QuestionItem = Extract<ChatItem, { kind: 'question' }>;
 
@@ -1849,7 +1849,7 @@ export class Studio {
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    await this.send(fixErrorPrompt(problem.d.message));
+    await this.sendIn('edit', fixErrorPrompt(problem.d.message));
   }
 
   /** The Typst error under a position in the active file (1-based), if any. */
@@ -1882,9 +1882,8 @@ export class Studio {
   /**
    * A message about the selection alone, in `mode`. The selection goes with
    * it, and the editor lets go of it (the cursor at its end), so the mark on
-   * the passage shows while the assistant works. A reply running in another
-   * mode is let finish first, so it keeps what its mode allowed (an Ask reply
-   * never gets to edit); `signal` calls it off meanwhile.
+   * the passage shows while the assistant works. The card says so itself
+   * while a reply in another mode finishes first; `signal` calls it off.
    */
   private async sendAboutSelection(mode: AgentMode, message: string, signal?: AbortSignal): Promise<boolean> {
     this.setAgent({ attachments: [] });
@@ -1892,11 +1891,33 @@ export class Studio {
     const end = this.editor?.getSelection()?.getEndPosition();
     if (end) this.editor!.setSelection(monaco.Range.fromPositions(end));
     this.events.emit('show-agent-pane');
-    if (this.state.agent.mode !== mode) {
+    return this.sendIn(mode, message, { signal, quiet: true });
+  }
+
+  /** Where a button's change to the book is made: in Write, or in Figures if the chat is in it (it edits too). */
+  modeForChanges(): AgentMode {
+    return this.state.agent.mode === 'figures' ? 'figures' : 'write';
+  }
+
+  /**
+   * A button's request (Fix this error, a TODO, a merge…) in the mode its task
+   * is done in, not whatever mode the chat was left in: a fix asked for after
+   * some Options goes in Write. A reply running in another mode is let finish
+   * first, so it keeps what its mode allowed (an Ask reply never gets to edit),
+   * and the chat says the request waits for it (`quiet`: the caller says so);
+   * `signal` calls it off meanwhile.
+   */
+  async sendIn(mode: RequestMode, message: string, { signal, quiet = false }: { signal?: AbortSignal; quiet?: boolean } = {}): Promise<boolean> {
+    const to = mode === 'edit' ? this.modeForChanges() : mode;
+    if (this.state.agent.mode !== to) {
+      if (this.state.agent.running && !quiet) {
+        const what = stockAction(message)?.verb ?? 'Your request';
+        this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `${what} waits for this reply, then goes in ${modeConfig(to).label} mode.` });
+      }
       await this.untilIdle();
       if (signal?.aborted) return false;
-      await this.setMode(mode);
-      if (this.state.agent.mode !== mode) return false;
+      await this.setMode(to);
+      if (this.state.agent.mode !== to) return false;
     }
     return !signal?.aborted && this.send(message);
   }
@@ -2201,15 +2222,19 @@ export class Studio {
     await this.scanTodos();
   }
 
-  /** Ask the assistant to do a TODO, with its line attached. */
-  async askTodo(todo: Todo) {
+  /**
+   * Ask the assistant to do a TODO, with its line attached: as a change to the
+   * book, or in a mode the author picked from its menu (talked through in
+   * Discuss, answered in Ask, drawn in Figures). A TODO can ask for any of them.
+   */
+  async askTodo(todo: Todo, mode: RequestMode = 'edit') {
     await this.openAt(todo.path, todo.line);
     const model = this.editor?.getModel();
     if (model) this.editor!.setSelection(new monaco.Range(todo.line, 1, todo.line, model.getLineMaxColumn(todo.line)));
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    await this.send(todoPrompt(todo));
+    await this.sendIn(mode, todoPrompt(todo));
   }
 
   /** A Makefile so the book builds without Foreword (`make` → export/<name>.pdf). */
@@ -2356,11 +2381,10 @@ export class Studio {
       if (before[comment.path] === undefined) before[comment.path] = (await this.currentText(comment.path)) ?? '';
       if (where) at[comment.id] = [where.start, where.end];
     }
-    if (this.state.agent.mode !== 'write') await this.setMode('write');
     this.events.emit('show-agent-pane');
     this.reviewTurn = { sessionId: null, ids: open.map((c) => c.id), before, at };
     this.store.set((s) => ({ review: { ...s.review, busy: open.map((c) => c.id) } }));
-    if (!(await this.send(addressPrompt(located)))) {
+    if (!(await this.sendIn('edit', addressPrompt(located)))) {
       this.reviewTurn = null;
       this.store.set((s) => ({ review: { ...s.review, busy: [] } }));
       return;
@@ -3500,7 +3524,7 @@ export class Studio {
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
-    const sent = await this.send(mergePrompt(path, q.theirs, q.by === ASSISTANT_NAMES[this.state.settings.assistant]));
+    const sent = await this.sendIn('edit', mergePrompt(path, q.theirs, q.by === ASSISTANT_NAMES[this.state.settings.assistant]));
     if (sent) this.docs?.dismissQuestion(path, id);
   }
 

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent a
 import { composerKeyAction, sendHint } from '../app/settings';
 import { pendingQuestion, studio, type QuestionItem } from '../app/studio';
 import { setupLine } from '../app/mode-setups';
+import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
@@ -18,6 +19,7 @@ import { PermissionsMenu } from './Permissions';
 import { ContextMeter, TaskMenu, useContextUse } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
 import { AttachedFiles } from './AttachedFiles';
+import { todoMenu } from './todo-menu';
 import { carriesFiles, droppedItems, pastedFiles, pastedName } from '../app/attachments';
 import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
 import { actionLine, STARTERS, stockAction } from '../app/stock-prompts';
@@ -1059,7 +1061,7 @@ function Starter() {
         <div className="starter-group">
           <div className="starter-label">From your TODOs</div>
           {todos.slice(0, 3).map((t) => (
-            <button key={`${t.path}:${t.line}`} className="suggestion todo tone-todo" disabled={!ready} title="Ask the assistant to do this now" onClick={() => void studio.askTodo(t)}>
+            <button key={`${t.path}:${t.line}`} className="suggestion todo tone-todo" disabled={!ready} title="Ask the assistant to do this now (right-click for other ways)" onClick={() => void studio.askTodo(t)} onContextMenu={onContextMenu(() => todoMenu(t))}>
               <span className="suggestion-icon">
                 <Icon name="todos" size={13} />
               </span>
@@ -1076,7 +1078,7 @@ function Starter() {
       <div className="starter-group">
         <div className="starter-label">Try asking</div>
         {STARTERS.map((s) => (
-          <button key={s.label} className={`suggestion tone-${s.tone}`} disabled={!ready} title="Ask the assistant" onClick={() => void studio.send(s.prompt)}>
+          <button key={s.label} className={`suggestion tone-${s.tone}`} disabled={!ready} title={`Ask the assistant, in ${modeConfig(s.mode).label} mode`} onClick={() => void studio.sendIn(s.mode, s.prompt)}>
             <span className="suggestion-icon">
               <Icon name={s.icon} size={13} />
             </span>

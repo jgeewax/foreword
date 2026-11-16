@@ -756,6 +756,11 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .todo-hover button:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 13%, transparent); }
 .todo-hover .todo-hover-ask { --tone: var(--ai-edit); background: color-mix(in srgb, var(--tone) 9%, transparent); }
 .todo-hover .todo-hover-ask:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 18%, transparent); }
+/* Ask, and its ▾ of the other modes: one button, split by a hairline. */
+.todo-hover-split { display: inline-flex; gap: 1px; }
+.todo-hover .todo-hover-split .todo-hover-ask { border-radius: 5px 0 0 5px; }
+.todo-hover .todo-hover-ways { --tone: var(--ai-edit); width: 20px; padding: 0; justify-content: center; border-radius: 0 5px 5px 0; background: color-mix(in srgb, var(--tone) 9%, transparent); }
+.todo-hover .todo-hover-ways:hover:not(:disabled) { background: color-mix(in srgb, var(--tone) 18%, transparent); }
 .todo-hover .todo-hover-done { --tone: var(--good); }
 .todo-hover .todo-hover-all { color: var(--muted); }
 .todo-hover .todo-hover-all:hover { color: var(--fg); }

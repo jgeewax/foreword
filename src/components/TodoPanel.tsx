@@ -2,8 +2,10 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import { studio } from '../app/studio';
 import { numberedTitle } from '../app/tool-labels';
 import { removable } from '../app/todos';
+import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import { Icon } from './icons';
+import { todoMenu } from './todo-menu';
 
 /** A button inside a row: its click is its own, not the row's. */
 const own = (run: () => void) => (e: MouseEvent) => {
@@ -51,6 +53,7 @@ export function TodoPanel() {
                   tabIndex={0}
                   title={`Go to line ${t.line}`}
                   onClick={go}
+                  onContextMenu={onContextMenu(() => todoMenu(t))}
                   onKeyDown={(e: KeyboardEvent) => {
                     if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
                     e.preventDefault();

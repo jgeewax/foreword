@@ -87,14 +87,16 @@ export const failingExamplesPrompt = (lines: string[]) =>
 
 /**
  * The empty chat's "Try asking", each in the colour of what it does: look
- * (blue), check (green), write (purple), Typst (its teal). One that's sent as
- * written isn't an action.
+ * (blue), check (green), write (purple), Typst (its teal). Each goes in its
+ * mode, whatever mode the chat was left in: the questions and the proofread
+ * in Ask (its fixes come as changes to make), the outline in Discuss. One
+ * that's sent as written isn't an action.
  */
-export const STARTERS: { icon: ActionIcon; tone: 'look' | 'check' | 'change' | 'typst'; label: string; prompt: string }[] = [
-  { icon: 'book', tone: 'look', label: 'Explain how this book fits together', prompt: 'Explain how the files of this book fit together.' },
-  { icon: 'passed', tone: 'check', label: 'Proofread the open chapter', prompt: "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet." },
-  { icon: 'edit', tone: 'change', label: 'Outline my next chapter', prompt: 'Suggest an outline for my next chapter.' },
-  { icon: 'help', tone: 'typst', label: 'How do I add a footnote?', prompt: 'How do I add a footnote?' },
+export const STARTERS: { icon: ActionIcon; tone: 'look' | 'check' | 'change' | 'typst'; label: string; prompt: string; mode: AgentMode }[] = [
+  { icon: 'book', tone: 'look', label: 'Explain how this book fits together', prompt: 'Explain how the files of this book fit together.', mode: 'ask' },
+  { icon: 'passed', tone: 'check', label: 'Proofread the open chapter', prompt: "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet.", mode: 'ask' },
+  { icon: 'edit', tone: 'change', label: 'Outline my next chapter', prompt: 'Suggest an outline for my next chapter.', mode: 'discuss' },
+  { icon: 'help', tone: 'typst', label: 'How do I add a footnote?', prompt: 'How do I add a footnote?', mode: 'ask' },
 ];
 
 // ---- reading them back ---------------------------------------------------------------------
@@ -201,7 +203,7 @@ const READERS: ((text: string) => StockAction | null)[] = [
   },
   (text) => {
     const s = STARTERS.find((x) => x.prompt === text && x.prompt !== x.label);
-    return s ? { verb: s.label, tone: s.tone === 'check' ? 'done' : s.tone === 'typst' ? 'other' : s.tone, icon: s.icon } : null;
+    return s ? { verb: s.label, tone: s.tone === 'check' ? 'done' : s.tone === 'typst' ? 'other' : s.tone, icon: s.icon, mode: s.mode } : null;
   },
 ];
 
