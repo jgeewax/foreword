@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
+import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, optionsAsked, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
 import { addressPrompt, makeComment } from './review';
 import { todoPrompt } from './todos';
 import { modeChoiceMessage, modeConfig } from '../services/agent/modes';
@@ -53,6 +53,16 @@ describe('what a button asked for, read back from its message', () => {
     const raw = moreLikePrompt({ n: 2, label: '', text: 'Run:\n```rust\nfn main() {}\n```' });
     expect(raw).toContain('\n````typst\nRun:\n```rust\nfn main() {}\n```\n````');
     expect(stockAction(raw)).toMatchObject({ verb: 'Three more like Option 2', rows: [{ text: 'Run:' }] });
+    // What the options were for goes with it, quoted, and reads back the same.
+    const aimed = moreLikePrompt({ n: 2, label: 'Warmer', text: 'She smiled.' }, 3, ['More vivid', 'Less formal\n\nand > shorter']);
+    expect(aimed).toContain("They're still for what I asked, and replace the selected passage, as before.\n\nWhat I asked for, in order:\n\n> More vivid\n\n> Less formal\n>\n> and > shorter\n\nOption 2 was:");
+    expect(stockAction(aimed)).toMatchObject({ verb: 'Three more like Option 2', rows: [{ text: 'Warmer' }], mode: 'options' });
+    expect(optionsAsked(aimed, true)).toEqual({ asked: ['More vivid', 'Less formal\n\nand > shorter'], whole: true });
+    expect(moreLikePrompt({ n: 1, label: '', text: 'A.' }, 3, ['Shorter'])).toContain('\n\nWhat I asked for:\n\n> Shorter\n\nOption 1 was:');
+    expect(optionsAsked(moreLikePrompt({ n: 1, label: '', text: 'A.' }), true)).toEqual({ asked: [], whole: false });
+    expect(optionsAsked(optionsPrompt('Shorter', 2), true)).toEqual({ asked: ['Shorter'], whole: true });
+    expect(optionsAsked(OPTIONS_AGAIN_PROMPT, true)).toEqual({ asked: [], whole: false });
+    expect(optionsAsked(' Make it rhyme ', false)).toEqual({ asked: ['Make it rhyme'], whole: false });
     expect(stockAction(askPrompt('Why is everything after it bold?'))).toMatchObject({ verb: 'Ask about this passage', rows: [{ text: 'Why is everything after it bold?' }], tone: 'look', mode: 'ask' });
     expect(stockAction('Revise the selected passage: shorter')).toBeNull();
   });

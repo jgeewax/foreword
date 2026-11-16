@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BAR_MODE, barMessage, barProgress, passageChange, PRESETS, presetsFor, selectionSummary, wordsLabel, type BarRequest } from './selection-bar';
-import { askPrompt, optionsPrompt, revisePrompt } from './stock-prompts';
+import { BAR_MODE, barMessage, barProgress, optionsAskedFor, passageChange, PRESETS, presetsFor, selectionSummary, wordsLabel, type BarRequest } from './selection-bar';
+import { askPrompt, moreLikePrompt, optionsPrompt, revisePrompt } from './stock-prompts';
 import type { ChatItem, QueuedMessage } from './studio';
 
 const revise: BarRequest = { kind: 'revise', message: revisePrompt('Tighten it'), since: 1000 };
@@ -47,6 +47,30 @@ describe('how a request from the selection bar is getting on', () => {
     expect(barProgress({ items: more('p2', 0), queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: false });
     const before = [about(said('a0', THREE), 'p1', 1), asked, about(said('a1', THREE), 'p1')];
     expect(barProgress({ items: before, queued: [], running: false }, options)).toEqual({ phase: 'options', count: 3, picked: false });
+  });
+
+  it('More like this says again what the options were for: the ask, what was typed after it, back to where it began', () => {
+    const about = (item: ChatItem, passage?: string): ChatItem =>
+      item.kind === 'assistant' ? { ...item, options: { target: null, original: null, applied: null, ...(passage ? { passage } : {}) } } : item;
+    const selected = (id: string, text: string): ChatItem => ({ kind: 'user', id, text, attachments: ['ch1.typ:3'], at: 2000 });
+    const option = { n: 2, label: 'Plain', text: 'B.' };
+    // From the bar: its instruction, and nothing before it.
+    const bar = [selected('u0', optionsPrompt('Warmer')), about(said('a0', THREE), 'p1'), selected('u1', optionsPrompt('Shorter')), about(said('a1', THREE), 'p1')];
+    expect(optionsAskedFor(bar, 'a1')).toEqual(['Shorter']);
+    // Words typed after it, with nothing selected, go with it.
+    const typed = [...bar, user('u2', 'Less formal, too'), about(said('a2', THREE))];
+    expect(optionsAskedFor(typed, 'a2')).toEqual(['Shorter', 'Less formal, too']);
+    // More like this, then More like this from those: the ask goes along each time.
+    const more1 = [...typed, selected('u3', moreLikePrompt(option, 3, optionsAskedFor(typed, 'a2'))), about(said('a3', THREE), 'p1')];
+    expect(optionsAskedFor(more1, 'a3')).toEqual(['Shorter', 'Less formal, too']);
+    // One sent before it carried the ask (0.10.0) goes back further for it.
+    const older = [...bar, selected('u3', moreLikePrompt(option)), about(said('a3', THREE), 'p1')];
+    expect(optionsAskedFor(older, 'a3')).toEqual(['Shorter']);
+    // Typed with the passage selected: a new ask. About another passage, or after a reply without options: where it stops.
+    expect(optionsAskedFor([...bar, selected('u2', 'Make it rhyme'), about(said('a2', THREE), 'p1')], 'a2')).toEqual(['Make it rhyme']);
+    expect(optionsAskedFor([selected('u0', optionsPrompt('Warmer')), about(said('a0', THREE), 'p2'), user('u1', 'Shorter'), about(said('a1', THREE), 'p1')], 'a1')).toEqual(['Shorter']);
+    expect(optionsAskedFor([selected('u0', optionsPrompt('Warmer')), about(said('a0', 'Which passage?')), user('u1', 'Shorter'), about(said('a1', THREE))], 'a1')).toEqual(['Shorter']);
+    expect(optionsAskedFor(bar, 'nope')).toEqual([]);
   });
 
   it('Ask: answered once its turn is over, even when the answer happens to hold options', () => {

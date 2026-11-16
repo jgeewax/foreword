@@ -58,15 +58,23 @@ const OPTIONS_AGAIN_THREE = OPTIONS_AGAIN_PROMPT.replace('Write new options', 'W
 /** "Three more options", "One more option". */
 const moreInWords = (count: number) => capitalized(optionsInWords(count).replace(/ (options?)$/, ' more $1'));
 
+/** What the author asked for, quoted: every line marked, so none of it can end the block early. */
+const quoted = (s: string) => s.trim().split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n');
+const unquoted = (s: string) => s.split('\n').map((l) => l.replace(/^> ?/, '')).join('\n');
+
 /**
  * "More like this" on an option: as many new options again, for the same
  * passage, starting from that one. Its words go with it, so they're there
- * however long ago it was written (in a fence longer than any in it).
+ * however long ago it was written (in a fence longer than any in it), and so
+ * does what the author asked the options for (`asked`, oldest first: the ask,
+ * then what they typed after it), so the new ones still aim at that.
  */
-export const moreLikePrompt = (option: { n: number; label: string; text: string }, count = DEFAULT_OPTION_COUNT) => {
+export const moreLikePrompt = (option: { n: number; label: string; text: string }, count = DEFAULT_OPTION_COUNT, asked: string[] = []) => {
   const fence = '`'.repeat(Math.max(3, ...(option.text.match(/`+/g) ?? []).map((run) => run.length + 1)));
   const label = option.label ? ` (“${option.label}”)` : '';
-  return `${moreInWords(count)} like Option ${option.n}${label}. That one is closest to what I want: write new options that start from it and take it further, each in its own way, rather than going back toward the others. They replace the selected passage, as before.\n\nOption ${option.n} was:\n\n${fence}typst\n${option.text}\n${fence}`;
+  const goals = asked.map((a) => a.trim()).filter(Boolean);
+  const goal = goals.length ? `\n\nWhat I asked for${goals.length > 1 ? ', in order' : ''}:\n\n${goals.map(quoted).join('\n\n')}` : '';
+  return `${moreInWords(count)} like Option ${option.n}${label}. That one is closest to what I want: write new options that start from it and take it further, each in its own way, rather than going back toward the others. ${goals.length ? "They're still for what I asked, and" : 'They'} replace the selected passage, as before.${goal}\n\nOption ${option.n} was:\n\n${fence}typst\n${option.text}\n${fence}`;
 };
 
 /** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
@@ -120,7 +128,8 @@ const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
 const REVISE_SELECTION = new RegExp(`^(?:${[revisePrompt, REVISE_UNTIL_091].map((p) => esc(p('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')).join('|')})$`);
 const OPTIONS_SELECTION = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for the selected passage: ([\\s\\S]+)$`);
 const ASK_SELECTION = new RegExp(`^${esc(askPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
-const MORE_LIKE = new RegExp(`^(${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (\\d+)(?: \\(“([^\\n]*)”\\))?\\. That one is closest to what I want: [\\s\\S]*?\\n\\nOption \\d+ was:\\n\\n(\`{3,})typst\\n([\\s\\S]*)\\n\\4$`);
+// What the author asked for is in it after 0.10.0.
+const MORE_LIKE = new RegExp(`^(${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (\\d+)(?: \\(“([^\\n]*)”\\))?\\. That one is closest to what I want: [\\s\\S]*?(?:\\n\\nWhat I asked for(?:, in order)?:\\n\\n([\\s\\S]*?))?\\n\\nOption \\d+ was:\\n\\n(\`{3,})typst\\n([\\s\\S]*)\\n\\5$`);
 
 /** Each kind of message, read back: what it asked for, or null if it isn't that one. */
 const READERS: ((text: string) => StockAction | null)[] = [
@@ -146,7 +155,7 @@ const READERS: ((text: string) => StockAction | null)[] = [
   (text) => {
     // "Three more like Option 2", and its label (or, without one, its first line).
     const m = MORE_LIKE.exec(text);
-    const what = m && (m[3] || m[5].trim().split('\n')[0]);
+    const what = m && (m[3] || m[6].trim().split('\n')[0]);
     return m ? { verb: `${m[1].replace(/ options?$/, '')} like Option ${m[2]}`, ...(what ? { rows: [{ text: what }] } : {}), tone: 'other', icon: 'check', mode: 'options' } : null;
   },
   (text) => {
@@ -206,6 +215,23 @@ const READERS: ((text: string) => StockAction | null)[] = [
     return s ? { verb: s.label, tone: s.tone === 'check' ? 'done' : s.tone === 'typst' ? 'other' : s.tone, icon: s.icon, mode: s.mode } : null;
   },
 ];
+
+/**
+ * What a message in Options mode asked the options for, for More like this to
+ * say again (oldest first), and whether that's all of it (`whole`): the bar's
+ * Options, a More like this that carried it, or words typed with the passage
+ * `selected`. Otherwise the messages before it count too: words typed after
+ * some options, or a request that only goes on from them.
+ */
+export function optionsAsked(message: string, selected: boolean): { asked: string[]; whole: boolean } {
+  const text = message.trim();
+  const ask = OPTIONS_SELECTION.exec(text);
+  if (ask) return { asked: [ask[2].trim()], whole: true };
+  const more = MORE_LIKE.exec(text);
+  if (more) return more[4] ? { asked: more[4].split('\n\n').map(unquoted), whole: true } : { asked: [], whole: false };
+  if (text === OPTIONS_AGAIN_PROMPT || text === OPTIONS_AGAIN_THREE) return { asked: [], whole: false };
+  return { asked: text ? [text] : [], whole: selected };
+}
 
 /** The action a message is, if Foreword wrote it for a button; null for the author's own words. */
 export function stockAction(message: string): StockAction | null {

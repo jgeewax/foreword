@@ -103,7 +103,7 @@ import { commandPermissionRules, ruleKey, rulesUsed, type CommandRule, type Rule
 import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
-import { BAR_MODE, barMessage, type BarKind } from './selection-bar';
+import { BAR_MODE, barMessage, optionsAskedFor, type BarKind } from './selection-bar';
 import { fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockAction, stockTitle } from './stock-prompts';
 import { clip, plainLine } from './task-list';
 import type { AgentAdapter, AgentEvent, AttachedFile, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
@@ -6027,6 +6027,7 @@ export class Studio {
    * "More like this" on an option: as many new options again (the author's
    * count), for the same passage as it is now, starting from that one, for when
    * it's the closest but not there yet. Again from the new ones, until one is.
+   * What they asked for goes with it, so the assistant needn't remember it.
    */
   async moreLikeOption(itemId: string, index: number) {
     const item = this.state.agent.items.find((i) => i.id === itemId);
@@ -6037,7 +6038,8 @@ export class Studio {
     const sel = id ? await this.passageSelection(id) : null;
     if (id && !sel) return this.toast('The passage can’t be found any more: select it and ask again.', 'error');
     // Nothing was selected for these (a title, say): as a follow-up typed in the box.
-    await this.sendForOptions(moreLikePrompt({ n: option.n, label: option.label, text: option.text }, this.state.settings.optionCount), id && sel ? { id, sel } : null);
+    const asked = optionsAskedFor(this.state.agent.items, itemId);
+    await this.sendForOptions(moreLikePrompt({ n: option.n, label: option.label, text: option.text }, this.state.settings.optionCount, asked), id && sel ? { id, sel } : null);
   }
 
   /** `message` in Options mode, about `passage` as it is now; a reply running in another mode finishes first, as from the selection bar. */

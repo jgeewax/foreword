@@ -3,9 +3,10 @@
 // from the chat (it waits its turn, the assistant works on it, it's done), for
 // the passage's own note in the editor.
 import { countWords, wordPieces, type Piece } from './prose-diff';
-import { askPrompt, optionsPrompt, revisePrompt } from './stock-prompts';
+import { askPrompt, optionsAsked, optionsPrompt, revisePrompt } from './stock-prompts';
 import type { ChatItem, QueuedMessage } from './studio';
 import { turnsOf, type UserItem } from './trace';
+import { EARLIER_CHIP } from '../services/agent/message-context';
 import type { AgentMode } from '../services/agent/modes';
 import { DEFAULT_OPTION_COUNT, parseOptions } from '../services/agent/options-mode';
 
@@ -88,6 +89,31 @@ export function barProgress(agent: Agent, req: BarRequest): BarProgress {
   const later = agent.items.slice(agent.items.indexOf(reply));
   const picked = later.some((it) => it.kind === 'assistant' && it.options?.applied != null && (it === reply || (!!passage && it.options.passage === passage)));
   return { phase: 'options', count, picked };
+}
+
+/**
+ * What the author asked an Options reply's options for, oldest first, for
+ * More like this to say again: back from its message through the Options
+ * replies before it about the same passage, to the ask that began them (the
+ * bar's Options, or words sent with the passage selected), with what they
+ * typed in between. Empty if there's none to find.
+ */
+export function optionsAskedFor(items: readonly ChatItem[], replyId: string): string[] {
+  const turns = turnsOf(items);
+  let i = turns.findIndex((t) => t.reply?.id === replyId);
+  const passage = i >= 0 ? turns[i].reply!.options?.passage : undefined;
+  const asked: string[] = [];
+  for (; i >= 0; i--) {
+    const { user, reply } = turns[i];
+    if (!user || !reply || !parseOptions(reply.text).options.length) break;
+    // A follow-up typed with nothing selected has no passage of its own.
+    const other = reply.options?.passage;
+    if (passage && other && other !== passage) break;
+    const said = optionsAsked(user.text, user.attachments.some((a) => a !== EARLIER_CHIP));
+    asked.unshift(...said.asked);
+    if (said.whole) break;
+  }
+  return asked;
 }
 
 /** What a revision did to the passage, word by word, and how many words longer it got; null if it's the same. */
