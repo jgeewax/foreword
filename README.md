@@ -16,7 +16,7 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
-**New in 0.11:** edit a file right in its diff, in Source Control or History's Compare with Now · Fix This Error, a TODO and the other buttons ask in the right mode, whatever mode the chat was in · a TODO's ▾ asks about it, talks it through or draws it · More like this remembers what you asked the options for · Ask's answer comes first on its card
+**New in 0.11:** edit a file right in its diff, in Source Control or History's Compare with now · Fix This Error, a TODO and the other buttons ask in the right mode, whatever mode the chat was in · a TODO's ▾ asks about it, talks it through or draws it · More like this remembers what you asked the options for · Ask's answer comes first on its card
 
 <br>
 

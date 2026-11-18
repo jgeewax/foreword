@@ -6,7 +6,7 @@ What's new in each version of Foreword (called Typst Studio up to 0.3.0). The re
 
 ### Source Control and History
 
-- **Edit the file in its diff.** A file's uncommitted changes in Source Control, and *Compare with Now* in History, show the file itself on the right. Type there and you're changing the file: undo and ⌘S work as in the editor, and a ● shows until you save. Changes you make in the editor are in the diff when you come back to it. Staged changes, commits and History's earlier versions stay read-only. After you stage, commit or save, the list of changes updates where it is.
+- **Edit the file in its diff.** When a diff shows a file as it is now (its uncommitted changes in Source Control, or *Compare with now* in History), you can type in its new text in **Lines**, and you're changing the file: undo and ⌘S work as in the editor, and a ● shows until you save. Changes you make in the editor are in the diff when you come back to it. Staged changes, commits and History's earlier versions stay read-only. After you stage, commit or save, the list of changes updates where it is.
 
 ### The assistant
 
