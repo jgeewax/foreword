@@ -2,6 +2,24 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.11.0 · 19 November 2026
+
+### Source Control and History
+
+- **Edit the file in its diff.** A file's uncommitted changes in Source Control, and *Compare with Now* in History, show the file itself on the right. Type there and you're changing the file: undo and ⌘S work as in the editor, and a ● shows until you save. Changes you make in the editor are in the diff when you come back to it. Staged changes, commits and History's earlier versions stay read-only. After you stage, commit or save, the list of changes updates where it is.
+
+### The assistant
+
+- **Buttons ask in the right mode.** *Fix This Error*, a TODO's *Ask the assistant to do it*, *Resolve with* on a passage changed two ways at once, *Ask the assistant to fix them* on failing code examples, and asking for a comment's change now go in Write mode (or Figures, if the chat is there), whatever mode the chat was left in. A fix asked for after some Options no longer comes back as more options. The suggestions in an empty chat go in their own mode: the questions and the proofread in Ask, the outline in Discuss. If a reply in another mode is still running, the request waits for it, and the chat says so.
+- **More ways to do a TODO.** A TODO's bar has a ▾ beside *Ask the assistant to do it*: ask about it in Ask, talk it through in Discuss, or draw it in Figures. Right-click a TODO in the editor or the To do list for the same choices, under *Other Ways with the Assistant*. A request made in a mode other than Write says its mode in the chat.
+- **More like this remembers what you asked for.** It sends what you asked the options for again (the selection bar's request, or what you wrote with the passage selected, and anything you added after), so the new options still aim at it, even in a long chat or after you switch assistants.
+- **The answer comes first on Ask's card.** *Where in the book* and *Why* fold to a line each, shut until you click one, so the answer isn't pushed up out of sight. A chart comes right under the answer.
+- **A quieter mark when the chat carries over.** After you switch assistants, the message that took the chat with it has a small mark beside its time. Hover over it to see what happened.
+
+### Fixes
+
+- After switching assistants, the last Options reply lost its *Use this*, *More like this* and *Copy* buttons and showed as plain text. It keeps them now.
+
 ## 0.10.0 · 14 November 2026
 
 ### The assistant
