@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GitFile, GitStatus } from '../lib/ipc';
-import { SourceControl, branchEntries, discardQuestion, initialGit, mainAction, type GitHost, type GitState } from './source-control';
+import { SourceControl, branchEntries, discardQuestion, initialGit, keepShown, mainAction, type GitHost, type GitState } from './source-control';
 
 const ipcMock = vi.hoisted(() => ({
   gitStatus: vi.fn(),
@@ -11,6 +11,8 @@ const ipcMock = vi.hoisted(() => ({
   gitPull: vi.fn(),
   gitPush: vi.fn(),
   gitStage: vi.fn(),
+  gitFile: vi.fn(),
+  gitCommitFiles: vi.fn(),
   fsRead: vi.fn(),
 }));
 vi.mock('../lib/ipc', () => ({ ipc: ipcMock, errorMessage: (e: unknown) => String(e instanceof Error ? e.message : e) }));
@@ -19,13 +21,18 @@ vi.mock('../lib/ipc', () => ({ ipc: ipcMock, errorMessage: (e: unknown) => Strin
 const repo = (over: Partial<GitStatus> = {}): GitStatus => ({ root: '/book', prefix: '', branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, staged: [], files: [], ...over });
 const file = (path: string, status: GitFile['status'] = 'M'): GitFile => ({ path, status });
 
-/** A SourceControl over a made-up state, recording what it asked and did. */
-function rig(state: Partial<GitState> = {}, answers: { confirm?: boolean; prompt?: string | null; keep?: Error } = {}) {
+/** A SourceControl over a made-up state, recording what it asked and did (and each view it showed). `open`: files open, with their text. */
+function rig(state: Partial<GitState> = {}, answers: { confirm?: boolean; prompt?: string | null; keep?: Error } = {}, open: Record<string, string> = {}) {
   let s: GitState = { ...initialGit, status: 'ready', repo: repo(), ...state };
   const calls: string[] = [];
+  const views: GitState['view'][] = [];
   const host: GitHost = {
     get: () => s,
-    set: (patch) => (s = { ...s, ...patch }),
+    set: (patch) => {
+      if ('view' in patch) views.push(patch.view!);
+      s = { ...s, ...patch };
+    },
+    buffer: (path) => open[path] ?? null,
     report: (text, tone) => calls.push(`${tone}: ${text}`),
     confirm: async (message, title, ok) => (calls.push(`confirm ${title} [${ok}]: ${message}`), answers.confirm ?? true),
     prompt: async (r) => (calls.push(`prompt ${r.title}`), answers.prompt ?? null),
@@ -37,7 +44,7 @@ function rig(state: Partial<GitState> = {}, answers: { confirm?: boolean; prompt
     discarded: async (paths, trashed) => void calls.push(`discarded ${paths.join(' ')} | ${trashed.join(' ')}`),
     ignore: async (path) => void calls.push(`ignore ${path}`),
   };
-  return { git: new SourceControl(host), calls, state: () => s };
+  return { git: new SourceControl(host), calls, views, state: () => s };
 }
 
 beforeEach(() => {
@@ -168,5 +175,73 @@ describe('the rest of VS Code’s Source Control', () => {
     expect(labels).toEqual(['Create New Branch…', 'separator', 'main ✓', 'draft', 'separator', 'origin/ideas']);
     for (const e of entries) if (typeof e === 'object' && e && 'action' in e) e.action();
     expect(picked).toEqual(['create', 'main', 'draft', 'origin/ideas']);
+  });
+});
+
+describe('what changed: versions, or the files as they are', () => {
+  const text = (ref: string, path: string) => `${path} ${ref === ':0' ? 'staged' : ref}\n`;
+  beforeEach(() => {
+    ipcMock.gitFile.mockImplementation(async (ref: string, path: string) => text(ref, path));
+    ipcMock.fsRead.mockImplementation(async (path: string) => ({ text: `${path} on disk\n`, hash: 'h' }));
+  });
+  const shown = (s: GitState) => s.view?.files?.map((f) => [f.path, !!f.live, f.after]);
+  const commit = { hash: 'c1', short: 'c1', subject: 'One', author: 'A', time: 0, parents: ['c0'], head: true, refs: [] };
+
+  it('uncommitted changes: each new side is the file as it is (an open one’s unsaved words too), edited in the diff', async () => {
+    const { git, state } = rig({ repo: repo({ files: [file('a.typ'), file('new.typ', '?'), file('gone.typ', 'D')] }) }, {}, { 'a.typ': 'a.typ, unsaved\n' });
+    await git.showWorking();
+    expect(shown(state())).toEqual([
+      ['a.typ', true, 'a.typ, unsaved\n'],
+      ['new.typ', true, 'new.typ on disk\n'],
+      // Deleted: nothing to edit.
+      ['gone.typ', false, null],
+    ]);
+    expect(state().view?.files?.map((f) => f.before)).toEqual(['a.typ staged\n', null, 'gone.typ staged\n']);
+  });
+
+  it('what’s staged, and a commit: both sides are versions, read-only', async () => {
+    const { git, state } = rig({ repo: repo({ staged: [file('a.typ')] }) }, {}, { 'a.typ': 'unsaved\n' });
+    await git.showWorking(undefined, true);
+    expect(shown(state())).toEqual([['a.typ', false, 'a.typ staged\n']]);
+    ipcMock.gitCommitFiles.mockResolvedValue([file('a.typ')]);
+    await git.showCommit(commit);
+    expect(shown(state())).toEqual([['a.typ', false, 'a.typ c1\n']]);
+  });
+
+  it('follows the repo in place: what was staged meanwhile, a file no longer changed kept, a new one added', async () => {
+    const { git, state, views } = rig({ repo: repo({ files: [file('a.typ'), file('b.typ')] }) });
+    await git.showWorking();
+    ipcMock.gitFile.mockImplementation(async (ref: string, path: string) => (path === 'a.typ' ? 'a.typ staged since\n' : text(ref, path)));
+    ipcMock.gitStatus.mockResolvedValue(repo({ files: [file('a.typ'), file('c.typ', '?')] }));
+    const shownBefore = views.length;
+    await git.refresh();
+    await vi.waitFor(() => expect(state().view?.files?.length).toBe(3));
+    expect(state().view?.files?.map((f) => [f.path, f.before, f.after, f.live])).toEqual([
+      ['a.typ', 'a.typ staged since\n', 'a.typ on disk\n', true],
+      ['b.typ', 'b.typ staged\n', 'b.typ on disk\n', true],
+      ['c.typ', null, 'c.typ on disk\n', true],
+    ]);
+    // In place: no "Loading…" in between, so the tab stays as it is.
+    expect(views.slice(shownBefore).map((v) => v?.files === null)).toEqual([false]);
+  });
+
+  it('leaves a commit’s view as it is when the repo changes', async () => {
+    const { git, state } = rig({ repo: repo({ files: [file('a.typ')] }) });
+    await git.showWorking();
+    ipcMock.gitCommitFiles.mockResolvedValue([file('a.typ')]);
+    await git.showCommit(commit);
+    ipcMock.gitFile.mockClear();
+    await git.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(ipcMock.gitFile).not.toHaveBeenCalled();
+    expect(state().view?.title).toBe('One');
+  });
+
+  it('keeps the files a view shows in their places, then the new ones', () => {
+    const shownFiles = [
+      { path: 'b.typ', status: 'M' as const, diff: null },
+      { path: 'a.typ', status: 'A' as const, diff: null },
+    ];
+    expect(keepShown(shownFiles, [file('a.typ', '?'), file('c.typ')])).toEqual([file('b.typ'), file('a.typ', '?'), file('c.typ')]);
   });
 });

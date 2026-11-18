@@ -1517,6 +1517,65 @@ section), the page starts at the window's top and the offset is measured.
     with both files, inline (screen capture). Staging, commits, push and pull
     worked as before.
 
+### A diff of the file as it is now edits the file (as VS Code's working-tree diffs)
+
+- **The rule is VS Code's.** When a diff's new side is the file as it is now,
+  that side is the file's own text. That covers Source Control's uncommitted
+  changes and History's Compare with Now. The diff shares the file's Monaco
+  model with the editor, so typing in it is typing in the file: its undo, its
+  ●, ⌘S, Format on save. Edits made anywhere else (the editor, the assistant,
+  another app) show in the diff at once. The old side stays read-only.
+- **Diffs between two versions stay read-only:** what's staged, a commit,
+  History's versions and one file of a version. That includes History's
+  latest version, since its new side is that version, not the file.
+- **Asked for after this:** the user opened a diff, edited the file in the
+  editor, came back, and the diff still showed the old copy of the text. The
+  tabs unmount when another tab is in front, and they came back from the
+  copies.
+- **How it holds together:**
+  - `ChangedFile.live` marks such files, and `DiffEditor` takes the file's
+    model (opened for the diff if it wasn't open, without a tab).
+  - Closing the file's tab while a diff shows it leaves the text open there.
+    Discarding unsaved changes reverts it to disk.
+  - When no tab shows a file that was opened for a diff, it closes again. If
+    it has unsaved words, it gets a tab of its own instead (not in front),
+    with a toast, as VS Code keeps a preview tab you've edited.
+  - ⌘S saves the file being written in: the diff's, not the editor's behind it.
+  - The tab and the file's header show ● while it's unsaved. The words view
+    and the counts follow the text, a moment after typing.
+  - Source Control's view of what's changed now is read again in place after
+    a stage, a commit or a save, with no "Loading…" in between. Files it
+    shows keep their place (one no longer changed stays, showing nothing
+    changed), new ones are added, and the old side changes in place.
+  - The editor behind the tab no longer moves the preview when the diff's
+    typing shifts its cursor.
+  - The list scrolls to keep the cursor in sight. Each diff is as tall as its
+    content, so Monaco can't scroll it itself.
+- **Monaco 0.57 bug, worked around:** a diff editor given plain models never
+  disposes the view model it makes for them. A diff still being worked out
+  when its tab changed then failed on the closed texts ("no diff result
+  available", an unhandled rejection; it was there before this change).
+  `DiffEditor` now makes the view model itself and disposes it with the
+  editor.
+- Verified:
+  - Self-test `livediff` (scratch Git book), with `one.typ` not open
+    beforehand. Not committed yet opened it for the diff, with no tab: the new
+    side was editable and was the file's model, the old side read-only.
+    Typing there made the file unsaved. The tab and the header showed ●, and
+    the count read +5 words. ⌘S (the menu's Save) wrote it to disk while
+    `two.typ` was in the editor. Undo and redo worked in the diff.
+  - An edit made in the editor was in the diff on coming back. Typing in the
+    diff made no preview jump. With the file's tab closed, the diff still had
+    the file. Staging read the view again in place, the old side now the
+    staged text, still editable.
+  - Staged changes, the commit, History's latest version and one file of it
+    were all read-only. Compare with Now was editable. Typing there and
+    closing the tab gave `one.typ` a tab, still unsaved, with the toast.
+  - No unhandled rejections. Before the view-model fix, the same run had
+    four.
+  - Unit tests: the live flags for uncommitted, staged and commit views and
+    for History's two modes; reading the view again in place.
+
 ### Showing that the assistant is working
 
 - **Live events** (recorded from OpenCode 2.0.20 with a real turn, through a

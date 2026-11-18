@@ -1113,6 +1113,8 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .history-folder { color: var(--muted); font-size: 10.5px; }
 .history-status { font-size: 10px; text-transform: uppercase; color: var(--muted); }
 .history-counts { font-size: 11px; white-space: nowrap; }
+/* A file edited in its diff and not saved yet: its tab's ●. */
+.change-unsaved { color: var(--accent); font-size: 9px; }
 .history-version-actions { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 4px 0 0 1px; }
 .history-empty { padding: 12px; }
 /* After the timeline: what History is, more on request. */

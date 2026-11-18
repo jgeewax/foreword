@@ -7,7 +7,7 @@ import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-
 import { isPicture, tildePath } from '../lib/paths';
 import { bookFiles, refNamed, type SourceRef } from '../lib/source-links';
 import { commandId, type TabCommand } from '../lib/tab-keys';
-import { Documents, type MergeQuestion } from '../editor/documents';
+import { Documents, type Doc, type MergeQuestion } from '../editor/documents';
 import { definitions, toMonacoRange, uriToRelative, type LspDiagnostic } from '../editor/lsp-convert';
 import { monaco } from '../editor/monaco';
 import { definitionPreview, filePreview, labelPreview } from '../editor/definition-preview';
@@ -59,7 +59,8 @@ import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
 import { initialProofing, Proofing, type ProofingState } from './proofing';
 import { bookLanguage, checkable, languageName, PROOFING_KEYS, proofOptions } from './proofing-core';
-import { History, initialHistory, type HistoryState } from './history';
+import { History, initialHistory, type ChangedFile, type HistoryState } from './history';
+import { proseDiff } from './prose-diff';
 import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { SAMPLES, SAMPLES_FOLDER } from '../samples';
@@ -800,8 +801,12 @@ export class Studio {
     get: () => this.state.git,
     set: (patch) => {
       this.store.set((s) => ({ git: { ...s.git, ...patch } }));
-      if ('view' in patch) this.followChanges(GIT_TAB, patch.view, patch.view?.files === null);
+      if ('view' in patch) {
+        this.followChanges(GIT_TAB, patch.view, patch.view?.files === null);
+        this.scheduleDiffRelease();
+      }
     },
+    buffer: (path) => this.docs?.get(path)?.model.getValue() ?? null,
     report: (text, tone) => this.toast(text, tone),
     confirm: (message, title, ok) => this.confirmAction(message, title, ok),
     prompt: (request) => this.prompt(request),
@@ -843,7 +848,10 @@ export class Studio {
     get: () => this.state.history,
     set: (patch) => {
       this.store.set((s) => ({ history: { ...s.history, ...patch } }));
-      if ('changes' in patch) this.followChanges(HISTORY_TAB, patch.changes, patch.changes?.files === null);
+      if ('changes' in patch) {
+        this.followChanges(HISTORY_TAB, patch.changes, patch.changes?.files === null);
+        this.scheduleDiffRelease();
+      }
       if ('diff' in patch) this.followChanges(HISTORY_FILE_TAB, patch.diff, true);
     },
     docs: () => this.docs,
@@ -1271,6 +1279,8 @@ export class Studio {
         if (p === this.state.workspace?.entry) this.scheduleChapterPreview();
         // Its labels and references (or a bibliography's keys): which references go nowhere.
         if (p.endsWith('.typ') || this.refs.hasBibliography(p)) this.scheduleRefs(p);
+        // A "what changed" tab showing it as it is now: its words and counts follow.
+        this.scheduleLiveDiff(p);
       },
       onDirtyChange: (p, dirty) => {
         this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } }));
@@ -3042,6 +3052,9 @@ export class Studio {
     this.unsubscribeAgent = null;
     await Promise.allSettled([this.typst.stop(), this.agent?.stop(), ipc.previewClose()]);
     this.previewOpened = false;
+    this.diffDocs.clear();
+    for (const t of this.liveDiffTimers.values()) clearTimeout(t);
+    this.liveDiffTimers.clear();
     this.docs?.dispose();
     this.docs = null;
     this.proofing.stopBook();
@@ -3203,6 +3216,88 @@ export class Studio {
     }
   }
 
+  // ---- "what changed" tabs that edit the file (uncommitted changes, Compare with Now) ----
+
+  /** Files opened only for a diff's new side: closed again once no tab shows them. */
+  private diffDocs = new Set<string>();
+  private diffReleaseTimer: number | undefined;
+  private liveDiffTimers = new Map<string, number>();
+
+  /** The files the "what changed" tabs show as they are now (ChangedFile.live): their diffs edit them. */
+  liveDiffPaths(): Set<string> {
+    const { git, history } = this.state;
+    return new Set([...(git.view?.files ?? []), ...(history.changes?.files ?? [])].filter((f) => f.live).map((f) => f.path));
+  }
+
+  /** A file's text for a diff's new side: the open file's, or opened for the diff. Null if it can't be read. */
+  async diffDoc(path: string): Promise<Doc | null> {
+    if (!this.docs) return null;
+    const open = this.docs.get(path);
+    if (open) return open;
+    const doc = await this.docs.open(path).catch(() => null);
+    if (!doc) return null;
+    if (!this.state.tabs.includes(path)) this.diffDocs.add(path);
+    // What was found in it before it opened, as openFile shows it.
+    const marks = this.diagnostics.get(path);
+    if (marks) this.docs.setDiagnostics(path, marks);
+    return doc;
+  }
+
+  /** A "what changed" tab shows something else, or closed: soon after its editors let go of the text. */
+  private scheduleDiffRelease() {
+    clearTimeout(this.diffReleaseTimer);
+    this.diffReleaseTimer = window.setTimeout(() => this.releaseDiffDocs(), 0);
+  }
+
+  /**
+   * Files opened for a diff that no tab shows now are closed; one with unsaved
+   * words gets a tab of its own instead (not in front), so they're kept, as VS
+   * Code keeps a diff edited in its preview tab.
+   */
+  private releaseDiffDocs() {
+    const { git, history } = this.state;
+    // Still loading: what it will show isn't known yet.
+    if (git.view?.files === null || history.changes?.files === null) return;
+    const shown = this.liveDiffPaths();
+    const kept: string[] = [];
+    for (const path of this.diffDocs) {
+      if (shown.has(path)) continue;
+      this.diffDocs.delete(path);
+      if (this.state.tabs.includes(path) || !this.docs?.get(path)) continue;
+      if (this.state.dirty[path]) {
+        kept.push(path);
+        void this.openFile(path, { activate: false });
+      } else this.docs.close(path);
+    }
+    if (kept.length) this.toast(`Your unsaved changes to ${kept.map((p) => p.slice(p.lastIndexOf('/') + 1)).join(', ')} are in ${kept.length === 1 ? 'its tab' : 'their tabs'}.`, 'info');
+  }
+
+  /** A file edited while a "what changed" tab shows it as it is now: its words and counts there follow, a moment later. */
+  private scheduleLiveDiff(path: string) {
+    if (!this.liveDiffPaths().has(path)) return;
+    clearTimeout(this.liveDiffTimers.get(path));
+    this.liveDiffTimers.set(
+      path,
+      window.setTimeout(() => {
+        this.liveDiffTimers.delete(path);
+        const text = this.docs?.get(path)?.model.getValue();
+        if (text === undefined) return;
+        const follow = (f: ChangedFile): ChangedFile => (f.live && f.path === path && f.after !== text ? { ...f, after: text, diff: proseDiff(f.before ?? null, text) } : f);
+        this.store.set((s) => ({
+          git: s.git.view?.files ? { ...s.git, view: { ...s.git.view, files: s.git.view.files.map(follow) } } : s.git,
+          history: s.history.changes?.files ? { ...s.history, changes: { ...s.history.changes, files: s.history.changes.files.map(follow) } } : s.history,
+        }));
+      }, 300),
+    );
+  }
+
+  /** A "what changed" tab with unsaved words in a file it edits (its tab's ●). */
+  viewTabDirty(key: string): boolean {
+    const { git, history, dirty } = this.state;
+    const files = key === GIT_TAB ? git.view?.files : key === HISTORY_TAB ? history.changes?.files : null;
+    return !!files?.some((f) => f.live && dirty[f.path]);
+  }
+
   async closeTab(path: string) {
     if (isViewTab(path)) return this.closeViewTab(path);
     if (this.state.dirty[path]) {
@@ -3215,7 +3310,11 @@ export class Studio {
       if (!discard) return;
     }
     const tabs = this.state.tabs.filter((t) => t !== path);
-    this.docs?.close(path);
+    if (this.liveDiffPaths().has(path)) {
+      // A "what changed" tab edits it too: the text stays open there, as it is on disk.
+      if (this.state.dirty[path]) await this.docs?.reload(path);
+      this.diffDocs.add(path);
+    } else this.docs?.close(path);
     this.viewStates.delete(path);
     this.closedTabs = [...this.closedTabs.filter((p) => p !== path), path].slice(-30);
     this.store.set((s) => {
@@ -3329,7 +3428,8 @@ export class Studio {
   /** `typing`: the cursor moved with an edit (typing, paste, undo), not a click or an arrow key. */
   setCursor(line: number, column: number, typing = false) {
     this.store.set({ cursor: { line, column } });
-    this.schedulePreviewSync(typing);
+    // Behind a tab that isn't a file, the editor's cursor moves only when its text is edited in a diff there: the preview stays put.
+    if (!this.state.viewTab) this.schedulePreviewSync(typing);
   }
 
   // ---- source ↔ preview sync ----------------------------------------------------
@@ -3452,8 +3552,17 @@ export class Studio {
     editor.focus();
   }
 
-  /** Save a file (⌘S): a Typst file is formatted first if Format on save is on. */
-  async save(path = this.state.active, opts?: { overwrite?: boolean; format?: boolean }) {
+  /** The file whose text has the keyboard: the editor's, or the one a diff in a "what changed" tab edits. */
+  private focusedFile(): string | null {
+    const editor = monaco.editor.getEditors().find((e) => e.hasTextFocus());
+    if (!editor) return null;
+    const diff = monaco.editor.getDiffEditors().find((d) => d.getOriginalEditor() === editor || d.getModifiedEditor() === editor);
+    const model = (diff?.getModifiedEditor() ?? editor).getModel();
+    return (model && this.docs?.all().find((d) => d.model === model)?.path) ?? null;
+  }
+
+  /** Save a file (⌘S): the one being written in (a diff's too), else the editor's. A Typst file is formatted first if Format on save is on. */
+  async save(path = this.focusedFile() ?? this.state.active, opts?: { overwrite?: boolean; format?: boolean }) {
     if (!path || !this.docs) return;
     try {
       await this.docs.save(path, { format: this.state.settings.formatOnSave, ...opts });

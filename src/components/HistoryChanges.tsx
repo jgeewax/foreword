@@ -148,10 +148,14 @@ export function ChangeAction({ icon, label, title, disabled, onClick }: { icon: 
 /**
  * One file in a "what changed" tab: its name, folder and counts, its actions
  * (below the name when the tab is narrow), then its changes as lines or words.
+ * A live file (the file as it is now) is edited in its lines: they stay while
+ * it's written in, even with nothing changed any more, and ● says it's unsaved.
  */
 export function ChangedFileSection({ file, mode, latest, actions }: { file: ChangedFile; mode: ChangesMode; latest: boolean; actions?: ReactNode }) {
   const d = file.diff;
   const slash = file.path.lastIndexOf('/');
+  const unsaved = useStore(studio.store, (s) => !!file.live && !!s.dirty[file.path]);
+  const lines = mode === 'lines' && file.before !== undefined && !!d && (d.hunks.length > 0 || !!file.live);
   return (
     <section className="change-file">
       <header>
@@ -161,6 +165,11 @@ export function ChangedFileSection({ file, mode, latest, actions }: { file: Chan
           {file.path.slice(slash + 1)}
           {slash > 0 && <span className="history-folder"> {file.path.slice(0, slash)}</span>}
         </span>
+        {unsaved && (
+          <span className="change-unsaved" title="Unsaved changes (⌘S saves them)" aria-label="Unsaved changes">
+            ●
+          </span>
+        )}
         {file.status === 'A' && <span className="pill">new</span>}
         {file.status === 'D' && <span className="pill bad">deleted</span>}
         {d && (
@@ -174,9 +183,9 @@ export function ChangedFileSection({ file, mode, latest, actions }: { file: Chan
         </span>
       </header>
       {file.note && <div className="muted">{file.note}</div>}
-      {d && !d.hunks.length && <div className="muted">Only spacing or line endings changed.</div>}
-      {d && d.hunks.length > 0 && mode === 'lines' && file.before !== undefined ? (
-        <DiffEditor path={file.path} before={file.before} after={file.after ?? null} />
+      {d && !d.hunks.length && !lines && <div className="muted">{file.live && file.before === file.after ? 'No changes now.' : 'Only spacing or line endings changed.'}</div>}
+      {lines ? (
+        <DiffEditor path={file.path} before={file.before ?? null} after={file.after ?? null} live={file.live} />
       ) : (
         d?.hunks.map((h, i) => <Passage key={i} hunk={h} path={file.path} latest={latest} text={file.after} />)
       )}

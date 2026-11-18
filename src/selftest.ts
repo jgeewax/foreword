@@ -3446,6 +3446,161 @@ async function diffTabChecks() {
 }
 
 /**
+ * A diff edits the file, as VS Code's working-tree diffs do: in uncommitted
+ * changes and Compare with Now the new side is the file itself (typing there
+ * is typing in the file: unsaved ●, ⌘S, undo, and the editor's edits show in
+ * the diff); what's staged, a commit and History's versions stay read-only.
+ * Run with a scratch Git book as the workspace: main.typ including
+ * chapters/one.typ and chapters/two.typ, all committed (two.typ opens first).
+ */
+async function liveDiffChecks() {
+  const out: Record<string, unknown> = {};
+  // Diffs come and go here (a view replaced, read again, closed): none may leave a failure behind.
+  const rejections: string[] = [];
+  const onRejection = (e: PromiseRejectionEvent) => rejections.push(String(e.reason?.message ?? e.reason));
+  window.addEventListener('unhandledrejection', onRejection);
+  const g = () => studio.state.git;
+  const hs = () => studio.state.history;
+  await waitFor(() => g().status === 'ready', 20000, 'git');
+  await waitFor(() => hs().status === 'ready', 30000, 'history');
+  const file = 'chapters/one.typ';
+  const doc = () => studio.docs?.get(file);
+  // The diff in front, and what each of its sides allows.
+  const shown = () => monaco.editor.getDiffEditors().find((d) => d.getContainerDomNode().isConnected);
+  const newSide = () => shown()?.getModifiedEditor();
+  const sides = () => {
+    const d = shown();
+    const readOnly = (e: monaco.editor.ICodeEditor) => e.getOption(monaco.editor.EditorOption.readOnly);
+    return d ? { newEditable: !readOnly(d.getModifiedEditor()), oldEditable: !readOnly(d.getOriginalEditor()), isTheFile: d.getModifiedEditor().getModel() === doc()?.model } : null;
+  };
+  const type = async (words: string, line = 3) => {
+    const side = newSide();
+    side?.focus();
+    side?.setPosition({ lineNumber: line, column: 1 });
+    side?.trigger('keyboard', 'type', { text: words });
+    await sleep(100);
+  };
+  const tabDot = () => document.querySelector('.tab.active .tab-close')?.classList.contains('dirty');
+  const { text, hash } = await ipc.fsRead(file);
+  await ipc.fsWrite(file, text.replace('Hello from the first chapter.', 'Hello again from the first chapter.'), hash);
+  await waitFor(() => g().repo?.files.some((f) => f.path === file), 10000, 'changed').catch(() => {});
+
+  // Not committed yet, the file not open: opened for the diff (no tab), and its side is the file.
+  out.openBefore = !!doc();
+  await studio.git.showWorking();
+  await waitFor(() => g().view?.files, 10000, 'view');
+  await waitFor(() => sides()?.isTheFile, 5000, 'live side').catch(() => {});
+  out.working = { ...sides(), tabs: [...studio.state.tabs], live: g().view?.files?.map((f) => `${f.path} ${f.live}`) };
+
+  // Typing in it is typing in the file: unsaved, the tab's ● and the file's, the counts following.
+  await type('Typed in the diff. ');
+  await sleep(600);
+  out.typed = {
+    focused: newSide()?.hasTextFocus(),
+    text: doc()?.model.getValue(),
+    dirty: !!studio.state.dirty[file],
+    tabDot: tabDot(),
+    fileDot: !!document.querySelector('.change-unsaved'),
+    added: g().view?.files?.find((f) => f.path === file)?.diff?.added,
+    snapshot: await snap('livediff-typed'),
+  };
+
+  // ⌘S (the menu's Save) saves it, though the editor behind holds another file.
+  await studio.menuCommand('save');
+  await waitFor(() => !studio.state.dirty[file], 5000, 'saved').catch(() => {});
+  out.saved = { active: studio.state.active, disk: (await ipc.fsRead(file)).text, dirty: !!studio.state.dirty[file], tabDot: tabDot() };
+
+  // Undo in the diff takes the typing back, as in the editor; redo puts it back.
+  newSide()?.trigger('keyboard', 'undo', null);
+  await sleep(150);
+  const undone = doc()?.model.getValue();
+  newSide()?.trigger('keyboard', 'redo', null);
+  await sleep(150);
+  out.undo = { undone, redone: doc()?.model.getValue() };
+
+  // Edited in the editor with the diff behind it: back in the diff, the edit is there.
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  editor.executeEdits('selftest', [{ range: model.getFullModelRange().collapseToEnd(), text: 'From the editor.\n' }]);
+  studio.activate('view:git');
+  await sleep(500);
+  out.fromEditor = { inDiff: newSide()?.getModel()?.getValue().includes('From the editor.'), sameText: newSide()?.getModel() === model };
+  // Typing in the diff above the editor's cursor moves that cursor: the preview stays where it is.
+  let jumps = 0;
+  const offJumps = await listen<{ tag?: string }>('preview:report', (e) => void (e.payload?.tag === 'jump' && jumps++));
+  await type('X', 1);
+  await sleep(1200);
+  offJumps();
+  out.previewStill = { jumps, preview: studio.state.preview.status };
+  newSide()?.trigger('keyboard', 'undo', null);
+  await studio.save(file);
+
+  // Its tab closed while the diff has it: the diff keeps the file, still the file's own text.
+  await studio.closeTab(file);
+  await sleep(300);
+  out.tabClosed = { tabs: [...studio.state.tabs], open: !!doc(), disposed: newSide()?.getModel()?.isDisposed(), ...sides() };
+
+  // Staged meanwhile: the view reads it again in place. The file stays (nothing changed now), still editable.
+  await studio.git.stage([file]);
+  await waitFor(
+    () => {
+      const f = g().view?.files?.find((x) => x.path === file);
+      return f && f.before === f.after;
+    },
+    10000,
+    'read again',
+  ).catch(() => {});
+  await sleep(300);
+  out.staged = {
+    files: g().view?.files?.map((f) => `${f.path} ${f.live}`),
+    editors: document.querySelectorAll('.changes-tab .monaco-diff-editor').length,
+    oldSideIsStaged: shown()?.getOriginalEditor().getModel()?.getValue() === doc()?.model.getValue(),
+    ...sides(),
+  };
+
+  // What's staged, and a commit: read-only.
+  await studio.git.showWorking(file, true);
+  await waitFor(() => g().view?.files, 10000, 'staged view');
+  await sleep(400);
+  out.stagedView = { title: g().view?.title, ...sides() };
+  await studio.git.commit('Edit one');
+  await waitFor(() => !g().busy && g().log[0]?.subject === 'Edit one', 10000, 'commit').catch(() => {});
+  await studio.git.showCommit(g().log[0]);
+  await waitFor(() => g().view?.files, 10000, 'commit view');
+  await sleep(400);
+  out.commitView = { title: g().view?.title, ...sides() };
+  studio.git.closeView();
+
+  // History: a version, and one file of it, read-only; Compare with Now edits the file.
+  await studio.history.checkpoint('save', 'Live diff check');
+  const versions = hs().versions;
+  await studio.history.showChanges(versions[0]);
+  await waitFor(() => hs().changes?.files, 15000, 'version');
+  await sleep(400);
+  out.version = { label: versions[0].label, ...sides() };
+  await studio.history.showDiff(versions[0], file);
+  await sleep(600);
+  out.versionFile = sides();
+  studio.history.closeDiff();
+  await studio.history.compareWithNow(versions[versions.length - 1]);
+  await waitFor(() => hs().changes?.files, 15000, 'since');
+  await waitFor(() => sides()?.isTheFile, 5000, 'since live').catch(() => {});
+  out.since = { live: hs().changes?.files?.map((f) => `${f.path} ${f.live}`), ...sides(), snapshot: await snap('livediff-since') };
+
+  // Typed in there and not saved, then the tab closed: the file gets a tab of its own, the words kept.
+  await type('Unsaved. ', 1);
+  studio.history.closeChanges();
+  await sleep(500);
+  out.closedUnsaved = { tabs: [...studio.state.tabs], dirty: !!studio.state.dirty[file], start: doc()?.model.getValue().slice(0, 20), toast: studio.state.toast?.text };
+  await studio.save(file);
+  await sleep(1000);
+  window.removeEventListener('unhandledrejection', onRejection);
+  out.rejections = rejections;
+  return out;
+}
+
+/**
  * Cover designer: a fresh novel, the dialog (prefilled from the book), a cover
  * that matches the book, the Book/Cover switch, updating the spine after the
  * book grows, refusing to overwrite, and both exports. Works next to the
@@ -10577,6 +10732,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();
     if (launch.selftestEdits && want('difftabs')) result.difftabs = await diffTabChecks();
+    if (launch.selftestEdits && want('livediff')) result.livediff = await liveDiffChecks();
     if (launch.selftestEdits && want('typingsync')) result.typingsync = await typingSyncChecks();
     if (launch.selftestEdits && want('ctags')) result.ctags = await commentTagChecks();
     if (launch.selftestEdits && want('proofing')) result.proofing = await proofingChecks();

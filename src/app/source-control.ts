@@ -69,6 +69,8 @@ export type GitHost = {
   discarded(paths: string[], trashed: string[]): Promise<void>;
   /** Add to .gitignore: a line for this book file in the book's .gitignore. */
   ignore(path: string): Promise<void>;
+  /** An open file's text as it is in the editor, unsaved words too (null: it isn't open). */
+  buffer(path: string): string | null;
 };
 
 /** Files shown in one dialog (the rest are counted). */
@@ -79,6 +81,16 @@ const BRANCH_LIMIT = 30;
 
 /** Git's statuses as History's (added, modified, deleted). */
 const asChange = (s: GitFile['status']): ChangedFile['status'] => (s === 'A' || s === '?' ? 'A' : s === 'D' ? 'D' : 'M');
+
+/**
+ * A view read again: the files it shows, in their places (one that's no longer
+ * changed stays, with nothing marked, as a diff left open does in VS Code), then the new ones.
+ */
+export function keepShown(shown: ChangedFile[], listed: GitFile[]): GitFile[] {
+  const now = new Map(listed.map((f) => [f.path, f]));
+  const paths = new Set(shown.map((f) => f.path));
+  return [...shown.map((f): GitFile => now.get(f.path) ?? { path: f.path, status: 'M' }), ...listed.filter((f) => !paths.has(f.path))];
+}
 
 const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
@@ -137,6 +149,8 @@ export class SourceControl {
   }
 
   private refreshes = 0;
+  /** What the open view shows, when it's what's changed now (staged or not): it follows the repo. */
+  private working: { only?: string; staged: boolean } | null = null;
 
   /** Status and recent commits (quietly: a failure leaves the last known state). */
   async refresh() {
@@ -146,7 +160,10 @@ export class SourceControl {
     try {
       const repo = await ipc.gitStatus();
       const log = repo ? await ipc.gitLog(this.state.limit) : [];
-      if (n === this.refreshes) this.host.set({ status: 'ready', repo, log, error: null });
+      if (n !== this.refreshes) return;
+      this.host.set({ status: 'ready', repo, log, error: null });
+      // Staged, committed or changed meanwhile: what's changed now, shown again in place.
+      if (this.working && this.state.view?.files) void this.showWorking(this.working.only, this.working.staged, true);
     } catch (e) {
       if (n === this.refreshes) this.host.set({ status: 'error', error: errorMessage(e) });
     }
@@ -160,6 +177,7 @@ export class SourceControl {
 
   reset() {
     this.refreshes++; // the last book's refresh, still running, is dropped
+    this.working = null;
     this.host.set(initialGit);
   }
 
@@ -420,28 +438,40 @@ export class SourceControl {
   /**
    * What's changed (`only`: one file), as VS Code's diffs: Staged Changes
    * from the last commit to what's staged; Changes from what's staged (the
-   * last commit, if nothing is) to the file as it is.
+   * last commit, if nothing is) to the file as it is, whose side is the
+   * file itself, edited there. `again`: the view open now, read again in
+   * place (after a stage, a commit, a save): files it shows stay, new ones join.
    */
-  async showWorking(only?: string, staged = false) {
+  async showWorking(only?: string, staged = false, again = false) {
     const repo = this.state.repo;
     if (!repo) return;
-    const files = (staged ? repo.staged : repo.files).filter((f) => !only || f.path === only);
+    let files = (staged ? repo.staged : repo.files).filter((f) => !only || f.path === only);
+    if (again) files = keepShown(this.state.view?.files ?? [], files);
+    this.working = { only, staged };
     const branch = repo.branch ? ` on ${repo.branch}` : '';
     if (staged) {
-      await this.show({ title: only ? `Staged changes to ${only}` : 'Staged for the next commit', subtitle: `Since the last commit${branch}`, working: false }, files, async (f) => [
-        f.status === 'A' ? null : await ipc.gitFile('HEAD', f.path),
-        f.status === 'D' ? null : await ipc.gitFile(':0', f.path),
-      ]);
+      await this.show(
+        { title: only ? `Staged changes to ${only}` : 'Staged for the next commit', subtitle: `Since the last commit${branch}`, working: false },
+        files,
+        async (f) => [f.status === 'A' ? null : await ipc.gitFile('HEAD', f.path), f.status === 'D' ? null : await ipc.gitFile(':0', f.path)],
+        { again },
+      );
       return;
     }
-    await this.show({ title: only ? `Changes to ${only}` : 'Not committed yet', subtitle: repo.staged.length ? 'Not staged yet' : `Since the last commit${branch}`, working: true }, files, async (f) => [
-      f.status === '?' ? null : await ipc.gitFile(f.status === 'U' ? 'HEAD' : ':0', f.path),
-      f.status === 'D' ? null : (await ipc.fsRead(f.path)).text,
-    ]);
+    await this.show(
+      { title: only ? `Changes to ${only}` : 'Not committed yet', subtitle: repo.staged.length ? 'Not staged yet' : `Since the last commit${branch}`, working: true },
+      files,
+      async (f) => [
+        f.status === '?' ? null : await ipc.gitFile(f.status === 'U' ? 'HEAD' : ':0', f.path),
+        f.status === 'D' ? null : (this.host.buffer(f.path) ?? (await ipc.fsRead(f.path)).text),
+      ],
+      { again, live: true },
+    );
   }
 
   /** What one commit changed in the book. */
   async showCommit(c: GitCommit) {
+    this.working = null;
     const when = new Date(c.time * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
     this.host.set({ view: { title: c.subject, subtitle: `${c.short} · ${c.author} · ${when}`, working: false, files: null, more: 0 } });
     try {
@@ -455,22 +485,29 @@ export class SourceControl {
     }
   }
 
-  private async show(head: Omit<GitChangesView, 'files' | 'more'>, files: GitFile[], texts: (f: GitFile) => Promise<[string | null, string | null]>) {
-    this.host.set({ view: { ...head, files: null, more: Math.max(0, files.length - VIEW_LIMIT) } });
+  /** `live`: each file's new side is the file as it is now (see ChangedFile). `again`: in place, not "Loading…" first. */
+  private async show(
+    head: Omit<GitChangesView, 'files' | 'more'>,
+    files: GitFile[],
+    texts: (f: GitFile) => Promise<[string | null, string | null]>,
+    { again = false, live = false } = {},
+  ) {
+    if (!again) this.host.set({ view: { ...head, files: null, more: Math.max(0, files.length - VIEW_LIMIT) } });
     const changed = await Promise.all(
       files.slice(0, VIEW_LIMIT).map(async (f): Promise<ChangedFile> => {
         try {
           const [before, after] = await texts(f);
-          return { path: f.path, status: asChange(f.status), diff: proseDiff(before, after), before, after };
+          return { path: f.path, status: asChange(f.status), diff: proseDiff(before, after), before, after, live: live && after !== null };
         } catch (e) {
           return { path: f.path, status: asChange(f.status), diff: null, note: errorMessage(e) };
         }
       }),
     );
-    if (this.state.view?.title === head.title) this.host.set({ view: { ...head, files: changed, more: Math.max(0, files.length - VIEW_LIMIT) } });
+    if (this.state.view?.title === head.title && (!again || this.state.view.files)) this.host.set({ view: { ...head, files: changed, more: Math.max(0, files.length - VIEW_LIMIT) } });
   }
 
   closeView() {
+    this.working = null;
     this.host.set({ view: null });
   }
 }

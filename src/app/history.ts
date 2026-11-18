@@ -27,6 +27,12 @@ export type ChangedFile = {
   /** The text before and after (null: the file didn't exist), for the side-by-side diff. */
   before?: string | null;
   after?: string | null;
+  /**
+   * `after` is the file as it is now (uncommitted changes, Compare with Now), as
+   * VS Code's working-tree diffs: the diff's right side is the file's own text, edited there.
+   * Otherwise both sides are versions, and the diff is read-only.
+   */
+  live?: boolean;
   /** Not shown as text (binary, not UTF-8, …). */
   note?: string;
 };
@@ -281,8 +287,11 @@ export class History {
         shown.map(async (c): Promise<ChangedFile> => {
           if (c.added === null) return { path: c.path, status: c.status, diff: null, note: 'not a text file' };
           try {
-            const [before, after] = await Promise.all([from ? ipc.historyFile(from, c.path) : Promise.resolve(null), ipc.historyFile(to, c.path)]);
-            return { path: c.path, status: c.status, diff: proseDiff(before, after), before, after };
+            const [before, saved] = await Promise.all([from ? ipc.historyFile(from, c.path) : Promise.resolve(null), ipc.historyFile(to, c.path)]);
+            // Compared with now: the file as it is, unsaved words too (the diff edits it).
+            const live = view.mode === 'now' && c.status !== 'D' && saved !== null;
+            const after = live ? (this.host.docs()?.get(c.path)?.model.getValue() ?? saved) : saved;
+            return { path: c.path, status: c.status, diff: proseDiff(before, after), before, after, live };
           } catch (e) {
             return { path: c.path, status: c.status, diff: null, note: errorMessage(e) };
           }

@@ -520,7 +520,8 @@ export function EditorPane() {
               )}
               <span className="tab-name">{name}</span>
               <button
-                className={`tab-close${dirty[t] ? ' dirty' : ''}`}
+                // A "what changed" tab has the ● too while a file it edits is unsaved.
+                className={`tab-close${dirty[t] || (view && studio.viewTabDirty(t)) ? ' dirty' : ''}`}
                 aria-label={`Close ${name}`}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => void studio.closeTab(t)}
