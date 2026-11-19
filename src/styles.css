@@ -987,8 +987,11 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .changes-mode button { border: none; border-radius: 0; background: transparent; padding: 1px 9px; font-size: 11.5px; color: var(--muted); }
 .changes-mode button.on { background: var(--bg-3); color: var(--fg); }
 .diff-editor { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+/* A diff that edits its file is as tall as its text: its bars and hovers spill out of it (over the page, DiffEditor.tsx), over the files below and under the sticky names. */
+.diff-editor.live { overflow: visible; }
+.diff-editor.live .overflowingContentWidgets { position: absolute; top: 0; left: 0; z-index: 2; }
 .change-file { margin-bottom: 18px; }
-.change-file > header { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; position: sticky; top: -1px; background: var(--bg); z-index: 1; }
+.change-file > header { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; position: sticky; top: -1px; background: var(--bg); z-index: 3; }
 .change-file > header .history-path { flex: 0 1 auto; font-size: 12px; color: var(--fg); }
 /* A file's actions: quiet words with icons, on one line, at the right (or under the name when narrow). */
 .change-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }

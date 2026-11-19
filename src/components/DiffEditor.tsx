@@ -3,6 +3,7 @@ import { studio } from '../app/studio';
 import type { Doc } from '../editor/documents';
 import { editorTextOptions, languageFor, monaco } from '../editor/monaco';
 import { useStore } from '../lib/store';
+import { attachEditorTools } from './editor-tools';
 
 /**
  * One file's change in Monaco's diff editor, as VS Code shows it: side by
@@ -14,7 +15,9 @@ import { useStore } from '../lib/store';
  * Between two versions it's read-only. `live` (the file as it is now, as in
  * VS Code's working-tree diffs): the new side is the file's own text, the one
  * the editor has, so typing there is typing in the file (its undo, ⌘S, its
- * tab's ●), and edits made anywhere else show at once. The old side stays read-only.
+ * tab's ●), and edits made anywhere else show at once. It has the editor's
+ * tools too (editor-tools.tsx): the selection bar, a TODO's, spelling, the
+ * right-click menu, comments. The old side stays read-only.
  */
 export function DiffEditor({ path, before, after, live = false }: { path: string; before: string | null; after: string | null; live?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
@@ -38,6 +41,9 @@ export function DiffEditor({ path, before, after, live = false }: { path: string
       const editor = monaco.editor.createDiffEditor(host.current!, {
         readOnly: !doc,
         originalEditable: false,
+        // The file's own: the editor's native menu (editor-tools.tsx), spelling's fixes on ⌘. (not a bulb), ▶ Run over a
+        // code example. Hovers go under the line: above it, they'd go under the file's name stuck at the top.
+        ...(doc ? { contextmenu: false, lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off }, hover: { above: false }, diffCodeLens: true } : {}),
         automaticLayout: true,
         renderSideBySide: true,
         useInlineViewWhenSpaceIsLimited: true,
@@ -66,8 +72,13 @@ export function DiffEditor({ path, before, after, live = false }: { path: string
         if (host.current?.querySelector('.monaco-diff-editor.side-by-side')) sides[0].updateOptions({ wordWrapOverride2: 'inherit' });
         setHeight(Math.max(...sides.map((e) => e.getContentHeight())));
       };
+      // Where the list shows the text (the page's y): under the file's name, stuck at the top as the list scrolls.
+      const visibleTop = () => {
+        const list = host.current?.closest('.changes-body');
+        return list ? list.getBoundingClientRect().top + (host.current?.closest('.change-file')?.querySelector('header')?.getBoundingClientRect().height ?? 0) : 0;
+      };
       // The cursor kept in sight as it moves (typing a new line at the bottom, say): the list scrolls, not the editor,
-      // clear of the file's name stuck at the top.
+      // clear of the file's name.
       const reveal = (e: monaco.editor.ICodeEditor) => {
         const list = host.current?.closest('.changes-body');
         const pos = e.getPosition();
@@ -75,7 +86,7 @@ export function DiffEditor({ path, before, after, live = false }: { path: string
         if (!list || !at || !e.hasTextFocus()) return;
         const y = e.getDomNode()!.getBoundingClientRect().top + at.top;
         const box = list.getBoundingClientRect();
-        const top = box.top + (host.current?.closest('.change-file')?.querySelector('header')?.getBoundingClientRect().height ?? 0) + at.height;
+        const top = visibleTop() + at.height;
         const bottom = box.bottom - at.height;
         if (y < top) list.scrollTop -= top - y;
         else if (y + at.height > bottom) list.scrollTop += y + at.height - bottom;
@@ -87,15 +98,28 @@ export function DiffEditor({ path, before, after, live = false }: { path: string
           reveal(e);
         }),
       );
+      // Monaco fixes a diff's floating widgets to the window, whatever it's told (and again at each change to its options),
+      // so they stayed put as the list scrolled. The file's side has them over the page instead, moving with its text
+      // and hidden with it; each widget takes this as it's made.
+      const unfix = () => sides[1].getOption(monaco.editor.EditorOption.fixedOverflowWidgets) && sides[1].updateOptions({ fixedOverflowWidgets: false });
+      if (doc) unfix();
+      // The file's side is written in as the editor is, with its tools; the actions they start act here once it has the keys.
+      const tools = doc ? [attachEditorTools(sides[1], { visibleTop }), studio.attachDiffWriter(sides[1])] : [];
       const subscriptions = [
         ...sides.map((e) => e.onDidContentSizeChange(fit)),
         editor.onDidUpdateDiff(fit),
         ...follow,
-        // The file closed under it (the book closing): the tab goes next.
-        ...(doc ? [doc.model.onWillDispose(() => editor.setModel(null))] : []),
+        ...(doc
+          ? [
+              sides[1].onDidChangeConfiguration((e) => e.hasChanged(monaco.editor.EditorOption.fixedOverflowWidgets) && unfix()),
+              // The file closed under it (the book closing): the tab goes next.
+              doc.model.onWillDispose(() => editor.setModel(null)),
+            ]
+          : []),
       ];
       fit();
       stop = () => {
+        tools.forEach((off) => off());
         subscriptions.forEach((s) => s.dispose());
         diffEditor.current = null;
         editor.dispose();
@@ -124,5 +148,5 @@ export function DiffEditor({ path, before, after, live = false }: { path: string
   // The editor's text size (Settings ▸ General ▸ Editor).
   useEffect(() => diffEditor.current?.updateOptions(editorTextOptions(fontSize)), [fontSize]);
 
-  return <div className="diff-editor" ref={host} style={{ height }} />;
+  return <div className={`diff-editor${live ? ' live' : ''}`} ref={host} style={{ height }} />;
 }

@@ -337,9 +337,10 @@ const keepFocus = (e: MouseEvent) => {
  * Comment and Add to chat (Fix error first over a Typst error). Revise,
  * Options and Ask open a card in its place. A request sent from it gets a
  * note under its passage while it waits and works, and when it's done: the
- * words it changed, and Undo (an answer is in the chat). Returns its cleanup.
+ * words it changed, and Undo (an answer is in the chat). `overflow`: they may
+ * spill out of the editor (a diff's, as tall as its text). Returns its cleanup.
  */
-export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor): () => void {
+export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, { overflow = false } = {}): () => void {
   // ---- the bar, or its card, under the selection ----
   const barNode = document.createElement('div');
   barNode.className = 'selection-widget';
@@ -352,6 +353,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
   const barWidget: monaco.editor.IContentWidget = {
     getId: () => 'studio.selectionBar',
     getDomNode: () => barNode,
+    allowEditorOverflow: overflow,
     getPosition: () => (view && anchor ? { position: anchor, preference: [BELOW, ABOVE] } : null),
   };
   editor.addContentWidget(barWidget);
@@ -362,13 +364,15 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     const sel = editor.getSelection();
     return sel && !sel.isEmpty() ? sel : null;
   };
+  /** The Typst error in the selection, in this editor's file. */
+  const errorIn = (sel: monaco.IRange) => studio.errorIn(sel, studio.fileOf(editor.getModel()));
   const barNow = () => {
     if (!view) return null;
     const ready = studio.state.agent.status === 'ready';
     if (view.kind === 'bar') {
       const sel = selection();
       const chatMode = modeConfig(studio.state.agent.mode).label;
-      return <Bar compact={editor.getLayoutInfo().contentWidth < COMPACT_BELOW} error={!!sel && !!studio.errorIn(sel)} ready={ready} chatMode={chatMode} optionCount={studio.state.settings.optionCount} act={act} />;
+      return <Bar compact={editor.getLayoutInfo().contentWidth < COMPACT_BELOW} error={!!sel && !!errorIn(sel)} ready={ready} chatMode={chatMode} optionCount={studio.state.settings.optionCount} act={act} />;
     }
     const sel = selection();
     const model = editor.getModel();
@@ -414,7 +418,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     if (what === 'comment') void studio.addComment();
     else if (what === 'chat') void studio.askAboutSelection();
     else if (what === 'fix' && sel) {
-      const error = studio.errorIn(sel);
+      const error = errorIn(sel);
       if (error) void studio.fixProblem(error);
     }
   }
@@ -445,6 +449,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
   const noteWidget: monaco.editor.IContentWidget = {
     getId: () => 'studio.selectionNote',
     getDomNode: () => noteNode,
+    allowEditorOverflow: overflow,
     getPosition: () => {
       const range = tracked && editor.getModel() === tracked.model ? rangeOf(tracked) : null;
       return tracked && range && noteKey ? { position: endOf(tracked.model, range), preference: [BELOW, ABOVE] } : null;
@@ -585,8 +590,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor):
     }
     if (tracked) renderNote(false);
   });
-  // The context menu's Revise…, Options… and Ask About This…, and the commands.
-  const offCard = studio.events.on('selection-card', (kind) => selection() && openCard(kind));
+  // The context menu's Revise…, Options… and Ask About This…, and the commands: in the editor being written in.
+  const offCard = studio.events.on('selection-card', (kind) => studio.writer()?.editor === editor && selection() && openCard(kind));
   return () => {
     clearTimeout(showTimer);
     untrack();

@@ -1575,6 +1575,48 @@ section), the page starts at the window's top and the offset is measured.
     four.
   - Unit tests: the live flags for uncommitted, staged and commit views and
     for History's two modes; reading the view again in place.
+- **It has the editor's tools too** (asked for next: "the actions (fixing
+  todos, revise, etc) don't work inside the diff view").
+  - `editor-tools.tsx` holds what writing in a file comes with, attached to the
+    editor and to a live diff's file side alike: the right-click menu; ⇧⌥F, ⌘I
+    and ⌥⌘M; tagged comments with a TODO's bar; spelling's caret; review
+    comments and merge questions under their passages; the selection bar. The
+    file's tab keeps what's its own: the assistant's marks in the gutter, the
+    path bar, ⌘S. The diff's colours already say what changed.
+  - Spelling's hover and ⌘., the ▶ Run lenses (`diffCodeLens`) and Go to
+    Definition work on any open file's model, so on a diff's file side too; a
+    read-only diff's copy of a version gets none of them.
+  - `studio.writer()` is where the author is writing: a live diff's file side
+    while its tab is in front and it had the keys (or a click on its bars)
+    last, else the editor. ⌘I, Revise, Options, Ask, comments, a TODO's
+    request, Fix error, spelling's fixes, ⌘;, Find and the merge card's
+    Resolve act there, so they select and send the diff's passage without
+    opening the file's tab (`writerFor`). The context menu's Revise… opens the
+    card in that editor only.
+  - Monaco fixes a diff's floating widgets to the window, whatever it's told,
+    so they stayed put as the list scrolled. The file's side turns that off
+    (again whenever Monaco sets it back), so the bars, cards and hovers move
+    with the text, spill out of the diff over the page, and stay within its
+    width (short of the preview, a native view). The TODO bar goes under its
+    line, and hovers too, where above it would be under the file's name.
+- Verified (self-test `livediff`, `liveDiffTools`), all in the uncommitted
+  diff of `one.typ`, its tab never opened:
+  - A TODO typed there was tinted and had its bar, drawn and on top. Its
+    request sent the TODO with `one.typ:1` attached and the line selected in
+    the diff. Done took it out.
+  - A selection's bar showed, and the chat's live selection was `one.typ:3`.
+    Revise's card opened with its box focused. It sent "Shorter" with that
+    passage and moved with the list when it scrolled (60 px and 60 px).
+  - ⌘I attached the passage. ⌥⌘M opened the comment box under it in the
+    diff; Cancel put the keys back there.
+  - The right-click menu was the editor's, and its Options… opened the card
+    in the diff, the only one.
+  - Misspellings typed there were found in `one.typ`. ⌘; selected the first
+    in the diff, and its hover showed the fixes, under the line, on top.
+  - Staged, commit and History version diffs had none of the tools.
+  - The editor's own groups (`selcard`, `selection`, `ctags`, `todos`,
+    `review`, `action-modes`, `proofing`, `menus`, `merge`, `aiedits`,
+    `difftabs`, `changes`) were as before.
 
 ### Showing that the assistant is working
 

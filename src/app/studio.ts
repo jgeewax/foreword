@@ -885,7 +885,7 @@ export class Studio {
   /** Spelling and grammar, for each open file (proofing.ts; the checking is in Rust, proof/). */
   readonly proofing = new Proofing({
     docs: () => this.docs,
-    editor: () => this.editor,
+    editor: () => this.writer()?.editor ?? null,
     options: () => {
       const { settings, project, workspace } = this.state;
       if (!workspace) return null;
@@ -1160,9 +1160,9 @@ export class Studio {
     this.showSidebar(view);
   }
 
-  /** Run one of the editor's own actions (Find, Replace) from the menu bar or the command palette. */
+  /** Run one of the editor's own actions (Find, Replace) from the menu bar or the command palette, where the author is writing. */
   editorAction(id: string) {
-    const editor = this.editor;
+    const editor = this.writer()?.editor;
     if (!editor) return;
     editor.focus();
     void editor.getAction(id)?.run();
@@ -1349,7 +1349,8 @@ export class Studio {
   /** ⇧⌘F: the Search view, its box focused, with the editor's selection in it (one line of it). */
   showSearch() {
     this.revealSidebar('search');
-    const selection = this.editor?.hasTextFocus() ? this.editor.getModel()?.getValueInRange(this.editor.getSelection()!) : '';
+    const editor = this.writer()?.editor;
+    const selection = editor?.hasTextFocus() ? editor.getModel()?.getValueInRange(editor.getSelection()!) : '';
     this.events.emit('focus-search', selection && !selection.includes('\n') ? selection : null);
   }
 
@@ -1815,7 +1816,7 @@ export class Studio {
   /** ⌘; (as in Pages and TextEdit): the next spelling or grammar mistake, selected, with its suggestions. */
   nextSpelling(back = false) {
     const found = this.proofing.next(back);
-    if (found) return this.editor?.trigger('proofing', 'editor.action.showHover', { focus: false });
+    if (found) return this.writer()?.editor.trigger('proofing', 'editor.action.showHover', { focus: false });
     const { checkSpelling, checkGrammar } = this.state.settings;
     this.toast(checkSpelling || checkGrammar ? 'No spelling or grammar mistakes in this file.' : 'Spelling and grammar checking is off (Settings ▸ Spelling & Grammar).', 'info');
   }
@@ -1851,20 +1852,20 @@ export class Studio {
   /** Ask the assistant to explain and fix the next error, with its line attached. */
   async fixProblem(problem?: { path: string; d: LspDiagnostic }) {
     problem ??= (await this.nextProblem()) ?? undefined;
-    if (!problem || !this.editor) return;
-    if (this.state.active !== problem.path || this.state.viewTab) await this.openFile(problem.path);
-    const model = this.editor.getModel()!;
+    if (!problem) return;
+    const editor = await this.writerFor(problem.path);
+    const model = editor?.getModel();
+    if (!editor || !model) return;
     const { start, end } = problem.d.range;
-    this.editor.setSelection(new monaco.Range(start.line + 1, 1, end.line + 1, model.getLineMaxColumn(end.line + 1)));
+    editor.setSelection(new monaco.Range(start.line + 1, 1, end.line + 1, model.getLineMaxColumn(end.line + 1)));
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
     await this.sendIn('edit', fixErrorPrompt(problem.d.message));
   }
 
-  /** The Typst error under a position in the active file (1-based), if any. */
-  errorAt(line: number, column: number) {
-    const path = this.state.active;
+  /** The Typst error under a position in a file (1-based; the one being written in), if any. */
+  errorAt(line: number, column: number, path = this.writer()?.path) {
     const d = path
       ? (this.diagnostics.get(path) ?? []).find((x) => {
           if (x.severity !== 1) return false;
@@ -1898,8 +1899,9 @@ export class Studio {
   private async sendAboutSelection(mode: AgentMode, message: string, signal?: AbortSignal): Promise<boolean> {
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
-    const end = this.editor?.getSelection()?.getEndPosition();
-    if (end) this.editor!.setSelection(monaco.Range.fromPositions(end));
+    const editor = this.writer()?.editor;
+    const end = editor?.getSelection()?.getEndPosition();
+    if (end) editor!.setSelection(monaco.Range.fromPositions(end));
     this.events.emit('show-agent-pane');
     return this.sendIn(mode, message, { signal, quiet: true });
   }
@@ -1961,9 +1963,8 @@ export class Studio {
     this.fillComposer(before ? `${before}\n\n${typed}` : typed);
   }
 
-  /** The first Typst error in a range of the active file (1-based), if any: the selection bar offers to fix it. */
-  errorIn(range: monaco.IRange) {
-    const path = this.state.active;
+  /** The first Typst error in a range of a file (1-based; the one being written in), if any: the selection bar offers to fix it. */
+  errorIn(range: monaco.IRange, path = this.writer()?.path) {
     const d = path
       ? (this.diagnostics.get(path) ?? []).find((x) => {
           if (x.severity !== 1) return false;
@@ -2238,9 +2239,14 @@ export class Studio {
    * Discuss, answered in Ask, drawn in Figures). A TODO can ask for any of them.
    */
   async askTodo(todo: Todo, mode: RequestMode = 'edit') {
-    await this.openAt(todo.path, todo.line);
-    const model = this.editor?.getModel();
-    if (model) this.editor!.setSelection(new monaco.Range(todo.line, 1, todo.line, model.getLineMaxColumn(todo.line)));
+    // In the diff it's in, when that's where the author is writing; else in its tab.
+    const editor = await this.writerFor(todo.path);
+    const model = editor?.getModel();
+    if (editor && model) {
+      editor.revealLineInCenter(todo.line);
+      editor.setSelection(new monaco.Range(todo.line, 1, todo.line, model.getLineMaxColumn(todo.line)));
+      editor.focus();
+    }
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
@@ -2319,18 +2325,19 @@ export class Studio {
     this.showSidebar('review');
   }
 
-  /** Comment on the editor's selection: a box to write it in opens under the passage. */
+  /** Comment on the selection where the author is writing: a box to write it in opens under the passage. */
   async addComment() {
-    const path = this.state.active;
-    const model = this.editor?.getModel();
-    const range = this.editor?.getSelection();
+    const w = this.writer();
+    const path = w?.path;
+    const model = w?.editor.getModel();
+    const range = w?.editor.getSelection();
     if (!path || !model || !range || range.isEmpty()) return this.toast('Select the passage you want to comment on first.');
     this.store.set((s) => ({ review: { ...s.review, draft: { path, start: model.getOffsetAt(range.getStartPosition()), end: model.getOffsetAt(range.getEndPosition()) } } }));
   }
 
   cancelComment() {
     this.store.set((s) => ({ review: { ...s.review, draft: null } }));
-    this.editor?.focus();
+    this.writer()?.editor.focus();
   }
 
   /** Save the comment being written. */
@@ -2342,7 +2349,7 @@ export class Studio {
     const comment = makeComment(nextCommentId(this.state.review.comments), draft.path, full, draft.start, draft.end, text);
     this.store.set((s) => ({ review: { ...s.review, draft: null } }));
     await this.saveReview([...this.state.review.comments, comment]);
-    this.editor?.focus();
+    this.writer()?.editor.focus();
   }
 
   async editComment(id: string, text: string) {
@@ -3298,6 +3305,48 @@ export class Studio {
     return !!files?.some((f) => f.live && dirty[f.path]);
   }
 
+  /** The file side of a diff that edits its file, the last one to have the keys (attachDiffWriter). */
+  private diffWriter: monaco.editor.IStandaloneCodeEditor | null = null;
+
+  /** A diff's file side, written in as the editor is (DiffEditor): once it has the keys, the editor's tools act in it. Returns its cleanup. */
+  attachDiffWriter(editor: monaco.editor.IStandaloneCodeEditor): () => void {
+    const take = () => (this.diffWriter = editor);
+    const focus = editor.onDidFocusEditorText(take);
+    // A click on its bars and hovers too: they leave the keys where they were (a TODO's bar under the pointer, say).
+    const node = editor.getContainerDomNode();
+    node.addEventListener('mousedown', take, true);
+    return () => {
+      focus.dispose();
+      node.removeEventListener('mousedown', take, true);
+      if (this.diffWriter === editor) this.diffWriter = null;
+    };
+  }
+
+  /**
+   * Where the author is writing, and in which file: a diff's file side while
+   * its tab is in front and it had the keys last, else the editor. The
+   * selection bar's requests, ⌘I, comments, a TODO's request, spelling's fixes
+   * and the menu bar's editing commands act there.
+   */
+  writer(): { editor: monaco.editor.IStandaloneCodeEditor; path: string | null } | null {
+    const diff = this.state.viewTab ? this.diffWriter : null;
+    if (diff) return { editor: diff, path: this.fileOf(diff.getModel()) };
+    return this.editor && { editor: this.editor, path: this.state.active };
+  }
+
+  /** The open file a model is the text of (the editor's, a diff's file side), or null (a diff's copy of a version). */
+  fileOf(model: monaco.editor.ITextModel | null): string | null {
+    return (model && this.docs?.all().find((d) => d.model === model)?.path) ?? null;
+  }
+
+  /** The editor to work on `path` in: the diff being written in, if it's that file's, else the file's tab (opened, in front). */
+  private async writerFor(path: string): Promise<monaco.editor.IStandaloneCodeEditor | null> {
+    const w = this.writer();
+    if (w && w.path === path && (w.editor !== this.editor || !this.state.viewTab)) return w.editor;
+    await this.openFile(path);
+    return this.state.active === path && !this.state.viewTab ? this.editor : null;
+  }
+
   async closeTab(path: string) {
     if (isViewTab(path)) return this.closeViewTab(path);
     if (this.state.dirty[path]) {
@@ -3455,9 +3504,10 @@ export class Studio {
    *   before the next position is tried.
    */
   async syncPreviewToCursor({ quiet = false } = {}) {
-    const path = this.state.active;
-    const model = this.editor?.getModel();
-    const pos = this.editor?.getPosition();
+    const w = this.writer();
+    const path = w?.path;
+    const model = w?.editor.getModel();
+    const pos = w?.editor.getPosition();
     if (!path || !model || !pos) return;
     const lineAt = (n: number) => (n >= 0 && n < model.getLineCount() ? model.getLineContent(n + 1) : null);
     await this.jumpPreview(path, lineAt, pos.lineNumber - 1, pos.column - 1, quiet);
@@ -3572,8 +3622,8 @@ export class Studio {
     }
   }
 
-  /** Format Document (⇧⌥F): the open Typst file, with typstyle, whether or not Format on save is on. Undoable. */
-  async formatDocument(path = this.state.active) {
+  /** Format Document (⇧⌥F): the Typst file being written in, with typstyle, whether or not Format on save is on. Undoable. */
+  async formatDocument(path = this.writer()?.path) {
     if (!path || !this.docs) return;
     if (!path.endsWith('.typ')) return this.toast('Only Typst files can be formatted.', 'error');
     const outcome = await this.docs.format(path);
@@ -3623,13 +3673,13 @@ export class Studio {
   async resolveWithAssistant(path: string, id: string) {
     const q = this.state.questions[path]?.find((x) => x.id === id);
     const range = this.docs?.questionRange(path, id);
-    if (!q || !range || !this.editor) return;
-    if (this.state.active !== path || this.state.viewTab) await this.openFile(path);
-    const model = this.editor.getModel();
-    if (!model) return;
+    if (!q || !range) return;
+    const editor = await this.writerFor(path);
+    const model = editor?.getModel();
+    if (!editor || !model) return;
     // The passage as it is now (the author's) goes as the selection; theirs is in the message.
     const end = range.endColumn === 1 && range.endLineNumber > range.startLineNumber ? new monaco.Position(range.endLineNumber - 1, model.getLineMaxColumn(range.endLineNumber - 1)) : range.getEndPosition();
-    this.editor.setSelection(monaco.Range.fromPositions(range.getStartPosition(), end));
+    editor.setSelection(monaco.Range.fromPositions(range.getStartPosition(), end));
     this.setAgent({ attachments: [] });
     await this.attachSelection({ focus: false });
     this.events.emit('show-agent-pane');
@@ -5453,10 +5503,11 @@ export class Studio {
     }
   }
 
-  /** ⌘I: attach the selection (or cursor position) to the chat and focus it. */
+  /** ⌘I: attach the selection (or cursor position) where the author is writing to the chat and focus it. */
   async attachSelection({ focus = true } = {}) {
-    const path = this.state.active;
-    const editor = this.editor;
+    const w = this.writer();
+    const path = w?.path;
+    const editor = w?.editor;
     const model = editor?.getModel();
     const selection = editor?.getSelection();
     if (!path || !model || !selection) {
@@ -5482,8 +5533,9 @@ export class Studio {
   }
 
   private async captureLiveSelection() {
-    const path = this.state.active;
-    const editor = this.editor;
+    const w = this.writer();
+    const path = w?.path;
+    const editor = w?.editor;
     const model = editor?.getModel();
     const range = editor?.getSelection();
     const from = this.selectionFrom;
@@ -5532,9 +5584,8 @@ export class Studio {
 
   /** Select a passage sent (or to be sent) to the chat, in its file. */
   async revealSelection(sel: SourceSelection) {
-    await this.openFile(sel.relativePath);
-    const editor = this.editor;
-    if (!editor || this.state.active !== sel.relativePath) return;
+    const editor = await this.writerFor(sel.relativePath);
+    if (!editor) return;
     const range = new monaco.Range(sel.start.line, sel.start.column, sel.end.line, sel.end.column);
     editor.setSelection(range);
     editor.revealRangeInCenterIfOutsideViewport(range);

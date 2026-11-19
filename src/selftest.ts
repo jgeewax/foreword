@@ -3453,11 +3453,167 @@ async function diffTabChecks() {
  * Run with a scratch Git book as the workspace: main.typ including
  * chapters/one.typ and chapters/two.typ, all committed (two.typ opens first).
  */
+/**
+ * The editor's tools in a diff that edits its file (editor-tools.tsx): a
+ * TODO's bar, its request and Done; the selection bar, its Revise card and
+ * the request; ⌘I; a comment; the right-click menu; spelling. Each acts on the
+ * diff's file, in the diff, without opening the file's tab. Requests are
+ * caught before they reach an assistant; the file is put back as it was.
+ */
+async function liveDiffTools(file: string, side: monaco.editor.IStandaloneCodeEditor, host: () => HTMLElement | null) {
+  const out: Record<string, unknown> = {};
+  const model = side.getModel()!;
+  const start = model.getValue();
+  const s = studio as unknown as { setAgent(p: Record<string, unknown>): void };
+  const saved = { send: studio.send, agent: studio.state.agent };
+  const sent: { text: string; attachments: string[] }[] = [];
+  studio.send = async (text: string) => (sent.push({ text: text.slice(0, 80), attachments: studio.state.agent.attachments.map((a) => a.label) }), true);
+  s.setAgent({ status: 'ready', mode: 'write', running: false, queued: [], attachments: [] });
+  // Drawn, and on top where it is (not cut off at the diff's edge, nor under the next file or the file's name), and
+  // within the diff's width (short of the preview, a native view over the page).
+  const within = (selector: string | HTMLElement | null | undefined, bounds = host()) => {
+    const el = typeof selector === 'string' ? host()?.querySelector<HTMLElement>(selector) : selector;
+    const r = el?.getBoundingClientRect();
+    const box = bounds?.getBoundingClientRect();
+    const hit = r && document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 10));
+    return { shown: !!el, onTop: !!el && !!hit && el.contains(hit), inWidth: !!r && !!box && r.left >= box.left - 1 && r.right <= box.right + 1 };
+  };
+  const where = () => ({ viewTab: studio.state.viewTab, fileTab: studio.state.tabs.includes(file) });
+  const range = (r: monaco.IRange | null | undefined) => r && `${r.startLineNumber}:${r.startColumn}-${r.endLineNumber}:${r.endColumn}`;
+  // As a click does: the press first (the bars keep the keys where they were), then the click.
+  const press = (el: HTMLElement | null | undefined) => {
+    el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    el?.click();
+  };
+  try {
+    side.focus();
+    out.writer = { isDiff: studio.writer()?.editor === side, path: studio.writer()?.path ?? null };
+
+    // A TODO typed in the diff: tinted, its bar on the cursor's line; its request selects the line here and goes with it; Done takes it out.
+    side.setPosition({ lineNumber: 1, column: 1 });
+    side.trigger('keyboard', 'type', { text: '// TODO: selftest say hello twice\n' });
+    side.setPosition({ lineNumber: 1, column: 6 });
+    await waitFor(() => host()?.querySelector('.todo-hover'), 3000, 'todo bar').catch(() => null);
+    await sleep(200);
+    out.todoBar = { ...within('.todo-hover'), tinted: !!host()?.querySelector('.ctag-label.ctag-todo'), snapshot: await snap('livediff-todo-bar') };
+    press(host()?.querySelector<HTMLElement>('.todo-hover-ask'));
+    await waitFor(() => sent.length > 0, 5000, 'todo sent').catch(() => {});
+    out.todoAsked = { sent: sent.at(-1) ?? null, selection: range(side.getSelection()), ...where() };
+    side.focus();
+    side.setPosition({ lineNumber: 1, column: 6 });
+    await waitFor(() => host()?.querySelector('.todo-hover-done'), 3000, 'todo done').catch(() => null);
+    press(host()?.querySelector<HTMLElement>('.todo-hover-done'));
+    await sleep(400);
+    out.todoDone = { firstLine: model.getLineContent(1), ...where() };
+
+    // A selection made in the diff: the bar under it, and the chat's live selection is the diff's passage.
+    const line = model.getLinesContent().findIndex((l) => l.includes('first chapter')) + 1;
+    side.focus();
+    side.setSelection(new monaco.Range(line, 1, line, 20), 'mouse');
+    await waitFor(() => host()?.querySelector('.selection-bar'), 3000, 'selection bar').catch(() => null);
+    await sleep(300);
+    out.selectionBar = { ...within('.selection-bar'), live: studio.state.agent.selection?.attachment.label ?? null, snapshot: await snap('livediff-selection-bar') };
+    // Revise: its card, typed in and sent with the diff's passage.
+    press(host()?.querySelector<HTMLElement>('.selection-bar .sel-revise'));
+    await waitFor(() => host()?.querySelector('.selection-card .sel-input'), 3000, 'card').catch(() => null);
+    await sleep(300);
+    const box = host()?.querySelector<HTMLTextAreaElement>('.selection-card .sel-input');
+    out.card = { ...within('.selection-card'), focused: !!box && document.activeElement === box, snapshot: await snap('livediff-revise-card') };
+    // The list scrolled: the card goes with its passage.
+    const list = host()?.closest('.changes-body');
+    const cardTop = () => host()?.querySelector('.selection-card')?.getBoundingClientRect().top ?? 0;
+    const lineTop = () => side.getDomNode()!.getBoundingClientRect().top;
+    const [card0, line0] = [cardTop(), lineTop()];
+    if (list) list.scrollTop += 60;
+    await sleep(150);
+    out.cardScrolled = { list: Math.round(line0 - lineTop()), card: Math.round(card0 - cardTop()) };
+    if (list) list.scrollTop = 0;
+    await sleep(150);
+    const before = sent.length;
+    if (box) {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'Shorter');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(200);
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    }
+    await waitFor(() => sent.length > before, 5000, 'revise sent').catch(() => {});
+    out.revised = { sent: sent.length > before ? sent.at(-1) : null, ...where() };
+
+    // ⌘I: the passage goes with the chat.
+    s.setAgent({ attachments: [] });
+    side.focus();
+    side.setSelection(new monaco.Range(line, 1, line, 20));
+    await side.getAction('studio.askAgent')?.run();
+    await sleep(300);
+    out.addToChat = { attachments: studio.state.agent.attachments.map((a) => a.label), ...where() };
+
+    // ⌥⌘M: the comment's box opens under the passage, in the diff.
+    side.focus();
+    side.setSelection(new monaco.Range(line, 1, line, 20));
+    await side.getAction('studio.addComment')?.run();
+    await waitFor(() => host()?.querySelector('.comment-zone'), 3000, 'composer').catch(() => null);
+    await sleep(300);
+    out.comment = { draft: studio.state.review.draft?.path ?? null, ...within('.comment-zone'), snapshot: await snap('livediff-comment') };
+    studio.cancelComment();
+    await sleep(300);
+    out.commentCancelled = { zone: !!host()?.querySelector('.comment-zone'), backInDiff: side.hasTextFocus() };
+
+    // Right-click in the diff: the editor's menu; its Options… opens the card here, and only here.
+    side.setSelection(new monaco.Range(line, 1, line, 20));
+    let entries: Exclude<MenuEntry, null | false | undefined>[] = [];
+    menuRecorder.record = (e) => (entries = e);
+    const p = side.getScrolledVisiblePosition({ lineNumber: line, column: 5 })!;
+    const dom = side.getDomNode()!.getBoundingClientRect();
+    const [x, y] = [dom.left + p.left + 2, dom.top + p.top + 5];
+    (document.elementFromPoint(x, y) ?? side.getDomNode()!).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 }));
+    await sleep(250);
+    menuRecorder.record = undefined;
+    out.menu = entries.map((e) => (typeof e === 'string' ? `[${e}]` : e.label));
+    const options = entries.find((e) => typeof e !== 'string' && e.label === 'Options to Pick From…');
+    if (options && typeof options !== 'string' && 'action' in options) options.action?.();
+    await sleep(400);
+    out.menuCard = { inDiff: !!host()?.querySelector('.selection-card.sel-options'), cards: document.querySelectorAll('.selection-card').length };
+    host()?.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();
+    await sleep(100);
+
+    // Spelling: mistakes typed in the diff are found in its file; ⌘; selects the first here, with its hover.
+    side.focus();
+    side.setPosition({ lineNumber: line, column: 1 });
+    side.trigger('keyboard', 'type', { text: 'Thsi sentense has misspeled wrds. ' });
+    side.setPosition({ lineNumber: 1, column: 1 });
+    await waitFor(() => studio.proofing.list(file).length > 0, 10000, 'spelling').catch(() => {});
+    studio.nextSpelling();
+    await sleep(800);
+    const picked = side.getSelection();
+    const hover = [...(host()?.querySelectorAll<HTMLElement>('.monaco-hover') ?? [])].find((h) => h.textContent?.includes('Spelling'));
+    out.spelling = {
+      found: studio.proofing.list(file).map((f) => f.issue.word),
+      selected: picked && model.getValueInRange(picked),
+      hover: hover?.textContent?.slice(0, 60) ?? null,
+      // (Monaco's hover can be wider than a narrow diff: it's kept within the list.)
+      hoverSeen: within(hover, host()?.closest<HTMLElement>('.changes-body')),
+      // Over the page, not fixed to the window: they move with the text as the list scrolls.
+      placed: [...(side.getDomNode()?.querySelector('.overflowingContentWidgets')?.children ?? [])].map((k) => (k as HTMLElement).style.position),
+      ...where(),
+      snapshot: await snap('livediff-spelling'),
+    };
+  } finally {
+    menuRecorder.record = undefined;
+    studio.send = saved.send;
+    s.setAgent(saved.agent);
+    // The file as it was.
+    if (model.getValue() !== start) side.executeEdits('selftest', [{ range: model.getFullModelRange(), text: start }]);
+    await studio.save(file);
+  }
+  return out;
+}
+
 async function liveDiffChecks() {
   const out: Record<string, unknown> = {};
   // Diffs come and go here (a view replaced, read again, closed): none may leave a failure behind.
   const rejections: string[] = [];
-  const onRejection = (e: PromiseRejectionEvent) => rejections.push(String(e.reason?.message ?? e.reason));
+  // (Not Monaco's own cancellations: its WebKit clipboard stand-in cancels one at each click, as main.tsx knows.)
+  const onRejection = (e: PromiseRejectionEvent) => void (e.reason?.name !== 'Canceled' && rejections.push(String(e.reason?.message ?? e.reason)));
   window.addEventListener('unhandledrejection', onRejection);
   const g = () => studio.state.git;
   const hs = () => studio.state.history;
@@ -3471,7 +3627,9 @@ async function liveDiffChecks() {
   const sides = () => {
     const d = shown();
     const readOnly = (e: monaco.editor.ICodeEditor) => e.getOption(monaco.editor.EditorOption.readOnly);
-    return d ? { newEditable: !readOnly(d.getModifiedEditor()), oldEditable: !readOnly(d.getOriginalEditor()), isTheFile: d.getModifiedEditor().getModel() === doc()?.model } : null;
+    // The editor's tools (editor-tools.tsx) come with the file's side alone.
+    const tools = !!d?.getModifiedEditor().getAction('studio.askAgent');
+    return d ? { newEditable: !readOnly(d.getModifiedEditor()), oldEditable: !readOnly(d.getOriginalEditor()), isTheFile: d.getModifiedEditor().getModel() === doc()?.model, tools } : null;
   };
   const type = async (words: string, line = 3) => {
     const side = newSide();
@@ -3482,7 +3640,9 @@ async function liveDiffChecks() {
   };
   const tabDot = () => document.querySelector('.tab.active .tab-close')?.classList.contains('dirty');
   const { text, hash } = await ipc.fsRead(file);
-  await ipc.fsWrite(file, text.replace('Hello from the first chapter.', 'Hello again from the first chapter.'), hash);
+  // Lines enough that the list of changes scrolls.
+  const more = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}, added so the list scrolls.`).join('\n');
+  await ipc.fsWrite(file, `${text.replace('Hello from the first chapter.', 'Hello again from the first chapter.')}\n${more}\n`, hash);
   await waitFor(() => g().repo?.files.some((f) => f.path === file), 10000, 'changed').catch(() => {});
 
   // Not committed yet, the file not open: opened for the diff (no tab), and its side is the file.
@@ -3508,6 +3668,8 @@ async function liveDiffChecks() {
   // ⌘S (the menu's Save) saves it, though the editor behind holds another file.
   await studio.menuCommand('save');
   await waitFor(() => !studio.state.dirty[file], 5000, 'saved').catch(() => {});
+  // (The tab is drawn again a moment after.)
+  await waitFor(() => !tabDot(), 2000, 'tab dot').catch(() => {});
   out.saved = { active: studio.state.active, disk: (await ipc.fsRead(file)).text, dirty: !!studio.state.dirty[file], tabDot: tabDot() };
 
   // Undo in the diff takes the typing back, as in the editor; redo puts it back.
@@ -3518,14 +3680,18 @@ async function liveDiffChecks() {
   await sleep(150);
   out.undo = { undone, redone: doc()?.model.getValue() };
 
+  // The editor's tools in the diff, acting on the diff's file without opening its tab.
+  out.tools = await liveDiffTools(file, newSide() as monaco.editor.IStandaloneCodeEditor, () => shown()?.getContainerDomNode() ?? null);
+
   // Edited in the editor with the diff behind it: back in the diff, the edit is there.
   await studio.openFile(file);
   const editor = studio.editor!;
   const model = editor.getModel()!;
+  const writerIsEditor = studio.writer()?.editor === editor;
   editor.executeEdits('selftest', [{ range: model.getFullModelRange().collapseToEnd(), text: 'From the editor.\n' }]);
   studio.activate('view:git');
   await sleep(500);
-  out.fromEditor = { inDiff: newSide()?.getModel()?.getValue().includes('From the editor.'), sameText: newSide()?.getModel() === model };
+  out.fromEditor = { inDiff: newSide()?.getModel()?.getValue().includes('From the editor.'), sameText: newSide()?.getModel() === model, writerIsEditor };
   // Typing in the diff above the editor's cursor moves that cursor: the preview stays where it is.
   let jumps = 0;
   const offJumps = await listen<{ tag?: string }>('preview:report', (e) => void (e.payload?.tag === 'jump' && jumps++));

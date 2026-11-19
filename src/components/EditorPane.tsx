@@ -1,21 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { CommentCard, CommentComposer } from './CommentCard';
-import { MergeCard } from './MergeCard';
+import { useEffect, useRef, useState } from 'react';
 import { studio } from '../app/studio';
 import { editorTextOptions, editorWrapOptions, monaco } from '../editor/monaco';
 import { cellStatus } from '../code/cells';
-import { locate } from '../app/review';
 import { editMarks, readMarks, type EditMark } from '../app/ai-marks';
-import { commentTags, type TagKind } from '../editor/comment-tags';
-import { todoAt } from '../app/todos';
-import { attachTodoHover } from './TodoHover';
-import { todoMenu } from './todo-menu';
-import { attachSelectionBar } from './SelectionBar';
-import { attachProofing, languageEntries, proofEntries } from './ProofingHover';
+import { attachEditorTools } from './editor-tools';
+import { registerProofing } from './ProofingHover';
 import { headings, type Heading } from '../editor/outline';
 import { keepWidgetsInside } from '../editor/overflow-widgets';
-import { onContextMenu, showContextMenu } from '../lib/context-menu';
+import { onContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GitChanges } from './GitChanges';
@@ -44,25 +36,6 @@ function editHover(m: EditMark): monaco.IMarkdownString {
   const head = m.removal ? '**✦ The assistant removed text here**' : m.old ? '**✦ Changed by the assistant**' : '**✦ Added by the assistant**';
   const body = m.old ? `\n\n${m.removal ? 'Removed:' : 'Before:'}\n\n${quote(m.old)}` : '';
   return { value: `${head} · ${md(m.label.replace(/^Agent: /, ''))} · ${when(m.time)}${body}\n\n${link}`, isTrusted: { enabledCommands: ['studio.showVersionChanges'] } };
-}
-
-/** Reports its content's height (a comment card in a view zone sizes the zone with it). */
-function Measured({ onHeight, children }: { onHeight: (h: number) => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const report = () => onHeight(Math.ceil(el.getBoundingClientRect().height) + 10);
-    report();
-    const ro = new ResizeObserver(report);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [onHeight]);
-  return (
-    <div ref={ref} className="comment-zone-inner">
-      {children}
-    </div>
-  );
 }
 
 /** A tab that isn't a file: its name, icon and tooltip. */
@@ -107,66 +80,14 @@ export function EditorPane() {
       unicodeHighlight: { ambiguousCharacters: false },
       padding: { top: 8 },
       fixedOverflowWidgets: true,
-      // Our own native menu instead of Monaco's HTML one (see onContextMenu below).
+      // Our own native menu instead of Monaco's HTML one (editor-tools.tsx).
       contextmenu: false,
       // Spelling's fixes are on ⌘., the hover and the right-click menu: no bulb in the margin.
       lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void studio.save());
-    editor.addAction({
-      id: 'studio.formatDocument',
-      label: 'Format Document',
-      keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
-      run: () => void studio.formatDocument(),
-    });
-    editor.addAction({
-      id: 'studio.askAgent',
-      label: 'Add Selection to Chat',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
-      run: () => void studio.attachSelection(),
-    });
-    editor.onContextMenu((e) => {
-      e.event.preventDefault();
-      e.event.stopPropagation();
-      const pos = e.target.position;
-      const sel = editor.getSelection();
-      // Right-clicking outside the selection moves the cursor there, as in other editors.
-      if (pos && sel && !sel.containsPosition(pos)) editor.setPosition(pos);
-      editor.focus();
-      const hasSelection = !editor.getSelection()?.isEmpty();
-      const error = pos ? studio.errorAt(pos.lineNumber, pos.column) : null;
-      const path = studio.state.active;
-      const model = editor.getModel();
-      const mark =
-        pos && path && model && studio.state.settings.markAiEdits
-          ? editMarks(studio.aiEditsFor(path), model.getValue()).find((m) => m.from <= pos.lineNumber && pos.lineNumber <= m.to)
-          : undefined;
-      const todo = pos && path && model ? todoAt(model.getLineContent(pos.lineNumber), path, pos.lineNumber) : null;
-      const ready = studio.state.agent.status === 'ready';
-      // What's under the pointer first, then the selection, then editing. File- and
-      // book-level commands live in the menu bar and the tab's menu.
-      void showContextMenu([
-        // A misspelling's suggestions first, as TextEdit and Word put them.
-        ...(model ? proofEntries(model, pos) : []),
-        error && { label: 'Fix This Error with the Assistant', action: () => void studio.fixProblem(error) },
-        ...(todo ? todoMenu(todo.todo, todo.fix) : []),
-        mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
-        'separator',
-        hasSelection && { label: 'Add to Chat', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
-        hasSelection && ready && { label: 'Revise…', action: () => studio.events.emit('selection-card', 'revise') },
-        hasSelection && ready && { label: 'Options to Pick From…', action: () => studio.events.emit('selection-card', 'options') },
-        hasSelection && ready && { label: 'Ask About This…', action: () => studio.events.emit('selection-card', 'ask') },
-        hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
-        hasSelection && !!path?.endsWith('.typ') && { label: 'Set Language', items: languageEntries() },
-        'separator',
-        'cut',
-        'copy',
-        'paste',
-        'separator',
-        !!path?.endsWith('.typ') && { label: 'Format Document', accelerator: 'Shift+Alt+F', action: () => void studio.formatDocument() },
-        !!path && { label: 'Show in Preview', action: () => void studio.syncPreviewToCursor() },
-      ]);
-    });
+    // The menu, the keys, TODOs, spelling, comments and the selection bar: a diff's file side has them too.
+    const offTools = attachEditorTools(editor);
     // The assistant's marks: lines it changed and lines it read, in the gutter.
     const showVersion = monaco.editor.registerCommand('studio.showVersionChanges', (_accessor, id: string) => void studio.showVersionChanges(id));
     const aiMarks = editor.createDecorationsCollection();
@@ -225,39 +146,8 @@ export function EditorPane() {
       clearTimeout(aiTimer);
       aiTimer = window.setTimeout(paintAi, 300);
     });
-    // Tagged comments (// TODO:, // NOTE:): the tag as a coloured label, the line tinted; TODO and FIXME in the scrollbar.
-    const tagMarks = editor.createDecorationsCollection();
-    const tagRuler: Partial<Record<TagKind, string>> = { todo: '#d29922', fix: '#e5534b' };
-    const paintTags = () => {
-      const model = editor.getModel();
-      if (!model || model.getLanguageId() !== 'typst') return tagMarks.clear();
-      tagMarks.set(
-        commentTags(model.getLinesContent()).flatMap((t): monaco.editor.IModelDeltaDecoration[] => [
-          {
-            range: new monaco.Range(t.line, 1, t.line, 1),
-            options: {
-              isWholeLine: true,
-              className: `ctag-line ctag-${t.kind}`,
-              overviewRuler: tagRuler[t.kind] ? { color: tagRuler[t.kind]!, position: monaco.editor.OverviewRulerLane.Right } : undefined,
-            },
-          },
-          { range: new monaco.Range(t.line, t.slashes[0], t.line, t.slashes[1]), options: { inlineClassName: 'ctag-slashes' } },
-          { range: new monaco.Range(t.line, t.tag[0], t.line, t.tag[1]), options: { inlineClassName: `ctag-label ctag-${t.kind}` } },
-          { range: new monaco.Range(t.line, t.tag[1], t.line, t.end), options: { inlineClassName: `ctag-text ctag-${t.kind}` } },
-        ]),
-      );
-    };
-    let tagTimer: number | undefined;
-    editor.onDidChangeModel(paintTags);
-    editor.onDidChangeModelContent(() => {
-      clearTimeout(tagTimer);
-      tagTimer = window.setTimeout(paintTags, 120);
-    });
-    paintTags();
-    // The cursor on a TODO comment, or the pointer resting on one: ask the assistant to do it, mark it done, or see the others.
-    const offTodoHover = attachTodoHover(editor);
-    // Spelling and grammar: the hover, ⌘. and the caret that holds back the word being typed.
-    const offProofing = attachProofing(editor);
+    // Spelling's hover and ⌘., in any editor of an open file.
+    const offProofing = registerProofing();
     // Its hover and suggestions stop at its right edge, short of the preview (a native view drawn over the page).
     const offWidgets = keepWidgetsInside(editor);
     // The headings, for the path bar (the cursor's own line comes from the store).
@@ -277,9 +167,10 @@ export function EditorPane() {
     const lensChanged = new monaco.Emitter<monaco.languages.CodeLensProvider>();
     const lenses = monaco.languages.registerCodeLensProvider('typst', {
       onDidChange: lensChanged.event,
+      // In any editor of the file: a diff's file side has them too.
       provideCodeLenses: (model) => {
-        const path = studio.state.active;
-        if (!path || model !== editor.getModel() || !model.getValue().includes('#run(')) return { lenses: [], dispose() {} };
+        const path = studio.fileOf(model);
+        if (!path || !model.getValue().includes('#run(')) return { lenses: [], dispose() {} };
         const { cells, outputs, running } = studio.state.code;
         return {
           lenses: cells
@@ -308,122 +199,9 @@ export function EditorPane() {
     const definitionProvider = monaco.languages.registerDefinitionProvider('typst', {
       provideDefinition: (model, position) => studio.definitionsAt(model, position),
     });
-    // Monaco only moves within the file it shows; a definition in another file opens in its tab.
+    // Monaco only moves within the file it shows (the editor's, a diff's file side); a definition in another file opens in its tab.
     const definitionOpener = monaco.editor.registerEditorOpener({
-      openCodeEditor: (_source, uri, at) => (uri.toString() === editor.getModel()?.uri.toString() ? false : studio.openDefinition(uri, at)),
-    });
-    // Review comments: their passages highlighted, and a card under each (open, or changed
-    // and waiting to be checked), in a view zone. The comment being written is one too, and
-    // so is each passage a merge with the file on disk asks about (documents.ts).
-    const commentMarks = editor.createDecorationsCollection();
-    // `line` is where we put it: Monaco's own tracking of zones isn't reliable when a file reloads from disk.
-    type Zone = { zoneId: string; root: Root; fit: (h: number) => void; zone: monaco.editor.IViewZone; line: number };
-    const zones = new Map<string, Zone>();
-    const clearZones = () => {
-      editor.changeViewZones((a) => {
-        for (const z of zones.values()) a.removeZone(z.zoneId);
-      });
-      for (const z of zones.values()) queueMicrotask(() => z.root.unmount());
-      zones.clear();
-    };
-    const syncComments = () => {
-      const path = studio.state.active;
-      const model = editor.getModel();
-      const want = new Map<string, { line: number; node: ReactNode }>();
-      const marks: monaco.editor.IModelDeltaDecoration[] = [];
-      if (path && model) {
-        const text = model.getValue();
-        for (const c of studio.state.review.comments) {
-          if (c.path !== path || c.status === 'resolved') continue;
-          let range: monaco.Range | null = null;
-          // A changed passage: the card goes under the whole new text (to check it).
-          const after = c.status === 'addressed' ? c.outcome?.change?.after : undefined;
-          const i = after ? text.indexOf(after) : -1;
-          if (after && i >= 0) range = monaco.Range.fromPositions(model.getPositionAt(i), model.getPositionAt(i + after.length));
-          else {
-            const at = locate(text, c);
-            if (at) range = monaco.Range.fromPositions(model.getPositionAt(at[0]), model.getPositionAt(at[1]));
-          }
-          if (!range) continue;
-          marks.push({ range, options: { inlineClassName: c.status === 'addressed' ? 'review-highlight changed' : 'review-highlight', linesDecorationsClassName: 'review-line' } });
-          want.set(c.id, { line: range.endLineNumber, node: <CommentCard comment={c} /> });
-        }
-        const draft = studio.state.review.draft;
-        if (draft && draft.path === path) {
-          const range = monaco.Range.fromPositions(model.getPositionAt(draft.start), model.getPositionAt(draft.end));
-          marks.push({ range, options: { inlineClassName: 'review-highlight draft' } });
-          want.set('draft', { line: range.endLineNumber, node: <CommentComposer quote={model.getValueInRange(range)} /> });
-        }
-        for (const q of studio.state.questions[path] ?? []) {
-          const range = studio.docs?.questionRange(path, q.id);
-          if (!range) continue;
-          // A passage of whole lines ends at the start of the next: the card goes under its last line.
-          const line = range.endColumn === 1 && range.endLineNumber > range.startLineNumber ? range.endLineNumber - 1 : range.endLineNumber;
-          want.set(q.id, { line, node: <MergeCard path={path} question={q} /> });
-        }
-      }
-      commentMarks.set(marks);
-      editor.changeViewZones((a) => {
-        for (const [key, z] of zones) {
-          if (want.has(key)) continue;
-          a.removeZone(z.zoneId);
-          queueMicrotask(() => z.root.unmount());
-          zones.delete(key);
-        }
-        for (const [key, w] of want) {
-          const existing = zones.get(key);
-          if (existing) {
-            if (existing.line !== w.line) {
-              // Moved: the same node (and the card's state) at its new line.
-              a.removeZone(existing.zoneId);
-              existing.zone.afterLineNumber = w.line;
-              existing.zoneId = a.addZone(existing.zone);
-              existing.line = w.line;
-            }
-            existing.root.render(<Measured onHeight={existing.fit}>{w.node}</Measured>);
-            continue;
-          }
-          const domNode = document.createElement('div');
-          domNode.className = 'comment-zone';
-          const zone: monaco.editor.IViewZone = { afterLineNumber: w.line, heightInPx: 96, domNode };
-          const root = createRoot(domNode);
-          const entry: Zone = { zoneId: a.addZone(zone), root, fit: () => {}, zone, line: w.line };
-          // The zone takes the card's height.
-          entry.fit = (h: number) => {
-            if (Math.abs((zone.heightInPx ?? 0) - h) < 1) return;
-            zone.heightInPx = h;
-            editor.changeViewZones((b) => b.layoutZone(entry.zoneId));
-          };
-          const fit = entry.fit;
-          zones.set(key, entry);
-          root.render(<Measured onHeight={fit}>{w.node}</Measured>);
-        }
-      });
-    };
-    let lastReview = studio.state.review;
-    let lastQuestions = studio.state.questions;
-    const offReview = studio.store.subscribe(() => {
-      if (studio.state.review === lastReview && studio.state.questions === lastQuestions) return;
-      lastReview = studio.state.review;
-      lastQuestions = studio.state.questions;
-      syncComments();
-    });
-    editor.onDidChangeModel(() => {
-      clearZones();
-      syncComments();
-    });
-    let commentTimer: number | undefined;
-    editor.onDidChangeModelContent(() => {
-      clearTimeout(commentTimer);
-      commentTimer = window.setTimeout(syncComments, 400);
-    });
-    // Under a selection (after a moment): Revise, Options, Ask, Comment and Add to chat.
-    const offSelectionBar = attachSelectionBar(editor);
-    editor.addAction({
-      id: 'studio.addComment',
-      label: 'Add Review Comment',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyM],
-      run: () => void studio.addComment(),
+      openCodeEditor: (source, uri, at) => (uri.toString() === source.getModel()?.uri.toString() ? false : studio.openDefinition(uri, at)),
     });
     editor.onKeyDown((e) => {
       const ts = e.browserEvent.timeStamp;
@@ -431,10 +209,9 @@ export function EditorPane() {
     });
     // Explicit: a click or an arrow key; anything else (typing, paste, undo) moved it with an edit.
     editor.onDidChangeCursorPosition((e) => studio.setCursor(e.position.lineNumber, e.position.column, e.reason !== monaco.editor.CursorChangeReason.Explicit));
-    editor.onDidChangeCursorSelection(() => studio.onEditorSelection());
-    editor.onDidChangeModel(() => studio.onEditorSelection());
     studio.attachEditor(editor);
-    const off = studio.events.on('focus-editor', () => editor.focus());
+    // Back to where the author was writing (a diff's file side, behind a tab that isn't a file).
+    const off = studio.events.on('focus-editor', () => studio.writer()?.editor.focus());
     // The text size, wrapping and rulers (Settings ▸ Editor).
     let lastSize = studio.state.settings.editorFontSize;
     const wrapState = () => {
@@ -460,13 +237,9 @@ export function EditorPane() {
       clearTimeout(aiTimer);
       clearTimeout(outlineTimer);
       showVersion.dispose();
-      offTodoHover();
+      offTools();
       offProofing();
       offWidgets();
-      offReview();
-      clearTimeout(commentTimer);
-      offSelectionBar();
-      clearZones();
       offLens();
       lenses.dispose();
       runCommand.dispose();

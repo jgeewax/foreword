@@ -51,9 +51,9 @@ function TodoActions({ found, close }: { found: Found; close: () => void }) {
 
 type Shown = { found: Found; key: string };
 
-/** The TODO on a line of the open file, and what tells it apart (where it is and what it says). */
+/** The TODO on a line of an open file, and what tells it apart (where it is and what it says). */
 function todoOn(model: monaco.editor.ITextModel, line: number, column?: number): Shown | null {
-  const path = studio.state.active;
+  const path = studio.fileOf(model);
   if (!path || model.getLanguageId() !== 'typst') return null;
   const at = todoAt(model.getLineContent(line), path, line, column);
   return at && { found: { todo: at.todo, fix: at.fix, from: at.from }, key: `${path}:${line}:${at.from}:${at.todo.text}` };
@@ -65,9 +65,11 @@ const lineOf = (s: Shown) => `${s.found.todo.path}:${s.found.todo.line}`;
  * Actions over a TODO comment, as the selection bar sits under a selection:
  * ask the assistant to do it, mark it done, or see the others. It stays while
  * the cursor is on the TODO's line, and comes up when the pointer rests on
- * one. Returns its cleanup.
+ * one. `visibleTop`, in a diff (as tall as its text): it may spill out of the
+ * editor, and goes under its line where above it would be out of sight, under
+ * the file's name (the page's y the text shows below). Returns its cleanup.
  */
-export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor): () => void {
+export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor, { visibleTop }: { visibleTop?: () => number } = {}): () => void {
   const node = document.createElement('div');
   // Clicks keep the editor's focus and selection.
   node.onmousedown = (e) => e.preventDefault();
@@ -81,11 +83,18 @@ export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor): ()
   let showTimer: number | undefined;
   let hideTimer: number | undefined;
   let caretTimer: number | undefined;
+  const { ABOVE, BELOW } = monaco.editor.ContentWidgetPositionPreference;
+  /** Above the TODO's line, unless it would be out of sight there. */
+  const above = (line: number) => {
+    const top = editor.getDomNode()?.getBoundingClientRect().top;
+    return !visibleTop || top === undefined || top + editor.getTopForLineNumber(line) - editor.getScrollTop() - (node.offsetHeight || 30) >= visibleTop();
+  };
   const widget: monaco.editor.IContentWidget = {
     getId: () => 'studio.todoHover',
     getDomNode: () => node,
+    allowEditorOverflow: !!visibleTop,
     getPosition: () =>
-      shown ? { position: { lineNumber: shown.found.todo.line, column: shown.found.from }, preference: [monaco.editor.ContentWidgetPositionPreference.ABOVE, monaco.editor.ContentWidgetPositionPreference.BELOW] } : null,
+      shown ? { position: { lineNumber: shown.found.todo.line, column: shown.found.from }, preference: above(shown.found.todo.line) ? [ABOVE, BELOW] : [BELOW, ABOVE] } : null,
   };
   editor.addContentWidget(widget);
   const bar = () => (shown ? <TodoActions found={shown.found} close={dismiss} /> : null);

@@ -204,7 +204,7 @@ export function App() {
           if (chord) studio.tabCommand(chord);
           else {
             const action = inEditor ? editorChordAction(e) : null;
-            if (action) studio.editor?.trigger('keyboard', action, null);
+            if (action) studio.writer()?.editor.trigger('keyboard', action, null);
           }
           return;
         }

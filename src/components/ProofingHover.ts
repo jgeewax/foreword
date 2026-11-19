@@ -1,7 +1,8 @@
 // Spelling and grammar in the editor's own UI: a mistake's hover (what's
 // wrong, its fixes as links, Add to Dictionary), its entries at the top of the
-// right-click menu (as TextEdit puts them), and ⌘. for the same fixes. Only
-// for the editor's own file: a diff's copy of a file gets none of it.
+// right-click menu (as TextEdit puts them), and ⌘. for the same fixes. In any
+// editor of an open file (the editor, a diff's file side); a diff's copy of a
+// version gets none of it.
 import type { Found } from '../app/proofing';
 import { fixLabel, issueMessage, ISSUE_TITLE, languageName, LANGUAGES, proofMenu, type ProofAction } from '../app/proofing-core';
 import { studio } from '../app/studio';
@@ -21,11 +22,10 @@ function act(found: Found, action: ProofAction) {
   else if (action.kind === 'rule') p.disableRule(found, 'user');
 }
 
-/** The editor's file and the mistakes at a position in it, if the model is the editor's. */
+/** The mistakes at a position in an open file's text. */
 function foundAt(model: monaco.editor.ITextModel, position: monaco.IPosition): Found[] {
-  const path = studio.state.active;
-  if (!path || model !== studio.editor?.getModel() || studio.state.viewTab) return [];
-  return studio.proofing.at(path, model.getOffsetAt(position));
+  const path = studio.fileOf(model);
+  return path ? studio.proofing.at(path, model.getOffsetAt(position)) : [];
 }
 
 const link = (label: string, found: Found, action: ProofAction) =>
@@ -65,13 +65,13 @@ export function languageEntries(): MenuEntry[] {
   return LANGUAGES.map((tag) => ({ label: languageName(tag), action: () => studio.proofing.setLanguage(tag) }));
 }
 
-/** The hover, ⌘. and the links' command, for this editor. Returns their cleanup. */
-export function attachProofing(editor: monaco.editor.IStandaloneCodeEditor): () => void {
+/** The hover, ⌘. and the links' command, for every editor (each editor's caret is its own: Proofing.attach). Returns their cleanup. */
+export function registerProofing(): () => void {
   const command = monaco.editor.registerCommand(COMMAND, (_accessor, path: string, id: string, action: ProofAction) => {
     const found = studio.proofing.find(path, id);
     if (found) act(found, action);
     // The hover stays open after a click on its links, still saying what was wrong.
-    editor.trigger('proofing', 'editor.action.hideHover', null);
+    for (const editor of monaco.editor.getEditors()) editor.trigger('proofing', 'editor.action.hideHover', null);
   });
   const hover = monaco.languages.registerHoverProvider('*', {
     provideHover: (model, position) => {
@@ -91,11 +91,9 @@ export function attachProofing(editor: monaco.editor.IStandaloneCodeEditor): () 
       return { actions: list, dispose() {} };
     },
   });
-  const caret = studio.proofing.attach(editor);
   return () => {
     command.dispose();
     hover.dispose();
     actions.dispose();
-    caret();
   };
 }

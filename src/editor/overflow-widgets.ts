@@ -1,6 +1,7 @@
 // Monaco's floating widgets (the hover, with spelling's fixes; suggestions)
 // are fixed to the page so they can spill out of the editor
-// (fixedOverflowWidgets), and Monaco lets them run past its right edge by
+// (fixedOverflowWidgets), or, in a diff that's as tall as its text, placed
+// over the page beside it; and Monaco lets them run past its right edge by
 // their own width. The preview is a native view above the page, so what
 // spills onto it is drawn under it: they're kept within the editor's width.
 import type { monaco } from './monaco';
@@ -21,7 +22,7 @@ export function keepWidgetsInside(editor: monaco.editor.ICodeEditor): () => void
     if (!host || !layer) return;
     const box = host.getBoundingClientRect();
     for (const el of layer.children) {
-      if (!(el instanceof HTMLElement) || el.style.position !== 'fixed') continue;
+      if (!(el instanceof HTMLElement) || (el.style.position !== 'fixed' && el.style.position !== 'absolute')) continue;
       const r = el.getBoundingClientRect();
       const shift = r.width ? shiftInside(r, box.left + MARGIN, box.right - MARGIN) : 0;
       // Monaco writes `left` again only when its own place for it changes, and this runs then too.
