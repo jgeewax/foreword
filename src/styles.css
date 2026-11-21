@@ -1273,12 +1273,19 @@ button.link.quiet { color: var(--muted); }
 .mode-trigger { --mode: var(--accent); display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px 0 5px; font-size: 11.5px; font-weight: 600; border: none; border-radius: 6px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
 .mode-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--mode) 22%, transparent); }
 /* Each mode's colour: its button under the message box, the assistant's offer of it, and your pick of it (Trace.tsx). */
-:is(.mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone) { --mode: var(--accent); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-ask { --mode: #1f8fa5; }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-discuss { --mode: var(--milestone); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-review { --mode: var(--review); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-options { --mode: var(--good); }
-:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-figures { --mode: #a35bd6; }
+:is(.mode-tag, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone) { --mode: var(--accent); }
+/* Auto with nothing typed yet: no mode's colour. Typing, it's the colour of the mode it would pick. */
+.mode-trigger.mode-auto { --mode: var(--muted); }
+.auto-pick-icon { display: none; width: 14px; text-align: center; }
+.composer-controls:is([data-fit="3"], [data-fit="4"]) .auto-pick-label { display: none; }
+.composer-controls:is([data-fit="3"], [data-fit="4"]) .auto-pick-icon { display: inline; }
+/* Your message, typed in Auto: the mode it went in. */
+.mode-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; font-size: 10.5px; font-weight: 600; line-height: 16px; color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); vertical-align: 1px; }
+:is(.mode-trigger, .mode-tag, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-ask { --mode: #1f8fa5; }
+:is(.mode-trigger, .mode-tag, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-discuss { --mode: var(--milestone); }
+:is(.mode-trigger, .mode-tag, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-review { --mode: var(--review); }
+:is(.mode-trigger, .mode-tag, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-options { --mode: var(--good); }
+:is(.mode-trigger, .mode-tag, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-figures { --mode: #a35bd6; }
 .mode-icon { width: 14px; text-align: center; }
 .mode-popover { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 4px); z-index: 50; display: flex; flex-direction: column; padding-top: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); }
 .mode-option { display: flex; align-items: flex-start; gap: 8px; text-align: left; border: none; border-radius: 0; background: transparent; padding: 6px 10px; white-space: normal; height: auto; }

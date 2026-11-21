@@ -1697,7 +1697,9 @@ async function modeCardsChecks() {
   const model = editor.getModel()!;
   const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
   const words = model.getLineContent(line).slice(0, 24);
-  const saved = { mode: studio.state.agent.mode, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items, running: studio.state.agent.running, change: studio.state.agent.change };
+  const saved = { mode: studio.state.agent.mode, auto: studio.state.agent.auto, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items, running: studio.state.agent.running, change: studio.state.agent.change };
+  // The cards in their own modes first; Auto after.
+  studio.store.set((st) => ({ agent: { ...st.agent, auto: false } }));
   const { send, setMode, sendForOptions } = studio as any;
   const sent: { text: string; mode: string }[] = [];
   studio.send = async (text: string) => {
@@ -1705,7 +1707,7 @@ async function modeCardsChecks() {
     return true;
   };
   studio.setMode = async (mode) => {
-    studio.store.set((st) => ({ agent: { ...st.agent, mode } }));
+    studio.store.set((st) => ({ agent: { ...st.agent, ...(mode === 'auto' ? { auto: true } : { mode, auto: false }) } }));
   };
   s.sendForOptions = async (text: string) => {
     sent.push({ text, mode: 'options' });
@@ -1847,6 +1849,75 @@ async function modeCardsChecks() {
     out.reviewTab = { open: !!document.querySelector('.selection-card.sel-review'), box: document.querySelector<HTMLTextAreaElement>('.selection-card .sel-input')?.placeholder ?? null, presets: [...document.querySelectorAll('.selection-card .sel-preset')].map((b) => b.textContent) };
     out.reviewTabPicture = await snap('modecards-selcard');
     document.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();
+    await sleep(150);
+    // Auto: the mode a message would go in, beside the box as it's typed, and the message tagged with it.
+    const still = document.createElement('style');
+    still.textContent = '*{animation:none!important;transition:none!important}';
+    document.head.appendChild(still);
+    editor.setSelection(new monaco.Range(line, 1, line, 1));
+    studio.store.set((st) => ({ agent: { ...st.agent, auto: true, mode: 'write', items: [], sessionId: null, change: null, autoFor: null } }));
+    await sleep(300);
+    out.autoState = { auto: studio.state.agent.auto, mode: studio.state.agent.mode, running: studio.state.agent.running };
+    const trigger = () => document.querySelector<HTMLButtonElement>('.agent-pane .mode-trigger');
+    const chip = () => ({
+      label: trigger()?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+      shown: [...(trigger()?.querySelectorAll('span') ?? [])].filter((e) => e.childElementCount === 0 && getComputedStyle(e).display !== 'none').map((e) => e.textContent).join(''),
+      mode: /\bmode-(?!trigger)(\w+)/.exec(trigger()?.className ?? '')?.[1] ?? null,
+      colour: trigger() ? getComputedStyle(trigger()!).color : null,
+      fit: document.querySelector<HTMLElement>('.agent-pane .composer-controls')?.dataset.fit ?? null,
+      title: trigger()?.title ?? null,
+    });
+    out.autoEmpty = { ...chip(), placeholder: document.querySelector<HTMLTextAreaElement>('.agent-pane textarea')?.placeholder ?? null };
+    const typedPicks: Record<string, unknown> = {};
+    for (const t of ['make this paragraph shorter', 'what is this section trying to say?', 'proofread this', 'I’m not sure this section adds anything', 'three versions of this line', 'draw a diagram of the dot product']) {
+      studio.events.emit('fill-composer', t);
+      await sleep(120);
+      typedPicks[t] = { ...chip(), optionCount: !!document.querySelector('.agent-pane .composer-controls .option-count') };
+    }
+    out.autoPicks = typedPicks;
+    studio.events.emit('fill-composer', 'proofread this');
+    await sleep(150);
+    out.autoChipPicture = await snap('modecards-auto-chip');
+    await studio.setZoom(0.8, { persist: false, write: false });
+    await sleep(400);
+    out.autoChipWide = chip();
+    out.autoChipWidePicture = await snap('modecards-auto-chip-wide');
+    await studio.setZoom(zoom, { persist: false, write: false });
+    await sleep(300);
+    trigger()?.click();
+    await sleep(150);
+    out.autoMenu = [...document.querySelectorAll('.mode-popover .mode-option')].map((o) => ({ name: o.querySelector('.mode-name')?.textContent, checked: o.getAttribute('aria-checked') }));
+    out.autoMenuPin = !!document.querySelector('.mode-popover .mode-pin');
+    out.autoMenuPicture = await snap('modecards-auto-menu');
+    trigger()?.click();
+    studio.events.emit('fill-composer', '');
+    // Sent: in the mode picked, still in Auto, and tagged with it.
+    sent.length = 0;
+    await studio.sendTyped('proofread this');
+    out.autoSent = { sent: sent.map((x) => x.mode), auto: studio.state.agent.auto, mode: studio.state.agent.mode };
+    studio.store.set((st) => ({ agent: { ...st.agent, items: [{ kind: 'user', id: 'ua', text: 'proofread this', attachments: [], at: Date.now(), mode: 'review', picked: studio.autoPick('proofread this').why }] } }));
+    await sleep(300);
+    out.autoUsers = [...document.querySelectorAll('.agent-pane .msg.user')].map((e) => e.outerHTML.slice(0, 300));
+    out.autoItems = studio.state.agent.items.map((it) => ({ kind: it.kind, id: it.id, ...(it.kind === 'user' ? { mode: it.mode, picked: it.picked } : {}) }));
+    const tag = document.querySelector<HTMLElement>('.msg.user .mode-tag');
+    out.autoTag = { text: tag?.textContent ?? null, title: tag?.title ?? null, mode: /\bmode-(?!tag)(\w+)/.exec(tag?.className ?? '')?.[1] ?? null };
+    out.autoTagPicture = await snap('modecards-auto-tag');
+    // A follow-up goes on in the mode before; a card's Continue in chat keeps its tab's mode.
+    studio.events.emit('fill-composer', 'what about chapter 2?');
+    await sleep(120);
+    out.autoFollowUp = chip();
+    studio.store.set((st) => ({ agent: { ...st.agent, autoFor: 'options' } }));
+    studio.events.emit('fill-composer', 'punchier');
+    await sleep(120);
+    out.autoFor = chip();
+    studio.store.set((st) => ({ agent: { ...st.agent, autoFor: null } }));
+    studio.events.emit('fill-composer', '');
+    // /ask leaves Auto; /auto comes back to it.
+    await studio.runSlash('/ask');
+    const afterAsk = studio.state.agent.auto;
+    await studio.runSlash('/auto');
+    out.autoSlash = { afterAsk, afterAuto: studio.state.agent.auto };
+    still.remove();
   } finally {
     studio.send = send;
     studio.setMode = setMode;
@@ -1973,7 +2044,8 @@ async function askCardChecks() {
   const model = editor.getModel()!;
   const original = model.getValue();
   const line = model.getLinesContent().findIndex((l) => l.includes('Two vectors are orthogonal')) + 1;
-  const saved = { mode: studio.state.agent.mode, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items, running: studio.state.agent.running };
+  const saved = { mode: studio.state.agent.mode, auto: studio.state.agent.auto, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items, running: studio.state.agent.running };
+  studio.store.set((st) => ({ agent: { ...st.agent, auto: false } }));
   const { send, setMode } = studio;
   const sent: { text: string; mode: string }[] = [];
   studio.send = async (text: string) => {
@@ -1981,7 +2053,7 @@ async function askCardChecks() {
     return true;
   };
   studio.setMode = async (mode) => {
-    studio.store.set((st) => ({ agent: { ...st.agent, mode } }));
+    studio.store.set((st) => ({ agent: { ...st.agent, ...(mode === 'auto' ? { auto: true } : { mode, auto: false }) } }));
   };
   const card = () => [...document.querySelectorAll('.answer-card')].pop() ?? null;
   // Pictures at a readable size, of the whole chat: a screenful at a time, from the top.

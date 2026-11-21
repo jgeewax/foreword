@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ASK_INSTRUCTIONS } from './ask-mode';
 import { FIGURES_INSTRUCTIONS, FIGURE_PACKAGES } from './figures-mode';
 import { DISCUSS_INSTRUCTIONS } from './discuss-mode';
-import { AGENT_MODES, modeChoiceMessage, modeConfig, modeNamed, modeOffer, nextMode, withoutModeOffer } from './modes';
+import { AGENT_MODES, CHAT_MODES, chatModeNamed, menuEntry, modeChoiceMessage, modeConfig, modeNamed, modeOffer, nextMode, withoutModeOffer } from './modes';
 import { REMINDER_START } from './message-context';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
 import { REVIEW_INSTRUCTIONS } from './review-mode';
@@ -14,13 +14,18 @@ describe('modeConfig', () => {
     expect(AGENT_MODES.filter((m) => !modeConfig(m).readOnly)).toEqual(['write', 'figures']);
   });
 
-  it('Ask comes after Write, Review after Discuss; ⇧Tab goes round', () => {
+  it('Auto first, Ask after Write, Review after Discuss; ⇧Tab goes round', () => {
     expect(AGENT_MODES).toEqual(['write', 'ask', 'discuss', 'review', 'options', 'figures']);
+    expect(CHAT_MODES).toEqual(['auto', ...AGENT_MODES]);
+    expect(nextMode('auto')).toBe('write');
     expect(nextMode('write')).toBe('ask');
     expect(nextMode('ask')).toBe('discuss');
     expect(nextMode('discuss')).toBe('review');
     expect(nextMode('review')).toBe('options');
-    expect(nextMode('figures')).toBe('write');
+    expect(nextMode('figures')).toBe('auto');
+    expect(chatModeNamed(' Auto ')).toBe('auto');
+    expect(chatModeNamed('plan')).toBe('discuss');
+    expect(menuEntry('auto').label).toBe('Auto');
   });
 
   it('knows a mode by its name in any case, and Plan as Discuss', () => {

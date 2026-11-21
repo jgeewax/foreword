@@ -11,8 +11,8 @@
 // And the book as the author sees it, which its files alone don't show: its
 // pages as they're typeset (images), where each heading landed, Typst's
 // errors, and the author's review comments. These only look.
-import type { AgentMode } from '../services/agent/modes';
-import { AGENT_MODES, modeConfig, modeNamed } from '../services/agent/modes';
+import type { ChatMode } from '../services/agent/modes';
+import { CHAT_MODES, chatModeNamed, menuEntry } from '../services/agent/modes';
 import { effortFor } from '../services/agent/models';
 import { matchesQuery } from '../services/agent/model-search';
 import type { EffortOption, ModelInfo, ModelRef } from '../services/agent/types';
@@ -68,7 +68,8 @@ export type StudioHost = {
     model: ModelRef | null;
     efforts: EffortOption[];
     effort: string | null;
-    mode: AgentMode;
+    /** The mode menu's choice: Auto, or a mode. */
+    mode: ChatMode;
     /** Whether it may change settings (Settings ▸ Permissions): without asking, after asking the author, or not at all. */
     permission: Level;
   };
@@ -87,7 +88,7 @@ export type StudioHost = {
   switchAssistant(id: AssistantId, choice: ModelChoice): void;
   /** This assistant's model and effort (the chat says what came of it). */
   chooseModel(choice: ModelChoice): Promise<void>;
-  setMode(mode: AgentMode): Promise<void>;
+  setMode(mode: ChatMode): Promise<void>;
   openSettings(page?: ToolsSettingsPage): void;
   book: BookHost;
 };
@@ -302,7 +303,7 @@ export const TOOLS: Tool[] = [
           name: ASSISTANT_NAMES[s.assistant],
           model: model ? { id: model.id, name: model.name, provider: model.providerName } : s.model,
           effort: s.efforts.length ? { level: s.effort, levels: s.efforts.map((e) => e.value) } : 'this model has no effort setting',
-          mode: { id: s.mode, about: modeConfig(s.mode).description, modes: AGENT_MODES },
+          mode: { id: s.mode, about: menuEntry(s.mode).description, modes: CHAT_MODES },
         },
         assistants: ASSISTANTS.map((id) => ({ id, name: ASSISTANT_NAMES[id] })),
         preferences: Object.fromEntries(
@@ -433,16 +434,17 @@ export const TOOLS: Tool[] = [
   {
     name: 'set_mode',
     title: 'Change the chat’s mode',
-    description: `The chat's mode, from the author's next message on (it changes when your reply ends): ${AGENT_MODES.map((m) => `${m} (${modeConfig(m).description})`).join('; ')}`,
-    inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...AGENT_MODES] } }, required: ['mode'], additionalProperties: false },
+    description: `The chat's mode, from the author's next message on (it changes when your reply ends): ${CHAT_MODES.map((m) => `${m} (${m === 'auto' ? 'Foreword picks one per message' : menuEntry(m).description})`).join('; ')}`,
+    inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...CHAT_MODES] } }, required: ['mode'], additionalProperties: false },
     run: async (input, host) => {
       mayChange(host);
-      const mode = modeNamed(words(input.mode));
-      if (!mode) throw new ToolError(`No mode is called “${words(input.mode)}”: ${AGENT_MODES.join(', ')}.`);
-      if (mode === host.state().mode) return `The chat is in ${modeConfig(mode).label} mode already.`;
-      await approved(host, 'set_mode', `${modeConfig(mode).label} mode`);
+      const mode = chatModeNamed(words(input.mode));
+      if (!mode) throw new ToolError(`No mode is called “${words(input.mode)}”: ${CHAT_MODES.join(', ')}.`);
+      const name = mode === 'auto' ? 'Auto' : `${menuEntry(mode).label} mode`;
+      if (mode === host.state().mode) return `The chat is in ${name} already.`;
+      await approved(host, 'set_mode', name);
       host.whenIdle(() => host.setMode(mode));
-      return `When your reply ends, the chat switches to ${modeConfig(mode).label} mode.`;
+      return `When your reply ends, the chat switches to ${name}.`;
     },
   },
   {

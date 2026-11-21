@@ -6,7 +6,8 @@ import { setupLine } from '../app/mode-setups';
 import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
-import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
+import { AUTO_MENU, CHAT_MODES, menuEntry, modeConfig, nextMode } from '../services/agent/modes';
+import type { AutoPick } from '../services/agent/auto-mode';
 import type { ChangeNote } from '../services/agent/change-context';
 import { DEFAULT_EFFORT } from '../services/agent/types';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
@@ -366,17 +367,25 @@ function QuestionPanel({ item }: { item: QuestionItem }) {
   );
 }
 
-/** The mode menu: compact trigger, opens upward with a description per mode, and what a pinned one runs on. ⇧Tab cycles. */
-function ModeMenu() {
+/**
+ * The mode menu: compact trigger, opens upward with a description per mode,
+ * and what a pinned one runs on. ⇧Tab cycles. In Auto, the trigger shows the
+ * mode the message being typed would go in (`pick`), in its colour.
+ */
+function ModeMenu({ pick }: { pick: AutoPick | null }) {
   const mode = useStore(studio.store, (s) => s.agent.mode);
+  const auto = useStore(studio.store, (s) => s.agent.auto);
   const running = useStore(studio.store, (s) => s.agent.running);
   const pins = useStore(studio.store, (s) => s.agent.setups.pins);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const inUse = useSetupNow();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const chosen = auto ? 'auto' : mode;
   const current = modeConfig(mode);
-  const pinned = !!pins[mode];
+  const pinned = !auto && !!pins[mode];
+  const picked = auto && pick ? modeConfig(pick.mode) : null;
+  const title = picked ? `Auto picked ${picked.label}: ${pick!.why}. Pick a mode to choose it yourself (⇧Tab to switch)` : `${menuEntry(chosen).description} (⇧Tab to switch)`;
 
   useEffect(() => {
     if (!open) return;
@@ -393,28 +402,35 @@ function ModeMenu() {
   return (
     <div className="mode-menu" ref={rootRef}>
       <button
-        className={`mode-trigger mode-${mode}`}
+        className={`mode-trigger mode-${auto ? (pick?.mode ?? 'auto') : mode}${auto ? ' auto' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Mode: ${current.label}`}
+        aria-label={picked ? `Mode: Auto, picking ${picked.label}` : `Mode: ${menuEntry(chosen).label}`}
         disabled={running}
-        title={`${current.description} (⇧Tab to switch)`}
+        title={title}
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="mode-icon">{current.icon}</span>
-        <span className="mode-trigger-label">{current.label}</span>
+        <span className="mode-icon">{menuEntry(chosen).icon}</span>
+        <span className="mode-trigger-label">{menuEntry(chosen).label}</span>
+        {/* "✦ Auto · Review", or in a narrow box "✦ ✓". */}
+        {picked && (
+          <span className="auto-pick">
+            <span className="auto-pick-label">· {picked.label}</span>
+            <span className="auto-pick-icon">{picked.icon}</span>
+          </span>
+        )}
       </button>
       {open && (
         <div className="mode-popover" role="menu">
-          {AGENT_MODES.map((m) => {
-            const c = modeConfig(m);
-            const setup = pins[m];
+          {CHAT_MODES.map((m) => {
+            const c = menuEntry(m);
+            const setup = m === 'auto' ? undefined : pins[m];
             return (
               <button
                 key={m}
                 role="menuitemradio"
-                aria-checked={m === mode}
-                className={`mode-option${m === mode ? ' current' : ''}`}
+                aria-checked={m === chosen}
+                className={`mode-option${m === chosen ? ' current' : ''}`}
                 onClick={() => {
                   setOpen(false);
                   void studio.setMode(m);
@@ -430,11 +446,12 @@ function ModeMenu() {
                     </span>
                   )}
                 </span>
-                <span className="model-check">{m === mode ? '✓' : ''}</span>
+                <span className="model-check">{m === chosen ? '✓' : ''}</span>
               </button>
             );
           })}
-          {/* The mode shown, pinned to what's in use (or not): it then keeps them whatever the others run on. */}
+          {/* The mode shown, pinned to what's in use (or not): it then keeps them whatever the others run on. Auto runs on the usual ones. */}
+          {!auto && (
           <label className="mode-pin" title={pinned ? `Unpinned, ${current.label} runs on your usual assistant, model and effort, as the modes not pinned do` : undefined}>
             <input type="checkbox" checked={pinned} disabled={!ready} onChange={() => void studio.pinMode(mode, !pinned)} />
             <span className="mode-text">
@@ -444,8 +461,13 @@ function ModeMenu() {
               <span className="mode-description">{pinned ? `${current.label} keeps them whatever the other modes run on.` : `${inUse}: ${current.label} keeps them whatever the other modes run on.`}</span>
             </span>
           </label>
+          )}
           <div className="model-footer">
-            <span className="muted">⇧Tab in the message box switches mode. Switching keeps the assistant, model and effort, but for a mode pinned to its own.</span>
+            <span className="muted">
+              {auto
+                ? '⇧Tab in the message box switches mode. Auto runs every message on your usual assistant, model and effort, whatever mode it picks.'
+                : '⇧Tab in the message box switches mode. Switching keeps the assistant, model and effort, but for a mode pinned to its own.'}
+            </span>
           </div>
         </div>
       )}
@@ -460,7 +482,7 @@ function ModeMenu() {
  */
 function PinButton() {
   const mode = useStore(studio.store, (s) => s.agent.mode);
-  const pinned = useStore(studio.store, (s) => !!s.agent.setups.pins[s.agent.mode]);
+  const pinned = useStore(studio.store, (s) => !s.agent.auto && !!s.agent.setups.pins[s.agent.mode]);
   const running = useStore(studio.store, (s) => s.agent.running);
   if (!pinned) return null;
   const label = modeConfig(mode).label;
@@ -692,12 +714,17 @@ function Composer() {
   const files = useStore(studio.store, (s) => s.agent.files);
   const running = useStore(studio.store, (s) => s.agent.running);
   const mode = useStore(studio.store, (s) => s.agent.mode);
+  const auto = useStore(studio.store, (s) => s.agent.auto);
+  // What Auto's pick goes by besides the words: a change attached, the mode before, a card's mode.
+  const pickedBy = useStore(studio.store, (s) => `${!!s.agent.change}|${s.agent.mode}|${s.agent.items.some((it) => it.kind === 'user')}|${s.agent.autoFor}`);
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const sendKey = useStore(studio.store, (s) => s.settings.sendKey);
   const live = useStore(studio.store, (s) => s.agent.selection);
   useStore(studio.store, (s) => s.agent.selectionDismissed);
   const liveShown = !!live && studio.isSelectionIncluded() && !attachments.some((a) => a.label === live.attachment.label);
   const [text, setTextState] = useState(() => studio.composerDraft);
+  // A message about to go, and nothing else typed: the mode Auto would send it in.
+  const pick = useMemo(() => (auto && (text.trim() || studio.state.agent.autoFor) && !text.trim().startsWith('/') ? studio.autoPick(text) : null), [auto, text, pickedBy]);
   // Where the caret is: the "/…" list is for the word being typed there.
   const [caret, setCaret] = useState(text.length);
   const caretAfter = useRef<number | null>(null);
@@ -715,9 +742,9 @@ function Composer() {
   // The row of controls fits again when what it shows changes (useRowFit).
   const controlsRef = useRef<HTMLDivElement>(null);
   const rowShows = useStore(studio.store, (s) =>
-    [s.agent.mode, s.settings.assistant, s.agent.status, s.agent.model?.id, s.agent.models.length, s.agent.effort, s.agent.efforts.length, !!s.agent.setups.pins[s.agent.mode], JSON.stringify(s.settings.permissions)].join('|'),
+    [s.agent.mode, s.agent.auto, s.settings.assistant, s.agent.status, s.agent.model?.id, s.agent.models.length, s.agent.effort, s.agent.efforts.length, !!s.agent.setups.pins[s.agent.mode], JSON.stringify(s.settings.permissions)].join('|'),
   );
-  useRowFit(controlsRef, `${rowShows}|${running}|${!text}`);
+  useRowFit(controlsRef, `${rowShows}|${running}|${!text}|${pick?.mode}`);
 
   useEffect(() => studio.events.on('focus-composer', () => inputRef.current?.focus()), []);
   useEffect(
@@ -764,7 +791,7 @@ function Composer() {
     }
     // Cleared at once (it feels instant); put back if it couldn't be sent.
     setText('');
-    if (!(await studio.send(message, { delivery }))) setText(message);
+    if (!(await studio.sendTyped(message, { delivery }))) setText(message);
   };
   // The box grows with what's typed, up to a cap (then it scrolls).
   useLayoutEffect(() => {
@@ -841,7 +868,7 @@ function Composer() {
           ref={inputRef}
           value={text}
           rows={2}
-          placeholder={!ready ? 'Agent not available' : change ? 'What do you want to know about this change?' : modeConfig(mode).placeholder}
+          placeholder={!ready ? 'Agent not available' : change ? 'What do you want to know about this change?' : auto ? AUTO_MENU.placeholder : modeConfig(mode).placeholder}
           onChange={(e) => {
             caretAfter.current = null;
             typed(e.target.value, e.target.selectionStart);
@@ -881,13 +908,13 @@ function Composer() {
               studio.events.emit('focus-editor');
             } else if (e.key === 'Tab' && e.shiftKey && !running) {
               e.preventDefault();
-              void studio.setMode(nextMode(mode));
+              void studio.setMode(nextMode(auto ? 'auto' : mode));
             }
           }}
         />
         <div className="composer-controls" ref={controlsRef}>
-          <ModeMenu />
-          {mode === 'options' && <OptionCount />}
+          <ModeMenu pick={pick} />
+          {(auto ? pick?.mode : mode) === 'options' && <OptionCount />}
           <AssistantMenu />
           <ModelPicker placement="up" />
           <EffortPicker />

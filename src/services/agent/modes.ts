@@ -1,4 +1,5 @@
-// Agent modes for a conversation, told apart by what comes back: Write (the
+// Agent modes for a conversation, told apart by what comes back (and Auto,
+// which picks one of them for each message, auto-mode.ts): Write (the
 // change, made), Ask (an answer, and nothing to change), Discuss (a view, the
 // questions that would settle it, and directions to take), Review (changes to
 // make one by one), Options (alternatives to choose from, as many as the
@@ -16,6 +17,31 @@ import { WRITE_INSTRUCTIONS, WRITE_REMINDER } from './write-mode';
 export type AgentMode = 'write' | 'ask' | 'discuss' | 'review' | 'options' | 'figures';
 
 export const AGENT_MODES: AgentMode[] = ['write', 'ask', 'discuss', 'review', 'options', 'figures'];
+
+/**
+ * What the mode menu offers: Auto, where Foreword picks one of the modes for
+ * each message the author types (auto-mode.ts), and the modes themselves.
+ */
+export type ChatMode = AgentMode | 'auto';
+
+export const CHAT_MODES: ChatMode[] = ['auto', ...AGENT_MODES];
+
+/** Auto in the mode menu, the message box and the chat. */
+export const AUTO_MENU = {
+  label: 'Auto',
+  icon: '✦',
+  description: 'Picks the mode for each message from what you ask: a change made, an answer, a review, a discussion, versions or a figure.',
+  placeholder: 'Ask about the book, or ask for a change…',
+  notice: 'Auto: each message goes in the mode that fits what you ask, shown beside the box before you send. Only a request for a change goes in Write.',
+};
+
+/** The mode menu's entry for a mode, or for Auto. */
+export const menuEntry = (m: ChatMode): Pick<ModeConfig, 'label' | 'icon' | 'description' | 'placeholder' | 'notice'> => (m === 'auto' ? AUTO_MENU : modeConfig(m));
+
+/** A mode or Auto by name ("auto", "Review", "plan"), or null. */
+export function chatModeNamed(word: string): ChatMode | null {
+  return word.trim().toLowerCase() === 'auto' ? 'auto' : modeNamed(word);
+}
 
 /**
  * The mode a button's request goes in (Fix this error, a TODO…), whatever mode
@@ -101,8 +127,8 @@ export function modeChoiceMessage(s: Pick<ModeSuggestion, 'mode' | 'from' | 'the
   return `${go ? 'Go on' : 'Stay'} in ${modeConfig(go ? s.mode : s.from).label} mode, as you offered: “${go ? s.there : s.here}”`;
 }
 
-/** The next mode in the menu (⇧Tab in the composer cycles through them). */
-export const nextMode = (mode: AgentMode): AgentMode => AGENT_MODES[(AGENT_MODES.indexOf(mode) + 1) % AGENT_MODES.length];
+/** The next in the mode menu, Auto first (⇧Tab in the composer cycles through them). */
+export const nextMode = (mode: ChatMode): ChatMode => CHAT_MODES[(CHAT_MODES.indexOf(mode) + 1) % CHAT_MODES.length];
 
 export function modeConfig(mode: AgentMode): ModeConfig {
   switch (mode) {

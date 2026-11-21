@@ -13,6 +13,7 @@ export type SlashCommand = {
 };
 
 export const SLASH_COMMANDS: SlashCommand[] = [
+  { name: 'auto', description: 'Auto: each message goes in the mode that fits what you ask; only a request for a change edits', immediate: true },
   { name: 'write', description: 'Write mode: the assistant writes and edits the book', immediate: true },
   { name: 'ask', description: 'Ask mode: questions about the book, answered in the chat, nothing to change', immediate: true },
   { name: 'discuss', description: 'Discuss mode: think a direction through before writing, no changes', immediate: true, aliases: ['plan'] },

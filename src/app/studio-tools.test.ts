@@ -191,7 +191,8 @@ describe('Foreword’s tools, as an MCP server', () => {
     expect(t.did).toEqual(['assistant claude {"model":"default"}', 'model {"model":"sonnet","effort":"high"}', 'mode discuss']);
     // Plan, Discuss's old name, is Discuss.
     expect((await call(t.h, 'set_mode', { mode: 'Plan' })).text).toBe('When your reply ends, the chat switches to Discuss mode.');
-    expect((await call(t.h, 'set_mode', { mode: 'draft' })).text).toBe('No mode is called “draft”: write, ask, discuss, review, options, figures.');
+    expect((await call(t.h, 'set_mode', { mode: 'draft' })).text).toBe('No mode is called “draft”: auto, write, ask, discuss, review, options, figures.');
+    expect((await call(t.h, 'set_mode', { mode: 'Auto' })).text).toBe('When your reply ends, the chat switches to Auto.');
   });
 
   it('with the settings permission at Never, looks but changes nothing, and says why', async () => {

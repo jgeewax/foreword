@@ -8,7 +8,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { errorMessage, ipc } from '../lib/ipc';
 import { wordMatch } from '../lib/fuzzy';
 import { baseName, tildePath } from '../lib/paths';
-import { AGENT_MODES, modeConfig } from '../services/agent/modes';
+import { CHAT_MODES, menuEntry, modeConfig } from '../services/agent/modes';
 import { effectiveBookColor, randomBookColor } from './book-color';
 import { uncommitted, unstaged } from './source-control';
 import type { Studio } from './studio';
@@ -229,12 +229,12 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('stop', 'Stop', { when: () => s().agent.running }),
         { id: 'resume', title: 'Resume', keywords: ['continue'], when: () => s().agent.stopped && !s().agent.running && !!s().agent.sessionId, run: () => studio.resume() },
         { id: 'compact', title: 'Compact the Conversation', keywords: ['summarize', 'context'], when: () => idle() && !!s().agent.sessionId, run: () => studio.compactTask() },
-        ...AGENT_MODES.map(
+        ...CHAT_MODES.map(
           (mode): Spec => ({
             id: `mode-${mode}`,
-            title: `Switch to ${modeConfig(mode).label} Mode`,
-            detail: modeConfig(mode).description,
-            when: () => agentReady() && s().agent.mode !== mode,
+            title: mode === 'auto' ? 'Switch to Auto' : `Switch to ${modeConfig(mode).label} Mode`,
+            detail: menuEntry(mode).description,
+            when: () => agentReady() && (s().agent.auto ? 'auto' : s().agent.mode) !== mode,
             run: () => studio.setMode(mode),
           }),
         ),

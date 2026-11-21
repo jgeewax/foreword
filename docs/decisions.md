@@ -5061,6 +5061,60 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   with pictures in both themes. `claude-ask` now checks that Ask gives no
   changes, then that Review gives some and one can be made from the card.
 
+### Auto: the mode picked for each message (2026-11-21)
+
+- **Why:** with each mode giving back one kind of thing, choosing one is a
+  question of what the author wants back: the change made, versions, an
+  answer, fixes to choose from, or a discussion. Most messages say so, and
+  choosing from six before every message is friction. Auto is the first entry
+  in the mode menu, `/auto`, the palette, and the default for a new window.
+  Choosing a mode leaves Auto, as choosing any mode does.
+- **The app picks, not the model** (auto-mode.ts `pickMode`), from the words
+  typed, a change attached, and the mode of the message before. Each message
+  then runs in a real mode, with its own permissions, per-message reminder
+  and card. Buttons that name a mode (the selection bar, a card's Make this
+  change, a direction's Write it, an answer's `next: … | review`) keep it
+  and stay in Auto. Continue in chat keeps its tab's mode for the next
+  message typed.
+- **Write only when told to change the text.** That means an edit verb at the
+  start of a request ("can you tighten this?" too), a verb-first instruction
+  ("punch it up"), a wish about the text ("this needs to be shorter",
+  "I need it under 200 words") or a bare comparative ("shorter"). What it
+  can't place goes to the read-only mode of the message before, or to Ask, so
+  a wrong pick costs a click, not an edit. Text pasted after a colon, and
+  words in quotes, don't count as the author's requests.
+- **Seen before sending:** the mode button reads "✦ Auto · Review" in the
+  picked mode's colour as you type ("✦ ✓" in a narrow box), with the reason
+  in its tooltip. Each message typed in Auto carries a tag for its mode. A
+  message typed while a reply in another mode runs waits for it, so the
+  reply keeps what its mode allowed.
+- **One prompt for every mode:** in Auto the assistant has all six modes'
+  instructions at once (`AUTO_INSTRUCTIONS`, about 38k characters of system
+  prompt against 18–21k for one mode). Each message's reminder names its mode
+  (`autoReminder`). A pick changes only permissions, so Claude Code isn't
+  resumed with a new system prompt, and its prompt cache isn't lost, on every
+  switch. Codex and Gemini get the block once, not again on each change.
+- **Pins don't apply in Auto:** every message runs on the usual assistant,
+  model and effort, whatever mode it picks (the author's call: a chat
+  handed to another assistant for each message would be slow and surprising).
+  The pin controls hide in Auto, and `/pin` says so.
+- **How well it picks:** 208 labelled phrasings in auto-mode.test.ts. Two sets
+  written after the rules, to test them on new phrasings: 29 of 45 at first,
+  every miss but one going to Ask. That one ("Add two vectors: what
+  happens?") went to Write, and the rules were reworked. Then 40 of 42, both
+  misses going to Ask. Both sets are in the tests now.
+- **Headless eval** (Haiku, the test book's ch3, three runs each; Auto's prompt
+  against the picked mode's own): Auto kept to the picked mode in 32 of 33
+  turns, the single-mode prompts in 27 of 33. In a chat that goes Ask, Review,
+  Write, Discuss, Auto's Discuss turn gave directions 3 of 3 times, the
+  single-mode one 0 of 3 (with only Discuss's instructions left, it followed
+  the earlier turns' shape). Auto's miss was a "why did this change?" answered
+  in prose, with no answer block after the question block.
+- **Self-test** `modecards`: the button as six messages are typed (mode,
+  colour, narrow and wide), the menu with Auto checked and no pin, a message
+  sent in Auto keeping Auto and tagged, a follow-up, Continue in chat's
+  mode, `/ask` then `/auto`.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

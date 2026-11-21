@@ -1046,6 +1046,12 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
     <div className={`msg user${action ? ' by-button' : ''}`} onContextMenu={itemMenu(action ? actionText(action) : item.text, 'Message')}>
       <div className="turn-who">
         You{item.at ? ` · ${clock(item.at)}` : ''}
+        {/* Typed in Auto: the mode it picked, in that mode's colour. */}
+        {item.picked && item.mode && (
+          <span className={`mode-tag mode-${item.mode}`} title={`Auto picked ${modeConfig(item.mode).label}: ${item.picked}`}>
+            {modeConfig(item.mode).label}
+          </span>
+        )}
         {carried && <CarriedMark who={item.by ? ASSISTANT_NAMES[item.by.assistant] : null} />}
         {onFold && (
           <button className="turn-fold icon" aria-label="Fold this turn" aria-expanded title="Fold this turn to a line" onClick={onFold}>

@@ -90,7 +90,8 @@ import { minimalEdit } from '../editor/text-edit';
 import { OpenCodeAdapter } from '../services/agent/opencode';
 import { AcpAdapter, CLAUDE_ASKS, GOOGLE_SIGN_IN, isSignedOut } from '../services/agent/acp';
 import { buildInstructions, INSTRUCTIONS_KEY } from '../services/agent/instructions';
-import { MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ModeSuggestion, type RequestMode } from '../services/agent/modes';
+import { AUTO_MENU, MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOffer, type AgentMode, type ChatMode, type ModeSuggestion, type RequestMode } from '../services/agent/modes';
+import { AUTO_INSTRUCTIONS, autoReminder, pickMode, type AutoPick } from '../services/agent/auto-mode';
 import { answerOf, removalLines, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
 import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
 import { optionsReminder, parseOptions } from '../services/agent/options-mode';
@@ -188,6 +189,8 @@ export type ChatItem =
       by?: TurnBy;
       /** The mode it was sent in (this window's turns only: a conversation opened again doesn't say). */
       mode?: AgentMode;
+      /** Typed in Auto: why Auto picked its mode (auto-mode.ts). */
+      picked?: string;
       /** The History version of what the turn changed (null: it changed nothing). */
       version?: string | null;
     }
@@ -450,8 +453,12 @@ export type StudioState = {
     selection: { attachment: Attachment; from: 'editor' | 'preview' } | null;
     /** A selection the author dismissed for now (key: label + text; until it changes). */
     selectionDismissed: string | null;
-    /** Write (default), Ask, Discuss (think it through first), Options (versions to pick from) or Figures. */
+    /** The mode the chat is in: the one chosen, or in Auto the one the last message went in (Write, Ask, Discuss, Review, Options or Figures). */
     mode: AgentMode;
+    /** Auto (the default): Foreword picks the mode for each message typed (auto-mode.ts); `mode` is the last one picked. */
+    auto: boolean;
+    /** In Auto, the mode for the next message typed, when a card handed it over in its own (Continue in chat). */
+    autoFor: AgentMode | null;
     /** The assistant, model and effort the modes run on: the usual one, and the modes pinned to their own (mode-setups.ts; kept on this Mac). */
     setups: Setups;
     /** This book's conversations (tasks), newest first. */
@@ -596,6 +603,8 @@ const initialState: StudioState = {
     selection: null,
     selectionDismissed: null,
     mode: 'write',
+    auto: true,
+    autoFor: null,
     // Read at init (readSetups).
     setups: { usual: null, pins: {} },
     tasks: [],
@@ -1934,8 +1943,7 @@ export class Studio {
       }
       await this.untilIdle();
       if (signal?.aborted) return false;
-      await this.setMode(to);
-      if (this.state.agent.mode !== to) return false;
+      if (!(await this.enterMode(to))) return false;
     }
     return !signal?.aborted && this.send(message);
   }
@@ -1971,7 +1979,7 @@ export class Studio {
     // A reply running in another mode finishes first; the note waits in the box meanwhile.
     if (this.state.agent.mode !== 'ask') {
       await this.untilIdle();
-      await this.setMode('ask');
+      await this.enterMode('ask');
     }
     this.events.emit('focus-composer');
   }
@@ -2005,7 +2013,9 @@ export class Studio {
 
   /** The card's "Continue in chat": in its tab's mode (Ask's for a question), what the author typed goes after what's in the message box. */
   async continueInChat(kind: BarKind, draft: string) {
-    await this.setMode(BAR_MODE[kind]);
+    // In Auto, it goes in the tab's mode whatever its words would pick.
+    if (this.state.agent.auto) this.setAgent({ autoFor: BAR_MODE[kind] });
+    else await this.setMode(BAR_MODE[kind]);
     this.events.emit('show-agent-pane');
     await this.attachSelection({ focus: false });
     const typed = draft.trim();
@@ -4510,39 +4520,103 @@ export class Studio {
   }
 
   /**
-   * Switch between Write, Ask, Discuss, Options and Figures (applies to the
-   * current conversation). A mode pinned to its own assistant, model and effort
-   * brings them in once the author rests on it, and leaving it brings back the
-   * usual ones; between modes not pinned they stay (mode-setups.ts).
+   * The mode menu's choice (⇧Tab, /ask, the palette): Auto, or one of the
+   * modes, for the conversation shown. A mode pinned to its own assistant,
+   * model and effort brings them in once the author rests on it, and leaving
+   * it brings back the usual ones; between modes not pinned they stay, and
+   * Auto runs on the usual ones whatever it picks (mode-setups.ts).
    */
-  async setMode(mode: AgentMode) {
-    const previous = this.state.agent.mode;
-    if (mode === previous) return this.setupReady();
+  async setMode(to: ChatMode) {
+    const { mode: previous, auto: wasAuto } = this.state.agent;
+    const auto = to === 'auto';
+    // Into Auto, the chat goes on in the mode it's in until the next message picks one.
+    const mode = to === 'auto' ? previous : to;
+    if (auto === wasAuto && mode === previous) return this.setupReady();
     this.keepSetup(previous);
-    this.setAgent({ mode });
+    this.setAgent({ mode, auto, autoFor: null });
     // Another assistant's mode: the chat goes over to it (handOverTo), which takes the mode with it.
     const elsewhere = this.setupFor(mode)?.assistant;
     const leaving = !!elsewhere && elsewhere !== this.state.settings.assistant && !this.assistantBusy;
-    if (!leaving && !(await this.modeToSession(previous))) return;
+    if (!leaving && !(await this.modeToSession({ mode: previous, auto: wasAuto }))) return;
     await this.settleSetup();
   }
 
-  /** The mode, for the conversation shown: what it may do, and its instructions; false if it couldn't (back to `previous`). */
-  private async modeToSession(previous: AgentMode | null): Promise<boolean> {
-    const { sessionId, mode } = this.state.agent;
+  /**
+   * The mode a request goes in: a button's, a card's, or Auto's pick for a
+   * message typed. In Auto the chat stays in Auto, and only the mode this
+   * message goes in changes, quietly: what the assistant may do, and the note
+   * with the message (it has every mode's instructions already). Otherwise
+   * it's the mode menu's choice. True once the chat is in it.
+   */
+  private async enterMode(mode: AgentMode): Promise<boolean> {
+    if (!this.state.agent.auto) {
+      await this.setMode(mode);
+      return this.state.agent.mode === mode;
+    }
+    const previous = this.state.agent.mode;
+    if (mode === previous) return true;
+    this.setAgent({ mode });
+    const { sessionId, taskId } = this.state.agent;
     if (!sessionId || !this.agent) return true;
-    const config = modeConfig(mode);
     try {
-      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(this.state.agent.taskId));
-      if (config.instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, config.instructions);
-      else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: config.notice });
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, modeConfig(mode).readOnly, this.authorRules(taskId));
       return true;
     } catch (e) {
-      if (previous) this.setAgent({ mode: previous });
-      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't switch to ${config.label} mode: ${errorMessage(e)}` });
+      this.setAgent({ mode: previous });
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't go on in ${modeConfig(mode).label} mode: ${errorMessage(e)}` });
       return false;
     }
+  }
+
+  /** The mode's instructions, or in Auto every mode's (auto-mode.ts). */
+  private modeInstructions(): string | null {
+    return this.state.agent.auto ? AUTO_INSTRUCTIONS : modeConfig(this.state.agent.mode).instructions;
+  }
+
+  /** The mode, for the conversation shown: what it may do, and its instructions; false if it couldn't (back to `back`). */
+  private async modeToSession(back: { mode: AgentMode; auto: boolean } | null): Promise<boolean> {
+    const { sessionId, mode, auto } = this.state.agent;
+    if (!sessionId || !this.agent) return true;
+    const config = modeConfig(mode);
+    const instructions = this.modeInstructions();
+    try {
+      await this.agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(this.state.agent.taskId));
+      if (instructions) await this.agent.setInstructions(sessionId, MODE_INSTRUCTIONS_KEY, instructions);
+      else await this.agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: auto ? AUTO_MENU.notice : config.notice });
+      return true;
+    } catch (e) {
+      if (back) this.setAgent(back);
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't switch to ${auto ? 'Auto' : `${config.label} mode`}: ${errorMessage(e)}` });
+      return false;
+    }
+  }
+
+  /** Auto's pick for a message typed now: the message box shows it as it's typed. */
+  autoPick(text: string): AutoPick {
+    const a = this.state.agent;
+    if (a.autoFor) return { mode: a.autoFor, why: `as the card asked: ${modeConfig(a.autoFor).label}` };
+    return pickMode(text, { change: !!a.change, last: a.items.some((it) => it.kind === 'user') ? a.mode : null });
+  }
+
+  /**
+   * A message typed in the box: in Auto, in the mode picked for it (autoPick);
+   * otherwise in the chat's mode. While a reply is at work, one for another
+   * mode waits for it (so the reply keeps what its mode allowed), and one
+   * sent into it ("send now") goes in its mode.
+   */
+  async sendTyped(text: string, { delivery = 'queue' as Delivery } = {}): Promise<boolean> {
+    const a = this.state.agent;
+    if (!a.auto || (a.running && delivery === 'steer')) return this.send(text, { delivery });
+    const { mode, why } = this.autoPick(text);
+    if (a.running && mode !== a.mode) {
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `Your message waits for this reply, then goes in ${modeConfig(mode).label} mode.` });
+      while (this.state.agent.running) await this.untilIdle();
+      if (!this.state.agent.auto) return this.send(text);
+    }
+    if (!(await this.enterMode(mode))) return false;
+    this.setAgent({ autoFor: null });
+    return this.send(text, { delivery, picked: why });
   }
 
   // ---- what the modes run on: the usual setup, and a pinned mode's own (mode-setups.ts) -----
@@ -4565,13 +4639,15 @@ export class Studio {
     return { usual: readSetup(readJson(USUAL_SETUP_KEY)), pins: readModeSetups(readJson(MODE_PINS_KEY)) };
   }
 
+  /** What `mode` runs on: its own if it's pinned, else the usual one; in Auto, the usual one whatever it picks. */
   private setupFor(mode: AgentMode): ModeSetup | undefined {
-    return setupOf(this.readSetups(), mode);
+    const setups = this.readSetups();
+    return this.state.agent.auto ? (setups.usual ?? undefined) : setupOf(setups, mode);
   }
 
-  /** Whose setup `mode` runs on: its own (pinned), or the usual one (null). */
+  /** Whose setup `mode` runs on: its own (pinned), or the usual one (null), as Auto's always is. */
   private ownerOf(mode: AgentMode): AgentMode | null {
-    return this.readSetups().pins[mode] ? mode : null;
+    return !this.state.agent.auto && this.readSetups().pins[mode] ? mode : null;
   }
 
   /** `mode` runs on what's in use now: it's the mode shown, or neither is pinned. */
@@ -4685,6 +4761,7 @@ export class Studio {
   /** "Figures mode is pinned to Codex · GPT-6 · High", or "Write mode, back to your usual Claude Code · Opus 5.5". */
   private setupWords(mode: AgentMode, setup: ModeSetup) {
     const label = modeConfig(mode).label;
+    if (this.state.agent.auto) return `Auto, back to your usual ${setupLine(setup)}`;
     return this.ownerOf(mode) ? `${label} mode is pinned to ${setupLine(setup)}` : `${label} mode, back to your usual ${setupLine(setup)}`;
   }
 
@@ -4818,7 +4895,7 @@ export class Studio {
       const config = modeConfig(this.state.agent.mode);
       await agent.setPermissions(sessionId, this.state.settings.permissions, config.readOnly, this.authorRules(taskId)).catch(() => {});
       await this.applyInstructions(sessionId);
-      if (!config.instructions) await agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
+      if (!this.modeInstructions()) await agent.removeInstructions(sessionId, MODE_INSTRUCTIONS_KEY).catch(() => {});
       const { model } = this.state.agent;
       if (model) await agent.switchModel(sessionId, model).catch(() => {});
       await this.refreshEfforts();
@@ -4849,16 +4926,15 @@ export class Studio {
     const item = this.state.agent.items.find((it) => it.id === itemId);
     const s = item?.kind === 'assistant' ? item.modeSuggestion : undefined;
     if (!s || s.state !== 'pending' || this.state.agent.running) return;
-    const mode = go ? s.mode : s.from;
-    await this.setMode(mode);
-    if (this.state.agent.mode !== mode) return;
+    if (!(await this.enterMode(go ? s.mode : s.from))) return;
     this.updateItem(itemId, (it) => (it.kind === 'assistant' && it.modeSuggestion ? { ...it, modeSuggestion: { ...it.modeSuggestion, state: go ? 'switched' : 'stayed' } } : it));
     await this.send(modeChoiceMessage(s, go));
   }
 
-  /** The mode's reminder of how to reply, to go with a message (Ask's answer card, how many options). */
+  /** The mode's reminder of how to reply, to go with a message (Ask's answer card, how many options); in Auto, which mode the message is in, too. */
   private modeReminder(mode: AgentMode): MessageContext[] {
-    const reminder = mode === 'options' ? optionsReminder(this.state.settings.optionCount) : modeConfig(mode).reminder;
+    const own = mode === 'options' ? optionsReminder(this.state.settings.optionCount) : modeConfig(mode).reminder;
+    const reminder = this.state.agent.auto ? autoReminder(mode, own) : own;
     return reminder ? [{ reminder }] : [];
   }
 
@@ -4869,11 +4945,8 @@ export class Studio {
    */
   async takeDirection(d: Direction, to: 'write' | 'options') {
     if (to === 'options') return this.sendForOptions(directionOptionsPrompt(d, this.state.settings.optionCount), null);
-    if (this.state.agent.mode !== 'write') {
-      await this.untilIdle();
-      await this.setMode('write');
-    }
-    if (this.state.agent.mode === 'write') await this.send(directionWritePrompt(d));
+    if (this.state.agent.mode !== 'write') await this.untilIdle();
+    if (await this.enterMode('write')) await this.send(directionWritePrompt(d));
   }
 
   /** The mode a direction was taken to, in the messages after it (`after`), if it was. */
@@ -4892,8 +4965,7 @@ export class Studio {
   async carryOut() {
     const carry = modeConfig(this.state.agent.mode).carryOut;
     if (!carry) return;
-    await this.setMode('write');
-    if (this.state.agent.mode === 'write') await this.send(carry.prompt);
+    if (await this.enterMode('write')) await this.send(carry.prompt);
   }
 
   // ---- Ask mode's answer card (ask-answer.ts) -----------------------------------------------
@@ -4902,8 +4974,7 @@ export class Studio {
   async askNext(text: string, mode: AgentMode | null = null) {
     if (this.state.agent.running || !text.trim()) return;
     const to = mode ?? 'ask';
-    await this.setMode(to);
-    if (this.state.agent.mode === to) await this.send(text);
+    if (await this.enterMode(to)) await this.send(text);
   }
 
   /** "Not quite?" and "Answer that instead": the question as the author meant it, answered again. */
@@ -5005,8 +5076,7 @@ export class Studio {
     const editor = this.editor;
     const model = editor?.getModel();
     if (!range || !editor || !model) {
-      await this.setMode('write');
-      if (this.state.agent.mode !== 'write') return;
+      if (!(await this.enterMode('write'))) return;
       made('write');
       await this.send(changePrompt(change));
       return;
@@ -5064,8 +5134,7 @@ export class Studio {
     elsewhere.push(...todo.filter((t) => !t.ref));
     let write = false;
     if (elsewhere.length) {
-      await this.setMode('write');
-      write = this.state.agent.mode === 'write';
+      write = await this.enterMode('write');
       if (write) for (const t of elsewhere) made[t.i] = 'write';
     }
     this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, made: { ...it.made, ...made }, removed: { ...it.removed, ...removed } } : it));
@@ -5728,8 +5797,8 @@ export class Studio {
     else void this.openFile(f.path);
   }
 
-  /** `files`: these instead of the message box's (Try again: the same files as before). */
-  async send(text: string, { delivery = 'queue' as Delivery, files: given }: { delivery?: Delivery; files?: AttachedFile[] } = {}): Promise<boolean> {
+  /** `files`: these instead of the message box's (Try again: the same files as before); `picked`: Auto's reason for the mode it's in (sendTyped). */
+  async send(text: string, { delivery = 'queue' as Delivery, files: given, picked }: { delivery?: Delivery; files?: AttachedFile[]; picked?: string } = {}): Promise<boolean> {
     // The mode just chosen: its assistant, model and effort first.
     await this.setupReady();
     const { agent, docs } = this;
@@ -5763,7 +5832,7 @@ export class Studio {
       activity: { phase: 'sending', since: Date.now() },
       items: [
         ...a.items,
-        { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(change ? [changeLabel(change)] : []), ...(earlier ? [EARLIER_CHIP] : [])], ...(files.length && { files }), at: Date.now(), by: this.turnBy(), mode: a.mode },
+        { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(change ? [changeLabel(change)] : []), ...(earlier ? [EARLIER_CHIP] : [])], ...(files.length && { files }), at: Date.now(), by: this.turnBy(), mode: a.mode, ...(picked && { picked }) },
       ],
     }));
     const unsend = (why: string) => {
@@ -6057,7 +6126,7 @@ export class Studio {
       studioTools: this.agent.hasStudioTools(),
       ownPrompt: this.agent.ownsSystemPrompt(),
     });
-    const modeText = modeConfig(this.state.agent.mode).instructions;
+    const modeText = this.modeInstructions();
     return [
       [INSTRUCTIONS_KEY, text],
       ...(this.styleGuideText?.trim() ? [[STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText)] as [string, string]] : []),
@@ -6287,11 +6356,8 @@ export class Studio {
 
   /** `message` in Options mode, about `passage` as it is now; a reply running in another mode finishes first, as from the selection bar. */
   private async sendForOptions(message: string, passage: { id: string; sel: SourceSelection } | null) {
-    if (this.state.agent.mode !== 'options') {
-      await this.untilIdle();
-      await this.setMode('options');
-    }
-    if (this.state.agent.mode !== 'options') return;
+    if (this.state.agent.mode !== 'options') await this.untilIdle();
+    if (!(await this.enterMode('options'))) return;
     if (passage) this.setAgent({ attachments: [{ id: uid('a'), label: selectionLabel(passage.sel), selection: passage.sel, passage: passage.id }] });
     await this.send(message);
   }
@@ -6327,7 +6393,16 @@ export class Studio {
         // "/write make it shorter": that, sent in Write (back in the box if it can't go).
         if (cmd.arg && this.state.agent.mode === cmd.name && !(await this.send(cmd.arg))) this.fillComposer(cmd.arg);
         break;
+      case 'auto':
+        await this.setMode('auto');
+        // "/auto tighten this": that, in the mode Auto picks for it.
+        if (cmd.arg && this.state.agent.auto && !(await this.sendTyped(cmd.arg))) this.fillComposer(cmd.arg);
+        break;
       case 'pin': {
+        if (this.state.agent.auto) {
+          say('Auto runs every message on your usual assistant, model and effort, whatever mode it picks: choose a mode to pin it to its own.', 'error');
+          break;
+        }
         const { mode } = this.state.agent;
         const label = modeConfig(mode).label;
         const had = this.state.agent.setups.pins[mode];
@@ -7565,7 +7640,7 @@ export class Studio {
         model: a.model,
         efforts: a.efforts,
         effort: a.effort,
-        mode: a.mode,
+        mode: a.auto ? 'auto' : a.mode,
         permission: this.state.settings.permissions.settings,
       };
     },
@@ -7812,7 +7887,7 @@ export class Studio {
     const a = this.state.agent;
     if (!this.agent || a.status !== 'ready' || a.running) return false;
     if (a.sessionId || a.items.length) this.newSession();
-    if (this.state.agent.mode !== 'write') await this.setMode('write');
+    await this.enterMode('write');
     this.styleDraftBefore = this.styleGuideText;
     // How the author has rewritten the assistant's text: the guide should ask for that (a revision changes only what they ask).
     const revisions = kind === 'revise' ? [] : await this.authorRevisions();
