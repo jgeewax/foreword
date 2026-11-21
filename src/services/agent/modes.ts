@@ -1,19 +1,21 @@
-// Agent modes for a conversation: Write (edits the book), Ask (questions about
-// the book), Discuss (think a direction through, before writing), Options
-// (alternatives to choose from, as many as the author chose) and Figures (diagrams, charts,
-// illustrations as code). Each mode is the app's own: the agent stays in its
+// Agent modes for a conversation, told apart by what comes back: Write (the
+// change, made), Ask (an answer, and nothing to change), Discuss (a view, the
+// questions that would settle it, and directions to take), Review (changes to
+// make one by one), Options (alternatives to choose from, as many as the
+// author chose) and Figures (diagrams, charts, illustrations as code). Each mode is the app's own: the agent stays in its
 // usual mode (never Claude Code's or Codex's plan mode, which write their
 // answer to a file and ask to leave), the app's rules block changes when it's
 // read-only, and an instruction entry shapes the reply.
-import { ASK_INSTRUCTIONS, ASK_REMINDER, GO_AHEAD_PROMPT } from './ask-mode';
-import { DISCUSS_INSTRUCTIONS, WRITE_FROM_DISCUSSION_PROMPT } from './discuss-mode';
+import { ASK_INSTRUCTIONS, ASK_REMINDER } from './ask-mode';
+import { DISCUSS_INSTRUCTIONS, DISCUSS_REMINDER, WRITE_FROM_DISCUSSION_PROMPT } from './discuss-mode';
 import { FIGURES_INSTRUCTIONS } from './figures-mode';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
+import { REVIEW_INSTRUCTIONS, REVIEW_REMINDER } from './review-mode';
 import { WRITE_INSTRUCTIONS, WRITE_REMINDER } from './write-mode';
 
-export type AgentMode = 'write' | 'ask' | 'discuss' | 'options' | 'figures';
+export type AgentMode = 'write' | 'ask' | 'discuss' | 'review' | 'options' | 'figures';
 
-export const AGENT_MODES: AgentMode[] = ['write', 'ask', 'discuss', 'options', 'figures'];
+export const AGENT_MODES: AgentMode[] = ['write', 'ask', 'discuss', 'review', 'options', 'figures'];
 
 /**
  * The mode a button's request goes in (Fix this error, a TODO…), whatever mode
@@ -110,10 +112,10 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         instructions: ASK_INSTRUCTIONS,
         label: 'Ask',
         icon: '?',
-        description: 'Questions about the book, answered in the chat. Can’t change files.',
-        placeholder: 'Ask about the book, a passage, a TODO…',
-        notice: 'Ask mode: the agent answers in the chat, and can’t change files.',
-        carryOut: { question: 'Want it changed?', label: 'Go ahead', prompt: GO_AHEAD_PROMPT },
+        description: 'Questions about the book, a passage or a change, answered in the chat. Suggests no changes.',
+        placeholder: 'Ask about the book, a passage, a change, a TODO…',
+        notice: 'Ask mode: the agent answers in the chat. It suggests no changes, and can’t make any.',
+        carryOut: null,
         go: 'Just answer',
         reminder: ASK_REMINDER,
       };
@@ -123,12 +125,25 @@ export function modeConfig(mode: AgentMode): ModeConfig {
         instructions: DISCUSS_INSTRUCTIONS,
         label: 'Discuss',
         icon: '⇄',
-        description: 'Think ideas and directions through: it says what it would do, and argues back. Can’t change files.',
-        placeholder: 'What should we think through? A direction, a chapter’s shape, a character…',
-        notice: 'Discuss mode: the agent weighs ideas with you and argues back, and can’t change files.',
+        description: 'Think a passage or a direction through: it says what it thinks, asks what would settle it, and offers directions.',
+        placeholder: 'What should we think through? “I’m not sure this section adds anything”…',
+        notice: 'Discuss mode: the agent weighs it with you, argues back and offers directions to take. It can’t change files.',
         carryOut: { question: 'Settled?', label: 'Write it', prompt: WRITE_FROM_DISCUSSION_PROMPT },
         go: 'Talk it through',
-        reminder: null,
+        reminder: DISCUSS_REMINDER,
+      };
+    case 'review':
+      return {
+        readOnly: true,
+        instructions: REVIEW_INSTRUCTIONS,
+        label: 'Review',
+        icon: '✓',
+        description: 'What isn’t working in the selection, or in what you name: a change for each problem, to make or skip.',
+        placeholder: 'What should it review, and for what? “Chapter 3, for clarity”…',
+        notice: 'Review mode: the agent reviews what you point it to and suggests a change for each problem; you make the ones you want.',
+        carryOut: null,
+        go: 'Review it',
+        reminder: REVIEW_REMINDER,
       };
     case 'options':
       return {

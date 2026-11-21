@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { BAR_MODE, barMessage, barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
+import { answersInChat, BAR_MODE, barMessage, barProgress, COMPACT_BELOW, passageChange, presetsFor, selectionSummary, wordsLabel, type BarKind, type BarProgress, type BarRequest } from '../app/selection-bar';
 import { studio } from '../app/studio';
 import { looksLikeProse, trimPieces } from '../app/trace';
 import { monaco } from '../editor/monaco';
@@ -14,6 +14,7 @@ import { DiffText } from './Trace';
 
 const OPTIONS_GLYPH = modeConfig('options').icon;
 const ASK_GLYPH = modeConfig('ask').icon;
+const REVIEW_GLYPH = modeConfig('review').icon;
 const NOT_READY = 'The assistant isn’t ready yet';
 const { ABOVE, BELOW } = monaco.editor.ContentWidgetPositionPreference;
 /** The passage a request is about, followed through edits: what the assistant writes at its ends is part of it. */
@@ -36,14 +37,15 @@ const TABS: Record<BarKind, { label: string; box: string; go: string; dialog: st
     working: (n) => `Writing ${optionsLabel(n)}…`,
   },
   ask: { label: 'Ask', box: 'What do you want to know?', go: 'Ask', dialog: 'Ask about the selection', waits: 'Your question waits for the current reply', working: () => 'Answering…' },
+  review: { label: 'Review', box: 'What should it look for?', go: 'Review', dialog: 'Review the selection', waits: 'Review waits for the current reply', working: () => 'Reviewing…' },
 };
 
-/** A tab's mark: Revise the assistant's edit, Options and Ask their modes' glyphs. */
+/** A tab's mark: Revise the assistant's edit, the others their modes' glyphs. */
 function KindIcon({ kind, size }: { kind: BarKind; size: number }) {
   if (kind === 'revise') return <Icon name="edit" size={size} />;
   return (
     <span className="sel-glyph" aria-hidden>
-      {kind === 'options' ? OPTIONS_GLYPH : ASK_GLYPH}
+      {kind === 'options' ? OPTIONS_GLYPH : kind === 'review' ? REVIEW_GLYPH : ASK_GLYPH}
     </span>
   );
 }
@@ -72,6 +74,10 @@ function Bar({ compact, error, ready, chatMode, optionCount, act }: { compact: b
       <button className={`sel-btn sel-ask${iconOnly}`} disabled={!ready} aria-label={compact ? 'Ask' : undefined} title={title('Ask about it: say what you want to know, or pick one of the usual questions (changes nothing)')} onClick={() => act('ask')}>
         <KindIcon kind="ask" size={14} />
         {word('Ask')}
+      </button>
+      <button className={`sel-btn sel-review${iconOnly}`} disabled={!ready} aria-label={compact ? 'Review' : undefined} title={title('Review it: say what to look for, or pick one of the usual ones; a change comes back for each problem, to make or skip')} onClick={() => act('review')}>
+        <KindIcon kind="review" size={14} />
+        {word('Review')}
       </button>
       <button className={`sel-btn sel-comment${iconOnly}`} aria-label={compact ? 'Comment' : undefined} title="Comment on the selection (⌥⌘M)" onClick={() => act('comment')}>
         <Icon name="comments" size={14} />
@@ -412,7 +418,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, 
     editor.focus();
   }
   function act(what: Act) {
-    if (what === 'revise' || what === 'options' || what === 'ask') return openCard(what);
+    if (what === 'revise' || what === 'options' || what === 'ask' || what === 'review') return openCard(what);
     const sel = selection();
     hideBar();
     if (what === 'comment') void studio.addComment();
@@ -460,8 +466,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, 
     const range = rangeOf(t);
     if (!range || t.pending === pending) return;
     t.pending = pending;
-    // A question only looks: in Ask's colour, not the assistant's purple for a change.
-    const mark = t.req.kind === 'ask' ? 'sel-pending sel-pending-ask' : 'sel-pending';
+    // A question or a review only looks: in its mode's colour, not the assistant's purple for a change.
+    const mark = answersInChat(t.req.kind) ? `sel-pending sel-pending-${t.req.kind}` : 'sel-pending';
     const options: monaco.editor.IModelDecorationOptions = { stickiness: GROWS, ...(pending ? { inlineClassName: mark } : {}) };
     t.decoration = t.model.deltaDecorations([t.decoration], [{ range, options }])[0];
   };
@@ -495,8 +501,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, 
     // Not in the chat yet: held back while a reply runs, or on its way.
     if (progress.phase === 'gone' && t.starting) progress = studio.state.agent.running ? { phase: 'queued', id: '', sending: false } : { phase: 'working' };
     const range = rangeOf(t);
-    // Gone, or done with: an option picked, or an answer (it's in the chat).
-    if (progress.phase === 'gone' || (progress.phase === 'options' && progress.picked) || (progress.phase === 'ended' && t.req.kind === 'ask') || !range) return untrack();
+    // Gone, or done with: an option picked, or an answer or a review (it's in the chat).
+    if (progress.phase === 'gone' || (progress.phase === 'options' && progress.picked) || (progress.phase === 'ended' && answersInChat(t.req.kind)) || !range) return untrack();
     decorate(t, progress.phase === 'queued' || progress.phase === 'working');
     const change = progress.phase === 'ended' ? passageChange(t.original, t.model.getValueInRange(range)) : null;
     const key = JSON.stringify([progress, change?.words, change && t.model.getValueInRange(range), t.showChange]);

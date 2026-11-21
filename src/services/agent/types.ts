@@ -2,6 +2,7 @@ import type { AgentPermissions, PermissionRule } from './permissions';
 // Provider-neutral agent interface (SPEC §4). The UI depends only on this;
 // OpenCodeAdapter is the first implementation.
 import type { AuthorEdit } from './author-edits';
+import type { ChangeNote } from './change-context';
 import type { SourceSelection } from '../../editor/selection';
 
 /**
@@ -9,13 +10,14 @@ import type { SourceSelection } from '../../editor/selection';
  * to the assistant's text, or the turns of the conversation another assistant
  * had (app/mode-setups.ts).
  */
-/** What goes with a message: a selection, the author's edits, another assistant's turns, the mode's reminder of how to reply, or files the author attached. */
+/** What goes with a message: a selection, the author's edits, another assistant's turns, the mode's reminder of how to reply, files the author attached, or a change they ask about. */
 export type MessageContext =
   | { selection: SourceSelection; stale: boolean }
   | { authorEdits: AuthorEdit[] }
   | { earlier: string }
   | { reminder: string }
-  | { files: AttachedFile[]; inline: InlineFile[] };
+  | { files: AttachedFile[]; inline: InlineFile[] }
+  | { change: ChangeNote };
 
 /**
  * A file attached to a message (attachments.rs): in the book, where it was

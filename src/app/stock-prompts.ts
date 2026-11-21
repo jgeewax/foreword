@@ -4,6 +4,9 @@
 // it. Each is read back from its text, so a conversation reopened later (or a
 // task named after its first message) shows the same.
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
+import { GO_AHEAD_PROMPT } from '../services/agent/ask-mode';
+import { CHANGE_INTRO } from '../services/agent/change-context';
+import type { Direction } from '../services/agent/discuss-mode';
 import { REMINDER_START } from '../services/agent/message-context';
 import { AGENT_MODES, modeConfig, type AgentMode } from '../services/agent/modes';
 import { DEFAULT_OPTION_COUNT, OPTION_COUNTS, optionsInWords } from '../services/agent/options-mode';
@@ -80,6 +83,17 @@ export const moreLikePrompt = (option: { n: number; label: string; text: string 
 /** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
 export const askPrompt = (question: string) => `About the selected passage: ${question.trim()}`;
 
+/** "Review" on a selection (the selection bar), sent in Review mode: what to review it for; a change comes back for each problem. */
+export const reviewPrompt = (aim: string) => `Review the selected passage: ${aim.trim()}`;
+
+/** "Write it" on a direction from Discuss: that one, made in Write mode. */
+export const directionWritePrompt = (d: Pick<Direction, 'name' | 'what'>) =>
+  `Let's go with this direction from our discussion: “${d.name.trim()}”: ${d.what.trim()}\n\nWrite it now, in the book's voice and style guide, editing the files directly. Afterwards, say in a sentence or two what you changed and where.`;
+
+/** "Options" on a direction from Discuss, sent in Options mode: versions of it, for the selected passage (or the one the options are about). */
+export const directionOptionsPrompt = (d: Pick<Direction, 'name' | 'what'>, count = DEFAULT_OPTION_COUNT) =>
+  `${capitalized(optionsInWords(count))} for this direction from our discussion: “${d.name.trim()}”: ${d.what.trim()}`;
+
 /** "Resolve with the assistant" on a passage changed two ways at once: the author's is the selection. */
 export const mergePrompt = (path: string, theirs: string, yours: boolean) => {
   const quoted = theirs.trim() ? theirs.trim().split('\n').map((l) => `> ${l}`).join('\n') : '> (nothing: that version doesn’t have this passage)';
@@ -96,13 +110,13 @@ export const failingExamplesPrompt = (lines: string[]) =>
 /**
  * The empty chat's "Try asking", each in the colour of what it does: look
  * (blue), check (green), write (purple), Typst (its teal). Each goes in its
- * mode, whatever mode the chat was left in: the questions and the proofread
- * in Ask (its fixes come as changes to make), the outline in Discuss. One
- * that's sent as written isn't an action.
+ * mode, whatever mode the chat was left in: the questions in Ask, the
+ * proofread in Review (its fixes come as changes to make), the outline in
+ * Discuss. One that's sent as written isn't an action.
  */
 export const STARTERS: { icon: ActionIcon; tone: 'look' | 'check' | 'change' | 'typst'; label: string; prompt: string; mode: AgentMode }[] = [
   { icon: 'book', tone: 'look', label: 'Explain how this book fits together', prompt: 'Explain how the files of this book fit together.', mode: 'ask' },
-  { icon: 'passed', tone: 'check', label: 'Proofread the open chapter', prompt: "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet.", mode: 'ask' },
+  { icon: 'passed', tone: 'check', label: 'Proofread the open chapter', prompt: "Read the open chapter and point out typos, repeated words and unclear sentences. Don't change anything yet.", mode: 'review' },
   { icon: 'edit', tone: 'change', label: 'Outline my next chapter', prompt: 'Suggest an outline for my next chapter.', mode: 'discuss' },
   { icon: 'help', tone: 'typst', label: 'How do I add a footnote?', prompt: 'How do I add a footnote?', mode: 'ask' },
 ];
@@ -112,8 +126,8 @@ export const STARTERS: { icon: ActionIcon; tone: 'look' | 'check' | 'change' | '
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const modeLabelled = (label: string) => AGENT_MODES.find((m) => modeConfig(m).label === label);
 
-/** After "Write it" and "Go ahead", what they make. */
-const CARRY_NOTES: Partial<Record<AgentMode, string>> = { discuss: 'what we agreed', ask: 'make the changes we talked about' };
+/** After "Write it", what it makes. */
+const CARRY_NOTES: Partial<Record<AgentMode, string>> = { discuss: 'what we agreed' };
 
 const FIX_ERROR = new RegExp(`^${esc(fixErrorPrompt('\0')).replace('\0', '([\\s\\S]*)')}$`);
 const TODO = /^Work on this TODO in .+ \(line \d+\): “([\s\S]*)”\. When it's done, remove the TODO itself\.$/;
@@ -128,6 +142,11 @@ const REVISE = /^Revise my style guide:(?: |\n\n)([\s\S]+)$/;
 const REVISE_SELECTION = new RegExp(`^(?:${[revisePrompt, REVISE_UNTIL_091].map((p) => esc(p('\0')).replace('\0', '([\\s\\S]+?)').replace('\n\n', '\\s+')).join('|')})$`);
 const OPTIONS_SELECTION = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for the selected passage: ([\\s\\S]+)$`);
 const ASK_SELECTION = new RegExp(`^${esc(askPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
+const REVIEW_SELECTION = new RegExp(`^${esc(reviewPrompt('\0')).replace('\0', '([\\s\\S]+)')}$`);
+// The direction's name, then what it says to do.
+// Also on one line, as Claude Code names a task after it.
+const DIRECTION_WRITE = new RegExp(`^${esc(directionWritePrompt({ name: '\0', what: '\x01' })).replace('\0', '([^\\n]*?)').replace('\x01', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
+const DIRECTION_OPTIONS = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for this direction from our discussion: “([^\\n]*?)”: ([\\s\\S]+)$`);
 // What the author asked for is in it after 0.10.0.
 const MORE_LIKE = new RegExp(`^(${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (\\d+)(?: \\(“([^\\n]*)”\\))?\\. That one is closest to what I want: [\\s\\S]*?(?:\\n\\nWhat I asked for(?:, in order)?:\\n\\n([\\s\\S]*?))?\\n\\nOption \\d+ was:\\n\\n(\`{3,})typst\\n([\\s\\S]*)\\n\\5$`);
 
@@ -138,6 +157,8 @@ const READERS: ((text: string) => StockAction | null)[] = [
     const carry = mode && modeConfig(mode).carryOut;
     return carry ? { verb: carry.label, note: CARRY_NOTES[mode], tone: 'change', icon: 'edit' } : null;
   },
+  // Ask's Go ahead, until it stopped suggesting changes.
+  (text) => (text === GO_AHEAD_PROMPT ? { verb: 'Go ahead', note: 'make the changes we talked about', tone: 'change', icon: 'edit' } : null),
   (text) => {
     const m = FIX_ERROR.exec(text);
     return m ? { verb: 'Fix this error', rows: [{ text: m[1] }], tone: 'change', icon: 'error' } : null;
@@ -161,6 +182,18 @@ const READERS: ((text: string) => StockAction | null)[] = [
   (text) => {
     const m = ASK_SELECTION.exec(text);
     return m ? { verb: 'Ask about this passage', rows: [{ text: m[1] }], tone: 'look', icon: 'help', mode: 'ask' } : null;
+  },
+  (text) => {
+    const m = REVIEW_SELECTION.exec(text);
+    return m ? { verb: 'Review this passage', rows: [{ text: m[1] }], tone: 'done', icon: 'passed', mode: 'review' } : null;
+  },
+  (text) => {
+    const m = DIRECTION_WRITE.exec(text);
+    return m ? { verb: 'Write it', note: 'the direction we picked', rows: [{ label: `${m[1]}:`, text: m[2] }], tone: 'change', icon: 'edit' } : null;
+  },
+  (text) => {
+    const m = DIRECTION_OPTIONS.exec(text);
+    return m ? { verb: `${m[1]} for this direction`, rows: [{ label: `${m[2]}:`, text: m[3] }], tone: 'other', icon: 'check', mode: 'options' } : null;
   },
   (text) => {
     const m = TODO.exec(text);
@@ -227,6 +260,8 @@ export function optionsAsked(message: string, selected: boolean): { asked: strin
   const text = message.trim();
   const ask = OPTIONS_SELECTION.exec(text);
   if (ask) return { asked: [ask[2].trim()], whole: true };
+  const direction = DIRECTION_OPTIONS.exec(text);
+  if (direction) return { asked: [`${direction[2].trim()}: ${direction[3].trim()}`], whole: true };
   const more = MORE_LIKE.exec(text);
   if (more) return more[4] ? { asked: more[4].split('\n\n').map(unquoted), whole: true } : { asked: [], whole: false };
   if (text === OPTIONS_AGAIN_PROMPT || text === OPTIONS_AGAIN_THREE) return { asked: [], whole: false };
@@ -279,9 +314,11 @@ const TITLE_OPENINGS: [string, string][] = [
   ['Revise the selected passage: ', 'Revise this passage'],
   ...OPTION_COUNTS.map((n): [string, string] => [`${capitalized(optionsInWords(n))} for the selected passage: `, `${capitalized(optionsInWords(n))} for this passage`]),
   ['About the selected passage: ', 'Ask about this passage'],
+  ['Review the selected passage: ', 'Review this passage'],
+  ["Let's go with this direction from our discussion: ", 'Write it'],
 ];
-const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)}|${esc(REMINDER_START)})[\\s\\S]*$`);
-const REMINDER_TAIL = new RegExp(`\\s*${esc(REMINDER_START)}[\\s\\S]*$`);
+const TITLE_TAIL = new RegExp(` (?:Selected in the editor: |The cursor is in |${esc(AUTHOR_EDITS_INTRO)}|${esc(CHANGE_INTRO)}|${esc(REMINDER_START)})[\\s\\S]*$`);
+const REMINDER_TAIL = new RegExp(`\\s*(?:${esc(CHANGE_INTRO)}|${esc(REMINDER_START)})[\\s\\S]*$`);
 
 export function stockTitle(title: string): string {
   const line = title.replace(/\s+/g, ' ').trim();
@@ -289,6 +326,6 @@ export function stockTitle(title: string): string {
   const a = stockAction(text);
   if (a) return actionLine(a);
   if (/^This passage of .+ was changed two ways at once\./.test(text)) return 'Combine both versions';
-  // Any other message keeps its title, but not the mode's reminder Foreword put after it.
+  // Any other message keeps its title, but not the change it asks about or the mode's reminder Foreword put after it.
   return TITLE_OPENINGS.find(([opening]) => text.startsWith(opening))?.[1] ?? title.replace(REMINDER_TAIL, '');
 }

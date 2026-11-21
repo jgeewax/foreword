@@ -171,7 +171,8 @@ describe('the instructions', () => {
       { text: 'Does Ada ever find out?', mode: null },
       { text: 'Should the promise be clearer in chapter 3?', mode: 'discuss' },
     ]);
-    expect(a.changes).toHaveLength(1);
+    // Ask answers only: its fixes are Review's.
+    expect(a.changes).toEqual([]);
     const chart = proseAndCharts(ASK_INSTRUCTIONS).charts[0];
     expect(parseChart(chart.body)?.bars.filter((b) => b.on).map((b) => b.label)).toEqual(['Ch 4']);
   });

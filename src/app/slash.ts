@@ -14,8 +14,9 @@ export type SlashCommand = {
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'write', description: 'Write mode: the assistant writes and edits the book', immediate: true },
-  { name: 'ask', description: 'Ask mode: questions about the book, answered in the chat, no changes', immediate: true },
+  { name: 'ask', description: 'Ask mode: questions about the book, answered in the chat, nothing to change', immediate: true },
   { name: 'discuss', description: 'Discuss mode: think a direction through before writing, no changes', immediate: true, aliases: ['plan'] },
+  { name: 'review', description: 'Review mode: a change for each problem in a passage, to make or skip, no changes until you do', immediate: true },
   { name: 'options', description: 'Options mode: versions of a passage to pick from', immediate: true },
   { name: 'figures', description: 'Figures mode: diagrams and plots in Typst (CeTZ, fletcher, lilaq)', immediate: true },
   { name: 'new', description: 'Start a new task (a new conversation)', immediate: true },

@@ -1,6 +1,7 @@
 import { formatSelectionContext } from '../../editor/selection';
 import { formatFiles } from './attached-files';
 import { formatAuthorEdits } from './author-edits';
+import { formatChange } from './change-context';
 import type { MessageContext } from './types';
 
 /** How the turns another assistant had start (app/mode-setups.ts writes them). */
@@ -25,7 +26,9 @@ export const messageText = (message: string, context: readonly MessageContext[])
             ? c.reminder
             : 'files' in c
               ? formatFiles(c.files, c.inline)
-              : formatSelectionContext(c.selection, c.stale),
+              : 'change' in c
+                ? formatChange(c.change)
+                : formatSelectionContext(c.selection, c.stale),
     ),
   ]
     .filter((part, i) => i > 0 || part.trim())

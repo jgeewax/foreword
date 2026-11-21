@@ -5,6 +5,7 @@ import { DISCUSS_INSTRUCTIONS } from './discuss-mode';
 import { AGENT_MODES, modeChoiceMessage, modeConfig, modeNamed, modeOffer, nextMode, withoutModeOffer } from './modes';
 import { REMINDER_START } from './message-context';
 import { OPTIONS_INSTRUCTIONS } from './options-mode';
+import { REVIEW_INSTRUCTIONS } from './review-mode';
 import { WRITE_INSTRUCTIONS } from './write-mode';
 import { answerOf } from './ask-answer';
 
@@ -13,10 +14,12 @@ describe('modeConfig', () => {
     expect(AGENT_MODES.filter((m) => !modeConfig(m).readOnly)).toEqual(['write', 'figures']);
   });
 
-  it('Ask comes after Write; ⇧Tab goes round', () => {
-    expect(AGENT_MODES).toEqual(['write', 'ask', 'discuss', 'options', 'figures']);
+  it('Ask comes after Write, Review after Discuss; ⇧Tab goes round', () => {
+    expect(AGENT_MODES).toEqual(['write', 'ask', 'discuss', 'review', 'options', 'figures']);
     expect(nextMode('write')).toBe('ask');
     expect(nextMode('ask')).toBe('discuss');
+    expect(nextMode('discuss')).toBe('review');
+    expect(nextMode('review')).toBe('options');
     expect(nextMode('figures')).toBe('write');
   });
 
@@ -37,6 +40,7 @@ describe('modeConfig', () => {
     expect(modeConfig('ask')).toMatchObject({ instructions: ASK_INSTRUCTIONS });
     expect(modeConfig('discuss')).toMatchObject({ instructions: DISCUSS_INSTRUCTIONS });
     expect(modeConfig('options')).toMatchObject({ instructions: OPTIONS_INSTRUCTIONS });
+    expect(modeConfig('review')).toMatchObject({ instructions: REVIEW_INSTRUCTIONS });
     expect(modeConfig('write')).toMatchObject({ instructions: WRITE_INSTRUCTIONS });
   });
 
@@ -49,23 +53,22 @@ describe('modeConfig', () => {
     expect(answerOf([example])?.changes).toEqual([expect.objectContaining({ at: 'chapters/04-storm.typ:114', why: 'Show him hiding it', complete: true })]);
   });
 
-  it('Ask and Discuss keep everything in the chat, and end in Write', () => {
-    for (const mode of ['ask', 'discuss'] as const) {
+  it('Ask, Discuss and Review keep everything in the chat; only Discuss ends in Write', () => {
+    for (const mode of ['ask', 'discuss', 'review'] as const) {
       const c = modeConfig(mode);
       expect(c.instructions).toMatch(/must not edit, create, or delete files/);
       expect(c.instructions).toMatch(/goes in your reply, where the author reads it/);
-      expect(c.carryOut?.prompt).toMatch(/edit(ing)? the files directly/);
     }
-    expect(modeConfig('ask').carryOut?.label).toBe('Go ahead');
-    expect(modeConfig('discuss').carryOut?.label).toBe('Write it');
-    for (const mode of ['write', 'options', 'figures'] as const) expect(modeConfig(mode).carryOut).toBeNull();
+    expect(modeConfig('discuss').carryOut).toMatchObject({ label: 'Write it', prompt: expect.stringMatching(/editing the files directly/) });
+    // Ask answers, and Review's changes are made from its card: neither has a Go ahead.
+    for (const mode of ['write', 'ask', 'review', 'options', 'figures'] as const) expect(modeConfig(mode).carryOut).toBeNull();
   });
 
   it('a pick of the assistant’s two ways on goes as the author’s message, in its words', () => {
     const s = { mode: 'discuss', from: 'write', there: 'Weigh Sam against Ada with you.', here: 'Go with Sam and rewrite chapter 1.' } as const;
     expect(modeChoiceMessage(s, true)).toBe('Go on in Discuss mode, as you offered: “Weigh Sam against Ada with you.”');
     expect(modeChoiceMessage(s, false)).toBe('Stay in Write mode, as you offered: “Go with Sam and rewrite chapter 1.”');
-    expect(AGENT_MODES.map((m) => modeConfig(m).go)).toEqual(['Write it', 'Just answer', 'Talk it through', 'Show versions', 'Draw it']);
+    expect(AGENT_MODES.map((m) => modeConfig(m).go)).toEqual(['Write it', 'Just answer', 'Talk it through', 'Review it', 'Show versions', 'Draw it']);
   });
 
   it('reads a reply’s offer of another mode, and leaves it out of the reply shown', () => {
@@ -88,21 +91,41 @@ describe('modeConfig', () => {
     expect(modeOffer(`\`\`\`mode\nmode: options\nthere: ${'x'.repeat(900)}\nhere: y\n\`\`\``)?.there).toHaveLength(600);
   });
 
-  it('Ask gives the question back first, as a question, and leaves the change for the card or Go ahead', () => {
-    const { instructions, carryOut } = modeConfig('ask');
+  it('Ask gives the question back first, as a question, and answers it with nothing to change', () => {
+    const { instructions, reminder } = modeConfig('ask');
     expect(instructions).toMatch(/Before you read or search anything, give the question back/);
     expect(instructions).toMatch(/as a question in the author's voice .*never "Whether…"/);
     expect(instructions).toMatch(/put the other on an `other:` line, also as a question, rather than asking which/);
-    expect(instructions).toMatch(/every reply in this mode as an answer card.*a request to check or review a passage/);
-    expect(instructions).toMatch(/don't ask which to make or whether to, with your question tool or in words: here that takes the place of asking the author/);
-    expect(instructions).toMatch(/press Make this change on the card, or Go ahead/);
-    expect(carryOut?.prompt).toMatch(/If we didn't settle on a change, say so/);
+    expect(instructions).toMatch(/no changes, and no suggested changes/);
+    expect(instructions).toMatch(/Don't suggest changes: no change blocks, no rewritten sentences or drafts, no list of fixes/);
+    // What it found to fix goes to Review, a follow-up away.
+    expect(instructions).toMatch(/offer it as a follow-up in Review \(`next: .* \| review`\)/);
+    expect(instructions).not.toMatch(/```change/);
+    expect(reminder).toMatch(/Answer only: no ```change blocks/);
   });
 
-  it('Write and Ask send a reminder with each message, and the chat knows where it starts', () => {
-    expect(AGENT_MODES.filter((m) => modeConfig(m).reminder)).toEqual(['write', 'ask']);
-    expect(modeConfig('ask').reminder?.startsWith(REMINDER_START)).toBe(true);
-    expect(modeConfig('write').reminder?.startsWith(REMINDER_START)).toBe(true);
+  it('Review says what it reviews first, then a verdict, then a change a problem, made from the card', () => {
+    const { instructions, reminder, readOnly, label } = modeConfig('review');
+    expect({ readOnly, label }).toEqual({ readOnly: true, label: 'Review' });
+    expect(instructions).toMatch(/Before you read or search anything, say back what you'll review and for what/);
+    expect(instructions).toMatch(/Only real problems/);
+    expect(instructions).toMatch(/don't invent fixes/);
+    expect(instructions).toMatch(/a proofread fixes mistakes and nothing else/);
+    expect(instructions).toMatch(/offer it as a follow-up in Discuss/);
+    expect(instructions).toMatch(/don't ask which to make or whether to, with your question tool or in words: the card does that/);
+    // The author's comments are the Review list's, not this mode's.
+    expect(instructions).toMatch(/in the Review list/);
+    expect(reminder).toMatch(/a ```change block for each real problem/);
+    // Its examples read as the card: what it reviews, the verdict, a change that cuts a sentence.
+    const answer = answerOf([instructions!]);
+    expect(answer).toMatchObject({ asked: expect.stringMatching(/^Is the argument in section 2\.3 clear/), answer: expect.stringMatching(/^Mostly clear/) });
+    expect(answer?.next).toEqual([{ text: 'Should the lemma move to section 2.2?', mode: 'discuss' }]);
+    expect(answer?.changes).toEqual([expect.objectContaining({ at: 'chapters/02-spaces.typ:152', replace: '', complete: true })]);
+  });
+
+  it('Write, Ask, Discuss and Review send a reminder with each message, and the chat knows where it starts', () => {
+    expect(AGENT_MODES.filter((m) => modeConfig(m).reminder)).toEqual(['write', 'ask', 'discuss', 'review']);
+    for (const m of ['write', 'ask', 'discuss', 'review'] as const) expect(modeConfig(m).reminder?.startsWith(REMINDER_START)).toBe(true);
     expect(modeConfig('write').reminder).toMatch(/a request for a change, "can you…" and "could you…" too, is made in the files now; a question about what you think of the text is answered, with nothing changed/);
   });
 });

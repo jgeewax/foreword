@@ -14,6 +14,7 @@ import { describeTool, NO_NAMES } from './tool-labels';
 import type { ChatItem } from './studio';
 import type { AgentMode } from '../services/agent/modes';
 import { AUTHOR_EDITS_INTRO } from '../services/agent/author-edits';
+import { CHANGE_INTRO } from '../services/agent/change-context';
 import { FILES_INTRO, filesFromText } from '../services/agent/attached-files';
 import { EARLIER_CHIP, EARLIER_INTRO, REMINDER_START } from '../services/agent/message-context';
 import type { AttachedFile } from '../services/agent/types';
@@ -183,7 +184,7 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The context Foreword appends to a message: files (agent/attached-files.ts; a message can be files alone), selections (editor/selection.ts), the author's edits (agent/author-edits.ts), another assistant's turns (mode-setups.ts) and the mode's reminder (modes.ts). */
 const CONTEXT_TAIL = new RegExp(
-  `(?:\\n\\n|^(?=${escape(FILES_INTRO)}))(?:${escape(FILES_INTRO)}|Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)}|${escape(REMINDER_START)})[\\s\\S]*$`,
+  `(?:\\n\\n|^(?=${escape(FILES_INTRO)}))(?:${escape(FILES_INTRO)}|Selected in the editor: |The cursor is in |${escape(AUTHOR_EDITS_INTRO)}|${escape(EARLIER_INTRO)}|${escape(CHANGE_INTRO)}|${escape(REMINDER_START)})[\\s\\S]*$`,
 );
 
 /** User message text as the author typed it, plus the labels of what was attached, and the files. */
@@ -191,6 +192,7 @@ export function splitUserText(text: string): { text: string; attachments: string
   const attachments = [
     ...[...text.matchAll(/<selection path="([^"]+)" start="(\d+):\d+" end="(\d+):\d+">/g)].map(([, path, a, b]) => (a === b ? `${path}:${a}` : `${path}:${a}–${b}`)),
     ...[...text.matchAll(/<author-edit path="([^"]+)" lines="(\d+)(?:–(\d+)| \(removed\))">/g)].map(([, path, a, b]) => `${AUTHOR_EDIT_CHIP} ${path}:${b && b !== a ? `${a}–${b}` : a}`),
+    ...[...text.matchAll(/<change path="([^"]+)" version="[^"]*">/g)].map(([, path]) => `Change to ${path.split('/').pop()}`),
     ...(text.includes(`\n\n${EARLIER_INTRO}`) ? [EARLIER_CHIP] : []),
   ];
   const files = text.startsWith(FILES_INTRO) || text.includes(`\n\n${FILES_INTRO}`) ? filesFromText(text) : [];

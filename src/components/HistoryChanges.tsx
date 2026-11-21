@@ -201,6 +201,7 @@ export function HistoryChanges() {
   const view = useStore(studio.store, (s) => s.history.changes);
   const versions = useStore(studio.store, (s) => s.history.versions);
   const busy = useStore(studio.store, (s) => s.history.busy);
+  const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
   const [mode, setMode] = useChangesMode();
 
   // ⌥← / ⌥→: the version before or after, while this tab is in front (and not while typing).
@@ -277,6 +278,7 @@ export function HistoryChanges() {
                 <>
                   {mode === 'words' && f.diff && <ChangeAction icon="sideBySide" label="Side by side" title="This file's change side by side, in its own tab" onClick={() => void studio.history.showDiff(v, f.path)} />}
                   {f.status !== 'D' && <ChangeAction icon="undo" label="Restore" disabled={busy} title="Write this file back as it was right after this version" onClick={() => void studio.history.restoreFile(v, f.path)} />}
+                  {ready && <ChangeAction icon="help" label="Ask" title="Ask about this change, in Ask mode: why it was made, what it does" onClick={() => void studio.askAboutChange(v.id, f.path)} />}
                 </>
               )
             }

@@ -7,6 +7,7 @@ import { onContextMenu } from '../lib/context-menu';
 import { useStore } from '../lib/store';
 import appIcon from '../../src-tauri/icons/128x128@2x.png';
 import { AGENT_MODES, modeConfig, nextMode } from '../services/agent/modes';
+import type { ChangeNote } from '../services/agent/change-context';
 import { DEFAULT_EFFORT } from '../services/agent/types';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
@@ -555,6 +556,62 @@ function ContextCard({ selection, live, fromPreview, onKeep, onRemove }: { selec
   );
 }
 
+/** A stretch of a change, as lines: the ones around it plain, then what it took out and what it put in. */
+function ChangeLines({ before, after }: { before: string; after: string }) {
+  const a = before.split('\n');
+  const b = after.split('\n');
+  // The line either side that the change kept.
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+  const line = (cls: string, mark: string, text: string, key: string) => (
+    <span key={key} className={cls}>
+      {mark} {text}
+    </span>
+  );
+  return (
+    <span className="change-card-hunk">
+      {a.slice(0, head).map((l, j) => line('change-card-same', ' ', l, `h${j}`))}
+      {a.slice(head, a.length - tail).map((l, j) => line('change-card-del', '−', l, `d${j}`))}
+      {b.slice(head, b.length - tail).map((l, j) => line('change-card-add', '+', l, `a${j}`))}
+      {a.slice(a.length - tail).map((l, j) => line('change-card-same', ' ', l, `t${j}`))}
+    </span>
+  );
+}
+
+/** A change the next message asks about (Ask About This Change): its file and version, and its lines before and after, a click away. */
+function ChangeCard({ change }: { change: ChangeNote }) {
+  const [open, setOpen] = useState(false);
+  const title = useStore(studio.store, (s) => s.names.titles[change.path]);
+  const name = change.version.label.replace(/^Agent:\s*/, '');
+  const stretches = change.hunks.length + change.more;
+  const who = change.version.byAssistant ? 'the assistant’s' : 'yours';
+  return (
+    <div className={`context-card change-card${open ? ' open' : ''}`}>
+      <div className="context-head">
+        <span className="context-pin" title="A change from History">
+          <Icon name="history" size={12} />
+        </span>
+        <button className="context-where" title={`${change.path}: go there`} onClick={() => void studio.openFile(change.path)}>
+          {title ?? basename(change.path)}
+          <span className="context-lines">
+            {' '}
+            · {stretches === 1 ? 'a change' : `${stretches} changes`}, {who}
+          </span>
+        </button>
+        <span className="spacer" />
+        <button className="context-action chip-remove" aria-label="Leave the change out" title="Leave it out of the next message" onClick={() => studio.dropChange()}>
+          <Icon name="close" size={11} />
+        </button>
+      </div>
+      <button className="context-text" aria-expanded={open} title={open ? 'Show less' : 'Show the lines it changed'} onClick={() => setOpen((o) => !o)}>
+        {open ? change.hunks.map((h, i) => <ChangeLines key={i} before={h.before} after={h.after} />) : `“${name}”`}
+      </button>
+    </div>
+  );
+}
+
 /**
  * The task's buttons, on the message box, where you look after a reply: Done, New task,
  * and how full the conversation is. They stay put (Done greys out while it works), and
@@ -631,6 +688,7 @@ function useRowFit(ref: React.RefObject<HTMLDivElement | null>, shows: string) {
 
 function Composer() {
   const attachments = useStore(studio.store, (s) => s.agent.attachments);
+  const change = useStore(studio.store, (s) => s.agent.change);
   const files = useStore(studio.store, (s) => s.agent.files);
   const running = useStore(studio.store, (s) => s.agent.running);
   const mode = useStore(studio.store, (s) => s.agent.mode);
@@ -728,8 +786,9 @@ function Composer() {
       <TaskBar />
       <QueuedMessages />
       <CarryOutActions />
-      {(attachments.length > 0 || liveShown) && (
+      {(attachments.length > 0 || liveShown || change) && (
         <div className="context-cards">
+          {change && <ChangeCard change={change} />}
           {attachments.map((a) => (
             <ContextCard key={a.id} selection={a.selection} live={false} onRemove={() => studio.removeAttachment(a.id)} />
           ))}
@@ -782,7 +841,7 @@ function Composer() {
           ref={inputRef}
           value={text}
           rows={2}
-          placeholder={ready ? modeConfig(mode).placeholder : 'Agent not available'}
+          placeholder={!ready ? 'Agent not available' : change ? 'What do you want to know about this change?' : modeConfig(mode).placeholder}
           onChange={(e) => {
             caretAfter.current = null;
             typed(e.target.value, e.target.selectionStart);

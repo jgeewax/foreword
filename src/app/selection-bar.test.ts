@@ -113,6 +113,13 @@ describe('what the card sends, and in which mode', () => {
     expect(barMessage('options', 'Shorter')).toBe(optionsPrompt('Shorter'));
     expect(barMessage('options', 'Shorter', 1)).toBe('One option for the selected passage: Shorter');
     expect(barMessage('options', 'Shorter', 5)).toBe('Five options for the selected passage: Shorter');
-    expect(BAR_MODE).toEqual({ revise: 'write', options: 'options', ask: 'ask' });
+    expect(barMessage('review', ' For clarity ')).toBe('Review the selected passage: For clarity');
+    expect(BAR_MODE).toEqual({ revise: 'write', options: 'options', ask: 'ask', review: 'review' });
+  });
+
+  it('Ask’s presets are questions; the ones that fix are Review’s', () => {
+    expect(PRESETS.ask.map((p) => p.label)).toEqual(['Explain it', 'What’s it saying?', 'Is it clear?', 'Does it fit?']);
+    expect(PRESETS.review.map((p) => p.label)).toEqual(['Everything', 'Proofread', 'Clarity', 'Tighter', 'Check the facts', 'Against my style guide']);
+    expect(presetsFor('review', false).map((p) => p.label)).not.toContain('Against my style guide');
   });
 });

@@ -78,6 +78,7 @@ import { OUTPUTS_FILE } from '../code/cells';
 import { message } from '@tauri-apps/plugin-dialog';
 import { copyText, showContextMenu } from '../lib/context-menu';
 import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
+import { turnsOf } from './trace';
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
@@ -105,7 +106,9 @@ import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import { BAR_MODE, barMessage, optionsAskedFor, type BarKind } from './selection-bar';
-import { fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockAction, stockTitle } from './stock-prompts';
+import { directionOptionsPrompt, directionWritePrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockAction, stockTitle } from './stock-prompts';
+import type { Direction } from '../services/agent/discuss-mode';
+import { changeHunks, changeLabel, type ChangeNote, type ChangeTurn } from '../services/agent/change-context';
 import { clip, plainLine } from './task-list';
 import type { AgentAdapter, AgentEvent, AttachedFile, Delivery, EffortOption, FilePatch, FormAnswer, FormField, FormRequest, MessageContext, ModelInfo, ModelRef, PermissionDecision } from '../services/agent/types';
 import { inlineFiles } from './attachments';
@@ -439,6 +442,8 @@ export type StudioState = {
     running: boolean;
     items: ChatItem[];
     attachments: Attachment[];
+    /** A change the next message asks about (Ask About This Change), from History. */
+    change: ChangeNote | null;
     /** Files for the next message (dropped, pasted or picked), already in the book. */
     files: AttachedFile[];
     /** The current selection (editor, or mapped from the preview): sent with each message unless dismissed. */
@@ -586,6 +591,7 @@ const initialState: StudioState = {
     running: false,
     items: [],
     attachments: [],
+    change: null,
     files: [],
     selection: null,
     selectionDismissed: null,
@@ -1944,6 +1950,51 @@ export class Studio {
         resolve();
       });
     });
+  }
+
+  /**
+   * "Ask About This Change": a History version's change to `path` goes with
+   * the next message, in Ask mode, with what Foreword knows of the turn that
+   * made it; the author says what they want to know. `near`, a line in the
+   * file after the change, picks the stretch there (a mark in the editor).
+   */
+  async askAboutChange(versionId: string, path: string, near?: number) {
+    const version = this.state.history.versions.find((v) => v.id === versionId) ?? (await ipc.historyList(300).catch(() => [])).find((v) => v.id === versionId);
+    if (!version) return this.toast('That version is too far back in History to ask about.', 'error');
+    const [before, after] = await Promise.all([version.parent ? ipc.historyFile(version.parent, path).catch(() => null) : null, ipc.historyFile(version.id, path).catch(() => null)]);
+    const { hunks, more } = changeHunks(before, after, near);
+    if (!hunks.length) return this.toast(`That version didn’t change ${path.split('/').pop()}.`, 'error');
+    const turn = version.kind === 'agent' ? this.changeTurn(version.id) : null;
+    const change: ChangeNote = { path, version: { id: version.id, label: version.label, time: version.time, byAssistant: version.kind === 'agent' }, hunks, more, ...(turn && { turn }) };
+    this.setAgent({ change });
+    this.events.emit('show-agent-pane');
+    // A reply running in another mode finishes first; the note waits in the box meanwhile.
+    if (this.state.agent.mode !== 'ask') {
+      await this.untilIdle();
+      await this.setMode('ask');
+    }
+    this.events.emit('focus-composer');
+  }
+
+  /** Take the change off the next message. */
+  dropChange() {
+    this.setAgent({ change: null });
+  }
+
+  /**
+   * What Foreword knows of the turn that made a version: in the chat shown,
+   * the author's message and the assistant's reply; otherwise the task whose
+   * files it last changed, by name.
+   */
+  private changeTurn(versionId: string): ChangeTurn | null {
+    const { items, title } = this.state.agent;
+    const turn = turnsOf(items).find((t) => t.user?.version === versionId);
+    if (turn?.user) {
+      const said = turn.reply ? withoutAnswerBlocks(withoutMarker(turn.reply.text)).trim() : '';
+      return { ...(title && { task: title }), asked: messageLine(turn.user.text), ...(said && { said }) };
+    }
+    const task = this.state.agent.tasks.find((t) => Object.values(t.files ?? {}).some((f) => f?.version === versionId));
+    return task ? { task: task.title } : null;
   }
 
   /** "Add to chat" (the selection bar's ⌘I): the selection goes with the chat, in the mode it's in, which shows with the cursor in its message box. */
@@ -4811,7 +4862,33 @@ export class Studio {
     return reminder ? [{ reminder }] : [];
   }
 
-  /** "Write it" (Discuss) and "Go ahead" (Ask): back to Write mode, to make what was agreed. */
+  /**
+   * A direction from Discuss, taken on: made in Write mode, or as versions to
+   * pick from in Options mode (for the selected passage, or the one the last
+   * options were about). A reply running in another mode finishes first.
+   */
+  async takeDirection(d: Direction, to: 'write' | 'options') {
+    if (to === 'options') return this.sendForOptions(directionOptionsPrompt(d, this.state.settings.optionCount), null);
+    if (this.state.agent.mode !== 'write') {
+      await this.untilIdle();
+      await this.setMode('write');
+    }
+    if (this.state.agent.mode === 'write') await this.send(directionWritePrompt(d));
+  }
+
+  /** The mode a direction was taken to, in the messages after it (`after`), if it was. */
+  directionTaken(d: Direction, after: readonly ChatItem[]): AgentMode | null {
+    const write = directionWritePrompt(d);
+    for (const it of after) {
+      if (it.kind !== 'user') continue;
+      if (it.text === write) return 'write';
+      const a = stockAction(it.text);
+      if (a?.mode === 'options' && a.rows?.[0]?.label === `${d.name.trim()}:` && a.rows[0].text === d.what.trim()) return 'options';
+    }
+    return null;
+  }
+
+  /** "Write it" (Discuss): back to Write mode, to make what was agreed. */
   async carryOut() {
     const carry = modeConfig(this.state.agent.mode).carryOut;
     if (!carry) return;
@@ -5397,6 +5474,7 @@ export class Studio {
             items,
             contextTokens: sessionId ? contextTokens(messages) : null,
             attachments: [],
+            change: null,
             files: [],
             queued: [],
             running,
@@ -5668,6 +5746,7 @@ export class Studio {
     this.prunePassages();
     if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachForOptions();
     const attachments = this.outgoingAttachments();
+    const change = state.change;
     // Followed from now on, so nothing the author does meanwhile moves it.
     const optionsTurn = state.mode === 'options' ? this.optionsTurnFor(attachments[0]) : null;
     // Handed over from another assistant: the turns this one hasn't seen go too.
@@ -5679,15 +5758,16 @@ export class Studio {
       running: true,
       stopped: false,
       attachments: [],
+      change: null,
       ...(!given && { files: [] }),
       activity: { phase: 'sending', since: Date.now() },
       items: [
         ...a.items,
-        { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(earlier ? [EARLIER_CHIP] : [])], ...(files.length && { files }), at: Date.now(), by: this.turnBy(), mode: a.mode },
+        { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(change ? [changeLabel(change)] : []), ...(earlier ? [EARLIER_CHIP] : [])], ...(files.length && { files }), at: Date.now(), by: this.turnBy(), mode: a.mode },
       ],
     }));
     const unsend = (why: string) => {
-      this.setAgent((a) => ({ running: false, attachments, ...(!given && { files }), items: a.items.filter((it) => it.id !== userId) }));
+      this.setAgent((a) => ({ running: false, attachments, change, ...(!given && { files }), items: a.items.filter((it) => it.id !== userId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: why });
       return false;
     };
@@ -5710,6 +5790,7 @@ export class Studio {
         selection: a.selection,
         stale: docs?.get(a.selection.relativePath)?.model.getVersionId() !== a.selection.documentVersion,
       })),
+      ...(change ? [{ change }] : []),
       ...(edits.length ? [{ authorEdits: edits }] : []),
       ...(earlier ? [{ earlier }] : []),
       ...this.modeReminder(state.mode),
@@ -5837,8 +5918,9 @@ export class Studio {
     const attachments = this.outgoingAttachments();
     const optionsTurn = options ? this.optionsTurnFor(attachments[0]) : null;
     const files = given ?? this.state.agent.files;
+    const change = this.state.agent.change;
     const tempId = uid('q');
-    this.setAgent((a) => ({ attachments: [], ...(!given && { files: [] }), queued: [...a.queued, { id: tempId, text, attachments: attachments.map((x) => x.label), ...(files.length && { files }), delivery, sending: true }] }));
+    this.setAgent((a) => ({ attachments: [], change: null, ...(!given && { files: [] }), queued: [...a.queued, { id: tempId, text, attachments: [...attachments.map((x) => x.label), ...(change ? [changeLabel(change)] : [])], ...(files.length && { files }), delivery, sending: true }] }));
     const failures = (await docs?.saveAll()) ?? [];
     const context: MessageContext[] = [
       ...(files.length ? [{ files, inline: await inlineFiles(files, agent.takes()) }] : []),
@@ -5846,6 +5928,7 @@ export class Studio {
         selection: x.selection,
         stale: docs?.get(x.selection.relativePath)?.model.getVersionId() !== x.selection.documentVersion,
       })),
+      ...(change ? [{ change }] : []),
       ...this.modeReminder(this.state.agent.mode),
     ];
     try {
@@ -5856,7 +5939,7 @@ export class Studio {
       if (this.deliveredEarly.delete(inboxId)) this.queuedDelivered(inboxId);
       return true;
     } catch (e) {
-      this.setAgent((a) => ({ attachments, ...(!given && { files }), queued: a.queued.filter((q) => q.id !== tempId) }));
+      this.setAgent((a) => ({ attachments, change, ...(!given && { files }), queued: a.queued.filter((q) => q.id !== tempId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Message not sent: ${errorMessage(e)}` });
       return false;
     }
@@ -6237,6 +6320,7 @@ export class Studio {
       case 'write':
       case 'ask':
       case 'discuss':
+      case 'review':
       case 'options':
       case 'figures':
         await this.setMode(cmd.name);

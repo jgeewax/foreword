@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { actionLine, actionText, askPrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, optionsAsked, optionsPrompt, revisePrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
+import { actionLine, actionText, askPrompt, directionOptionsPrompt, directionWritePrompt, EDIT_INSTEAD_PROMPT, EXPLAIN_PROMPT, failingExamplesPrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, optionsAsked, optionsPrompt, revisePrompt, reviewPrompt, STARTERS, stockAction, stockTitle } from './stock-prompts';
+import { GO_AHEAD_PROMPT } from '../services/agent/ask-mode';
 import { addressPrompt, makeComment } from './review';
 import { todoPrompt } from './todos';
 import { modeChoiceMessage, modeConfig } from '../services/agent/modes';
@@ -11,7 +12,22 @@ import { formatSelectionContext, type SourceSelection } from '../editor/selectio
 describe('what a button asked for, read back from its message', () => {
   it('Write it and Go ahead: back to Write, to make what was agreed', () => {
     expect(stockAction(modeConfig('discuss').carryOut!.prompt)).toMatchObject({ verb: 'Write it', note: 'what we agreed', tone: 'change' });
-    expect(stockAction(modeConfig('ask').carryOut!.prompt)).toMatchObject({ verb: 'Go ahead', tone: 'change' });
+    // Ask's, from before it stopped suggesting changes.
+    expect(stockAction(GO_AHEAD_PROMPT)).toMatchObject({ verb: 'Go ahead', note: 'make the changes we talked about', tone: 'change' });
+  });
+
+  it('a direction from Discuss, made in Write or as options to pick from', () => {
+    const d = { name: 'Cut it', what: 'Delete 2.4, and move its example into 2.3.' };
+    expect(stockAction(directionWritePrompt(d))).toEqual({ verb: 'Write it', note: 'the direction we picked', rows: [{ label: 'Cut it:', text: d.what }], tone: 'change', icon: 'edit' });
+    expect(stockAction(directionOptionsPrompt(d, 2))).toEqual({ verb: 'Two options for this direction', rows: [{ label: 'Cut it:', text: d.what }], tone: 'other', icon: 'check', mode: 'options' });
+    // More like this says it again.
+    expect(optionsAsked(directionOptionsPrompt(d), false)).toEqual({ asked: ['Cut it: Delete 2.4, and move its example into 2.3.'], whole: true });
+    expect(stockTitle(directionWritePrompt(d).replace(/\s+/g, ' '))).toBe('Write it: “Delete 2.4, and move its example into 2.3.”');
+  });
+
+  it('a review from the selection bar, in Review mode', () => {
+    expect(stockAction(reviewPrompt('For clarity'))).toMatchObject({ verb: 'Review this passage', rows: [{ text: 'For clarity' }], mode: 'review' });
+    expect(stockTitle(reviewPrompt('For clarity'))).toBe('Review this passage: “For clarity”');
   });
 
   it('an error, an explanation, a TODO: what it was about', () => {
@@ -103,7 +119,7 @@ describe('what a button asked for, read back from its message', () => {
     expect(stockAction(styleReviseMessage('Less formal.\nNo semicolons.'))?.rows).toEqual([{ text: 'Less formal.\nNo semicolons.' }]);
     expect(stockAction(EDIT_INSTEAD_PROMPT)?.verb).toBe('Edit the file instead');
     // Each starter is read back in the mode it goes in, whatever mode the chat was in.
-    expect(stockAction(STARTERS[1].prompt)).toMatchObject({ verb: 'Proofread the open chapter', tone: 'done', mode: 'ask' });
+    expect(stockAction(STARTERS[1].prompt)).toMatchObject({ verb: 'Proofread the open chapter', tone: 'done', mode: 'review' });
     expect(stockAction(STARTERS[2].prompt)).toMatchObject({ verb: 'Outline my next chapter', mode: 'discuss' });
   });
 

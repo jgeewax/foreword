@@ -5009,6 +5009,58 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   before: places quoted and pinned, a place opening the editor, the changes,
   both themes). `claude-ask` now opens the folds before it reads the places.
 
+### The modes, told apart by what comes back (2026-11-21)
+
+- **The problem:** the author felt Ask "also edits". It never changed a
+  file (read-only rules refuse every edit), but it ended answers with change
+  cards, a Make this change button and Go ahead, and the Proofread starter ran
+  in it. So Ask was doing two jobs, answering and reviewing, and so was Write
+  (answering a question with a change card).
+- **Now each mode is defined by what it gives back:**
+  - Write: the change, made.
+  - Options: versions to pick from (unchanged).
+  - Ask: an answer and nothing to change. No change blocks, no Go ahead. A
+    problem it notices becomes a `next: … | review` follow-up.
+  - Discuss: a verdict, the question that would settle it, and directions.
+  - Review (new, read-only): what it will review and for what, a verdict, then
+    a change block a problem, made from the same card Ask had. It's the
+    selection bar's fourth button (Everything, Proofread, Clarity, Tighter,
+    Check the facts, Against my style guide), /review, and the Proofread
+    starter. Ask's presets that fixed things moved to it.
+- **Discuss** reads first, gives an honest verdict in its first sentence, asks
+  what would settle it, and talks in directions, not wording. It ends with a
+  ```directions block (`direction: name | what to do | *`), which the chat
+  shows as cards with **Write it** (Write mode) and **Options** (Options mode,
+  for the selected passage). A taken direction says "Taken to Write". It now
+  sends a reminder with each message, as Ask does.
+- **Ask about a change:** *Ask About This Change…* on an assistant mark, and
+  **Ask** on each file in History's changes. The version's changed stretches
+  (a line either side, at most four and 80 lines, the one under the cursor
+  first) go with the next message, in Ask, as a `<change>` note. When the
+  chat shown made it, the note includes that turn's request and reply. Otherwise
+  it names the task, or says nothing records why, and Ask is told to call
+  its answer a guess then.
+- **Name clash:** "Review" is also the activity bar's list of the author's
+  comments. Kept, since both are feedback on the text; the prompt calls the
+  comments "the Review list".
+- **Headless eval** (Haiku, the app's real prompts, the test book's ch3, two
+  runs each):
+  - Ask: 0 change blocks in 6 of 6 runs, including "check the first
+    paragraph… what would you change?".
+  - Review: 1 to 2 changes, every `find` in the file; a proofread of a clean
+    paragraph gave none.
+  - Discuss: a verdict first every time, pushback on cutting the opening, no
+    rewrites. Directions came 0 of 4 times while the prompt said "no block
+    while still finding out". After saying "even while a question is still
+    open", they came 6 of 6 times (two or three each), with a pick marked in
+    5 of 8.
+  - Why did this change: answered from the recorded request (certain); with
+    no record, from the TODO the change removed.
+- **Self-test** `modecards` (no model) checks the Review card's labels, the
+  direction cards and where they send, the change card, and the Review tab,
+  with pictures in both themes. `claude-ask` now checks that Ask gives no
+  changes, then that Review gives some and one can be made from the card.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

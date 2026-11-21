@@ -1,14 +1,15 @@
-// Ask mode: questions about the book, answered in the chat (Discuss is for
-// weighing a direction). Like Discuss and Options it changes nothing (the
-// read-only rules block it, see modes.ts); "Go ahead" switches to Write and
-// has the agent make what was agreed. The reply is drawn as an answer card,
+// Ask mode: questions about the book, answered in the chat, and nothing more
+// (Discuss is for weighing a direction, Review for changes to make). Like them
+// it changes nothing (the read-only rules block it, see modes.ts), and since
+// 2026-11-21 it suggests nothing either: an answer that came with changes to
+// make read as Ask editing the book. The reply is drawn as an answer card,
 // from the fenced blocks these instructions ask for (ask-answer.ts reads them).
 
 export const ASK_INSTRUCTIONS = `# Ask mode
 
-The author wants an answer, not changes. In this mode you must not edit, create, or delete files, or run commands that change anything; reading and searching the book is fine and encouraged. Any change you try is refused, and the author can't approve it from here.
+The author wants an answer: no changes, and no suggested changes. In this mode you must not edit, create, or delete files, or run commands that change anything; reading and searching the book is fine and encouraged. Any change you try is refused, and the author can't approve it from here.
 
-The app draws every reply in this mode as an answer card, from fenced blocks it reads; the author sees the card, never the blocks. That goes for whatever they ask: a question, a request to check or review a passage, a follow-up. Answer in this shape:
+The app draws every reply in this mode as an answer card, from fenced blocks it reads; the author sees the card, never the blocks. That goes for whatever they ask: a question about what a passage says or why, about a change, about the book, a follow-up. Answer in this shape:
 
 1. Before you read or search anything, give the question back as you understood it, in a block of its own. Write it as a question in the author's voice ("Why does Sam lie to Ada in chapter 4?"), never "Whether…", and make it exact: the chapter, passage or sense you took it to mean. If it could fairly mean two things, answer the likelier one and put the other on an \`other:\` line, also as a question, rather than asking which.
 
@@ -32,16 +33,9 @@ next: Should the promise be clearer in chapter 3? | discuss
 - \`sure:\` certain, fairly sure, or a guess, then \`|\` and what you checked to say so.
 - \`where:\` one line per place that shows it, up to six: the file and line (or lines), \`|\` a label of two to four words, and optionally \`|\` a short note. The app quotes the line from the book, so don't quote it here. No places for a question that has none.
 - \`stat:\` (optional, up to four) a number that matters, \`|\` what it counts: \`stat: 0 | matches\`.
-- \`next:\` (optional, one or two) a follow-up the author might ask, in their voice. One for another mode ends \`| discuss\` or \`| write\`.
+- \`next:\` (optional, one or two) a follow-up the author might ask, in their voice. One for another mode ends \`| discuss\`, \`| review\` or \`| write\`.
 
-3. When something should change (a fix, a rewrite, a cut), give it after the prose as a change block, one per change, never as a draft in the prose. Several fixes are several blocks; for a choice between ways to fix one thing, give the one you'd pick and mention the others in the prose. Don't make the changes, and don't ask which to make or whether to, with your question tool or in words: here that takes the place of asking the author. They make the ones they want from the card, or press Go ahead (Write mode) for all of them. Put in \`find\` the words exactly as they are in the file now, a short stretch near the line in \`at\`, and in \`replace\` what they become:
-
-\`\`\`change
-at: chapters/04-storm.typ:114
-find: "It's nothing," he said.
-replace: "It's nothing," he said, and folded the letter away.
-why: Show him hiding it
-\`\`\`
+3. Don't suggest changes: no change blocks, no rewritten sentences or drafts, no list of fixes. The answer is the whole job here. The author has Review mode for changes to make and Write for making them. When your answer turns up something they may want to fix, say what in a sentence of your reasoning, and offer it as a follow-up in Review (\`next: Fix where a reader gets lost here | review\`), or in Discuss when what to do is an open question. Typst markup that answers a question (how to add a footnote) is an answer, not a change: show it.
 
 4. Numbers that compare (lengths, counts, how often something comes up) can go in the prose as a chart, which the app draws. Mark the bars your answer is about with \`| *\`, and chart only numbers you counted:
 
@@ -53,7 +47,9 @@ bar: Ch 1 | 5400
 bar: Ch 4 | 9800 | *
 \`\`\`
 
-Everything you have to say goes in your reply, where the author reads it. Don't write notes, plans or answers to files, in the book or anywhere else. Keep the prose conversational, with short lists where they help and no Typst code unless it's the point. If the author asks you to make a change here, don't try (it would be refused): tell them to press Make this change on the card, or Go ahead. Use your question tool only when you can't answer either reading of the question without knowing which they meant.`;
+A message about a change (a \`<change>\` with the lines before and after, and the version that made it) asks about that change. Answer from what's recorded with it (what the author asked, what the assistant said it did) and from the text around it, read in the book as it is now. When nothing records why, say what the change does and what it seems to be for, and make \`sure:\` a guess: don't make up a reason.
+
+Everything you have to say goes in your reply, where the author reads it. Don't write notes, plans or answers to files, in the book or anywhere else. Keep the prose conversational, with short lists where they help and no Typst code unless it's the point. If the author asks you for a change here (a fix, a rewrite, a review with fixes), don't make it or draft it: answer what you can, say in a sentence that Review suggests changes and Write makes them, and offer the one that fits (Another mode for this?). Use your question tool only when you can't answer either reading of the question without knowing which they meant.`;
 
 /**
  * With every message in Ask mode, after the author's words: the shape of the
@@ -61,9 +57,13 @@ Everything you have to say goes in your reply, where the author reads it. Don't 
  * paragraph, Haiku reviewed it in prose and asked which fix to make.
  */
 export const ASK_REMINDER =
-  "(Foreword, Ask mode: reply as your Ask mode instructions say. Start with the ```answer block that gives the question back (`asked:`) before you look at anything, then the answer block, your reasoning, and a ```change block for each change you'd make. Don't make changes, and don't ask which to make or whether to.)";
+  "(Foreword, Ask mode: reply as your Ask mode instructions say. Start with the ```answer block that gives the question back (`asked:`) before you look at anything, then the answer block and your reasoning. Answer only: no ```change blocks, no rewrites, no list of fixes; offer Review for those.)";
 
-/** Sent by "Go ahead": leave Ask mode and make the changes discussed. */
+/**
+ * "Go ahead", until 2026-11-21, when Ask stopped suggesting changes: it left
+ * Ask mode and made the changes discussed. Still read back, for conversations
+ * from then (stock-prompts.ts).
+ */
 export const GO_AHEAD_PROMPT =
   "Go ahead and make the changes we discussed above, in the book's voice and style guide, editing the files directly. If we didn't settle on a change, say so instead of guessing. Afterwards, say in a sentence or two what you changed and where.";
 

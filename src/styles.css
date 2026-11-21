@@ -12,6 +12,8 @@
   --good: #2a8a3e;
   --warn: #b26a00;
   --milestone: #b7791f;
+  /* Review mode's rose: its button, its chip, and its selection bar tab. */
+  --review: #c2456e;
   --warn-bg: #fff4d6;
   --add: #e6f6ea;
   --del: #fdeaea;
@@ -42,6 +44,7 @@
     --good: #5cc176;
     --warn: #e0a040;
     --milestone: #e0b050;
+    --review: #e2759a;
     --warn-bg: #3d3420;
     --add: #1d3324;
     --del: #3c2224;
@@ -438,6 +441,14 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .context-text:hover { color: var(--fg); }
 .context-text.empty { font-style: normal; }
 .context-card.open .context-text { max-height: 160px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font: 11px/1.45 "SF Mono", Menlo, monospace; color: var(--fg); padding-top: 3px; }
+/* A change the next message asks about: in History's colours, its lines before and after when open. */
+.context-card.change-card::before { background: var(--milestone); }
+.change-card .context-text { font-style: normal; }
+.change-card-hunk { display: flex; flex-direction: column; }
+.change-card-hunk + .change-card-hunk { margin-top: 6px; }
+.change-card-same { white-space: pre; min-height: 1.45em; color: var(--muted); }
+.change-card-del { background: var(--del); }
+.change-card-add { background: var(--add); }
 .tool { font-size: 11.5px; color: var(--muted); }
 .tool summary { display: flex; gap: 6px; align-items: baseline; list-style: none; }
 .tool summary::-webkit-details-marker { display: none; }
@@ -786,6 +797,7 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .sel-revise { --tone: var(--ai-edit); }
 .sel-options { --tone: var(--good); }
 .sel-ask { --tone: #1f8fa5; }
+.sel-review { --tone: var(--review); }
 .sel-comment { --tone: #e3a008; }
 .sel-fix { --tone: var(--bad); }
 .sel-btn .icon-svg, .sel-glyph { flex: none; color: var(--tone); stroke-width: 2; }
@@ -802,6 +814,7 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .selection-card { --tone: var(--ai-edit); width: 470px; display: flex; flex-direction: column; gap: 9px; padding: 8px; border-radius: 10px; white-space: normal; }
 .selection-card.sel-options { --tone: var(--good); }
 .selection-card.sel-ask { --tone: #1f8fa5; }
+.selection-card.sel-review { --tone: var(--review); }
 .sel-card-head, .sel-card-foot { display: flex; align-items: center; gap: 8px; }
 .sel-tabs { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
 .sel-tab { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 8px; border: none; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; }
@@ -885,6 +898,7 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 /* The passage while the assistant works on it: its purple, or Ask's teal for a question (it only looks). */
 .monaco-editor .sel-pending { --pending: var(--ai-edit); background: color-mix(in srgb, var(--pending) 16%, transparent); border-bottom: 1px dashed var(--pending); animation: sel-pending 1.6s ease-in-out infinite; }
 .monaco-editor .sel-pending-ask { --pending: #1f8fa5; }
+.monaco-editor .sel-pending-review { --pending: var(--review); }
 @keyframes sel-pending { 50% { background: color-mix(in srgb, var(--pending) 6%, transparent); } }
 /*
  * The chat before its first message (Starter): a welcome in the middle of the
@@ -1262,6 +1276,7 @@ button.link.quiet { color: var(--muted); }
 :is(.mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone) { --mode: var(--accent); }
 :is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-ask { --mode: #1f8fa5; }
 :is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-discuss { --mode: var(--milestone); }
+:is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-review { --mode: var(--review); }
 :is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-options { --mode: var(--good); }
 :is(.mode-trigger, .mode-way, .mode-choice-record, .user-action, .answer-next-q, .drop-zone).mode-figures { --mode: #a35bd6; }
 .mode-icon { width: 14px; text-align: center; }
@@ -2054,6 +2069,23 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .mode-glyph { width: 14px; text-align: center; font-weight: 700; }
 .mode-choice-record { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
 .mode-choice-record .mode-glyph { color: var(--mode); }
+/* Discuss's ways forward (Trace.tsx DirectionCards): a card each, in Discuss's amber, the assistant's pick marked, each with the modes to take it to. */
+.directions { display: flex; flex-direction: column; gap: 7px; margin-top: 3px; }
+.direction-list { display: flex; flex-direction: column; gap: 6px; }
+.direction { display: flex; flex-direction: column; gap: 5px; padding: 9px 11px 10px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-2); }
+.direction.picked { border-color: color-mix(in srgb, var(--milestone) 50%, var(--border)); background: color-mix(in srgb, var(--milestone) 7%, var(--bg-2)); }
+.direction-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.direction-name { font-weight: 650; }
+.direction-pick, .direction-taken { display: inline-flex; align-items: center; height: 17px; padding: 0 6px; border-radius: 9px; font-size: 10.5px; font-weight: 600; }
+.direction-pick { color: color-mix(in srgb, var(--milestone) 80%, var(--fg)); background: color-mix(in srgb, var(--milestone) 16%, transparent); }
+.direction-taken { --mode: var(--accent); color: var(--mode); background: color-mix(in srgb, var(--mode) 13%, transparent); }
+.direction-taken.mode-options { --mode: var(--good); }
+.direction-what { font-size: 12px; line-height: 1.45; color: color-mix(in srgb, var(--fg) 88%, var(--muted)); }
+.direction-ways { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.direction-go { --mode: var(--accent); display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px; border: 1px solid color-mix(in srgb, var(--mode) 55%, var(--border)); border-radius: 6px; background: transparent; color: var(--mode); font-size: 11.5px; font-weight: 600; }
+.direction-go.mode-options { --mode: var(--good); }
+.direction-go:hover:not(:disabled) { border-color: var(--mode); background: color-mix(in srgb, var(--mode) 12%, transparent); }
+.direction-go .mode-glyph { width: auto; }
 
 /* How the turn ended. */
 .turn-foot { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-top: -2px; font-size: 11.5px; color: var(--muted); }
@@ -2406,6 +2438,11 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 @media (prefers-color-scheme: light) {
   .agent-pane { --change-strong: color-mix(in srgb, var(--change) 72%, #000); --change-on: #fff; --change-ink: color-mix(in srgb, var(--change) 70%, #000); --ok-ink: color-mix(in srgb, var(--ok) 82%, #000); --warn-ink: color-mix(in srgb, var(--warn) 80%, #000); }
   .answer-next-q.mode-discuss, .answer-next-q.mode-options { --mode: color-mix(in srgb, var(--milestone) 75%, #000); }
+}
+/* A review's card, in Review's rose. */
+.answer-card.review-card { --answer: var(--review); --answer-ink: color-mix(in srgb, var(--review) 78%, #000); }
+@media (prefers-color-scheme: dark) {
+  .answer-card.review-card { --answer-ink: color-mix(in srgb, var(--review) 80%, #fff); }
 }
 .answer-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid color-mix(in srgb, var(--answer) 32%, var(--border)); border-radius: 12px; background: var(--bg); overflow: hidden; -webkit-user-select: text; user-select: text; }
 .answer-card > * + * { border-top: 1px solid var(--border); }

@@ -15,6 +15,7 @@ import { chapterNumber } from './app/tool-labels';
 import { todoPrompt } from './app/todos';
 import { handleMcp, pngSize } from './app/studio-tools';
 import { monaco } from './editor/monaco';
+import { reviewPrompt, stockAction } from './app/stock-prompts';
 import { selectAll } from './editor/select-all';
 import { undoRedo } from './editor/undo-redo';
 import { errorMessage, ipc, type LaunchOptions } from './lib/ipc';
@@ -1680,6 +1681,182 @@ async function optionsCutChecks() {
  * to its cap, and the card stays in the editor; ⏎ sends it all. Then the
  * assistant pane's New task at the top. No model: the send is caught.
  */
+/**
+ * The modes told apart by what comes back (no model): a Review turn's card
+ * (Verdict, Suggested changes), Discuss's ways forward as cards that go to
+ * Write or Options, a change from History waiting in the message box for a
+ * question in Ask, and the selection bar's Review. Pictures in both themes.
+ */
+async function modeCardsChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch1-vectors.typ';
+  const s = studio as any;
+  const SID = 'selftest-modecards';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+  const words = model.getLineContent(line).slice(0, 24);
+  const saved = { mode: studio.state.agent.mode, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items, running: studio.state.agent.running, change: studio.state.agent.change };
+  const { send, setMode, sendForOptions } = studio as any;
+  const sent: { text: string; mode: string }[] = [];
+  studio.send = async (text: string) => {
+    sent.push({ text, mode: studio.state.agent.mode });
+    return true;
+  };
+  studio.setMode = async (mode) => {
+    studio.store.set((st) => ({ agent: { ...st.agent, mode } }));
+  };
+  s.sendForOptions = async (text: string) => {
+    sent.push({ text, mode: 'options' });
+  };
+  const zoom = studio.state.zoom;
+  const reply = (id: string, body: string) => s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: id, ordinal: 0, text: body });
+  const pictures = async (name: string) => {
+    const scroller = document.querySelector<HTMLElement>('.agent-pane .transcript');
+    const shots: unknown[] = [];
+    for (let i = 0, at = 0; i < 6; i++) {
+      if (scroller) scroller.scrollTop = at;
+      await sleep(150);
+      shots.push(await snap(`${name}-${i}`));
+      if (!scroller || at + scroller.clientHeight >= scroller.scrollHeight) break;
+      at += Math.round(scroller.clientHeight * 0.8);
+    }
+    return shots;
+  };
+  const REVIEW = [
+    '```answer',
+    'asked: Is the opening of chapter 1 clear, for a reader new to vectors?',
+    '```',
+    '```answer',
+    'answer: Mostly clear, but it uses *magnitude* before it says what it means.',
+    'sure: fairly sure | read the chapter’s first section',
+    `where: ${file}:${line} | Magnitude, unexplained`,
+    'next: Should the definition come first? | discuss',
+    '```',
+    '',
+    'The rest reads well; the one snag is the word a new reader won’t have.',
+    '',
+    '```change',
+    `at: ${file}:${line}`,
+    `find: ${words}`,
+    `replace: ${words} (its size)`,
+    'why: Says what magnitude means',
+    '```',
+  ].join('\n');
+  const DISCUSS = [
+    'It mostly repeats the section before it: its one new point is the picture.',
+    '',
+    'What should a reader come away with here: the picture, or the proof?',
+    '',
+    '```directions',
+    'direction: Cut it | Delete the section, and move its picture into the one before. | *',
+    'direction: Give it a job | Keep it, but open with the question the next section answers.',
+    '```',
+  ].join('\n');
+  try {
+    await studio.setZoom(1.25, { persist: false, write: false });
+    studio.store.set((st) => ({
+      agent: {
+        ...st.agent,
+        sessionId: SID,
+        running: false,
+        mode: 'discuss',
+        items: [
+          { kind: 'user', id: 'u1', text: reviewPrompt('For clarity: where a reader could get lost'), attachments: [`${file}:${line}`], at: Date.now() - 60000, ended: Date.now() - 50000, mode: 'review' },
+          { kind: 'user', id: 'u2', text: 'I’m not sure the section on arrows adds anything.', attachments: [], at: Date.now() - 9000, ended: Date.now() - 2000, mode: 'discuss' },
+        ],
+        attachments: [],
+        queued: [],
+      },
+    }));
+    studio.events.emit('show-agent-pane');
+    // Each reply after its message.
+    reply('m1', REVIEW);
+    const items = studio.state.agent.items;
+    const r1 = items.find((i) => i.kind === 'assistant')!;
+    studio.store.set((st) => ({ agent: { ...st.agent, items: [items[0], r1, items[1]] } }));
+    reply('m2', DISCUSS);
+    await sleep(300);
+    // The earlier turn folds to a line: open it.
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.turn-folded')) b.click();
+    await sleep(200);
+    const card = document.querySelector('.review-card');
+    out.review = {
+      card: !!card,
+      label: card?.querySelector('.answer-main .answer-label')?.textContent ?? null,
+      changesLabel: card?.querySelector('.answer-changes .answer-label')?.textContent ?? null,
+      changes: card?.querySelectorAll('.answer-change').length ?? 0,
+      next: [...document.querySelectorAll('.answer-next-q')].map((b) => b.textContent?.replace(/\s+/g, ' ').trim()),
+    };
+    const dirs = [...document.querySelectorAll('.directions .direction')];
+    out.directions = {
+      count: dirs.length,
+      names: dirs.map((d) => d.querySelector('.direction-name')?.textContent),
+      pick: dirs.map((d) => !!d.querySelector('.direction-pick')),
+      buttons: dirs.map((d) => [...d.querySelectorAll('.direction-go')].map((b) => b.textContent?.trim())),
+      blockHidden: !document.querySelector('.agent-pane .msg.assistant')?.textContent?.includes('direction:'),
+    };
+    // A change from History, waiting in the box.
+    studio.store.set((st) => ({
+      agent: {
+        ...st.agent,
+        change: {
+          path: file,
+          version: { id: 'v1', label: 'Agent: Tighten the opening', time: Math.round(Date.now() / 1000) - 3600, byAssistant: true },
+          hunks: [{ from: line - 1, before: `${model.getLineContent(line - 1)}\nA vector in the plane has a size.`, after: `${model.getLineContent(line - 1)}\n${model.getLineContent(line)}` }],
+          more: 0,
+          turn: { asked: 'Tighten the opening' },
+        },
+      },
+    }));
+    await sleep(250);
+    out.changeCard = { card: !!document.querySelector('.change-card'), where: document.querySelector('.change-card .context-where')?.textContent?.replace(/\s+/g, ' ').trim() ?? null, placeholder: document.querySelector<HTMLTextAreaElement>('.agent-pane textarea')?.placeholder ?? null };
+    document.querySelector<HTMLButtonElement>('.change-card .context-text')?.click();
+    await sleep(150);
+    out.changeLines = [...document.querySelectorAll('.change-card .change-card-del, .change-card .change-card-add')].map((l) => l.textContent);
+    await setAppTheme('light');
+    await sleep(300);
+    out.lightPictures = await pictures('modecards-light');
+    await setAppTheme('dark');
+    await sleep(400);
+    out.darkPictures = await pictures('modecards-dark');
+    await setAppTheme(null);
+    // The ways forward: Write it goes in Write, Options in Options; the one taken says so.
+    dirs[0].querySelector<HTMLButtonElement>('.direction-go.mode-write')?.click();
+    await sleep(200);
+    dirs[1].querySelector<HTMLButtonElement>('.direction-go.mode-options')?.click();
+    await sleep(200);
+    out.sent = sent.map((x) => ({ mode: x.mode, action: stockAction(x.text) }));
+    studio.store.set((st) => ({ agent: { ...st.agent, items: [...st.agent.items, { kind: 'user', id: 'u3', text: sent[0]?.text ?? '', attachments: [], at: Date.now(), mode: 'write' }] } }));
+    await sleep(200);
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.turn-folded')) b.click();
+    await sleep(200);
+    out.taken = [...document.querySelectorAll('.directions .direction-taken')].map((t) => t.textContent);
+    studio.dropChange();
+    await sleep(150);
+    out.changeDropped = !document.querySelector('.change-card');
+    // The selection bar's Review, and its card.
+    editor.revealLineInCenter(line);
+    editor.setSelection(new monaco.Range(line, 1, line, 30), 'mouse');
+    await sleep(300);
+    editor.render(true);
+    studio.events.emit('selection-card', 'review');
+    await sleep(400);
+    editor.render(true);
+    out.reviewTab = { open: !!document.querySelector('.selection-card.sel-review'), box: document.querySelector<HTMLTextAreaElement>('.selection-card .sel-input')?.placeholder ?? null, presets: [...document.querySelectorAll('.selection-card .sel-preset')].map((b) => b.textContent) };
+    out.reviewTabPicture = await snap('modecards-selcard');
+    document.querySelector<HTMLButtonElement>('.selection-card .sel-close')?.click();
+  } finally {
+    studio.send = send;
+    studio.setMode = setMode;
+    s.sendForOptions = sendForOptions;
+    studio.store.set((st) => ({ agent: { ...st.agent, ...saved } }));
+    await studio.setZoom(zoom, { persist: false, write: false });
+  }
+  return out;
+}
+
 async function selectionCardChecks() {
   const out: Record<string, unknown> = {};
   await studio.openFile('chapters/ch1-vectors.typ');
@@ -9624,9 +9801,10 @@ async function withClaude(checks: () => Promise<Record<string, unknown>>): Promi
 }
 
 /**
- * Ask mode, with auto-edit ON: a question answered in the chat, nothing
- * changed or written anywhere (asked to change it, it says Go ahead), then Go
- * ahead switches to Write and makes the change. Scratch book only.
+ * Ask mode, with auto-edit ON: a question answered in the chat, with nothing
+ * to change and nothing changed or written anywhere (asked to change it, it
+ * points to Review or Write); then the same check in Review mode, a change a
+ * problem, and one made from the card. Scratch book only.
  */
 async function askModeChecks() {
   const out: Record<string, unknown> = {};
@@ -9688,6 +9866,7 @@ async function askModeChecks() {
     fileUnchanged: (await ipc.fsHash(file)) === hashBefore,
   };
   await sleep(300);
+  // Ask has no Go ahead any more.
   out.carryOutButton = document.querySelector('.carry-out-actions button')?.textContent ?? null;
   out.modeTrigger = document.querySelector('.mode-trigger')?.textContent ?? null;
   try {
@@ -9699,15 +9878,26 @@ async function askModeChecks() {
   // Asked to make the change in Ask mode: nothing changes, and it says how.
   const from = studio.state.agent.items.length;
   const pushy = await settleTurn('Yes, make that change now.', waited);
-  out.changeWhileAsking = { ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, mentionsGoAhead: /go ahead|write mode/i.test(pushy), reply: pushy.slice(0, 300) };
+  out.changeWhileAsking = { ...turnTools(from), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, changes: answerOf(studio.state.agent.items.slice(from).flatMap((i) => (i.kind === 'assistant' ? [i.text] : [])))?.changes.length ?? 0, mentionsReview: /review|write mode/i.test(pushy), reply: pushy.slice(0, 300) };
 
-  // "Go ahead": back to Write, and the change is made.
-  const before = studio.state.agent.items.length;
-  await studio.carryOut();
-  await sleep(1000);
-  await waitFor(() => !studio.state.agent.running, 180000, 'go ahead').catch(() => {});
-  await sleep(1500);
-  out.goAhead = { mode: studio.state.agent.mode, fileChanged: (await ipc.fsHash(file)) !== hashBefore, ...turnTools(before) };
+  // Review mode: what it reviews first, a verdict, a change a problem; nothing changes until one is made from the card.
+  studio.newSession();
+  await studio.setMode('review');
+  const reviewFrom = studio.state.agent.items.length;
+  await settleTurn(`Review the first paragraph of ${file} for clarity.`, waited);
+  out.review = { ...(await cardOf(reviewFrom)), ...turnTools(reviewFrom), waited: waited.splice(0), fileUnchanged: (await ipc.fsHash(file)) === hashBefore, label: [...document.querySelectorAll('.review-card .answer-main .answer-label')].pop()?.textContent ?? null };
+  try {
+    out.reviewSnapshot = await ipc.previewSnapshot('review-mode', 'main');
+  } catch (e) {
+    out.reviewSnapshot = errorMessage(e);
+  }
+  const holder = studio.state.agent.items.slice(reviewFrom).findLast((i) => i.kind === 'assistant' && (answerOf([i.text])?.changes.length ?? 0) > 0);
+  if (holder) {
+    await studio.applyAnswerChange(holder.id, 0);
+    await sleep(1500);
+    const made = studio.state.agent.items.find((i) => i.id === holder.id);
+    out.reviewMade = { made: made?.kind === 'assistant' ? made.made : null, mode: studio.state.agent.mode, bufferChanged: studio.docs?.get(file)?.model.getValue() !== (await ipc.fsRead(file)).text || (await ipc.fsHash(file)) !== hashBefore };
+  }
   studio.updateSettings({ permissions: savedPolicy });
   return out;
 }
@@ -10868,6 +11058,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('optionscut')) result.optionscut = await optionsCutChecks();
     if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
     if (only?.includes('askcard')) result.askcard = await askCardChecks();
+    if (only?.includes('modecards')) result.modecards = await modeCardsChecks();
     if (only?.includes('selcard')) result.selcard = await selectionCardChecks();
     if (only?.includes('composerrow')) result.composerrow = await composerRowChecks();
     if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();

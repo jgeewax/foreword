@@ -1,24 +1,32 @@
 // The bar under a selection in the editor (SelectionBar.tsx): what Revise,
-// Options and Ask offer, and how a request made from it is getting on, read
+// Options, Ask and Review offer, and how a request made from it is getting on, read
 // from the chat (it waits its turn, the assistant works on it, it's done), for
 // the passage's own note in the editor.
 import { countWords, wordPieces, type Piece } from './prose-diff';
-import { askPrompt, optionsAsked, optionsPrompt, revisePrompt } from './stock-prompts';
+import { askPrompt, optionsAsked, optionsPrompt, revisePrompt, reviewPrompt } from './stock-prompts';
 import type { ChatItem, QueuedMessage } from './studio';
 import { turnsOf, type UserItem } from './trace';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import type { AgentMode } from '../services/agent/modes';
 import { DEFAULT_OPTION_COUNT, parseOptions } from '../services/agent/options-mode';
 
-/** Revise changes the passage in place (Write mode); Options writes some to pick from (Options mode); Ask answers a question about it (Ask mode). */
-export type BarKind = 'revise' | 'options' | 'ask';
+/**
+ * Revise changes the passage in place (Write mode); Options writes some to
+ * pick from (Options mode); Ask answers a question about it (Ask mode);
+ * Review suggests a change for each problem, to make or skip (Review mode).
+ */
+export type BarKind = 'revise' | 'options' | 'ask' | 'review';
 
 /** The mode each one is sent in. */
-export const BAR_MODE: Record<BarKind, AgentMode> = { revise: 'write', options: 'options', ask: 'ask' };
+export const BAR_MODE: Record<BarKind, AgentMode> = { revise: 'write', options: 'options', ask: 'ask', review: 'review' };
+
+/** Its answer is in the chat, not in the passage: the passage's note goes once the reply ends. */
+export const answersInChat = (kind: BarKind) => kind === 'ask' || kind === 'review';
 
 /** The message a request from the card sends: the author's words, or a preset's (Options: as many as they chose). */
 export function barMessage(kind: BarKind, instruction: string, optionCount = DEFAULT_OPTION_COUNT): string {
   if (kind === 'revise') return revisePrompt(instruction);
+  if (kind === 'review') return reviewPrompt(instruction);
   return kind === 'options' ? optionsPrompt(instruction, optionCount) : askPrompt(instruction);
 }
 
@@ -40,13 +48,20 @@ export const PRESETS: Record<BarKind, Preset[]> = {
     { label: 'More vivid', instruction: 'More vivid' },
     { label: 'Match my style guide', instruction: 'Closer to my style guide', styleGuide: true },
   ],
+  // Questions: an answer comes back, and nothing to change (fixes are Review's).
   ask: [
     { label: 'Explain it', instruction: 'Explain it in plain words, including what any Typst markup in it does' },
+    { label: 'What’s it saying?', instruction: 'What is it trying to say? Its point, in a sentence or two' },
     { label: 'Is it clear?', instruction: 'Is it clear? Where might a reader get lost?' },
-    { label: 'Check the facts', instruction: 'Is it accurate? Check its facts, figures and claims' },
-    { label: 'What’s weakest?', instruction: 'What is the weakest part of it, and why?' },
     { label: 'Does it fit?', instruction: 'Does it fit with what comes before and after it?' },
-    { label: 'Against my style guide', instruction: 'Where does it stray from my style guide?', styleGuide: true },
+  ],
+  review: [
+    { label: 'Everything', instruction: 'Whatever keeps it from working' },
+    { label: 'Proofread', instruction: 'Proofread it: typos, spelling and grammar, and nothing else' },
+    { label: 'Clarity', instruction: 'For clarity: where a reader could get lost' },
+    { label: 'Tighter', instruction: 'For what it could do without: words, and sentences that say the same thing twice' },
+    { label: 'Check the facts', instruction: 'For accuracy: its facts, figures and claims' },
+    { label: 'Against my style guide', instruction: 'Against my style guide', styleGuide: true },
   ],
 };
 

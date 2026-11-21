@@ -19,6 +19,7 @@ import { plainLine } from '../app/task-list';
 import { onContextMenu } from '../lib/context-menu';
 import { refNamed, type BookFiles, type SourceRef } from '../lib/source-links';
 import { useStore } from '../lib/store';
+import { directionsOf, withoutDirections, type Direction } from '../services/agent/discuss-mode';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { modeConfig, withoutModeOffer, type AgentMode } from '../services/agent/modes';
 import { answerOf, answerText as answerPlainText, markedTerms, markPieces, proseAndCharts, quoteOf, withoutAnswerBlocks, type AnswerChange, type AnswerPlace, type AskAnswer, type Sure } from '../services/agent/ask-answer';
@@ -529,7 +530,7 @@ function StepItem({ item, editOpen }: { item: ChatItem; editOpen: boolean }) {
 type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
 
 /** A reply's words as the chat shows them: without the markers, offers and questions the app reads. */
-const shownText = (text: string) => withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(text).text)));
+const shownText = (text: string) => withoutDirections(withoutModeOffer(withoutAddressed(withoutMarker(splitQuestions(text).text))));
 
 /** Options-mode reply: one card per option; picking one replaces the passage in the editor. */
 /** The options as written (Typst), or as they'd print; the last choice is the next reply's. */
@@ -772,7 +773,8 @@ function Byline({ by }: { by: TurnBy | undefined }) {
 /** The reply that ends a turn, under its byline. */
 function Reply({ item, by }: { item: AssistantItem; by: TurnBy | undefined }) {
   const text = withoutAnswerBlocks(shownText(item.text));
-  if (!item.options && !text.trim() && item.taskCheck !== 'ask' && !item.modeSuggestion) return null;
+  const directions = useMemo(() => (item.options ? null : directionsOf(item.text)), [item.text, item.options]);
+  if (!item.options && !text.trim() && item.taskCheck !== 'ask' && !item.modeSuggestion && !directions?.directions.length) return null;
   return (
     <div className="reply" onContextMenu={itemMenu(item.text, 'Message')}>
       <Byline by={by} />
@@ -783,8 +785,61 @@ function Reply({ item, by }: { item: AssistantItem; by: TurnBy | undefined }) {
           <Markdown text={text} />
         </div>
       )}
+      {directions && directions.directions.length > 0 && <DirectionCards item={item} directions={directions.directions} />}
       {!item.options && item.taskCheck === 'ask' && <TaskCheck id={item.id} />}
       {item.modeSuggestion && <ModeChoice item={item} />}
+    </div>
+  );
+}
+
+/**
+ * The ways forward a discussion reached (Discuss's ```directions block), a
+ * card each: what to do, the assistant's pick marked, and the modes to take it
+ * to, Write to make it or Options for versions to pick from. One taken says so.
+ */
+function DirectionCards({ item, directions }: { item: AssistantItem; directions: Direction[] }) {
+  const running = useStore(studio.store, (s) => s.agent.running);
+  // Where the messages after this reply took one (a string, so the store's comparison holds).
+  const taken = useStore(studio.store, (s) => {
+    const after = s.agent.items.slice(s.agent.items.findIndex((i) => i.id === item.id) + 1);
+    return directions.map((d) => studio.directionTaken(d, after) ?? '').join(' ');
+  }).split(' ');
+  const write = modeConfig('write');
+  const options = modeConfig('options');
+  return (
+    <div className="directions" role="group" aria-label="Ways forward">
+      <span className="mode-choice-title">Ways forward</span>
+      <div className="direction-list">
+        {directions.map((d, i) => {
+          const went = (taken[i] || null) as AgentMode | null;
+          return (
+            <div key={i} className={`direction${d.pick ? ' picked' : ''}`}>
+              <div className="direction-head">
+                <span className="direction-name">{d.name}</span>
+                {d.pick && <span className="direction-pick">My pick</span>}
+                {went && <span className={`direction-taken mode-${went}`}>Taken to {modeConfig(went).label}</span>}
+              </div>
+              <div className="direction-what">
+                <MarkdownLine text={d.what} />
+              </div>
+              <div className="direction-ways">
+                <button className="direction-go mode-write" disabled={running} title="Make it: Write mode changes the book" onClick={() => void studio.takeDirection(d, 'write')}>
+                  <span className="mode-glyph" aria-hidden="true">
+                    {write.icon}
+                  </span>
+                  Write it
+                </button>
+                <button className="direction-go mode-options" disabled={running} title="Versions of it to pick from, for the selected passage" onClick={() => void studio.takeDirection(d, 'options')}>
+                  <span className="mode-glyph" aria-hidden="true">
+                    {options.icon}
+                  </span>
+                  Options
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1093,7 +1148,7 @@ function TurnView(props: TurnProps) {
   const { turn, last, running } = props;
   const answer = useMemo(() => answerOf(turnTexts(turn)), [turn]);
   // An answer on its way in Ask mode is a card from the start, before its first block.
-  if (answer || (running && last && turn.user?.mode === 'ask')) return <AskTurn {...props} answer={answer} />;
+  if (answer || (running && last && (turn.user?.mode === 'ask' || turn.user?.mode === 'review'))) return <AskTurn {...props} answer={answer} />;
   return <PlainTurn {...props} />;
 }
 
@@ -1409,14 +1464,15 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
     void studio.openRef(p.ref);
   };
   const reads = (path: string) => steps.flatMap((it) => (it.kind === 'tool' && it.read?.path === path ? [it.read] : []));
+  const review = isReviewTurn(turn);
   return (
-    <section className={`answer-card${live ? ' live' : ''}`} aria-label="The answer">
+    <section className={`answer-card${live ? ' live' : ''}${review ? ' review-card' : ''}`} aria-label={review ? 'The review' : 'The answer'}>
       {/* Write mode's answer to a question has no question given back (write-mode.ts), so nothing waits for one. */}
-      {(asked || (live && turn.user?.mode === 'ask')) && (
+      {(asked || (live && (turn.user?.mode === 'ask' || review))) && (
         <div className="answer-asked">
           <div className="answer-asked-head">
             <span className="answer-glyph" aria-hidden>
-              ?
+              {review ? '✓' : '?'}
             </span>
             <span className="answer-label">{other ? 'I took it as' : 'You asked'}</span>
             <span className="spacer" />
@@ -1505,7 +1561,7 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
 
       {(answer?.answer || prose || charts.length > 0 || live) && (
         <div className="answer-main">
-          <div className="answer-label">Answer</div>
+          <div className="answer-label">{review ? 'Verdict' : 'Answer'}</div>
           {answer?.answer ? (
             <div className="answer-headline md">
               <Markdown text={answer.answer} />
@@ -1515,7 +1571,7 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
               <Markdown text={prose} />
             </div>
           ) : (
-            !charts.length && <div className="answer-skeleton" aria-label="The answer is on its way">
+            !charts.length && <div className="answer-skeleton" aria-label={review ? 'The review is on its way' : 'The answer is on its way'}>
               <span />
               <span />
               <div className="answer-skeleton-note">{asked ? 'Comes once it has looked.' : 'It’s reading your question.'}</div>
@@ -1582,7 +1638,7 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
             <span className="answer-change-glyph" aria-hidden>
               <Icon name="edit" size={11} />
             </span>
-            <span className="answer-label">What I’d change</span>
+            <span className="answer-label">{review ? 'Suggested changes' : 'What I’d change'}</span>
             <span className="spacer" />
             {/* Two or more Make this change buttons: one for all of them. */}
             {unmade >= 2 && (
@@ -1605,7 +1661,10 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
   );
 }
 
-/** A turn in Ask mode: your message, the answer card, then what to ask next and how it ended. */
+/** A turn sent in Review mode (or, reopened, one whose message is the selection bar's Review): its card is a review's. */
+const isReviewTurn = (turn: Turn) => !!turn.user && (turn.user.mode === 'review' || (!turn.user.mode && stockAction(turn.user.text)?.mode === 'review'));
+
+/** A turn in Ask or Review mode: your message, the answer card, then what to ask next and how it ended. */
 function AskTurn({ turn, last, running, onFold, answer }: TurnProps & { answer: AskAnswer | null }) {
   const busy = useStore(studio.store, (s) => s.agent.running);
   const live = running && last;
@@ -1613,6 +1672,8 @@ function AskTurn({ turn, last, running, onFold, answer }: TurnProps & { answer: 
   const { prose, charts } = useMemo(() => proseAndCharts(reply ? shownText(reply.text) : ''), [reply?.text]);
   const copy = answer ? answerPlainText(answer, prose) : prose;
   const canAsk = last && !busy;
+  // A follow-up with no mode of its own stays in the turn's mode: Review's in Review.
+  const home: AgentMode = isReviewTurn(turn) ? 'review' : 'ask';
   return (
     <div className={`turn ask-turn${last ? ' last' : ''}`}>
       {turn.user && <UserCard item={turn.user} onFold={onFold} />}
@@ -1625,17 +1686,20 @@ function AskTurn({ turn, last, running, onFold, answer }: TurnProps & { answer: 
       {canAsk && (answer?.next.length ?? 0) > 0 && (
         <div className="answer-next" role="group" aria-label="Ask next">
           <div className="answer-label">Ask next</div>
-          {answer!.next.map((n, i) => (
-            <button key={i} className={`answer-next-q${n.mode && n.mode !== 'ask' ? ` mode-${n.mode}` : ''}`} title={n.mode && n.mode !== 'ask' ? `Ask it in ${modeConfig(n.mode).label} mode` : 'Ask it'} onClick={() => void studio.askNext(n.text, n.mode)}>
-              <span className="answer-next-glyph" aria-hidden>
-                {n.mode ? modeConfig(n.mode).icon : '?'}
-              </span>
-              <span className="answer-next-text">
-                <MarkdownLine text={n.text} />
-              </span>
-              {n.mode && n.mode !== 'ask' && <span className="answer-next-mode">in {modeConfig(n.mode).label}</span>}
-            </button>
-          ))}
+          {answer!.next.map((n, i) => {
+            const mode = n.mode ?? home;
+            return (
+              <button key={i} className={`answer-next-q${mode !== 'ask' ? ` mode-${mode}` : ''}`} title={mode !== 'ask' ? `Ask it in ${modeConfig(mode).label} mode` : 'Ask it'} onClick={() => void studio.askNext(n.text, mode)}>
+                <span className="answer-next-glyph" aria-hidden>
+                  {modeConfig(mode).icon}
+                </span>
+                <span className="answer-next-text">
+                  <MarkdownLine text={n.text} />
+                </span>
+                {mode !== home && <span className="answer-next-mode">in {modeConfig(mode).label}</span>}
+              </button>
+            );
+          })}
         </div>
       )}
       {turn.after.length > 0 && (
