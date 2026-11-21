@@ -6,6 +6,7 @@
 // (`asked`, `other`), another once it knows (`answer`, `sure`, `where`,
 // `stat`, `next`), its reasoning in prose, and a ```change block per change.
 // A ```chart in the prose is drawn as a chart (chart.ts).
+import { closingFence } from './fences';
 import { modeNamed, type AgentMode } from './modes';
 
 export type Sure = 'certain' | 'fairly' | 'guess';
@@ -58,12 +59,11 @@ export function segments(text: string): Segment[] {
       prose.push(lines[i]);
       continue;
     }
-    const fence = open[1];
     const lang = open[2].toLowerCase();
-    const closes = (l: string) => new RegExp(`^[ \\t]*${fence[0] === '`' ? '`' : '~'}{${fence.length},}[ \\t]*$`).test(l);
-    let j = i + 1;
-    while (j < lines.length && !closes(lines[j])) j++;
-    const closed = j < lines.length;
+    // A change's text can hold a raw block (```python … ```): it doesn't close the block.
+    const close = closingFence(lines, i);
+    const closed = close >= 0;
+    const j = closed ? close : lines.length;
     if (OURS.has(lang)) {
       flush();
       out.push({ kind: 'block', lang: lang as Lang, body: lines.slice(i + 1, j).join('\n'), closed });

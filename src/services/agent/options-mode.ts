@@ -3,6 +3,7 @@
 // Edits are blocked by permission rules; the reply format below is parsed into
 // option cards, and the one the author picks replaces the selection in the
 // editor (an ordinary, undoable buffer edit).
+import { closingFence, fenceOf } from './fences';
 
 /** How many options the author can ask for, and how many until they choose. */
 export const OPTION_COUNTS = [1, 2, 3, 4, 5];
@@ -64,26 +65,30 @@ export type ParsedOptions = { intro: string; options: ParsedOption[] };
 
 const OPTION_HEADING = /^(?:#{1,4}\s*(?:\*\*)?|\*\*)Option\s+(\d+)(?:\*\*)?\s*(?:[:.)–—-]\s*)?(.*?)(?:\*\*)?\s*$/i;
 
-/** Split a reply into its intro and "Option N" sections (tolerates bold headings and missing labels). */
+/**
+ * Split a reply into its intro and "Option N" sections (tolerates bold headings
+ * and missing labels). An option's text is its first code block, raw blocks it
+ * holds and all (fences.ts).
+ */
 export function parseOptions(reply: string): ParsedOptions {
   const lines = reply.replace(/\r\n?/g, '\n').split('\n');
   const intro: string[] = [];
   const sections: { n: number; label: string; body: string[] }[] = [];
-  let inFence = false;
-  for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-    const m = !inFence ? OPTION_HEADING.exec(line.trim()) : null;
+  for (let i = 0; i < lines.length; i++) {
+    // A code block goes in whole: an "Option" line in it isn't a heading.
+    const close = fenceOf(lines[i]) ? closingFence(lines, i) : i;
+    const end = close < 0 ? lines.length - 1 : close;
+    const m = end === i ? OPTION_HEADING.exec(lines[i].trim()) : null;
     if (m) sections.push({ n: parseInt(m[1], 10), label: m[2].replace(/^\*\*|\*\*$/g, '').trim(), body: [] });
-    else if (sections.length) sections[sections.length - 1].body.push(line);
-    else intro.push(line);
+    else (sections.length ? sections[sections.length - 1].body : intro).push(...lines.slice(i, end + 1));
+    i = end;
   }
   return {
     intro: intro.join('\n').trim(),
     options: sections.map(({ n, label, body }) => {
-      const open = body.findIndex((l) => /^\s*(```|~~~)/.test(l));
+      const open = body.findIndex((l) => fenceOf(l));
       if (open < 0) return { n, label, text: null, complete: false, note: body.join('\n').trim() };
-      const fence = body[open].trim().slice(0, 3);
-      const close = body.findIndex((l, i) => i > open && l.trim().startsWith(fence));
+      const close = closingFence(body, open);
       const code = body.slice(open + 1, close < 0 ? undefined : close);
       const note = close < 0 ? [] : [...body.slice(0, open), ...body.slice(close + 1)];
       return { n, label, text: code.join('\n'), complete: close >= 0, note: note.join('\n').trim() };

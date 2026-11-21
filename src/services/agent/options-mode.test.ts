@@ -50,6 +50,37 @@ describe('parseOptions', () => {
   it('keeps an option with no code block as text-less', () => {
     expect(parseOptions('### Option 1\nJust prose.').options[0]).toMatchObject({ n: 1, label: '', text: null });
   });
+
+  // Asked for code in a box: the option holds a raw block, with its own fences.
+  const CODE = '  In NumPy, that whole formula is a one-liner:\n\n  ```python\n  Xc = X - X.mean(axis=0)\n  Xc.T @ Xc / (len(X) - 1)\n  ```';
+  const WITH_CODE = `Each one adds the code.\n\n### Option 1: Mirror the Variance box\n\`\`\`typst\n${CODE}\n\`\`\`\nEchoes the Variance box.\n\n### Option 2: Wrap it\n\`\`\`typst\n#note[\n  \`\`\`python\n  def covariance(X): ...\n  \`\`\`\n]\n\`\`\`\nReusable.`;
+
+  it('keeps a raw block in an option: its fences are the option’s text, not its end', () => {
+    const { options } = parseOptions(WITH_CODE);
+    expect(options.map((o) => [o.n, o.label, o.complete, o.note])).toEqual([
+      [1, 'Mirror the Variance box', true, 'Echoes the Variance box.'],
+      [2, 'Wrap it', true, 'Reusable.'],
+    ]);
+    expect(options[0].text).toBe(CODE);
+    expect(options[1].text).toBe('#note[\n  ```python\n  def covariance(X): ...\n  ```\n]');
+  });
+
+  it('an option still coming isn’t complete inside its raw block, or after it', () => {
+    for (const upTo of ['```python', 'Xc.T @ Xc', '- 1)\n  ```']) {
+      const text = WITH_CODE.slice(0, WITH_CODE.indexOf(upTo) + upTo.length);
+      expect(parseOptions(text).options[0]).toMatchObject({ complete: false, note: '' });
+    }
+  });
+
+  it('a longer outer fence, as Markdown has it, holds the raw block too', () => {
+    expect(parseOptions(`### Option 1\n\`\`\`\`typst\n${CODE}\n\`\`\`\`\nNote.`).options[0]).toMatchObject({ text: CODE, complete: true, note: 'Note.' });
+  });
+
+  it('an "Option" line in a raw block inside an option isn’t a heading', () => {
+    const { options } = parseOptions('### Option 1\n```typst\n```text\n### Option 2: not one\n```\n```\nNote.');
+    expect(options).toHaveLength(1);
+    expect(options[0]).toMatchObject({ text: '```text\n### Option 2: not one\n```', note: 'Note.' });
+  });
 });
 
 describe('OPTIONS_INSTRUCTIONS', () => {

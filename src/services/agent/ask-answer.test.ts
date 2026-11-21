@@ -100,6 +100,15 @@ describe('answerOf', () => {
     expect(c.replace).toBe('Note: the new line');
   });
 
+  it('a change that puts code in a box keeps the code, and the box', () => {
+    const replace = '#note[\n  In NumPy:\n\n  ```python\n  Xc = X - X.mean(axis=0)\n  ```\n]';
+    const a = answerOf([`\`\`\`change\nat: a.typ:3\nfind: // TODO\nreplace:\n${replace}\nwhy: The code it asks for.\n\`\`\`\n\nThe box asks for it.`])!;
+    expect(a.changes).toEqual([{ at: 'a.typ:3', find: '// TODO', replace, why: 'The code it asks for.', complete: true }]);
+    expect(proseAndCharts(`\`\`\`change\nreplace:\n${replace}\n\`\`\`\nThe box asks for it.`).prose).toBe('The box asks for it.');
+    // Still coming: the code's own fence doesn't finish the change.
+    expect(answerOf(['```change\nat: a.typ:3\nreplace:\n#note[\n  ```python\n  Xc = X\n  ```'])!.changes[0].complete).toBe(false);
+  });
+
   it('reads fields written as a list, in bold', () => {
     expect(answerOf(['```answer\n- **asked**: Why?\n* answer: Because.\n```'])).toMatchObject({ asked: 'Why?', answer: 'Because.' });
   });
