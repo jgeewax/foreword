@@ -492,8 +492,8 @@ section), the page starts at the window's top and the offset is measured.
     bar's items do. A book chosen goes to its new window as its launch
     `workspace` (`AppState::books`), not through windows.json: that file
     isn't kept for self-tests or named launches.
-  - The page tells the app its recent books (`dock_recent`) at start and
-    whenever it opens a book. It now adds to the list as kept, not its own
+  - The page tells the app its recent books (`recent_books`, was
+    `dock_recent`) at start and whenever it opens a book. It now adds to the list as kept, not its own
     copy of it, and follows other windows' changes (`storage`): before, a
     window opened earlier dropped the books other windows had added since.
   - Verified (self-test `dock`, through AppKit's own `sendAction:to:from:`):
@@ -501,6 +501,28 @@ section), the page starts at the window's top and the offset is measured.
     out); New Window opened a window without a book; a book opened in a new
     window titled with its name; choosing it again, or the first window's
     book, opened no other window.
+- **File → Open Recent**, as VS Code's: the recent books by where they are
+  ("~/Books/novel"), then **More…** (⌃R) and **Clear Recently Opened…**.
+  - It leaves out the book of the window in front (as the palette's Open
+    Recent commands do) and books whose folders are gone. The menu bar is
+    the app's, not a window's, so `menu::show_recent` fills the submenu
+    again when the page sends the list, when a window comes forward
+    (`Focused`), and when one closes (its book is one to open again).
+  - A book chosen: the window that has it comes forward (one window per
+    book); else the window in front opens it (an `open-recent` event to its
+    page), as VS Code's File → Open Recent replaces the window's folder; with
+    no window in front, a window of its own opens it, as from the Dock.
+  - More… is the palette with ">Open Recent: " typed: the recent books
+    newest first (not by score, which puts short names first) until a name
+    is typed after it. Clear asks first, as VS Code does, and empties every
+    window's list and the Dock's.
+  - Not VS Code's recent files: a file opens in its book, and Reopen Closed
+    Tab (⇧⌘T) stays beside Close Tab.
+  - Verified (self-test `openrecent`, choices through the menu bar's own
+    dispatch, `menu_event`, with a given window in front; the submenu read
+    from AppKit's main menu): the list with and without a window in front
+    and from a second window; a book opened here, in a new window, or by
+    bringing its window forward; More… and Clear, Cancel kept the list.
 - **How (Rust):**
   - `AppState` became a map from window label ("main", "win-2", …) to a
     `WindowState` holding what used to be global.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { available, paletteCommands, rankCommands, recentCommands, runCommand, type CommandRow } from '../app/commands';
-import { studio } from '../app/studio';
+import { available, paletteCommands, rankCommands, RECENT_BOOKS_QUERY, recentCommands, runCommand, type CommandRow } from '../app/commands';
+import { studio, type QuickOpenMode } from '../app/studio';
 import { numberedTitle } from '../app/tool-labels';
 import { fileTabs } from '../app/view-tabs';
 import { fuzzyMatch } from '../lib/fuzzy';
@@ -23,7 +23,8 @@ const NO_FILES: string[] = [];
 
 /** What starts a query for a command, as in VS Code. */
 const COMMAND_PREFIX = '>';
-const startingQuery = (mode: 'files' | 'commands' | false) => (mode === 'commands' ? COMMAND_PREFIX : '');
+/** ⌃R: the commands that open a recent book (app/commands.ts), found by typing its name after this. */
+const startingQuery = (mode: QuickOpenMode | false) => (mode === 'commands' ? COMMAND_PREFIX : mode === 'recent' ? `${COMMAND_PREFIX}${RECENT_BOOKS_QUERY}` : '');
 
 /**
  * ⌘P: go to a file by (part of) its name, or a chapter by its heading.

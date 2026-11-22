@@ -33,6 +33,10 @@ export type Command = {
 /** "File: Save": what the palette shows and matches. */
 export const commandLabel = (c: Pick<Command, 'category' | 'title'>) => `${c.category}: ${c.title}`;
 
+/** A recent book's command: this, then the book's folder ("Open Recent: " and its name). ⌃R types the title's start. */
+const RECENT_BOOK_ID = 'open-recent:';
+export const RECENT_BOOKS_QUERY = 'Open Recent: ';
+
 type Spec = Omit<Command, 'category'> & {
   /** It works without a book open (the welcome screen). */
   anywhere?: boolean;
@@ -74,7 +78,7 @@ export function paletteCommands(studio: Studio): Command[] {
           .recent.filter((r) => r !== s().workspace?.root)
           .map(
             // Found by the book's folder name; its whole path would match almost anything.
-            (r): Spec => ({ id: `open-recent:${r}`, title: `Open Recent: ${baseName(r)}`, detail: tildePath(r), anywhere: true, run: () => studio.openWorkspace(r) }),
+            (r): Spec => ({ id: `${RECENT_BOOK_ID}${r}`, title: `${RECENT_BOOKS_QUERY}${baseName(r)}`, detail: tildePath(r), anywhere: true, run: () => studio.openWorkspace(r) }),
           ),
         menu('go-to-file', 'Go to File…', { keys: '⌘P', keywords: ['quick open', 'chapter'] }),
         menu('save', 'Save', { keys: '⌘S', when: file }),
@@ -376,12 +380,16 @@ export type CommandRow = {
  * first), then the rest by name. Otherwise those that match (the starts of
  * words, see `wordMatch`), best first, matched as "File: Save", as "Save"
  * alone, or by a keyword (which ranks a little lower); recently used ones a
- * little higher.
+ * little higher. "Open Recent:" alone (⌃R): the recent books, newest first.
  */
 export function rankCommands(commands: Command[], query: string, recent: string[]): CommandRow[] {
   const q = query.trim();
   const isRecent = new Set(recent);
   const row = (command: Command, positions: number[] = []): CommandRow => ({ command, label: commandLabel(command), positions, recent: isRecent.has(command.id) });
+  if (q.toLowerCase() === RECENT_BOOKS_QUERY.trim().toLowerCase()) {
+    // By score, the shortest names would come first.
+    return commands.filter((c) => c.id.startsWith(RECENT_BOOK_ID)).map((c) => row(c, wordMatch(q, commandLabel(c))?.positions));
+  }
   if (!q) {
     const byId = new Map(commands.map((c) => [c.id, c]));
     const first = recent.map((id) => byId.get(id)).filter((c): c is Command => !!c);

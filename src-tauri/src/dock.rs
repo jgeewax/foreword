@@ -7,11 +7,7 @@
 //! `applicationDockMenu:` to the app's delegate (tao's), and the items'
 //! actions beside it. They act on the event loop, as the menu bar's items do.
 
-use std::{
-    cell::RefCell,
-    path::Path,
-    sync::{Mutex, OnceLock},
-};
+use std::{cell::RefCell, path::Path, sync::OnceLock};
 
 use objc2::{
     MainThreadMarker, MainThreadOnly, ffi,
@@ -24,17 +20,9 @@ use objc2_foundation::NSString;
 
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
-/// The recent books, newest first, as the page keeps them (`dock_recent`).
-static RECENT: Mutex<Vec<String>> = Mutex::new(Vec::new());
-
 thread_local! {
     /// The menu last shown and the books in it, by item tag.
     static SHOWN: RefCell<Option<(Retained<NSMenu>, Vec<String>)>> = const { RefCell::new(None) };
-}
-
-/// The page's recent books (all windows share them): the Dock offers them.
-pub fn set_recent(paths: Vec<String>) {
-    *RECENT.lock().unwrap() = paths;
 }
 
 /// Gives the app its Dock menu. On the main thread, once the app has started.
@@ -139,12 +127,9 @@ unsafe extern "C-unwind" fn dock_menu(
     let Some(mtm) = MainThreadMarker::new() else {
         return std::ptr::null_mut();
     };
-    let books: Vec<String> = RECENT
-        .lock()
-        .unwrap()
-        .iter()
+    let books: Vec<String> = crate::menu::recent()
+        .into_iter()
         .filter(|p| Path::new(p).is_dir())
-        .cloned()
         .collect();
     let menu = NSMenu::new(mtm);
     let item = |title: &str, action: Sel| {
@@ -215,20 +200,13 @@ fn titles(books: &[String]) -> Vec<String> {
             let own = name(p);
             let shared = books.iter().filter(|q| name(q) == own).count() > 1;
             match Path::new(p).parent().filter(|_| shared) {
-                Some(parent) => format!("{own} — {}", tilde(&parent.to_string_lossy())),
+                Some(parent) => {
+                    format!("{own} — {}", crate::menu::tilde(&parent.to_string_lossy()))
+                }
                 None => own,
             }
         })
         .collect()
-}
-
-fn tilde(path: &str) -> String {
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() && path.starts_with(&home) => {
-            format!("~{}", &path[home.len()..])
-        }
-        _ => path.to_string(),
-    }
 }
 
 #[cfg(test)]

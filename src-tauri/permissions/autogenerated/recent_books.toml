@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-recent-books"
+description = "Enables the recent_books command without any pre-configured scope."
+commands.allow = ["recent_books"]
+
+[[permission]]
+identifier = "deny-recent-books"
+description = "Denies the recent_books command without any pre-configured scope."
+commands.deny = ["recent_books"]

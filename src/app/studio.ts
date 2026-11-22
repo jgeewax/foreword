@@ -401,6 +401,9 @@ const targetIn = (path: string, model: monaco.editor.ITextModel, r: monaco.IRang
 
 export type Stat = { p50: number | null; p95: number | null; n: number };
 
+/** What the ⌘P box was opened for: a file, a command, or a recent book (the commands, "Open Recent: " typed). */
+export type QuickOpenMode = 'files' | 'commands' | 'recent';
+
 export type StudioState = {
   launch: LaunchOptions | null;
   tools: ToolsStatus | null;
@@ -545,8 +548,8 @@ export type StudioState = {
   names: BookNames;
   /** The book's imports, which the chat's formulas and Typst blocks are set with (null: none, or no book). */
   snippetBook: SnippetBook | null;
-  /** ⌘P: go to a file by name; ⇧⌘P: run a command. What it was opened for (false: closed). */
-  quickOpen: false | 'files' | 'commands';
+  /** ⌘P: go to a file by name; ⇧⌘P: run a command; ⌃R: open a recent book. What it was opened for (false: closed). */
+  quickOpen: false | QuickOpenMode;
   /** The settings file: where it is, and why it can't be used (if so). */
   configFile: { path: string; error: string | null } | null;
   /** Foreword installing its own copy of an assistant (install.rs), or why it couldn't. */
@@ -807,8 +810,8 @@ export class Studio {
     'show-agent-pane': [];
     'show-explorer': [];
     'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
-    /** ⌘P or ⇧⌘P, pressed again while the box is open: it starts over in that mode. */
-    'quick-open': [mode: 'files' | 'commands'];
+    /** ⌘P, ⇧⌘P or ⌃R, pressed again while the box is open: it starts over in that mode. */
+    'quick-open': [mode: QuickOpenMode];
   }>();
   readonly perf = new PerfTracker();
   readonly typst = new TypstService();
@@ -1097,6 +1100,8 @@ export class Studio {
       }
     });
     void getCurrentWebview().listen<string>('menu', (e) => void this.menuCommand(e.payload));
+    // File → Open Recent: a book no window has (the app brings forward one that does).
+    void getCurrentWebview().listen<string>('open-recent', (e) => void this.openWorkspace(e.payload));
     // The update is the app's: any window's check, download or install shows in all of them.
     void listen<UpdateState>('update', (e) => this.store.set({ update: e.payload }));
     // A word added to a dictionary, in any window: check again.
@@ -1133,6 +1138,8 @@ export class Studio {
     'new-chapter': () => this.newChapter(),
     'new-file': () => this.newFile(),
     'open-book': () => this.chooseWorkspace(),
+    'open-recent-more': () => this.openRecentPicker(),
+    'clear-recent': () => this.clearRecent(),
     'go-to-file': () => this.openQuickOpen(),
     save: () => this.save(),
     'save-all': () => this.saveAll(),
@@ -1188,7 +1195,7 @@ export class Studio {
   };
 
   /** Commands that need a book open do nothing without one (the menu bar can't grey them out). */
-  private static readonly WITHOUT_A_BOOK = new Set(['settings', 'command-palette', 'new-book', 'open-book', 'zoom-in', 'zoom-out', 'zoom-reset', 'typst-guide', 'toggle-sidebar', 'toggle-preview', 'toggle-assistant']);
+  private static readonly WITHOUT_A_BOOK = new Set(['settings', 'command-palette', 'new-book', 'open-book', 'open-recent-more', 'clear-recent', 'zoom-in', 'zoom-out', 'zoom-reset', 'typst-guide', 'toggle-sidebar', 'toggle-preview', 'toggle-assistant']);
 
   async menuCommand(id: string) {
     if (!this.state.workspace && !Studio.WITHOUT_A_BOOK.has(id)) return;
@@ -1244,8 +1251,8 @@ export class Studio {
     // The settings file wins over this machine's cached copy; edits made elsewhere apply on return.
     await this.loadConfig();
     this.setAgent({ setups: this.readSetups() });
-    // The Dock's menu offers the recent books, each in a window of its own.
-    void ipc.dockRecent(this.state.recent).catch(() => {});
+    // File → Open Recent offers the recent books, and the Dock's menu, each in a window of its own.
+    void ipc.recentBooks(this.state.recent).catch(() => {});
     // Another window changed what a mode runs on: the mode menu says so here too. Or opened a book: it's recent here too.
     window.addEventListener('storage', (e) => {
       if (e.key === USUAL_SETUP_KEY || e.key === MODE_PINS_KEY) this.setAgent({ setups: this.readSetups() });
@@ -1308,7 +1315,7 @@ export class Studio {
       const recent = [info.root, ...(readJson<string[]>(RECENT_KEY) ?? []).filter((r) => r !== info.root)].slice(0, 8);
       writeJson(RECENT_KEY, recent);
       this.store.set({ recent });
-      void ipc.dockRecent(recent).catch(() => {});
+      void ipc.recentBooks(recent).catch(() => {});
     }
     // The book as it was left (book-state.ts): its tabs and where in them, its tasks, what wasn't saved, and the chat it showed.
     const book = await BookStore.open(info.root, this.keptBefore(info.root));
@@ -2444,6 +2451,21 @@ export class Studio {
   openCommandPalette() {
     this.store.set({ quickOpen: 'commands' });
     this.events.emit('quick-open', 'commands');
+  }
+
+  /** File → Open Recent → More… (⌃R, as in VS Code): the palette, with "Open Recent: " typed, so a book is found by name. */
+  openRecentPicker() {
+    this.store.set({ quickOpen: 'recent' });
+    this.events.emit('quick-open', 'recent');
+  }
+
+  /** File → Open Recent → Clear Recently Opened, after asking (as VS Code does). Every window's list, and the Dock's. */
+  async clearRecent() {
+    if (!this.state.recent.length) return;
+    if (!(await this.confirmAction('Clear the list of recently opened books? The books themselves stay where they are.', 'Clear Recently Opened', 'Clear'))) return;
+    writeJson(RECENT_KEY, []);
+    this.store.set({ recent: [] });
+    await ipc.recentBooks([]);
   }
 
   closeQuickOpen() {

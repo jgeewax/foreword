@@ -6857,11 +6857,11 @@ async function dockChecks() {
   const labels = async () => (await windows()).map((w) => w.label);
   // Each choice rebuilds the menu first, and a window that opens a book offers the author's recent books: offer these again.
   const choose = async (n: number) => {
-    await ipc.dockRecent([other, own, '/no/such/book']);
+    await ipc.recentBooks([other, own, '/no/such/book']);
     return ipc.selftestDock(n);
   };
   try {
-    await ipc.dockRecent([other, own, '/no/such/book']);
+    await ipc.recentBooks([other, own, '/no/such/book']);
     out.items = await ipc.selftestDock();
     // New Window: one more, on the welcome screen.
     const before = await labels();
@@ -6889,7 +6889,95 @@ async function dockChecks() {
   } finally {
     for (const [k, v] of kept) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
     studio.store.set({ recent: JSON.parse(localStorage.getItem('studio.recentWorkspaces') ?? '[]') });
-    await ipc.dockRecent(studio.state.recent);
+    await ipc.recentBooks(studio.state.recent);
+  }
+  return out;
+}
+
+/**
+ * File → Open Recent, as with each window in front: the recent books still
+ * there but that window's own, by where they are, then More… (⌃R) and Clear
+ * Recently Opened. A choice goes through the app's own dispatch, as a click's
+ * does: the window that has the book comes forward, or the one in front opens
+ * it, or (none in front) a window of its own does. More… is the palette with
+ * "Open Recent: " typed; Clear asks, then empties the list. (Needs
+ * scratchpad/book-in-src next to the self-test output.)
+ */
+async function openRecentChecks() {
+  const out: Record<string, unknown> = {};
+  const own = studio.state.workspace!.root;
+  const other = `${studio.state.launch!.selftestOut!.replace(/[^/]+$/, '')}book-in-src`;
+  const list = [other, own, '/no/such/book'];
+  // A window opened from the menu isn't the self-test's: its book becomes the author's last and recent one. Clear empties the list. Put them back after.
+  const kept = ['studio.lastWorkspace', 'studio.recentWorkspaces', 'studio.recentCommands'].map((k) => [k, localStorage.getItem(k)] as const);
+  const windows = () => ipc.selftestWindows();
+  const until = async (check: (ws: Awaited<ReturnType<typeof windows>>) => boolean, ms: number) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(200)) if (check(await windows())) return true;
+    return false;
+  };
+  const submenu = async () => (await ipc.menuOutline()).find(([title]) => title === 'File')?.[1].filter((i) => i.includes('Open Recent'));
+  // Opening a book here would end the self-test's own: note what this window is asked to open instead.
+  const asked: string[] = [];
+  const confirm = studio.confirmAction;
+  studio.openWorkspace = async (path: string) => void asked.push(path);
+  try {
+    await ipc.recentBooks(list);
+    out.native = await ipc.selftestMenu('main');
+    out.mainInFront = await submenu();
+    await ipc.selftestMenu(null);
+    out.noneInFront = await submenu();
+    // A book no window has, with this window in front: this window opens it.
+    await ipc.selftestMenu('main', `open-recent:${other}`);
+    await sleep(500);
+    out.openedHere = [...asked];
+    // This window's own book, with none in front: this window has it, so no new window.
+    const before = (await windows()).map((w) => w.label);
+    await ipc.selftestMenu(null, `open-recent:${own}`);
+    await sleep(1000);
+    out.ownNoNewWindow = (await windows()).length === before.length && asked.length === 1;
+    // With none in front: a window of its own, with that book.
+    await ipc.selftestMenu(null, `open-recent:${other}`);
+    out.newWindow = await until((ws) => ws.some((w) => w.root?.endsWith('/book-in-src')), 20000);
+    const opened = (await windows()).find((w) => w.root?.endsWith('/book-in-src'));
+    out.newWindowIsFresh = !!opened && !before.includes(opened.label);
+    if (opened) {
+      // Now a window has it: chosen with this one in front, that one comes forward, and nothing opens here.
+      await ipc.selftestMenu('main', `open-recent:${other}`);
+      await sleep(1000);
+      out.broughtForward = { windows: (await windows()).length - before.length, openedHere: asked.length };
+      // That window's menu: this window's book, not its own. (Its page sent the author's list when it opened the book.)
+      await ipc.recentBooks(list);
+      await ipc.selftestMenu(opened.label);
+      out.secondInFront = await submenu();
+      await ipc.selftestCloseWindow(opened.label);
+      await until((ws) => ws.length === before.length, 5000);
+    }
+    // More… (⌃R): the palette, "Open Recent: " typed, the recent books newest first.
+    studio.store.set({ recent: list });
+    await ipc.recentBooks(list);
+    await ipc.selftestMenu('main', 'open-recent-more');
+    await sleep(400);
+    out.more = {
+      value: document.querySelector<HTMLInputElement>('.quick-open input')?.value ?? null,
+      rows: [...document.querySelectorAll('.quick-open-row.command .quick-open-main')].map((e) => e.textContent),
+    };
+    studio.closeQuickOpen();
+    // Clear Recently Opened: it asks first, and Cancel keeps the list.
+    let question = '';
+    studio.confirmAction = async (message) => ((question = message), false);
+    await ipc.selftestMenu('main', 'clear-recent');
+    await sleep(300);
+    out.clearCancelled = { question, kept: studio.state.recent.length };
+    studio.confirmAction = async () => true;
+    await ipc.selftestMenu('main', 'clear-recent');
+    await sleep(300);
+    out.cleared = { store: studio.state.recent, stored: localStorage.getItem('studio.recentWorkspaces'), menu: await submenu(), native: await ipc.selftestMenu('main') };
+  } finally {
+    delete (studio as { openWorkspace?: unknown }).openWorkspace;
+    studio.confirmAction = confirm;
+    for (const [k, v] of kept) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    studio.store.set({ recent: JSON.parse(localStorage.getItem('studio.recentWorkspaces') ?? '[]') });
+    await ipc.recentBooks(studio.state.recent);
   }
   return out;
 }
@@ -7988,8 +8076,8 @@ async function menuBarChecks() {
   out.menus = outline.map(([title, items]) => `${title}: ${items.map((i) => i.split('=').pop()).join(' | ')}`);
   const ids = outline.flatMap(([, items]) => items.filter((i) => i.includes('=')).map((i) => i.split('=')[0]));
   const handled = Object.keys(studio.menuCommands);
-  // New Window and Close Window are handled by the app itself, not the page; Select All has its own event.
-  out.withoutHandler = ids.filter((id) => !['close-window', 'new-window', 'select-all'].includes(id) && !handled.includes(id));
+  // New Window, Close Window and the recent books are handled by the app itself, not the page; Select All has its own event.
+  out.withoutHandler = ids.filter((id) => !['close-window', 'new-window', 'select-all'].includes(id) && !id.startsWith('open-recent:') && !handled.includes(id));
   out.withoutItem = handled.filter((id) => !ids.includes(id));
   out.itemsPerMenu = Object.fromEntries(outline.map(([title, items]) => [title, items.filter((i) => i !== '---').length]));
 
@@ -11537,6 +11625,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
     if (want('dock')) result.dock = await dockChecks();
+    if (want('openrecent')) result.openrecent = await openRecentChecks();
     if (want('reloadwindow')) result.reloadwindow = await reloadWindowChecks();
     if (want('git')) result.git = await gitChecks();
     if (launch.selftestEdits && only?.includes('gitinit')) result.gitinit = await gitInitChecks();

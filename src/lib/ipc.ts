@@ -167,15 +167,17 @@ export const ipc = {
   launchOptions: () => invoke<LaunchOptions>('launch_options'),
   /** A new window, without a book. */
   windowNew: () => invoke<string>('window_new'),
-  /** The recent books, newest first: the Dock's menu offers them, each in a window of its own. */
-  dockRecent: (paths: string[]) => invoke<void>('dock_recent', { paths }),
+  /** The recent books, newest first: File → Open Recent offers them, and the Dock's menu, each in a window of its own. */
+  recentBooks: (paths: string[]) => invoke<void>('recent_books', { paths }),
   /** Self-test only: the Dock menu's items, after choosing the `choose`th. */
   selftestDock: (choose?: number) => invoke<string[]>('selftest_dock', { choose: choose ?? null }),
+  /** Self-test only: File → Open Recent as with window `front` in front (null: none), as AppKit has it ("More… ⌃r"), then a click on item `choose` (an id). */
+  selftestMenu: (front: string | null, choose?: string) => invoke<string[]>('selftest_menu', { front, choose: choose ?? null }),
   /** Self-test only: the windows, their titles and books; run a script in one; close one. */
   selftestWindows: () => invoke<{ label: string; title: string; root: string | null }[]>('selftest_windows'),
   selftestEval: (label: string, js: string) => invoke<void>('selftest_eval', { label, js }),
   selftestCloseWindow: (label: string) => invoke<void>('selftest_close_window', { label }),
-  /** The menu bar as [title, items ("id=Label", or a predefined item's label, "---")] (self-test only). */
+  /** The menu bar as [title, items ("id=Label", "(off)" after one greyed out, or a predefined item's label, "---"; a submenu's items after it, "id=Open Recent ▸ More…")] (self-test only). */
   menuOutline: () => invoke<[string, string[]][]>('menu_outline'),
   uiLog: (line: string) => invoke<void>('ui_log', { line }).catch(() => {}),
   selftestFinish: (result: unknown) => invoke<void>('selftest_finish', { result }),

@@ -9,6 +9,8 @@
 //! item acts, with the page or the preview focused, and a press isn't applied
 //! twice. Keys on no item (the ⌘K chords) reach the page.
 
+use std::{path::Path, sync::Mutex};
+
 use tauri::{
     AppHandle, Runtime,
     menu::{
@@ -17,8 +19,8 @@ use tauri::{
     },
 };
 
-/// Menu ids the page acts on (everything here except "new-window" and
-/// "close-window", which the app handles itself).
+/// Menu ids the page acts on (everything here except "new-window",
+/// "close-window" and the recent books, which the app handles itself).
 pub const COMMANDS: &[&str] = &[
     "about",
     "settings",
@@ -28,6 +30,8 @@ pub const COMMANDS: &[&str] = &[
     "new-chapter",
     "new-file",
     "open-book",
+    "open-recent-more",
+    "clear-recent",
     "go-to-file",
     "save",
     "save-all",
@@ -115,8 +119,12 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         ],
     )?;
 
-    let file = Submenu::with_items(
+    // Its books come from the page once it starts (`set_recent`).
+    let open_recent = Submenu::with_id(handle, OPEN_RECENT, "Open Recent", true)?;
+    fill_recent(handle, &open_recent, &[])?;
+    let file = Submenu::with_id_and_items(
         handle,
+        FILE,
         "File",
         true,
         &[
@@ -126,6 +134,7 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             &item("new-window", "New Window", Some("CmdOrCtrl+Alt+Shift+N"))?,
             &item("open-book", "Open Book…", Some("CmdOrCtrl+O"))?,
+            &open_recent,
             &item("go-to-file", "Go to File…", Some("CmdOrCtrl+P"))?,
             &sep()?,
             &item("save", "Save", Some("CmdOrCtrl+S"))?,
@@ -273,6 +282,146 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     )
 }
 
+const FILE: &str = "file";
+const OPEN_RECENT: &str = "open-recent";
+/// A recent book's item in File → Open Recent: this, then the book's folder.
+pub const RECENT_BOOK: &str = "open-recent:";
+
+/// The recent books, newest first, as the page keeps them (all windows share
+/// them): File → Open Recent and the Dock offer them.
+static RECENT: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+pub fn set_recent(paths: Vec<String>) {
+    *RECENT.lock().unwrap() = paths;
+}
+
+pub fn recent() -> Vec<String> {
+    RECENT.lock().unwrap().clone()
+}
+
+/// File → Open Recent again, for the window in front, whose book is `current`:
+/// each recent book still there but that one, then More… and Clear Recently
+/// Opened, as in VS Code. The menu bar is the app's, so this runs whenever
+/// the list changes and a window comes forward or goes.
+pub fn show_recent<R: Runtime>(app: &AppHandle<R>, current: Option<&Path>) -> tauri::Result<()> {
+    let sub = app
+        .menu()
+        .and_then(|m| m.get(FILE))
+        .and_then(|f| f.as_submenu().and_then(|f| f.get(OPEN_RECENT)))
+        .and_then(|r| r.as_submenu().cloned());
+    let Some(sub) = sub else {
+        return Ok(());
+    };
+    let books: Vec<String> = recent()
+        .into_iter()
+        .filter(|p| Some(Path::new(p)) != current && Path::new(p).is_dir())
+        .collect();
+    fill_recent(app, &sub, &books)
+}
+
+fn fill_recent<R: Runtime>(
+    handle: &AppHandle<R>,
+    sub: &Submenu<R>,
+    books: &[String],
+) -> tauri::Result<()> {
+    for _ in 0..sub.items()?.len() {
+        sub.remove_at(0)?;
+    }
+    for book in books {
+        // By where it is, as VS Code's are (`&` alone would be taken for a mnemonic and dropped).
+        let title = tilde(book).replace('&', "&&");
+        sub.append(&MenuItem::with_id(
+            handle,
+            format!("{RECENT_BOOK}{book}"),
+            title,
+            true,
+            None::<&str>,
+        )?)?;
+    }
+    if !books.is_empty() {
+        sub.append(&PredefinedMenuItem::separator(handle)?)?;
+    }
+    // ⌃R, as in VS Code: the palette, with the recent books.
+    sub.append(&MenuItem::with_id(
+        handle,
+        "open-recent-more",
+        "More…",
+        !books.is_empty(),
+        Some("Ctrl+R"),
+    )?)?;
+    sub.append(&PredefinedMenuItem::separator(handle)?)?;
+    let any = !recent().is_empty();
+    sub.append(&MenuItem::with_id(
+        handle,
+        "clear-recent",
+        "Clear Recently Opened…",
+        any,
+        None::<&str>,
+    )?)?;
+    Ok(())
+}
+
+/// File → Open Recent as AppKit has it (the self-test): each item's title, its
+/// key after it ("⌃r"), and "(off)" after one greyed out.
+#[cfg(target_os = "macos")]
+pub fn native_open_recent() -> Vec<String> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSEventModifierFlags};
+    use objc2_foundation::NSString;
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return Vec::new();
+    };
+    let within = |menu: Option<objc2::rc::Retained<objc2_app_kit::NSMenu>>, title: &str| {
+        menu.and_then(|m| m.itemWithTitle(&NSString::from_str(title)))
+            .and_then(|i| i.submenu())
+    };
+    let file = within(NSApplication::sharedApplication(mtm).mainMenu(), "File");
+    let Some(recent) = within(file, "Open Recent") else {
+        return Vec::new();
+    };
+    let keys = [
+        (NSEventModifierFlags::Control, "⌃"),
+        (NSEventModifierFlags::Option, "⌥"),
+        (NSEventModifierFlags::Shift, "⇧"),
+        (NSEventModifierFlags::Command, "⌘"),
+    ];
+    recent
+        .itemArray()
+        .iter()
+        .map(|i| {
+            if i.isSeparatorItem() {
+                return "---".to_string();
+            }
+            let mut text = i.title().to_string();
+            let key = i.keyEquivalent().to_string();
+            if !key.is_empty() {
+                let mask = i.keyEquivalentModifierMask();
+                let held: String = keys
+                    .iter()
+                    .filter(|(flag, _)| mask.contains(*flag))
+                    .map(|(_, sign)| *sign)
+                    .collect();
+                text.push_str(&format!(" {held}{key}"));
+            }
+            if !i.isEnabled() {
+                text.push_str(" (off)");
+            }
+            text
+        })
+        .collect()
+}
+
+/// A path under the home folder from "~".
+pub fn tilde(path: &str) -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.is_empty() && path.starts_with(&home) => {
+            format!("~{}", &path[home.len()..])
+        }
+        _ => path.to_string(),
+    }
+}
+
 /// Edit → Undo, Redo and Select All (`id`), and their keys: the menu bar sees
 /// ⌘Z, ⇧⌘Z and ⌘A before the page does (wry gives a child web view's ⌘ keys
 /// to the menu first). While the window's page has the keyboard, the page acts
@@ -327,23 +476,41 @@ pub fn edit_action(app: &AppHandle, front: Option<String>, id: &str) {
     let _ = (app, front, id);
 }
 
-/// The menu bar as text, for the self-test: each menu's title and items.
+/// The menu bar as text, for the self-test: each menu's title and items
+/// ("id=Title", "(off)" after one greyed out). A submenu's items follow it,
+/// with its title ("open-recent-more=Open Recent ▸ More…").
 pub fn outline<R: Runtime>(menu: &Menu<R>) -> tauri::Result<Vec<(String, Vec<String>)>> {
+    fn items<R: Runtime>(
+        sub: &Submenu<R>,
+        within: &str,
+        out: &mut Vec<String>,
+    ) -> tauri::Result<()> {
+        for i in sub.items()? {
+            if let Some(m) = i.as_menuitem() {
+                let off = if m.is_enabled()? { "" } else { " (off)" };
+                out.push(format!("{}={within}{}{off}", m.id().as_ref(), m.text()?));
+            } else if let Some(p) = i.as_predefined_menuitem() {
+                let text = p.text()?;
+                out.push(format!(
+                    "{within}{}",
+                    if text.is_empty() { "---".into() } else { text }
+                ));
+            } else if let Some(s) = i.as_submenu() {
+                let title = s.text()?;
+                out.push(format!("{within}{title} ▸"));
+                items(s, &format!("{within}{title} ▸ "), out)?;
+            }
+        }
+        Ok(())
+    }
     let mut out = Vec::new();
     for top in menu.items()? {
         let Some(sub) = top.as_submenu() else {
             continue;
         };
-        let mut items = Vec::new();
-        for i in sub.items()? {
-            if let Some(m) = i.as_menuitem() {
-                items.push(format!("{}={}", m.id().as_ref(), m.text()?));
-            } else if let Some(p) = i.as_predefined_menuitem() {
-                let text = p.text()?;
-                items.push(if text.is_empty() { "---".into() } else { text });
-            }
-        }
-        out.push((sub.text()?, items));
+        let mut list = Vec::new();
+        items(sub, "", &mut list)?;
+        out.push((sub.text()?, list));
     }
     Ok(out)
 }

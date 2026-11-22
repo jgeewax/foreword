@@ -34,7 +34,7 @@ mod workspace;
 
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU32, Ordering},
@@ -462,20 +462,103 @@ fn open_new_window(app: &tauri::AppHandle, book: Option<String>) {
 /// or a new window opens it (one window per book).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn open_book_window(app: &tauri::AppHandle, path: &str) {
-    let root = PathBuf::from(path)
+    let root = canonical(path);
+    if !bring_forward(app, &root) {
+        open_new_window(app, Some(root.to_string_lossy().into_owned()));
+    }
+}
+
+/// A recent book chosen in File → Open Recent: the window that has it comes
+/// forward; or the window in front opens it, as in VS Code; or, with none,
+/// a window of its own.
+fn open_recent(app: &tauri::AppHandle, front: Option<String>, path: &str) {
+    let root = canonical(path);
+    if !root.is_dir() {
+        // Gone since the menu was made: it goes from the menu.
+        refresh_open_recent(app, front);
+        return;
+    }
+    if bring_forward(app, &root) {
+        return;
+    }
+    match front {
+        Some(label) => {
+            let _ = app.emit_to(
+                EventTarget::webview(&label),
+                "open-recent",
+                root.to_string_lossy(),
+            );
+        }
+        None => open_new_window(app, Some(root.to_string_lossy().into_owned())),
+    }
+}
+
+fn canonical(path: &str) -> PathBuf {
+    PathBuf::from(path)
         .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(path));
+        .unwrap_or_else(|_| PathBuf::from(path))
+}
+
+/// The window that has this book comes forward, if one does.
+fn bring_forward(app: &tauri::AppHandle, root: &Path) -> bool {
     let has = app
         .state::<AppState>()
         .all()
         .into_iter()
-        .find(|(_, w)| w.root.lock().unwrap().as_deref() == Some(root.as_path()));
-    if let Some(window) = has.and_then(|(label, _)| app.get_window(&label)) {
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-        return;
+        .find(|(_, w)| w.root.lock().unwrap().as_deref() == Some(root));
+    let Some(window) = has.and_then(|(label, _)| app.get_window(&label)) else {
+        return false;
+    };
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    true
+}
+
+/// The window the menu bar acts on: the one in front.
+fn front_window(app: &tauri::AppHandle) -> Option<String> {
+    app.windows()
+        .into_iter()
+        .find(|(_, w)| w.is_focused().unwrap_or(false))
+        .map(|(label, _)| label)
+}
+
+/// File → Open Recent for the window in front (`front`): it doesn't offer that window's own book.
+fn refresh_open_recent(app: &tauri::AppHandle, front: Option<String>) {
+    let current = front.and_then(|label| {
+        let w = app
+            .state::<AppState>()
+            .windows
+            .lock()
+            .unwrap()
+            .get(&label)
+            .cloned();
+        w.and_then(|w| w.root.lock().unwrap().clone())
+    });
+    if let Err(e) = menu::show_recent(app, current.as_deref()) {
+        logs::push("app", format!("couldn't update Open Recent: {e}"));
     }
-    open_new_window(app, Some(root.to_string_lossy().into_owned()));
+}
+
+/// What an item of the menu bar does (`front`: the window in front).
+fn menu_event(app: &tauri::AppHandle, front: Option<String>, id: &str) {
+    match id {
+        "new-window" => open_new_window(app, None),
+        "close-window" => {
+            if let Some(w) = front.and_then(|l| app.get_window(&l)) {
+                let _ = w.close();
+            }
+        }
+        "undo" | "redo" | "select-all" => menu::edit_action(app, front, id),
+        _ if id.starts_with(menu::RECENT_BOOK) => {
+            open_recent(app, front, &id[menu::RECENT_BOOK.len()..])
+        }
+        _ if menu::COMMANDS.contains(&id) => {
+            if let Some(label) = front {
+                let _ = app.emit_to(EventTarget::webview(&label), "menu", id);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// File → New Window, from the page.
@@ -484,13 +567,33 @@ fn window_new(app: tauri::AppHandle) -> CmdResult<String> {
     Ok(new_window(&app, None, None)?)
 }
 
-/// The page's recent books, newest first (all windows share them): the Dock's menu offers them.
+/// The page's recent books, newest first (all windows share them): File →
+/// Open Recent and the Dock's menu offer them.
 #[tauri::command]
-fn dock_recent(paths: Vec<String>) {
+fn recent_books(app: tauri::AppHandle, paths: Vec<String>) {
+    menu::set_recent(paths);
+    refresh_open_recent(&app, front_window(&app));
+}
+
+/// Self-test only: File → Open Recent as it is with the window `front` in
+/// front (none: no window is), as AppKit has it, then (`choose`) what
+/// choosing that item does.
+#[tauri::command]
+fn selftest_menu(
+    app: tauri::AppHandle,
+    front: Option<String>,
+    choose: Option<String>,
+) -> CmdResult<Vec<String>> {
+    selftest_only()?;
+    refresh_open_recent(&app, front.clone());
     #[cfg(target_os = "macos")]
-    dock::set_recent(paths);
+    let native = menu::native_open_recent();
     #[cfg(not(target_os = "macos"))]
-    let _ = paths;
+    let native = Vec::new();
+    if let Some(id) = choose {
+        menu_event(&app, front, &id);
+    }
+    Ok(native)
 }
 
 /// Self-test only: the Dock menu's items as AppKit gets them, then (`choose`)
@@ -591,32 +694,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(menu::build)
-        .on_menu_event(|app, event| {
-            // The menu bar is the app's: it acts on the window in front.
-            let front = app
-                .windows()
-                .into_iter()
-                .find(|(_, w)| w.is_focused().unwrap_or(false))
-                .map(|(label, _)| label);
-            match event.id().as_ref() {
-                "new-window" => open_new_window(app, None),
-                "close-window" => {
-                    if let Some(w) = front.and_then(|l| app.get_window(&l)) {
-                        let _ = w.close();
-                    }
-                }
-                id @ ("undo" | "redo" | "select-all") => menu::edit_action(app, front, id),
-                id if menu::COMMANDS.contains(&id) => {
-                    if let Some(label) = front {
-                        let _ = app.emit_to(EventTarget::webview(&label), "menu", id);
-                    }
-                }
-                _ => {}
-            }
-        })
+        // The menu bar is the app's: it acts on the window in front.
+        .on_menu_event(|app, event| menu_event(app, front_window(app), event.id().as_ref()))
         .on_window_event(|window, event| {
             let kept = window.try_state::<windows::Windows>();
             match event {
+                // File → Open Recent offers every recent book but the one in front.
+                WindowEvent::Focused(true) => {
+                    refresh_open_recent(window.app_handle(), Some(window.label().to_string()))
+                }
                 // A closed window's helpers (Tinymist, OpenCode) stop with it.
                 WindowEvent::Destroyed => {
                     let state = window.state::<AppState>();
@@ -624,6 +710,8 @@ pub fn run() {
                         w.kill_children();
                     }
                     mcp::forget(window.app_handle(), window.label());
+                    // Its book is one to open again.
+                    refresh_open_recent(window.app_handle(), front_window(window.app_handle()));
                 }
                 // Where it is, for next time; one the author closes doesn't come back.
                 WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
@@ -700,7 +788,8 @@ pub fn run() {
             selftest_finish,
             menu_outline,
             window_new,
-            dock_recent,
+            recent_books,
+            selftest_menu,
             selftest_dock,
             selftest_windows,
             selftest_eval,

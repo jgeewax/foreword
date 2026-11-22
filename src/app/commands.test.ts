@@ -54,6 +54,16 @@ describe('the command palette', () => {
     expect(titles(rankCommands(commands, 'pdf', ['Book:Open Exported PDF']))[0]).toBe('Book: Open Exported PDF');
   });
 
+  it('lists the recent books newest first for ⌃R, then by the name typed after', () => {
+    const books = ['linear-algebra-book', 'luca', 'poems'].map((name) => cmd('File', `Open Recent: ${name}`, { id: `open-recent:/books/${name}` }));
+    const all = [...commands, ...books];
+    // Shorter names score higher: with nothing after "Open Recent:", the list's own order (newest first) stands.
+    expect(titles(rankCommands(all, 'Open Recent: ', []))).toEqual(['File: Open Recent: linear-algebra-book', 'File: Open Recent: luca', 'File: Open Recent: poems']);
+    const [first] = rankCommands(all, 'Open Recent: ', []);
+    expect(first.positions.map((p) => first.label[p]).join('')).toBe('OpenRecent:');
+    expect(titles(rankCommands(all, 'Open Recent: po', []))).toEqual(['File: Open Recent: poems']);
+  });
+
   it('remembers the newest first, once each, a few at most', () => {
     expect(withRecent(['a', 'b', 'c'], 'b')).toEqual(['b', 'a', 'c']);
     const many = Array.from({ length: 12 }, (_, i) => `c${i}`);
