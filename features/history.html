@@ -61,7 +61,7 @@
 
 <h2 id="what-changed-in-words">What changed, in words</h2>
 <p>In prose, one changed line can be a comma or a whole rewritten paragraph. So What changed shows words: the ones that went struck through, the ones that came in highlighted, with a line of the text around each passage so you can see where it is. Changed equations are drawn, old and new. If you’d rather see whole lines side by side, there’s <strong>Lines</strong>.</p>
-<p>Compared with now, the new text in Lines is your file itself, as in VS Code. Type there and you’re changing the file, with undo and <kbd>⌘</kbd><kbd>S</kbd> as in the editor, and a ● until you save. What you change in the editor shows in the diff when you come back. Source Control’s uncommitted changes work the same way. Earlier versions, commits and staged changes are read-only.</p>
+<p>Compared with now, the new text in Lines is your file itself, as in VS Code. Type there and you’re changing the file, with undo and <kbd>⌘</kbd><kbd>S</kbd> as in the editor, and a ● until you save. What you change in the editor shows in the diff when you come back. Source Control’s uncommitted changes work the same way. The editor’s tools are there too: the selection bar, a TODO’s bar, spelling, the right-click menu, review comments, ▶ Run and <kbd>⌘</kbd>-click. Earlier versions, commits and staged changes are read-only.</p>
 <p>Click a passage, or move through them with the arrow keys, and the preview scrolls to that place in the typeset pages.</p>
 
 <h2 id="undo-just-the-assistant-s-change">Undo just the assistant’s change</h2>
@@ -74,7 +74,8 @@
 
 <h2 id="where-it-s-kept">Where it’s kept</h2>
 <p>History is kept in Foreword’s own folder on your Mac, not in your book’s folder, so the book stays just as you’d send it. It includes every file in the book, pictures too. A version keeps only what changed, so even a long book’s History takes little room.</p>
-<p>It asks nothing of you: no saving copies as <em>chapter-3-final-v2-REAL.docx</em>, no commits, no messages. If you do keep your book in Git, History never reads or writes it, and your Git log stays yours. <strong>Source Control</strong> appears as a view of its own and works as VS Code’s: stage and commit (or amend, or undo the last commit), discard changes, switch branches or start one, and pull, push and sync. Discarding asks first, a new file goes to the Trash rather than away for good, and History keeps the book as it was, so you can always get it back.</p>
+<p>It asks nothing of you: no saving copies as <em>chapter-3-final-v2-REAL.docx</em>, no commits, no messages. If you do keep your book in Git, History never reads or writes it, and your Git log stays yours. <strong>Source Control</strong> is a view of its own and works as VS Code’s. For a book that isn’t in Git yet, <span class="ui">Initialize Repository</span> starts one in the book’s folder, and commits nothing until you do; the first time you publish, push or sync, it asks where to. Then stage and commit (or amend, or undo the last commit), discard changes, switch branches or start one, and pull, push and sync. Discarding asks first, a new file goes to the Trash rather than away for good, and History keeps the book as it was, so you can always get it back.</p>
+<p>In a Git repository, the file tree shows what’s changed, as VS Code’s does: a changed file’s name and letter in Git’s colours (M changed, U new, A added, R renamed, ! conflict), and a dot on each folder with a change inside it, whose tooltip says how many files changed.</p>
 
 <h2 id="your-typing-and-the-assistant-s-at-once">Your typing and the assistant’s, at once</h2>
 <p>You can keep writing while the assistant works, in the same chapter. When a file you have open changes underneath you (the assistant, Git, another program), Foreword folds the change into what you’re typing instead of making you choose between them. Your unsaved typing stays, their change goes in around it, and <kbd>⌘</kbd><kbd>Z</kbd> takes their change out in one step.</p>
@@ -104,7 +105,7 @@
   </article>
   <nav class="doc-next"><a href="assistants.html"><small>← Previous</small><b>Choosing an assistant</b></a><a class="next" href="printing.html"><small>Next →</small><b>Printing and covers</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.11.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.12.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>

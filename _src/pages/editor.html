@@ -2,7 +2,7 @@
 title: The editor
 heading: The editor
 lede: Where you write. A Typst book is plain text with a little markup, and the editor shows it close to how it will print: headings in bold, emphasis in italic. Around it are the things a long book needs: search across every chapter, a table of contents to move by, and chapters you can find by number. If you’ve used VS Code, it’s the same editor, with the same keys.
-description: Foreword's editor: Typst shown close to how it prints, typing that wraps a selection, spelling and grammar as you type, ⌘-click to where a name is defined, to what a reference points to, or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
+description: Foreword's editor: Typst shown close to how it prints, a book that opens as you left it, even after a crash, typing that wraps a selection, spelling and grammar as you type, ⌘-click to where a name is defined, to what a reference points to, or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
 image: images/f/editor-search.webp
 -->
 <figure class="lead">
@@ -49,8 +49,13 @@ image: images/f/editor-search.webp
 <h3>Keys and commands</h3>
 <p>The command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) lists Foreword’s commands, each with its shortcut, your recent ones first, so you can find a command by typing a word of it. Tabs work as they do in VS Code: <kbd>⌘</kbd><kbd>W</kbd> to close, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>T</kbd> to reopen, <kbd>⌃</kbd><kbd>⇥</kbd> to step through. Under the tabs, a bar shows where you are in the chapter, heading by heading.</p>
 
+<h2>Back where you left off</h2>
+<p>Quit, force quit, a crash or the Mac restarting: open the book again and it’s as if you never closed it. Its tabs come back, with the file in front, the cursor, selection and scroll in each one, the sidebar, and what the preview showed and where. So does the chat: its task, the message you were half-way through writing, and each reply as far as it had come. A reply cut off part-way says so, and <span class="ui">Resume</span> carries on. Anything you typed and didn’t save is kept within a second, and comes back as unsaved changes; if the file changed on disk in the meantime, that change is folded in.</p>
+<p>Every window comes back too, each with its book and where it was on the screen. A window you close yourself stays closed. Right-click Foreword in the Dock for <span class="ui">New Window</span> and your recent books; a book opens in a window of its own, or brings forward the window that has it.</p>
+
 <h2>A colour for each book</h2>
 <p>With two books open, every window looks the same. Give each book a colour (Settings ▸ This book ▸ Colour, or <span class="ui">Surprise me</span>) and its title bar, the icons down the side, and the status bar take it on. If you’ve already given the book a colour in VS Code with the Peacock extension, Foreword uses the same one.</p>
+<p>Under the swatches, you can say the colour in words: “brighter pink”, “a bit darker”, “bluish green”, “more like the sea”. The window changes as you type, so you see the colour as it will really look; <kbd>⏎</kbd> keeps it, and <kbd>⏎</kbd> again goes a step further. The assistant’s marks take words the same way.</p>
 <figure class="small">
   <img src="../images/f/editor-colour.webp" width="1500" height="700" alt="A Foreword window with its title bar, activity bar and status bar in the book's teal.">
   <figcaption>The book’s colour on the title bar, the icons down the side and the status bar.</figcaption>
