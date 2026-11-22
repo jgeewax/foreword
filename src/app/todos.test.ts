@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTodos, todoAt, todoPrompt, withoutTodo } from './todos';
+import { nearestTodos, parseTodos, todoAt, todoPrompt, withoutTodo } from './todos';
 
 const TYP = `= Vectors
 // TODO: check this date with the archive
@@ -70,5 +70,25 @@ describe('Done and prompts', () => {
   it('asks the assistant to do it and remove the TODO', () => {
     const [t] = parseTodos(TYP, 'chapters/ch1.typ');
     expect(todoPrompt(t)).toBe('Work on this TODO in chapters/ch1.typ (line 2): “check this date with the archive”. When it\'s done, remove the TODO itself.');
+  });
+});
+
+describe('nearestTodos (the chat’s starter)', () => {
+  const todos = [
+    ...parseTodos('// TODO: a\n// TODO: b', 'ch1.typ'),
+    ...parseTodos('// TODO: c', 'ch2/figures.typ'),
+    ...parseTodos('// TODO: d', 'ch2/intro.typ'),
+    ...parseTodos('// TODO: e', 'ch2/main.typ'),
+    ...parseTodos('// TODO: f', 'ch3.typ'),
+  ];
+  const texts = (ts: typeof todos) => ts.map((t) => t.text).join('');
+
+  it('puts the open file’s first, then its chapter’s in the chapter’s order, then the rest as found', () => {
+    expect(texts(nearestTodos(todos, 'ch2/intro.typ', ['ch2/main.typ', 'ch2/intro.typ', 'ch2/figures.typ']))).toBe('decabf');
+  });
+
+  it('keeps the order found when the open chapter has none, or nothing is open', () => {
+    expect(texts(nearestTodos(todos, 'ch4.typ', ['ch4.typ']))).toBe('abcdef');
+    expect(texts(nearestTodos(todos, null, []))).toBe('abcdef');
   });
 });

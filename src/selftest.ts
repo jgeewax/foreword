@@ -4733,6 +4733,19 @@ async function todoChecks(withAgent: boolean) {
   out.suggestions = [...document.querySelectorAll('.suggestion.todo')].map((e) => e.textContent);
   out.snapshot = await snap('todos');
 
+  // The starter offers the open chapter's TODOs before the rest of the book's.
+  const other = 'chapters/ch2-eigenvalues.typ';
+  const otherOriginal = (await ipc.fsRead(other)).text;
+  await studio.openFile(other);
+  studio.editor!.executeEdits('selftest', [{ range: monaco.Range.fromPositions({ lineNumber: 1, column: 1 }), text: '// TODO: name the matrix in the first example\n' }]);
+  await studio.save();
+  await sleep(800);
+  const firstSuggestion = () => document.querySelector('.suggestion.todo .suggestion-text')?.firstChild?.textContent;
+  out.chapterFirst = { inCh2: firstSuggestion() };
+  await studio.openFile(file);
+  await sleep(500);
+  (out.chapterFirst as any).inCh1 = firstSuggestion();
+
   const fixme = studio.state.todos.find((t) => t.text.startsWith('tidy'));
   if (fixme) await studio.todoDone(fixme);
   await sleep(300);
@@ -4754,6 +4767,7 @@ async function todoChecks(withAgent: boolean) {
     studio.updateSettings({ permissions: policy });
   }
   await ipc.fsWrite(file, original, await ipc.fsHash(file));
+  await ipc.fsWrite(other, otherOriginal, await ipc.fsHash(other));
   await sleep(500);
   studio.showSidebar('files');
   return out;

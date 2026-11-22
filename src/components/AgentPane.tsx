@@ -22,6 +22,7 @@ import { ContextMeter, TaskMenu, useContextUse } from './TaskMenu';
 import { ActivityGlyph, questionName, TaskStrip, Transcript } from './Trace';
 import { AttachedFiles } from './AttachedFiles';
 import { todoMenu } from './todo-menu';
+import { nearestTodos } from '../app/todos';
 import { carriesFiles, droppedItems, pastedFiles, pastedName } from '../app/attachments';
 import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
 import { actionLine, STARTERS, stockAction } from '../app/stock-prompts';
@@ -1124,10 +1125,21 @@ const TIPS: ReactNode[] = [
 
 const greeting = (hour: number) => (hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening');
 
-/** Shown before the first message: a welcome under Foreword's icon and name, things to ask (your TODOs first), the style guide's offer, and a tip. */
+/** Shown before the first message: a welcome under Foreword's icon and name, things to ask (your TODOs first, the open chapter's before the rest), the style guide's offer, and a tip. */
 function Starter() {
   const ready = useStore(studio.store, (s) => s.agent.status === 'ready');
-  const todos = useStore(studio.store, (s) => s.todos);
+  const active = useStore(studio.store, (s) => s.active);
+  const [chapter, setChapter] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    if (active) void studio.chapterFiles(active).then((files) => live && setChapter(files), () => {});
+    else setChapter([]);
+    return () => {
+      live = false;
+    };
+  }, [active]);
+  const found = useStore(studio.store, (s) => s.todos);
+  const todos = useMemo(() => nearestTodos(found, active, chapter), [found, active, chapter]);
   const titles = useStore(studio.store, (s) => s.names.titles);
   const offerGuide = useStore(studio.store, (s) => !s.styleGuide.exists && !s.styleGuide.dismissed);
   const drafting = useDraftingHere();

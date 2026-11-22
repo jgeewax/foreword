@@ -2264,6 +2264,15 @@ export class Studio {
     this.store.set({ todos: [...next.values()].flat() });
   }
 
+  /** The files of the chapter `path` is in (the chapter, then what it includes); just `path` if it's in none. */
+  async chapterFiles(path: string): Promise<string[]> {
+    const book = await this.bookTexts();
+    if (!book) return [path];
+    const root = this.typstRoot();
+    const chapter = chapterOf(path, book.chapters, book.read, root);
+    return chapter ? includeTree(chapter, book.read, root) : [path];
+  }
+
   private updateTodos(path: string, text: string) {
     if (!Studio.todoSource(path)) return;
     const found = parseTodos(text, path);

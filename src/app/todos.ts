@@ -69,6 +69,15 @@ export function withoutTodo(lineText: string, todo: Todo): string | null {
   return null;
 }
 
+/**
+ * The TODOs to offer first: the open file's, then the rest of its chapter's
+ * (`chapter`: the chapter's files, in order), then the book's, each as found.
+ */
+export function nearestTodos(todos: Todo[], active: string | null, chapter: string[]): Todo[] {
+  const rank = (t: Todo) => (t.path === active ? -1 : chapter.includes(t.path) ? chapter.indexOf(t.path) : chapter.length);
+  return [...todos].sort((a, b) => rank(a) - rank(b));
+}
+
 /** The chat message for working on a TODO. */
 export function todoPrompt(todo: Todo): string {
   return `Work on this TODO in ${todo.path} (line ${todo.line}): “${todo.text}”. When it's done, remove the TODO itself.`;
