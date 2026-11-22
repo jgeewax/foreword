@@ -1,6 +1,7 @@
 mod acp;
 mod agent;
 mod attachments;
+mod book_state;
 mod children;
 mod clipboard;
 mod code;
@@ -680,6 +681,10 @@ pub fn run() {
             history::history_file,
             tasks::task_chat_read,
             tasks::task_chat_write,
+            book_state::book_state_read,
+            book_state::book_state_write,
+            book_state::book_state_remove,
+            book_state::book_state_list,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Foreword")

@@ -167,15 +167,20 @@ export function keptItems(items: readonly ChatItem[]): ChatItem[] {
 /**
  * A chat kept while a turn was still going (it went on in the background, or
  * the window closed): that turn as its assistant has it now, after the
- * author's last message. As kept, if that message isn't in `theirs`.
+ * author's last message. As kept, if that message isn't in `theirs`, or if
+ * what was kept of the turn goes further: Foreword closed (or the Mac went
+ * down) mid-reply, and the assistant had written down less of it.
  */
 export function withLatestTurn(kept: readonly ChatItem[], theirs: readonly ChatItem[]): ChatItem[] {
   const last = kept.map((it) => it.kind).lastIndexOf('user');
   const said = kept[last]?.kind === 'user' ? kept[last].text.trim() : null;
   if (said === null) return [...kept];
+  const steps = (items: readonly ChatItem[]) => items.filter((it) => it.kind === 'assistant' || it.kind === 'thinking' || it.kind === 'tool').length;
   for (let j = theirs.length - 1; j >= 0; j--) {
     const it = theirs[j];
-    if (it.kind === 'user' && it.text.trim() === said) return [...kept.slice(0, last + 1), ...theirs.slice(j + 1)];
+    if (it.kind !== 'user' || it.text.trim() !== said) continue;
+    const turn = theirs.slice(j + 1);
+    return steps(turn) >= steps(kept.slice(last + 1)) ? [...kept.slice(0, last + 1), ...turn] : [...kept];
   }
   return [...kept];
 }

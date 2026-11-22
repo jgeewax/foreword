@@ -339,6 +339,14 @@ export const ipc = {
   /** A task's chat as Foreword kept it (tasks.rs), whichever assistant it was with; null if none is kept. */
   taskChatRead: (id: string) => invoke<string | null>('task_chat_read', { id }),
   taskChatWrite: (id: string, text: string) => invoke<void>('task_chat_write', { id, text }),
+
+  /** The window's book as Foreword keeps it on this Mac (book_state.rs): `root` must be the window's book. Null: none kept. */
+  bookStateRead: (root: string, name: string) => invoke<string | null>('book_state_read', { root, name }),
+  /** Written whole and flushed to the disk before it replaces the last. */
+  bookStateWrite: (root: string, name: string, text: string) => invoke<void>('book_state_write', { root, name, text }),
+  bookStateRemove: (root: string, name: string) => invoke<void>('book_state_remove', { root, name }),
+  /** Every file kept in one of its folders, as text. */
+  bookStateList: (root: string, folder: string) => invoke<string[]>('book_state_list', { root, folder }),
 };
 
 export { Channel };

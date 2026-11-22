@@ -116,6 +116,10 @@ fn main() {
             "history_file",
             "task_chat_read",
             "task_chat_write",
+            "book_state_read",
+            "book_state_write",
+            "book_state_remove",
+            "book_state_list",
         ]),
     ))
     .expect("failed to run tauri-build");

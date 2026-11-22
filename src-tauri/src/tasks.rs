@@ -6,13 +6,12 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 use sha2::{Digest, Sha256};
 use tauri::Manager;
 
-use crate::{Win, error::CmdResult};
+use crate::{Win, book_state::write_durably, error::CmdResult};
 
 /// A task's file: in its book's folder, named for a hash of its id (an
 /// assistant's session id, whatever characters that has).
@@ -42,8 +41,9 @@ pub async fn task_chat_read(
     }
 }
 
-/// Written whole, through a file of its own beside it, so a crash never
-/// leaves half a chat (and two windows never write the same one).
+/// Written whole, through a file of its own beside it, and flushed to the disk
+/// before it replaces the last (book_state.rs), so a crash, a force quit or
+/// the Mac going down never leaves half a chat, or none.
 #[tauri::command]
 pub async fn task_chat_write(
     app: tauri::AppHandle,
@@ -51,17 +51,8 @@ pub async fn task_chat_write(
     id: String,
     text: String,
 ) -> CmdResult<()> {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
     let path = chat_path(&app, &state, &id)?;
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension(format!("{}.tmp", NEXT.fetch_add(1, Ordering::Relaxed)));
-    fs::write(&tmp, text)?;
-    fs::rename(&tmp, &path).inspect_err(|_| {
-        let _ = fs::remove_file(&tmp);
-    })?;
-    Ok(())
+    Ok(write_durably(&path, text.as_bytes())?)
 }
 
 #[cfg(test)]

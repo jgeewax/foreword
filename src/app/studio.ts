@@ -31,6 +31,7 @@ import {
   type ProjectSettings,
 } from './project-settings';
 import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, firstAssistant, loadSettings, saveSettings, settingsSaved, type AppSettings, type AssistantId, type PreviewScope, type ToolName } from './settings';
+import { BookStore, type BookSession, type PreviewPlace, type UnsavedText } from './book-state';
 import { handleMcp, STUDIO_TOOLS, type BookProblem, type CommentRow, type ModelChoice, type PageHeading, type StudioHost } from './studio-tools';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
@@ -82,7 +83,7 @@ import { turnsOf } from './trace';
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
-import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
+import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type KeptChat, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
 import { chatSoFar, fromModeSetups, readModeSetups, readSetup, sameSetup, setupLine, setupOf, type ModeSetup, type Setups } from './mode-setups';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
@@ -660,6 +661,8 @@ const initialState: StudioState = {
 };
 
 const LAST_WORKSPACE = 'studio.lastWorkspace';
+/** The sidebar's views, for one kept with a book. */
+const SIDEBAR_VIEWS: readonly StudioState['sidebar'][] = ['files', 'contents', 'search', 'spelling', 'history', 'tasks', 'code', 'todos', 'review', 'git'];
 const MODEL_KEY = 'studio.model';
 /** The effort chosen for each model (effortKey → level). */
 const EFFORTS_KEY = 'studio.efforts';
@@ -696,8 +699,6 @@ export const AUTHOR_KEY = 'studio.author';
 const tabsKey = (root: string) => `studio.tabs:${root}`;
 /** Per book: where the preview was, in the book, its cover, and each chapter shown alone ("chapter:<path>"). */
 const previewPlaceKey = (root: string) => `studio.previewPlace:${root}`;
-/** A place in the preview: the page at its top (from 0), and how far down that page (0 to 1). */
-type PreviewPlace = { page: number; offset: number };
 /** Per book: the chapter the preview last showed alone. */
 const previewChapterKey = (root: string) => `studio.previewChapter:${root}`;
 /** Per book: its numbers when it was last typeset whole for them (BookNumbers), so a chapter shown alone has them at once. */
@@ -797,7 +798,8 @@ export class Studio {
     /** ⇧⌘F: the Search view's box, with this text in it if any (the editor's selection). */
     'focus-search': [text: string | null];
     'focus-editor': [];
-    'fill-composer': [text: string];
+    /** `focus` false: the text goes in without taking the keyboard (the book opening with a message half written). */
+    'fill-composer': [text: string, focus?: boolean];
     /** The selection bar's card, open on Revise, Options or Ask (the context menu, the command). */
     'selection-card': [kind: BarKind];
     'find-in-settings': [];
@@ -875,9 +877,19 @@ export class Studio {
   });
   /**
    * The message box's text, kept here so it survives the composer remounting
-   * (collapsing the pane, opening a book) and can be filled before it mounts.
+   * (collapsing the pane, opening a book) and can be filled before it mounts;
+   * and with the book, so it's there when the book opens again.
    */
-  composerDraft = '';
+  get composerDraft() {
+    return this.draft;
+  }
+  set composerDraft(text: string) {
+    this.draft = text;
+    if (this.bookStore && this.bookStore.session.draft !== text) this.bookStore.updateSession({ draft: text });
+  }
+  private draft = '';
+  /** The open book's state as Foreword keeps it (book-state.ts): where the window was, its tasks, what's unsaved. */
+  private bookStore: BookStore | null = null;
   readonly code = new CodeRunner({
     get: () => this.state.code,
     set: (patch) => this.store.set((s) => ({ code: { ...s.code, ...patch } })),
@@ -1032,15 +1044,32 @@ export class Studio {
       active = this.state.active;
       this.scheduleChapterPreview(0);
     });
-    // The shown task's chat is kept as it changes (tasks.rs), and as the window goes.
+    // The shown task's chat is kept as it changes (tasks.rs), within a second while a reply comes in, a message
+    // the author sends at once; and as the window goes. A crash or a force quit loses that second at most.
     let chat: ChatItem[] | null = null;
+    let wasRunning = false;
     this.store.subscribe(() => {
       const { taskId, items, running } = this.state.agent;
-      if (!taskId || items === chat) return;
+      if (!taskId || (items === chat && running === wasRunning)) return;
+      const sent = items.at(-1)?.kind === 'user' && chat?.at(-1)?.id !== items.at(-1)?.id;
       chat = items;
-      this.chatTimer ??= window.setTimeout(() => this.keepChat(), running ? 4000 : 800);
+      wasRunning = running;
+      if (sent) this.keepChat();
+      else this.chatTimer ??= window.setTimeout(() => this.keepChat(), running ? 1000 : 300);
     });
-    window.addEventListener('pagehide', () => this.keepChat());
+    // Which task the chat shows, the sidebar's view and what the preview shows: kept with the book as they change.
+    this.store.subscribe(() => {
+      const book = this.bookStore;
+      const s = this.state;
+      if (!book || s.workspace?.root !== book.root) return;
+      const now: Partial<BookSession> = { task: s.agent.taskId, sidebar: s.sidebar, previewTarget: s.previewTarget };
+      if (now.task !== book.session.task || now.sidebar !== book.session.sidebar || now.previewTarget !== book.session.previewTarget) book.updateSession(now);
+    });
+    window.addEventListener('pagehide', () => {
+      this.keepChat();
+      this.keepViews();
+      void this.bookStore?.flush();
+    });
     this.typst.on('diagnostics', (uri, list) => this.onDiagnostics(uri, list));
     this.typst.on('outline', (items) => (this.pageOutline = { items, typeset: this.typesets }));
     this.typst.on('compile', (s) => {
@@ -1275,8 +1304,15 @@ export class Studio {
       writeJson(RECENT_KEY, recent);
       this.store.set({ recent });
     }
+    // The book as it was left (book-state.ts): its tabs and where in them, its tasks, what wasn't saved, and the chat it showed.
+    const book = await BookStore.open(info.root, this.keptBefore(info.root));
+    const shown = book.session.task;
+    const kept = shown ? readKeptChat(await ipc.taskChatRead(shown).catch(() => null)) : null;
+    // Another book chosen meanwhile: that one opens instead.
+    if (this.state.opening !== path) return;
     this.docs = new Documents(info.root, this.typst, {
       onEdit: (p) => {
+        this.keepUnsaved(p);
         this.perf.edit(() => this.publishPerf());
         // What Search found follows the text as it changes.
         if (this.state.search.query) this.scheduleSearch(500);
@@ -1299,6 +1335,8 @@ export class Studio {
       },
       onDirtyChange: (p, dirty) => {
         this.store.set((s) => ({ dirty: { ...s.dirty, [p]: dirty } }));
+        // Saved (or back as it is on disk): its unsaved text is no longer kept.
+        if (!dirty) this.keepUnsaved(p, 0);
         // Saved: headings (and, for the main file, the chapter order) may have changed.
         if (!dirty && p.endsWith('.typ')) void this.refreshNames([p]);
         // Its headings and labels count for a chapter shown alone (its number, references to it).
@@ -1324,7 +1362,16 @@ export class Studio {
         }),
       agentAtWork: () => (this.assistantBusy ? ASSISTANT_NAMES[this.state.settings.assistant] : null),
     });
-    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false });
+    this.bookStore = book;
+    this.restoringTabs = true;
+    const sidebar = SIDEBAR_VIEWS.find((v) => v === book.session.sidebar) ?? this.state.sidebar;
+    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false, sidebar, previewTarget: book.session.previewTarget });
+    if (shown) this.showKeptTask(shown, kept);
+    // The message being written, not sent yet.
+    if (book.session.draft) {
+      this.draft = book.session.draft;
+      this.events.emit('fill-composer', this.draft, false);
+    }
 
     await this.loadProjectSettings();
     void this.loadPeacockColor();
@@ -1346,12 +1393,20 @@ export class Studio {
     if (own && own !== this.state.settings.assistant) this.updateSettings({ assistant: own }, { restart: false });
     void this.startAgent();
 
-    const saved = readJson<{ tabs: string[]; active: string | null }>(tabsKey(info.root));
-    const tabs = (saved?.tabs ?? []).filter((t) => info.files.includes(t));
+    // Its tabs, each file's cursor and scroll as they were, and what was typed in them and not saved.
+    const saved = book.session;
+    for (const [p, view] of Object.entries(saved.views)) this.viewStates.set(p, view as monaco.editor.ICodeEditorViewState);
+    const tabs = saved.tabs.filter((t) => info.files.includes(t));
     const fallback = info.entry ? [info.entry] : info.files.filter((f) => f.endsWith('.typ')).slice(0, 1);
-    for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
-    const active = saved?.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
-    if (active) await this.openFile(active);
+    try {
+      for (const t of tabs.length ? tabs : fallback) await this.openFile(t, { activate: false });
+      if (this.bookStore === book) await this.restoreUnsaved(book.unsaved, info.files);
+      const active = saved.active && this.state.tabs.includes(saved.active) ? saved.active : this.state.tabs[0];
+      if (active && this.bookStore === book) await this.openFile(active);
+    } finally {
+      if (this.bookStore === book) this.restoringTabs = false;
+    }
+    this.persistTabs();
     // Someone new (this is the only book they've opened): the tour, once the window has settled.
     if (!this.state.launch?.selftestOut && shouldStartTour(tourSeen(), this.state.recent.length)) setTimeout(() => this.state.workspace?.root === info.root && this.startTour(), 1500);
   }
@@ -3119,6 +3174,13 @@ export class Studio {
   private async closeWorkspace() {
     if (!this.state.workspace) return;
     this.keepChat();
+    // The book as it's left now is kept, and nothing after: closing it (its files' unsaved text too) doesn't change that.
+    this.keepViews();
+    const book = this.bookStore;
+    this.bookStore = null;
+    this.reopenOnStart = null;
+    this.keptAsIs = null;
+    await book?.close();
     this.composerDraft = '';
     this.setAgent({ files: [] });
     this.code.reset();
@@ -3204,7 +3266,82 @@ export class Studio {
   attachEditor(editor: monaco.editor.IStandaloneCodeEditor) {
     this.editor = editor;
     const active = this.state.active && this.docs?.get(this.state.active);
-    if (active) editor.setModel(active.model);
+    if (active) {
+      editor.setModel(active.model);
+      const view = this.viewStates.get(active.path);
+      if (view) editor.restoreViewState(view);
+    }
+    // Where the cursor and the scroll are: kept with the book as they change.
+    editor.onDidChangeCursorSelection(() => this.scheduleViewSave());
+    editor.onDidScrollChange(() => this.scheduleViewSave());
+  }
+
+  /** The tabs are being opened as the book was left: what's kept of them waits until they all are. */
+  private restoringTabs = false;
+  private viewTimer: number | undefined;
+
+  private scheduleViewSave() {
+    if (!this.bookStore || this.viewTimer !== undefined) return;
+    this.viewTimer = window.setTimeout(() => {
+      this.viewTimer = undefined;
+      this.keepViews();
+    }, 500);
+  }
+
+  /** The tabs, the one in front, and each open file's cursor, selection and scroll (the editor's as it is now): kept with the book. */
+  private keepViews() {
+    const book = this.bookStore;
+    if (!book || this.restoringTabs || book.root !== this.state.workspace?.root) return;
+    const { active } = this.state;
+    const doc = active ? this.docs?.get(active) : undefined;
+    if (this.editor && doc && this.editor.getModel() === doc.model) this.viewStates.set(doc.path, this.editor.saveViewState());
+    const tabs = fileTabs(this.state.tabs);
+    const views = Object.fromEntries(tabs.flatMap((t) => (this.viewStates.get(t) ? [[t, this.viewStates.get(t)]] : [])));
+    book.updateSession({ tabs, active, views });
+  }
+
+  /** A file's unsaved text, kept with the book a moment after it changes (book-state.ts); once it's saved, no longer. */
+  private keepUnsaved(path: string, delay?: number) {
+    const docs = this.docs;
+    this.bookStore?.keepUnsaved(
+      path,
+      () => {
+        const unsaved = docs?.unsavedOf(path);
+        return unsaved ? { path, ...unsaved, at: Date.now() } : null;
+      },
+      delay,
+    );
+  }
+
+  /**
+   * What was typed and not saved when the book was last open (it quit,
+   * crashed, or the Mac went down): back in its files, as unsaved changes,
+   * each in a tab. A file gone from the book keeps its text kept.
+   */
+  private async restoreUnsaved(unsaved: readonly UnsavedText[], files: readonly string[]) {
+    const back: string[] = [];
+    for (const u of unsaved) {
+      const docs = this.docs;
+      if (!docs || !files.includes(u.path)) continue;
+      try {
+        if (!this.state.tabs.includes(u.path)) await this.openFile(u.path, { activate: false });
+        if (await docs.restoreUnsaved(u.path, u)) back.push(u.path);
+        // Kept again as it is now (or not at all, if it's what's on disk).
+        this.keepUnsaved(u.path, 0);
+      } catch (e) {
+        console.warn(`restoring the unsaved text of ${u.path}`, e);
+      }
+    }
+    if (back.length) this.toast(`Your unsaved changes to ${back.map((p) => p.slice(p.lastIndexOf('/') + 1)).join(', ')} are back, as you left them.`);
+  }
+
+  /** What Foreword kept of a book in the page's storage before it kept the book's files (book-state.ts), and an older Foreword still does. */
+  private keptBefore(root: string): { session: Partial<BookSession>; tasks: TaskRecord[] } {
+    const tabs = readJson<{ tabs?: string[]; active?: string | null }>(tabsKey(root));
+    return {
+      session: { tabs: tabs?.tabs ?? [], active: tabs?.active ?? null, previewPlace: readJson<Record<string, PreviewPlace>>(previewPlaceKey(root)) ?? {}, previewChapter: readJson<string>(previewChapterKey(root)) },
+      tasks: readTaskRecords(readJson(`studio.tasks:${root}`)),
+    };
   }
 
   async openFile(path: string, { activate = true } = {}) {
@@ -3433,7 +3570,11 @@ export class Studio {
       // A "what changed" tab edits it too: the text stays open there, as it is on disk.
       if (this.state.dirty[path]) await this.docs?.reload(path);
       this.diffDocs.add(path);
-    } else this.docs?.close(path);
+    } else {
+      this.docs?.close(path);
+      // Its unsaved changes discarded: not kept either.
+      this.keepUnsaved(path, 0);
+    }
     this.viewStates.delete(path);
     this.closedTabs = [...this.closedTabs.filter((p) => p !== path), path].slice(-30);
     this.store.set((s) => {
@@ -3541,7 +3682,8 @@ export class Studio {
 
   private persistTabs() {
     const root = this.state.workspace?.root;
-    if (root) writeJson(tabsKey(root), { tabs: fileTabs(this.state.tabs), active: this.state.active });
+    if (root && !this.restoringTabs) writeJson(tabsKey(root), { tabs: fileTabs(this.state.tabs), active: this.state.active });
+    this.keepViews();
   }
 
   /** `typing`: the cursor moved with an edit (typing, paste, undo), not a click or an arrow key. */
@@ -3864,7 +4006,7 @@ export class Studio {
     this.entryText = chapter?.text ?? book?.text ?? '';
     // Nothing typeset yet: the page count is the last document's (the book's, a chapter's, the cover's) until it is.
     this.store.set((st) => ({ previewChapter: chapter?.chapter ?? null, compile: { status: 'idle', words: st.compile.words } }));
-    if (chapter) writeJson(previewChapterKey(ws.root), chapter.chapter);
+    if (chapter) this.keepPreviewChapter(ws.root, chapter.chapter);
     const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : (chapter?.path ?? book?.path ?? ws.entry);
     try {
       const project = this.state.project.settings;
@@ -3943,14 +4085,23 @@ export class Studio {
   /** Where the preview was in what it shows now (the book, its cover, a chapter), if it's been shown. */
   private previewPlace(): PreviewPlace | null {
     const root = this.state.workspace?.root;
-    return (root && readJson<Record<string, PreviewPlace>>(previewPlaceKey(root))?.[this.placeKey()]) || null;
+    if (!root) return null;
+    const places = this.bookStore?.root === root ? this.bookStore.session.previewPlace : readJson<Record<string, PreviewPlace>>(previewPlaceKey(root));
+    return places?.[this.placeKey()] ?? null;
   }
 
   private rememberPreviewPlace({ page, offset }: { page?: number; offset?: number }) {
     const root = this.state.workspace?.root;
     if (!root || !Number.isInteger(page) || page! < 0 || typeof offset !== 'number' || !(offset >= 0 && offset <= 1)) return;
-    const saved = readJson<Record<string, PreviewPlace>>(previewPlaceKey(root)) ?? {};
-    writeJson(previewPlaceKey(root), { ...saved, [this.placeKey()]: { page, offset } });
+    const place = { [this.placeKey()]: { page: page!, offset } };
+    writeJson(previewPlaceKey(root), { ...readJson<Record<string, PreviewPlace>>(previewPlaceKey(root)), ...place });
+    if (this.bookStore?.root === root) this.bookStore.updateSession({ previewPlace: { ...this.bookStore.session.previewPlace, ...place } });
+  }
+
+  /** The chapter the preview shows alone now: kept for when it shows one next (and the book opens again). */
+  private keepPreviewChapter(root: string, chapter: string) {
+    writeJson(previewChapterKey(root), chapter);
+    if (this.bookStore?.root === root) this.bookStore.updateSession({ previewChapter: chapter });
   }
 
   async restartTypst() {
@@ -4022,7 +4173,8 @@ export class Studio {
     const root = this.typstRoot();
     const active = this.state.active ? chapterOf(this.state.active, book.chapters, book.read, root) : null;
     const first = book.chapters.find((c) => chapterNumber(c, this.state.names) != null) ?? book.chapters[0];
-    const chapter = [active, this.state.previewChapter, readJson<string>(previewChapterKey(ws.root)), first].find((c): c is string => !!c && book.chapters.includes(c))!;
+    const last = (this.bookStore?.root === ws.root ? this.bookStore.session.previewChapter : null) ?? readJson<string>(previewChapterKey(ws.root));
+    const chapter = [active, this.state.previewChapter, last, first].find((c): c is string => !!c && book.chapters.includes(c))!;
     // References out of the chapter read as the whole book has them, once it's typeset for them again if a file outside it changed.
     const numbers = this.numbersOf(ws.root);
     const mine = new Set(includeTree(chapter, book.read, root));
@@ -4132,7 +4284,7 @@ export class Studio {
     if (next.chapter === this.state.previewChapter) return;
     // Its page count comes when it's typeset; until then it would be the last chapter's.
     this.store.set((st) => ({ previewChapter: next.chapter, compile: { ...st.compile, pages: undefined } }));
-    writeJson(previewChapterKey(this.state.workspace!.root), next.chapter);
+    this.keepPreviewChapter(this.state.workspace!.root, next.chapter);
     // Into the new chapter once it's typeset, where the editor is.
     await this.nextCompile(10_000);
     void this.syncPreviewToCursor();
@@ -4338,6 +4490,10 @@ export class Studio {
       const open = this.openOnStart;
       this.openOnStart = null;
       if (open && this.agent === agent) await this.switchTask(open);
+      // The task shown when the book was last open (showKeptTask): its conversation, opened again, unless the author has moved on.
+      const again = this.reopenOnStart;
+      this.reopenOnStart = null;
+      if (again && this.agent === agent && this.state.agent.taskId === again && !this.state.agent.sessionId) await this.switchTask(again, { again: true });
     } catch (e) {
       if (this.agent !== agent) return;
       this.setAgent({ status: 'error', error: errorMessage(e), signedOut: isSignedOut(e), notInstalled: isNotInstalled(e), signingIn: false });
@@ -4820,6 +4976,28 @@ export class Studio {
   private resumeOnStart: string | null = null;
   /** The task to open once the assistant that has its chat has started (switchTask). */
   private openOnStart: string | null = null;
+  /** The task shown (its chat as kept) when the book opened as it was left: its conversation opens again once the assistant has started. */
+  private reopenOnStart: string | null = null;
+  /** The task whose chat is shown just as it's kept, until its conversation opens: not kept again meanwhile. */
+  private keptAsIs: string | null = null;
+
+  /**
+   * The task the chat showed when the book was last open, at once, as
+   * Foreword kept it; its conversation with the assistant opens again once
+   * that has started (startAgent). One whose chat only an assistant has opens
+   * then.
+   */
+  private showKeptTask(taskId: string, kept: KeptChat | null) {
+    if (!kept) {
+      this.openOnStart = taskId;
+      return;
+    }
+    this.reopenOnStart = taskId;
+    this.keptAsIs = taskId;
+    const record = this.taskRecord(taskId);
+    const title = record?.title ? stockTitle(record.title) : record?.asked ? clip(record.asked, 60) : null;
+    this.store.set((s) => ({ agent: { ...s.agent, taskId, sessionId: null, title, items: keptItems(kept.items), contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
+  }
 
   /** A new chat (or another task shown): nothing to hand over. */
   private forgetHandover() {
@@ -5205,6 +5383,7 @@ export class Studio {
   }
 
   newSession() {
+    this.reopenOnStart = null;
     this.leaveTask();
     this.store.set((s) => ({ agent: { ...s.agent, taskId: null, sessionId: null, title: null, items: [], contextTokens: null, queued: [], running: false, activity: null, stopped: false } }));
     this.setAiReads([]);
@@ -5375,7 +5554,8 @@ export class Studio {
     this.chatTimer = undefined;
     const { taskId, items, running } = this.state.agent;
     const key = this.tasksKey();
-    if (!taskId || !this.state.workspace || !items.some((it) => it.kind === 'user')) return;
+    // Shown as it's kept (showKeptTask): kept as it is, with whether a turn was going then.
+    if (!taskId || taskId === this.keptAsIs || !this.state.workspace || !items.some((it) => it.kind === 'user')) return;
     ipc.taskChatWrite(taskId, JSON.stringify({ items, running })).then(
       () => {
         if (this.tasksKey() === key && !this.taskRecord(taskId)?.kept) this.updateTaskRecord(taskId, { kept: true });
@@ -5389,7 +5569,15 @@ export class Studio {
   }
 
   private taskRecords(): TaskRecord[] {
-    return readTaskRecords(readJson(this.tasksKey()));
+    const book = this.bookStore;
+    return book && book.root === this.state.workspace?.root ? book.tasks : readTaskRecords(readJson(this.tasksKey()));
+  }
+
+  /** What's remembered of the book's tasks: in its file (book-state.ts), and in the page's storage, where an older Foreword looks. */
+  private keepTaskRecords(records: TaskRecord[]) {
+    writeJson(this.tasksKey(), records);
+    const book = this.bookStore;
+    if (book && book.root === this.state.workspace?.root) book.setTasks(records);
   }
 
   /** Change what's remembered of a task, keeping the rest, in the list as well. */
@@ -5399,7 +5587,7 @@ export class Studio {
     const change = typeof patch === 'function' ? patch(old) : patch;
     if (!Object.keys(change).length) return;
     const next: TaskRecord = { ...old, ...change, id: taskId };
-    writeJson(this.tasksKey(), [...records.filter((r) => r.id !== taskId), next].slice(-TASK_RECORDS));
+    this.keepTaskRecords([...records.filter((r) => r.id !== taskId), next].slice(-TASK_RECORDS));
     const assistant = this.state.settings.assistant;
     this.setAgent((a) => ({ tasks: a.tasks.map((t) => (t.id === taskId ? { ...t, ...next, title: t.title, updated: next.updated ?? t.updated, sessionId: next.threads?.[assistant]?.sessionId ?? t.sessionId } : t)) }));
   }
@@ -5444,7 +5632,7 @@ export class Studio {
     // Another book or assistant meanwhile: its own list says.
     if (this.state.workspace?.root !== root || this.state.settings.assistant !== assistant) return;
     const { records, tasks, changed } = mergeTasks(this.taskRecords(), listed, assistant);
-    if (changed) writeJson(this.tasksKey(), records.slice(-TASK_RECORDS));
+    if (changed) this.keepTaskRecords(records.slice(-TASK_RECORDS));
     this.setAgent({ tasks: tasks.slice(0, TASK_LIMIT).map((t) => ({ ...t, title: t.title ? stockTitle(t.title) : t.asked ? clip(t.asked, 60) : 'Untitled task' })) });
   }
 
@@ -5494,12 +5682,14 @@ export class Studio {
    * assistant), the next message starts one and takes the chat so far, as when
    * the chat goes over to another assistant. One at work carries on in the
    * background. A task from before Foreword kept chats opens with the
-   * assistant that has it.
+   * assistant that has it. `again`: the task shown (as kept, when the book
+   * opened as it was left), with its conversation now.
    */
-  async switchTask(taskId: string) {
+  async switchTask(taskId: string, { again = false } = {}) {
     const agent = this.agent;
     const assistant = this.agentKind;
-    if (!agent || !assistant || taskId === this.state.agent.taskId) return;
+    if (!agent || !assistant || (taskId === this.state.agent.taskId && !again)) return;
+    if (!again) this.reopenOnStart = null;
     const record = this.taskRecord(taskId);
     // From before tasks could change assistant: its id is this assistant's conversation.
     const thread = record?.threads ? record.threads[assistant] : { sessionId: taskId, seen: null };
@@ -5526,6 +5716,7 @@ export class Studio {
       const [active, permissions] = sessionId ? await Promise.all([agent.activeSessions().catch(() => new Set<string>()), agent.pendingPermissions(sessionId).catch(() => [])]) : [new Set<string>(), []];
       if (this.agent !== agent) return;
       this.leaveTask();
+      this.keptAsIs = null;
       const task = this.state.agent.tasks.find((t) => t.id === taskId);
       const root = this.state.workspace?.root ?? '';
       // This assistant had its latest turn: its own record of it, if that went on after the chat was kept.
@@ -5538,6 +5729,9 @@ export class Studio {
       this.handover = kept && turns && !(sessionId && latest) ? { after: sessionId ? (thread?.seen ?? null) : null } : null;
       const running = !!sessionId && active.has(sessionId);
       const bg = sessionId ? this.state.agent.background[sessionId] : undefined;
+      // Kept while at work, and neither at work now nor seen to finish (in the background): Foreword closed, or the Mac went down, mid-turn.
+      const cut = !!kept?.running && !running && !bg && items.at(-1)?.kind !== 'assistant';
+      if (cut) items.push({ kind: 'notice', id: uid('n'), tone: 'info', text: `Foreword closed while this task was at work, so it stopped here.${sessionId ? ' Resume carries on.' : ''}` });
       this.turnMessage = (sessionId && this.turnMessages.get(sessionId)) || '';
       // Not setAgent: leaving a running conversation isn't the end of its turn.
       this.store.set((s) => {
@@ -5558,7 +5752,8 @@ export class Studio {
             running,
             activity: running ? { phase: 'waiting', since: bg?.since ?? Date.now() } : null,
             background,
-            stopped: false,
+            // Cut off: as if stopped, so Send with nothing typed resumes it.
+            stopped: cut && !!sessionId,
           },
         };
       });

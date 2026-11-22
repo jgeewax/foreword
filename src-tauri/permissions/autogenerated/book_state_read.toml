@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-book-state-read"
+description = "Enables the book_state_read command without any pre-configured scope."
+commands.allow = ["book_state_read"]
+
+[[permission]]
+identifier = "deny-book-state-read"
+description = "Denies the book_state_read command without any pre-configured scope."
+commands.deny = ["book_state_read"]

@@ -9835,8 +9835,7 @@ async function providerSwitchChecks() {
     studio.newSession();
     await sleep(1500);
     await ipc.taskChatWrite(oldTask, 'not a chat');
-    const key = `studio.tasks:${studio.state.workspace?.root}`;
-    localStorage.setItem(key, JSON.stringify(records().map((r) => (r.id === oldTask ? { ...r, kept: undefined } : r))));
+    (studio as any).updateTaskRecord(oldTask, { kept: undefined });
 
     // Codex, from a blank chat: every task listed, and the first opens in Codex's own conversation, which hears the Claude turn it missed.
     studio.switchAssistant('codex');
@@ -10954,6 +10953,11 @@ export async function runSelftest(launch: LaunchOptions) {
     log(`preview ${studio.state.preview.status}`);
     if (studio.state.preview.status === 'error') throw new Error(`preview: ${studio.state.preview.error}`);
 
+    // Killed mid-work and opened again: the same as never having quit (book-state.ts). Two runs on one copy of the
+    // book: crash-write, which the script running it kills (kill -9) once it logs "crash-ready", then crash-check.
+    if (only?.includes('crash-write')) await crashWrite();
+    if (only?.includes('crash-check')) result.crashCheck = await crashCheck();
+
     // Open a chapter from the middle of the book.
     const entry = (await ipc.fsRead(ws.entry!)).text;
     const includes = [...entry.matchAll(/#include\s+"([^"]+)"/g)].map((m) => m[1]);
@@ -11334,6 +11338,91 @@ export async function runSelftest(launch: LaunchOptions) {
   result.finishedAt = new Date().toISOString();
   log(`finish ok=${result.ok} ${result.error ?? ''}`);
   await ipc.selftestFinish(result);
+}
+
+// ---- quit mid-work, opened again ------------------------------------------------------------
+
+const CRASH = { a: 'chapters/ch1-vectors.typ', b: 'chapters/ch2-eigenvalues.typ', task: 'selftest-crash-task', typed: 'UNSAVED-A ', draft: 'Half-written message' };
+
+/**
+ * The book left mid-work: a chapter with unsaved words, another in front with
+ * a word selected and scrolled down, the Search view, a message half written,
+ * the preview scrolled, and a task at work in the chat. Then, once it's all
+ * kept, it waits to be killed.
+ */
+async function crashWrite(): Promise<never> {
+  const editor = studio.editor!;
+  await studio.openFile(CRASH.a);
+  editor.setPosition({ lineNumber: 3, column: 1 });
+  editor.trigger('selftest', 'type', { text: CRASH.typed });
+  await studio.openFile(CRASH.b);
+  editor.setSelection(new monaco.Range(40, 5, 40, 9));
+  editor.setScrollTop(300);
+  studio.showSidebar('search');
+  studio.composerDraft = CRASH.draft;
+  studio.events.emit('fill-composer', CRASH.draft, false);
+  await scrollPreview('c.scrollHeight / 2');
+  await sleep(1500);
+  (studio as any).updateTaskRecord(CRASH.task, { asked: 'Tighten chapter two', title: 'Tighten chapter two', updated: Date.now(), turns: 1 });
+  studio.store.set((s) => ({
+    agent: {
+      ...s.agent,
+      taskId: CRASH.task,
+      running: true,
+      items: [
+        { kind: 'user', id: 'cu1', text: 'Tighten chapter two', attachments: [] },
+        { kind: 'assistant', id: 'ca1', text: 'Reading it first.', done: true },
+        { kind: 'tool', id: 'ct1', name: 'read', summary: CRASH.b, status: 'done', detail: '' },
+      ],
+    },
+  }));
+  await sleep(2500);
+  const left = {
+    active: studio.state.active,
+    selection: editor.getSelection()?.toString(),
+    scrollTop: editor.getScrollTop(),
+    dirty: studio.state.dirty,
+    previewPlace: (studio as any).previewPlace(),
+    preview: await previewState('crash-write', PAGES_JS),
+    items: studio.state.agent.items.length,
+  };
+  log(`crash-expect ${JSON.stringify(left)}`);
+  log('crash-ready');
+  return new Promise<never>(() => {});
+}
+
+/** The book opened again after crashWrite was killed (and a line added to its first chapter on disk meanwhile): as it was left. */
+async function crashCheck() {
+  const out: Record<string, unknown> = {};
+  await waitFor(() => studio.state.active === CRASH.b && !(studio as any).restoringTabs, 20000, 'the tabs as left');
+  const editor = studio.editor!;
+  const text = (path: string) => (studio as any).docs.get(path)?.model.getValue() ?? '';
+  out.tabs = studio.state.tabs;
+  out.active = studio.state.active;
+  out.selection = editor.getSelection()?.toString();
+  out.scrollTop = editor.getScrollTop();
+  out.dirty = studio.state.dirty;
+  out.unsavedBack = text(CRASH.a).includes(CRASH.typed.trim());
+  out.diskChangeMergedIn = text(CRASH.a).includes('ADDED ON DISK AFTER THE CRASH');
+  out.toast = studio.state.toast?.text ?? null;
+  out.sidebar = studio.state.sidebar;
+  out.draft = studio.composerDraft;
+  out.composerText = document.querySelector<HTMLTextAreaElement>('.agent-pane textarea')?.value ?? null;
+  const chat = () => ({ status: studio.state.agent.status, taskId: studio.state.agent.taskId, items: studio.state.agent.items.map((it) => `${it.kind}:${'text' in it ? it.text : 'summary' in it ? it.summary : ''}`), stopped: studio.state.agent.stopped });
+  out.chatAtOnce = chat();
+  // Its conversation opened again once the assistant has started (it has none: the chat as kept), and said to be cut off.
+  await waitFor(() => studio.state.agent.status !== 'starting', 60000, 'the assistant').catch(() => {});
+  await sleep(2000);
+  out.chatOnceStarted = chat();
+  await studio.loadTasks();
+  out.taskListed = studio.state.agent.tasks.some((t) => t.id === CRASH.task);
+  out.previewPlace = (studio as any).previewPlace();
+  await sleep(2000);
+  out.preview = await previewState('crash-check', PAGES_JS);
+  // Leave nothing unsaved kept for the next run.
+  await (studio as any).docs.reload(CRASH.a);
+  await sleep(300);
+  return out;
 }
 
 async function agentTurn(chapter: string, line: number) {

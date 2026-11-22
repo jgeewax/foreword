@@ -124,6 +124,10 @@
     "allow-history-changes",
     "allow-history-file",
     "allow-task-chat-read",
-    "allow-task-chat-write"
+    "allow-task-chat-write",
+    "allow-book-state-read",
+    "allow-book-state-write",
+    "allow-book-state-remove",
+    "allow-book-state-list"
   ]
 }

@@ -291,6 +291,45 @@ export class Documents {
     for (const doc of this.docs.values()) doc.seenText = doc.diskText;
   }
 
+  // ---- unsaved text kept across a crash (app/book-state.ts) ----------------------------
+
+  /** What's typed in the file and not saved, and the disk text it was typed over; null if nothing is. */
+  unsavedOf(path: string): { text: string; diskText: string; diskHash: string | null } | null {
+    const doc = this.docs.get(path);
+    if (!doc || doc.model.isDisposed() || !this.isDirty(doc)) return null;
+    return { text: doc.model.getValue(), diskText: doc.diskText, diskHash: doc.diskHash };
+  }
+
+  /**
+   * Text typed and not saved when the book was last open (it quit, crashed,
+   * or the Mac went down), back in the file's buffer as unsaved edits, in an
+   * undo step of its own. If the file has changed on disk since, that change
+   * is merged in as if it had come while the buffer was open: nothing either
+   * side wrote is lost. True if the buffer has unsaved edits now.
+   */
+  async restoreUnsaved(path: string, kept: { text: string; diskText: string; diskHash: string | null }): Promise<boolean> {
+    const doc = await this.open(path);
+    return this.exclusive(doc, async () => {
+      const { model } = doc;
+      if (model.isDisposed()) return false;
+      const buffer = model.getValue();
+      const disk = { text: doc.diskText, hash: doc.diskHash };
+      if (kept.text !== buffer) {
+        model.pushStackElement();
+        this.replaceText(model, buffer, kept.text);
+        model.pushStackElement();
+      }
+      if (disk.hash !== kept.diskHash && disk.hash !== null) {
+        doc.diskText = kept.diskText;
+        doc.seenText = kept.diskText;
+        doc.diskHash = kept.diskHash;
+        await this.merge(doc, disk.text, disk.hash);
+      }
+      this.updateDirty(doc);
+      return this.isDirty(doc);
+    });
+  }
+
   // ---- questions: passages a merge couldn't settle ------------------------------------
 
   private publish(doc: Doc) {

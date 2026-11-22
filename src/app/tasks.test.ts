@@ -184,4 +184,13 @@ describe('tasks across assistants', () => {
     // Their record doesn't have the message (another assistant's turn): as kept.
     expect(withLatestTurn(kept, [user('m1', 'Hi')]).map((i) => i.id)).toEqual(['u1', 'a1', 'u2', 'a2:0']);
   });
+
+  it('keeps what it had of a turn that Foreword closed in the middle of, when the assistant wrote down less', () => {
+    const tool: ChatItem = { kind: 'tool', id: 'k:t', name: 'read', summary: 'two.typ', status: 'done', detail: '' };
+    const kept = [user('u1', 'Fix chapter 2'), reply('a1:0', 'Reading'), tool, reply('a1:1', 'Tightening the first parag')];
+    // Its record stops at the first words: what was kept (the tool, the reply so far) stays.
+    expect(withLatestTurn(kept, [user('m1', 'Fix chapter 2'), reply('m2:0', 'Reading')]).map((i) => i.id)).toEqual(['u1', 'a1:0', 'k:t', 'a1:1']);
+    // As far as what was kept, or further: theirs.
+    expect(withLatestTurn(kept, [user('m1', 'Fix chapter 2'), reply('m2:0', 'Reading'), { ...tool, id: 'm2:t' }, reply('m2:1', 'Tightened it.')]).map((i) => i.id)).toEqual(['u1', 'm2:0', 'm2:t', 'm2:1']);
+  });
 });

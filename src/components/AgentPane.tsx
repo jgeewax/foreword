@@ -750,9 +750,9 @@ function Composer() {
   useEffect(() => studio.events.on('focus-composer', () => inputRef.current?.focus()), []);
   useEffect(
     () =>
-      studio.events.on('fill-composer', (t) => {
+      studio.events.on('fill-composer', (t, focus = true) => {
         setText(t);
-        requestAnimationFrame(() => inputRef.current?.focus());
+        if (focus) requestAnimationFrame(() => inputRef.current?.focus());
       }),
     [],
   );
