@@ -12,7 +12,7 @@ import type { ChangeNote } from '../services/agent/change-context';
 import { DEFAULT_EFFORT } from '../services/agent/types';
 import { answerText, isAnswered, isRecommended, questionKind, questionText, withoutRecommended, type QuestionKind } from '../services/agent/questions';
 import { AssistantMenu } from './AssistantMenu';
-import { Icon } from './icons';
+import { FileIcon, Icon } from './icons';
 import { Markdown, MarkdownLine } from './Markdown';
 import { EffortPicker } from './EffortPicker';
 import { ModelPicker } from './ModelPicker';
@@ -25,6 +25,10 @@ import { todoMenu } from './todo-menu';
 import { nearestTodos } from '../app/todos';
 import { carriesFiles, droppedItems, pastedFiles, pastedName } from '../app/attachments';
 import { parseSlash, slashMatches, slashToken, withoutSlash } from '../app/slash';
+import { mentionedPaths, mentionMatches, mentionToken, withMention, type MentionRow } from '../app/mentions';
+import { fileTabs } from '../app/view-tabs';
+import { numberedTitle } from '../app/tool-labels';
+import { Marked } from './QuickOpen';
 import { actionLine, STARTERS, stockAction } from '../app/stock-prompts';
 import type { SourceSelection } from '../editor/selection';
 
@@ -764,8 +768,19 @@ function Composer() {
   const token = slashToken(text, caret);
   const matches = slashMatches(text, caret);
   const [highlight, setHighlight] = useState(0);
-  const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
-  const showSlash = matches.length > 0 && slashDismissed !== text;
+  // Esc closes the list until the text changes.
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const showSlash = matches.length > 0 && dismissed !== text;
+  // "@…": the book's files and folders, for a path in the message (mentions.ts).
+  const mention = token ? null : mentionToken(text, caret);
+  const mentionRows = useMemo(() => {
+    if (!mention) return [];
+    const s = studio.state;
+    const recent = [s.active, ...fileTabs(s.tabs).reverse()].filter((p): p is string => !!p);
+    return mentionMatches(mention.typed, s.workspace?.files ?? [], { recent, title: (p) => numberedTitle(p, s.names) });
+  }, [mention?.typed, mention === null]);
+  const showMention = !showSlash && mentionRows.length > 0 && dismissed !== text;
+  const listed = showSlash ? matches.length : showMention ? mentionRows.length : 0;
   useEffect(() => setHighlight(0), [text, caret]);
   const pickSlash = (name: string) => {
     const cmd = matches.find((c) => c.name === name);
@@ -776,6 +791,13 @@ function Composer() {
       setText(rest.text, rest.caret);
       void studio.runSlash(`/${cmd.name}`);
     } else setText(`/${cmd.name} `);
+    inputRef.current?.focus();
+  };
+  // A file's path goes in the message; a folder's opens it, so the list goes on in it.
+  const pickMention = (row: MentionRow) => {
+    if (!mention) return;
+    const next = withMention(text, mention, row);
+    setText(next.text, next.caret);
     inputRef.current?.focus();
   };
   const send = async (delivery: 'queue' | 'steer' = 'queue') => {
@@ -853,6 +875,7 @@ function Composer() {
           ))}
         </div>
       )}
+      {showMention && <MentionMenu rows={mentionRows} highlight={highlight} onHover={setHighlight} onPick={pickMention} />}
       <div
         className="composer-box"
         onMouseDown={(e) => {
@@ -874,7 +897,8 @@ function Composer() {
             caretAfter.current = null;
             typed(e.target.value, e.target.selectionStart);
           }}
-          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          // Not while a caret set from here waits to be put in place: a select event in the same keypress (⏎ on a list) still has the old one.
+          onSelect={(e) => caretAfter.current === null && setCaret(e.currentTarget.selectionStart)}
           onPaste={(e) => {
             // A screenshot, a copied picture or a file copied in Finder is attached; text pastes as usual.
             const pasted = pastedFiles([...e.clipboardData.files], e.clipboardData.getData('text/plain'));
@@ -883,20 +907,22 @@ function Composer() {
             void studio.attachFiles(pasted.map((f) => (pastedName(f) === f.name ? f : new File([f], pastedName(f), { type: f.type }))));
           }}
           onKeyDown={(e) => {
-            if (showSlash) {
+            if (listed && !e.nativeEvent.isComposing) {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 e.preventDefault();
-                setHighlight((h) => (h + (e.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length);
+                setHighlight((h) => (h + (e.key === 'ArrowDown' ? 1 : -1) + listed) % listed);
                 return;
               }
               if ((e.key === 'Tab' || e.key === 'Enter') && !e.shiftKey) {
                 e.preventDefault();
-                pickSlash(matches[Math.min(highlight, matches.length - 1)].name);
+                const at = Math.min(highlight, listed - 1);
+                if (showSlash) pickSlash(matches[at].name);
+                else pickMention(mentionRows[at]);
                 return;
               }
               if (e.key === 'Escape') {
                 e.preventDefault();
-                setSlashDismissed(text);
+                setDismissed(text);
                 return;
               }
             }
@@ -922,7 +948,7 @@ function Composer() {
           <PinButton />
           <PermissionsMenu />
           <span className="spacer" />
-          <button className="composer-attach" aria-label="Attach files" title="Attach pictures, PDFs or other files (or drop them here, or paste)" onClick={() => void studio.pickFiles()}>
+          <button className="composer-attach" aria-label="Attach files" title="Attach pictures, PDFs or other files (or drop them here, or paste, or type @ for one of the book's)" onClick={() => void studio.pickFiles()}>
             <Icon name="paperclip" size={15} />
           </button>
           {!text && (
@@ -964,6 +990,40 @@ function Composer() {
   );
 }
 
+/** The book's files and folders while "@…" is typed, as ⌘P shows them: a chapter by its heading. */
+function MentionMenu({ rows, highlight, onHover, onPick }: { rows: MentionRow[]; highlight: number; onHover: (i: number) => void; onPick: (row: MentionRow) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+  }, [highlight, rows]);
+  return (
+    <div className="slash-menu mention-menu" role="listbox" aria-label="Files in the book" ref={ref}>
+      {rows.map((r, i) => {
+        const name = `${basename(r.path)}${r.dir ? '/' : ''}`;
+        const nameStart = r.path.length - basename(r.path).length;
+        const folder = r.path.slice(0, Math.max(0, nameStart - 1));
+        const matched = r.inTitle ? [] : r.positions;
+        return (
+          <button
+            key={`${r.path}${r.dir ? '/' : ''}`}
+            role="option"
+            aria-selected={i === highlight}
+            className={i === highlight ? 'active' : ''}
+            title={r.dir ? `${r.path}/` : r.path}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseEnter={() => onHover(i)}
+            onClick={() => onPick(r)}
+          >
+            {r.dir ? <Icon name="folder" size={14} /> : <FileIcon path={r.path} />}
+            <span className="mention-name">{r.title ? <Marked text={r.title} at={r.inTitle ? r.positions : []} /> : <Marked text={name} at={matched.filter((p) => p >= nameStart).map((p) => p - nameStart)} />}</span>
+            <span className="mention-path">{r.title ? <Marked text={r.path} at={matched} /> : <Marked text={folder} at={matched.filter((p) => p < folder.length)} />}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Messages sent while the assistant works: waiting for it, or for its next step. */
 function QueuedMessages() {
   const queued = useStore(studio.store, (s) => s.agent.queued);
@@ -973,7 +1033,9 @@ function QueuedMessages() {
       {queued.map((q) => {
         // A button's request shows as what it asks for, and there's nothing of the author's to edit.
         const action = stockAction(q.text);
-        const attached = q.files?.length ? q.files.map((f) => f.name).join(', ') : '';
+        // Not again those its words name ("@path").
+        const named = mentionedPaths(q.text, q.files ?? []);
+        const attached = (q.files ?? []).filter((f) => !named.has(f.path)).map((f) => f.name).join(', ');
         const words = action ? actionLine(action) : [q.text.trim(), attached && `📎 ${attached}`].filter(Boolean).join(' ');
         return (
           <div key={q.id} className={`queued-item ${q.delivery}`}>

@@ -5138,6 +5138,38 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   sent in Auto keeping Auto and tagged, a follow-up, Continue in chat's
   mode, `/ask` then `/auto`.
 
+### @path in the message box (2026-11-22)
+
+- **As in Claude Code:** typing `@` (at the start, after a space or a bracket)
+  lists the book's files and folders: the open files first, then the top of
+  the book. Matching is ⌘P's fuzzy match, by path or by a chapter's heading
+  (`@eigen` finds "2. Eigenvalues"). Tab or ⏎ picks, Esc closes. A folder
+  picked writes `@chapters/` and the list goes on inside it; a file writes
+  `@chapters/two.typ` and a space. A path with spaces is quoted
+  (`@"my notes/to do.md"`). A query that matches only a file's folders ranks
+  the folder first, even over an open file in it.
+- **The words keep the path; the file goes with the message.** On send,
+  every `@path` that is a file or folder of the book becomes an attached
+  file, the same as one dragged from the file tree (`withMentioned` in
+  studio.ts, via `attach_paths`). The assistant gets the `<attachment>`
+  line, and a picture goes in the message itself, so every connector gets
+  it without having to expand `@` itself. Resolution happens at send, not
+  at pick, so a path typed by hand works, and one deleted from the words
+  doesn't go.
+- **Typst labels are safe:** `@fig-plot` or `@sec:intro` isn't a book path,
+  so it's just words and nothing is attached. The list only opens when
+  something matches, and ':' or '-' rarely match a path.
+- **In the chat:** the sent `@path` is a link that opens the file, so the
+  chip row leaves out files the words name. A picture still shows its
+  thumbnail. Queued messages and Edit on one do the same (the box gets the
+  words back, not chips as well).
+- **Caret trap:** ⏎ on the list made React fire `onSelect` in the same
+  keypress with the caret from before the pick, so a folder picked closed the
+  list. The box now ignores `onSelect` while a caret it set is pending.
+- **Self-test** `mentions`: the list bare, by folder, by heading, mid-message,
+  Esc, a label, an email; with Claude Code (Haiku), a note's code word read
+  through `@memo.md`, and the link with no chip, also after reopening the task.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

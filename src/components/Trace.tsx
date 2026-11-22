@@ -26,7 +26,7 @@ import { answerOf, answerText as answerPlainText, markedTerms, markPieces, prose
 import { parseOptions } from '../services/agent/options-mode';
 import { answerText, questionText, splitQuestions } from '../services/agent/questions';
 import { AssistantMark } from './AssistantSettings';
-import { AttachedFiles } from './AttachedFiles';
+import { AttachedFiles, filesBelow, MentionText } from './AttachedFiles';
 import { CommandPermission, RuleChip, scopeWords } from './CommandPermission';
 import { FileIcon, Icon, type IconName } from './icons';
 import { ChartBlock } from './Chart';
@@ -1059,8 +1059,16 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
           </button>
         )}
       </div>
-      {action ? <ActionStep action={action} /> : item.text.trim() && <div className="msg-text">{item.text}</div>}
-      {item.files && <AttachedFiles files={item.files} />}
+      {action ? (
+        <ActionStep action={action} />
+      ) : (
+        item.text.trim() && (
+          <div className="msg-text">
+            <MentionText text={item.text} files={item.files ?? []} />
+          </div>
+        )
+      )}
+      {item.files && <AttachedFiles files={action ? item.files : filesBelow(item.text, item.files)} />}
       {chips.length > 0 && (
         <div className="chips">
           {chips.map((a) => {

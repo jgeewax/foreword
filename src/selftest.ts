@@ -7614,6 +7614,127 @@ async function attachmentChecks(withAgent: boolean) {
   return out;
 }
 
+/**
+ * "@path" in the message box: "@" lists the book's files (the open one
+ * first), a folder picked opens it, a file picked goes in the words with a
+ * space after, a chapter is found by its heading, Esc closes the list, and a
+ * Typst label or an email lists nothing. With an agent (Claude Code, Haiku):
+ * the file goes with the message, the reply knows what's in it, and the
+ * message's "@path" is a link with no chip besides, also once the task is
+ * opened again. localStorage keys the group changed are put back.
+ */
+async function mentionChecks(withAgent: boolean) {
+  const out: Record<string, unknown> = {};
+  const keysBefore = new Map(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)]));
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const box = document.querySelector<HTMLTextAreaElement>('.composer textarea')!;
+  const type = async (value: string, caret = value.length) => {
+    box.focus();
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, value);
+    box.setSelectionRange(caret, caret);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+  };
+  // Only with the list open: ⏎ in the box otherwise sends.
+  const key = async (k: string) => {
+    if (!document.querySelector('.mention-menu')) return false;
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    await sleep(150);
+    return true;
+  };
+  const rows = () => [...document.querySelectorAll('.mention-menu button')].map((b) => `${b.querySelector('.mention-name')?.textContent} | ${b.querySelector('.mention-path')?.textContent}`);
+  const active = () => document.querySelector('.mention-menu button.active .mention-name')?.textContent;
+  try {
+    studio.newSession();
+    await studio.openFile('chapters/ch2-eigenvalues.typ');
+    await sleep(300);
+    await type('@');
+    out.bare = rows();
+    out.snapshotBare = await snap('mention-bare');
+    await type('Is @chap');
+    out.typed = rows();
+    await key('Enter');
+    out.folder = { box: box.value, rows: rows() };
+    await key('ArrowDown');
+    out.highlighted = active();
+    await key('Enter');
+    out.file = { box: box.value, caret: box.selectionStart, menu: !!document.querySelector('.mention-menu') };
+    // Mid-message, by a chapter's heading.
+    await type('Compare @eigen with the other', 'Compare @eigen'.length);
+    out.byTitle = rows();
+    out.snapshotTitle = await snap('mention-title');
+    await key('Tab');
+    out.mid = { box: box.value, caret: box.selectionStart };
+    // Esc closes it until the text changes; a Typst label and an email list nothing.
+    await type('see @fig');
+    const listed = rows();
+    await key('Escape');
+    out.escape = { listed, after: rows().length, box: box.value };
+    await type('fix @fig-span');
+    out.label = rows().length;
+    await type('mail jo@exam');
+    out.email = rows().length;
+    await type('');
+
+    if (withAgent) {
+      studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+      await sleep(500);
+      await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+      if (studio.state.agent.status !== 'ready') return { ...out, error: studio.state.agent.error };
+      const haiku = studio.state.agent.models.find((m) => m.id === 'haiku');
+      if (haiku) await studio.selectModel(haiku);
+      // A note with a word the model can't guess, read only if the file reaches it.
+      if (!studio.state.workspace?.files.includes('memo.md')) await ipc.fsWrite('memo.md', 'Notes for later.\n\nThe code word is HERON 4471.\n', null);
+      await waitFor(() => studio.state.workspace?.files.includes('memo.md'), 10000, 'memo in the file list').catch(() => {});
+      studio.newSession();
+      await sleep(300);
+      // Typed and picked as the author would, then sent with the button.
+      await type('What is the code word in @memo');
+      out.memoRows = rows();
+      await key('Enter');
+      await type(`${box.value}? Reply with just the code word.`);
+      out.sent = box.value;
+      document.querySelector<HTMLButtonElement>('.composer .send-button.primary')?.click();
+      const waited: string[] = [];
+      const reply = await settle(waited);
+      const user = studio.state.agent.items.find((i) => i.kind === 'user');
+      out.turn = {
+        reply: reply.slice(0, 300),
+        knew: /HERON\s*4471/i.test(reply),
+        waited,
+        kinds: studio.state.agent.items.map((i) => (i.kind === 'tool' ? `tool:${(i as any).name} ${(i as any).summary ?? ''}` : i.kind)),
+        userFiles: user?.kind === 'user' ? user.files?.map((f) => `${f.path} ${f.size}`) : null,
+        mode: user?.kind === 'user' ? user.mode : null,
+      };
+      const shown = () => ({
+        mentions: [...document.querySelectorAll('.msg.user .msg-text .mention')].map((e) => `${e.textContent} (${e.getAttribute('title')})`),
+        chips: document.querySelectorAll('.msg.user .attached-files > *').length,
+        text: document.querySelector('.msg.user .msg-text')?.textContent,
+      });
+      out.message = shown();
+      out.snapshotMessage = await snap('mention-message');
+      // Opened again (the chat as kept): still a link, still no chip.
+      const taskId = studio.state.agent.taskId;
+      studio.newSession();
+      await sleep(300);
+      if (taskId) await studio.switchTask(taskId);
+      await waitFor(() => document.querySelector('.msg.user .msg-text'), 10000, 'message after reopening').catch(() => {});
+      out.reopened = shown();
+      // A click on it opens the note.
+      await studio.openFile('main.typ');
+      document.querySelector<HTMLButtonElement>('.msg.user .msg-text .mention')?.click();
+      await sleep(400);
+      out.clickOpened = studio.state.active;
+    }
+  } finally {
+    await type('').catch(() => {});
+    if (withAgent) studio.updateSettings(saved, { write: false });
+    for (const k of Object.keys(localStorage)) if (!keysBefore.has(k)) localStorage.removeItem(k);
+    for (const [k, v] of keysBefore) if (localStorage.getItem(k) !== v && v !== null) localStorage.setItem(k, v);
+  }
+  return out;
+}
+
 /** What changed draws the formulas an edit changed (the chapter is put back). */
 async function mathDiffChecks() {
   const out: Record<string, unknown> = {};
@@ -11355,6 +11476,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('menubar')) result.menubar = await menuBarChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('sentences')) result.sentences = await sentencesChecks();
     if (launch.selftestEdits && want('attachments')) result.attachments = await attachmentChecks(!!launch.selftestAgent);
+    if (want('mentions')) result.mentions = await mentionChecks(!!(launch.selftestAgent && launch.selftestEdits));
     if (launch.selftestAgent && want('readtools')) result.readtools = await readToolsChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('authoredits')) result.authoredits = await authorEditsChecks();
     if (launch.selftestAgent && launch.selftestEdits && want('mathchat')) result.mathchat = await mathChatChecks();

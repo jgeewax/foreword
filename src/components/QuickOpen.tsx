@@ -9,7 +9,7 @@ import { useStore } from '../lib/store';
 type Row = { path: string; title?: string; score: number; positions: number[]; inTitle: boolean };
 
 /** The matched characters in bold. */
-function Marked({ text, at }: { text: string; at: number[] }) {
+export function Marked({ text, at }: { text: string; at: number[] }) {
   const set = new Set(at);
   return (
     <>

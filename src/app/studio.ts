@@ -106,6 +106,7 @@ import { describePermissions, onlyLooks, PRESETS, sessionRules, type PermissionR
 import { commandPermissionRules, ruleKey, rulesUsed, type CommandRule, type RuleEffect, type RuleScope } from '../services/agent/command-rules';
 import { decide } from '../services/agent/acp-events';
 import { claudeRules, codexRules, type OwnRule } from '../services/agent/assistant-rules';
+import { mentionedEntries, mentionedPaths } from './mentions';
 import { parseSlash, PERMISSION_WORDS, SLASH_COMMANDS } from './slash';
 import { BAR_MODE, barMessage, optionsAskedFor, type BarKind } from './selection-bar';
 import { directionOptionsPrompt, directionWritePrompt, fixErrorPrompt, mergePrompt, messageLine, moreLikePrompt, OPTIONS_AGAIN_PROMPT, stockAction, stockTitle } from './stock-prompts';
@@ -5998,6 +5999,14 @@ export class Studio {
     this.setAgent((a) => ({ files: a.files.filter((f) => f.path !== path) }));
   }
 
+  /** The message box's files, then the book's files and folders the words name with "@" (mentions.ts), each once. One gone since is left out. */
+  private async withMentioned(text: string, files: readonly AttachedFile[]): Promise<AttachedFile[]> {
+    const named = mentionedEntries(text, this.state.workspace?.files ?? []).filter((e) => !files.some((f) => f.path === e.path));
+    if (!named.length) return [...files];
+    const found = await Promise.all(named.map((e) => ipc.attachPaths([this.absolutePath(e.path)]).catch(() => [] as AttachedFile[])));
+    return [...files, ...found.flat().filter((f, i, all) => !files.some((x) => x.path === f.path) && all.findIndex((x) => x.path === f.path) === i)];
+  }
+
   /** Open an attached file: a picture or a PDF in Preview, text in the editor, anything else (or a folder) in Finder. */
   openAttachment(f: AttachedFile) {
     const mime = mimeOf(f.name);
@@ -6013,8 +6022,8 @@ export class Studio {
     const { agent, docs } = this;
     const state = this.state.agent;
     // Files can go on their own, with no words.
-    const files = given ?? state.files;
-    if (!agent || state.status !== 'ready' || (!text.trim() && !files.length)) return false;
+    const boxFiles = given ?? state.files;
+    if (!agent || state.status !== 'ready' || (!text.trim() && !boxFiles.length)) return false;
     // While a turn runs, the message waits for it (or, "send now", joins it at its next step).
     if (state.running) return this.queueMessage(text, delivery, given);
     // A reply's questions, passed over: the author wrote something else instead.
@@ -6030,6 +6039,8 @@ export class Studio {
     // Handed over from another assistant: the turns this one hasn't seen go too.
     const handover = this.handover;
     const earlier = handover ? chatSoFar(state.items, handover.after, this.state.workspace?.root) : null;
+    // The book's files the words name with "@" go too (Try again's files have them already).
+    const files = given ?? (await this.withMentioned(text, boxFiles));
     // The message shows at once; saving, the History version and the request follow.
     const userId = uid('u');
     this.setAgent((a) => ({
@@ -6045,7 +6056,7 @@ export class Studio {
       ],
     }));
     const unsend = (why: string) => {
-      this.setAgent((a) => ({ running: false, attachments, change, ...(!given && { files }), items: a.items.filter((it) => it.id !== userId) }));
+      this.setAgent((a) => ({ running: false, attachments, change, ...(!given && { files: boxFiles }), items: a.items.filter((it) => it.id !== userId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: why });
       return false;
     };
@@ -6195,7 +6206,8 @@ export class Studio {
     if (options && !this.outgoingAttachments().length) await this.attachForOptions();
     const attachments = this.outgoingAttachments();
     const optionsTurn = options ? this.optionsTurnFor(attachments[0]) : null;
-    const files = given ?? this.state.agent.files;
+    const boxFiles = given ?? this.state.agent.files;
+    const files = given ?? (await this.withMentioned(text, boxFiles));
     const change = this.state.agent.change;
     const tempId = uid('q');
     this.setAgent((a) => ({ attachments: [], change: null, ...(!given && { files: [] }), queued: [...a.queued, { id: tempId, text, attachments: [...attachments.map((x) => x.label), ...(change ? [changeLabel(change)] : [])], ...(files.length && { files }), delivery, sending: true }] }));
@@ -6217,7 +6229,7 @@ export class Studio {
       if (this.deliveredEarly.delete(inboxId)) this.queuedDelivered(inboxId);
       return true;
     } catch (e) {
-      this.setAgent((a) => ({ attachments, change, ...(!given && { files }), queued: a.queued.filter((q) => q.id !== tempId) }));
+      this.setAgent((a) => ({ attachments, change, ...(!given && { files: boxFiles }), queued: a.queued.filter((q) => q.id !== tempId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Message not sent: ${errorMessage(e)}` });
       return false;
     }
@@ -6272,7 +6284,9 @@ export class Studio {
     this.setAgent((a) => ({ queued: a.queued.filter((m) => m.id !== id) }));
     this.queuedOptions.delete(id);
     if (edit) {
-      if (q.files?.length) this.addFiles(q.files);
+      // Those its words name come back as the words ("@path"), not as files in the box too.
+      const named = mentionedPaths(q.text, q.files ?? []);
+      if (q.files?.length) this.addFiles(q.files.filter((f) => !named.has(f.path)));
       this.events.emit('fill-composer', q.text);
     }
   }
@@ -6710,7 +6724,7 @@ export class Studio {
         await this.openExportedPdf();
         break;
       case 'help':
-        say(`Commands: ${SLASH_COMMANDS.map((c) => `/${c.name}${c.arg ? ` <${c.arg}>` : ''} — ${c.description}`).join('; ')}.`);
+        say(`Commands: ${SLASH_COMMANDS.map((c) => `/${c.name}${c.arg ? ` <${c.arg}>` : ''} — ${c.description}`).join('; ')}. Type @ to name a file or folder of the book (@chapters/intro.typ): it goes with the message.`);
         break;
       default:
         say(`There’s no /${cmd.name} command. Type / to see them all.`, 'error');
