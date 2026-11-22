@@ -6763,6 +6763,64 @@ async function windowsChecks() {
 }
 
 /**
+ * The Dock's menu, as AppKit gets it from the app delegate: New Window, then
+ * the recent books that are still there. Choosing an item does what AppKit's
+ * choice would: a new window, or a book in a window of its own, or the window
+ * that has it brought forward. (Needs scratchpad/book-in-src next to the
+ * self-test output.)
+ */
+async function dockChecks() {
+  const out: Record<string, unknown> = {};
+  const own = studio.state.workspace!.root;
+  const other = `${studio.state.launch!.selftestOut!.replace(/[^/]+$/, '')}book-in-src`;
+  // A window opened from the Dock isn't the self-test's: its book becomes the author's last and recent one. Put them back after.
+  const kept = ['studio.lastWorkspace', 'studio.recentWorkspaces', 'studio.recentCommands'].map((k) => [k, localStorage.getItem(k)] as const);
+  const windows = () => ipc.selftestWindows();
+  const until = async (check: (ws: Awaited<ReturnType<typeof windows>>) => boolean, ms: number) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(200)) if (check(await windows())) return true;
+    return false;
+  };
+  const labels = async () => (await windows()).map((w) => w.label);
+  // Each choice rebuilds the menu first, and a window that opens a book offers the author's recent books: offer these again.
+  const choose = async (n: number) => {
+    await ipc.dockRecent([other, own, '/no/such/book']);
+    return ipc.selftestDock(n);
+  };
+  try {
+    await ipc.dockRecent([other, own, '/no/such/book']);
+    out.items = await ipc.selftestDock();
+    // New Window: one more, on the welcome screen.
+    const before = await labels();
+    await choose(0);
+    out.newWindow = await until((ws) => ws.length === before.length + 1, 10000);
+    const fresh = (await windows()).find((w) => !before.includes(w.label));
+    await sleep(2500); // its page loads and starts
+    out.fresh = fresh && { root: (await windows()).find((w) => w.label === fresh.label)?.root ?? null };
+    if (fresh) await ipc.selftestCloseWindow(fresh.label);
+    await until((ws) => ws.length === before.length, 5000);
+    // A recent book: a window of its own, with that book open.
+    await choose(2);
+    out.opened = await until((ws) => ws.some((w) => w.root?.endsWith('/book-in-src')), 20000);
+    const opened = (await windows()).find((w) => w.root?.endsWith('/book-in-src'));
+    out.book = opened && { fresh: !before.includes(opened.label), title: opened.title };
+    // The same book again, and the self-test's own: no new window, the one that has it comes forward.
+    const count = (await labels()).length;
+    await choose(2);
+    await choose(3);
+    await sleep(1500);
+    out.noSecond = { count: (await labels()).length === count, mainBook: (await windows()).find((w) => w.label === 'main')?.root === own };
+    if (opened) await ipc.selftestCloseWindow(opened.label);
+    await until((ws) => ws.length === before.length, 5000);
+    out.closed = (await labels()).length === before.length;
+  } finally {
+    for (const [k, v] of kept) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    studio.store.set({ recent: JSON.parse(localStorage.getItem('studio.recentWorkspaces') ?? '[]') });
+    await ipc.dockRecent(studio.state.recent);
+  }
+  return out;
+}
+
+/**
  * Reload Window, in a second window with a book of its own: the page starts
  * over (a mark left on it is gone) with that book open again, not the first
  * window's. (Needs scratchpad/book-in-src next to the self-test output.)
@@ -11174,6 +11232,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('dividers')) result.dividers = await dividerChecks();
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
+    if (want('dock')) result.dock = await dockChecks();
     if (want('reloadwindow')) result.reloadwindow = await reloadWindowChecks();
     if (want('git')) result.git = await gitChecks();
     if (want('subroot')) result.subroot = await subRootChecks();

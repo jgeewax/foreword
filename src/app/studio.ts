@@ -1243,9 +1243,12 @@ export class Studio {
     // The settings file wins over this machine's cached copy; edits made elsewhere apply on return.
     await this.loadConfig();
     this.setAgent({ setups: this.readSetups() });
-    // Another window changed what a mode runs on: the mode menu says so here too.
+    // The Dock's menu offers the recent books, each in a window of its own.
+    void ipc.dockRecent(this.state.recent).catch(() => {});
+    // Another window changed what a mode runs on: the mode menu says so here too. Or opened a book: it's recent here too.
     window.addEventListener('storage', (e) => {
       if (e.key === USUAL_SETUP_KEY || e.key === MODE_PINS_KEY) this.setAgent({ setups: this.readSetups() });
+      if (e.key === RECENT_KEY) this.store.set({ recent: readJson<string[]>(RECENT_KEY) ?? [] });
     });
     window.addEventListener('focus', () => {
       void this.loadConfig();
@@ -1300,9 +1303,11 @@ export class Studio {
     // Self-tests run against scratch folders: keep them out of the author's recent books.
     if (!this.state.launch?.selftestOut) {
       localStorage.setItem(LAST_WORKSPACE, info.root);
-      const recent = [info.root, ...this.state.recent.filter((r) => r !== info.root)].slice(0, 8);
+      // The list as kept, not as this window last read it: other windows open books too.
+      const recent = [info.root, ...(readJson<string[]>(RECENT_KEY) ?? []).filter((r) => r !== info.root)].slice(0, 8);
       writeJson(RECENT_KEY, recent);
       this.store.set({ recent });
+      void ipc.dockRecent(recent).catch(() => {});
     }
     // The book as it was left (book-state.ts): its tabs and where in them, its tasks, what wasn't saved, and the chat it showed.
     const book = await BookStore.open(info.root, this.keptBefore(info.root));

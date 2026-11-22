@@ -478,6 +478,29 @@ section), the page starts at the window's top and the offset is measured.
   - History lock.
   It's one process, so there's one Dock icon, and Window ▸ lists the windows
   by book: each window's title is its book's name.
+- **The Dock's menu** (right-click or hold Foreword in the Dock), as VS
+  Code's: **New Window**, then the recent books. A book opens in a window of
+  its own, or brings forward the window that has it. macOS lists the open
+  windows above these itself.
+  - Tauri has no Dock menu and doesn't hand out its native menus, so
+    `dock.rs` adds `applicationDockMenu:` and the items' two actions to the
+    app delegate's class (tao's) at startup, then sets the delegate again so
+    AppKit sees the new method. The menu is built each time it's asked for:
+    the recent books whose folders are still there, a name shared by two
+    books followed by where each is.
+  - The actions run on the event loop (`run_on_main_thread`), as the menu
+    bar's items do. A book chosen goes to its new window as its launch
+    `workspace` (`AppState::books`), not through windows.json: that file
+    isn't kept for self-tests or named launches.
+  - The page tells the app its recent books (`dock_recent`) at start and
+    whenever it opens a book. It now adds to the list as kept, not its own
+    copy of it, and follows other windows' changes (`storage`): before, a
+    window opened earlier dropped the books other windows had added since.
+  - Verified (self-test `dock`, through AppKit's own `sendAction:to:from:`):
+    the menu read New Window, a line and the two books (a gone one left
+    out); New Window opened a window without a book; a book opened in a new
+    window titled with its name; choosing it again, or the first window's
+    book, opened no other window.
 - **How (Rust):**
   - `AppState` became a map from window label ("main", "win-2", …) to a
     `WindowState` holding what used to be global.

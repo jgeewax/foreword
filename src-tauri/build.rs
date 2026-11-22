@@ -13,6 +13,8 @@ fn main() {
             "selftest_finish",
             "menu_outline",
             "window_new",
+            "dock_recent",
+            "selftest_dock",
             "selftest_windows",
             "selftest_eval",
             "selftest_close_window",

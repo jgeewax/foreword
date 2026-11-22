@@ -7,6 +7,8 @@ mod clipboard;
 mod code;
 mod config;
 mod discover;
+#[cfg(target_os = "macos")]
+mod dock;
 mod epub;
 mod error;
 mod export;
@@ -70,6 +72,8 @@ pub struct WindowState {
 pub struct AppState {
     windows: Mutex<HashMap<String, Arc<WindowState>>>,
     next_window: AtomicU32,
+    /// The book a new window opens with (a recent book chosen in the Dock), by window label.
+    books: Mutex<HashMap<String, String>>,
 }
 
 impl AppState {
@@ -188,7 +192,7 @@ async fn tools_status() -> ToolsStatus {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LaunchOptions {
-    /// `FOREWORD_WORKSPACE`: open this folder at launch.
+    /// Open this folder at launch: `FOREWORD_WORKSPACE`, or the book a new window was opened for.
     workspace: Option<String>,
     /// Dev builds only: the repo's sample book, for the welcome screen.
     sample_book: Option<String>,
@@ -217,9 +221,16 @@ fn launch_options(app: tauri::AppHandle, state: Win) -> LaunchOptions {
     // The environment (a book to open, the self-test) is for the first window only.
     let first = state.label() == "main";
     let env = |k: &str| std::env::var(k).ok().filter(|_| first);
+    let book = app
+        .state::<AppState>()
+        .books
+        .lock()
+        .unwrap()
+        .get(state.label())
+        .cloned();
     LaunchOptions {
         fresh: !first,
-        workspace: env("FOREWORD_WORKSPACE"),
+        workspace: env("FOREWORD_WORKSPACE").or(book),
         sample_book: (cfg!(debug_assertions) && sample.is_dir()).then(|| {
             sample
                 .canonicalize()
@@ -424,22 +435,84 @@ fn open_window(
 }
 
 /// A new window, without a book (it shows the welcome screen): "win-2", "win-3"…
-/// `kept`: one brought back as it was left, with its book.
-fn new_window(app: &tauri::AppHandle, kept: Option<&windows::Kept>) -> tauri::Result<String> {
-    let n = app
-        .state::<AppState>()
-        .next_window
-        .fetch_add(1, Ordering::Relaxed)
-        + 2;
+/// `kept`: one brought back as it was left, with its book. `book`: one it opens.
+fn new_window(
+    app: &tauri::AppHandle,
+    kept: Option<&windows::Kept>,
+    book: Option<String>,
+) -> tauri::Result<String> {
+    let state = app.state::<AppState>();
+    let n = state.next_window.fetch_add(1, Ordering::Relaxed) + 2;
     let label = format!("win-{n}");
+    if let Some(book) = book {
+        state.books.lock().unwrap().insert(label.clone(), book);
+    }
     open_window(app, &label, kept)?.set_focus()?;
     Ok(label)
+}
+
+/// New Window, from the menu bar or the Dock; `book`: one it opens.
+fn open_new_window(app: &tauri::AppHandle, book: Option<String>) {
+    if let Err(e) = new_window(app, None, book) {
+        logs::push("app", format!("couldn't open a window: {e}"));
+    }
+}
+
+/// A recent book chosen in the Dock: the window that has it comes forward,
+/// or a new window opens it (one window per book).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn open_book_window(app: &tauri::AppHandle, path: &str) {
+    let root = PathBuf::from(path)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(path));
+    let has = app
+        .state::<AppState>()
+        .all()
+        .into_iter()
+        .find(|(_, w)| w.root.lock().unwrap().as_deref() == Some(root.as_path()));
+    if let Some(window) = has.and_then(|(label, _)| app.get_window(&label)) {
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        return;
+    }
+    open_new_window(app, Some(root.to_string_lossy().into_owned()));
 }
 
 /// File → New Window, from the page.
 #[tauri::command]
 fn window_new(app: tauri::AppHandle) -> CmdResult<String> {
-    Ok(new_window(&app, None)?)
+    Ok(new_window(&app, None, None)?)
+}
+
+/// The page's recent books, newest first (all windows share them): the Dock's menu offers them.
+#[tauri::command]
+fn dock_recent(paths: Vec<String>) {
+    #[cfg(target_os = "macos")]
+    dock::set_recent(paths);
+    #[cfg(not(target_os = "macos"))]
+    let _ = paths;
+}
+
+/// Self-test only: the Dock menu's items as AppKit gets them, then (`choose`)
+/// what choosing one of them does.
+#[tauri::command]
+fn selftest_dock(choose: Option<usize>) -> CmdResult<Vec<String>> {
+    selftest_only()?;
+    #[cfg(target_os = "macos")]
+    {
+        let items = dock::outline();
+        if let Some(n) = choose
+            && !dock::choose(n)
+        {
+            return Err(CmdError::NotFound(format!("no Dock menu item {n}")));
+        }
+        Ok(items)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = choose;
+        Ok(Vec::new())
+    }
 }
 
 fn selftest_only() -> CmdResult<()> {
@@ -526,11 +599,7 @@ pub fn run() {
                 .find(|(_, w)| w.is_focused().unwrap_or(false))
                 .map(|(label, _)| label);
             match event.id().as_ref() {
-                "new-window" => {
-                    if let Err(e) = new_window(app, None) {
-                        logs::push("app", format!("couldn't open a window: {e}"));
-                    }
-                }
+                "new-window" => open_new_window(app, None),
                 "close-window" => {
                     if let Some(w) = front.and_then(|l| app.get_window(&l)) {
                         let _ = w.close();
@@ -607,7 +676,7 @@ pub fn run() {
             app.manage(kept);
             let window = open_window(app.handle(), "main", saved.first())?;
             for k in saved.iter().skip(1) {
-                if let Err(e) = new_window(app.handle(), Some(k)) {
+                if let Err(e) = new_window(app.handle(), Some(k), None) {
                     logs::push("app", format!("couldn't open a window again: {e}"));
                 }
             }
@@ -615,6 +684,9 @@ pub fn run() {
             if std::env::var_os("FOREWORD_SELFTEST").is_some() || saved.len() > 1 {
                 let _ = window.set_focus();
             }
+            // Right-click on Foreword in the Dock: New Window, and the recent books.
+            #[cfg(target_os = "macos")]
+            dock::install(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -628,6 +700,8 @@ pub fn run() {
             selftest_finish,
             menu_outline,
             window_new,
+            dock_recent,
+            selftest_dock,
             selftest_windows,
             selftest_eval,
             selftest_close_window,

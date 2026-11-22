@@ -24,6 +24,8 @@
     "allow-selftest-finish",
     "allow-menu-outline",
     "allow-window-new",
+    "allow-dock-recent",
+    "allow-selftest-dock",
     "allow-selftest-windows",
     "allow-selftest-eval",
     "allow-selftest-close-window",

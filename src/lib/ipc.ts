@@ -166,6 +166,10 @@ export const ipc = {
   launchOptions: () => invoke<LaunchOptions>('launch_options'),
   /** A new window, without a book. */
   windowNew: () => invoke<string>('window_new'),
+  /** The recent books, newest first: the Dock's menu offers them, each in a window of its own. */
+  dockRecent: (paths: string[]) => invoke<void>('dock_recent', { paths }),
+  /** Self-test only: the Dock menu's items, after choosing the `choose`th. */
+  selftestDock: (choose?: number) => invoke<string[]>('selftest_dock', { choose: choose ?? null }),
   /** Self-test only: the windows, their titles and books; run a script in one; close one. */
   selftestWindows: () => invoke<{ label: string; title: string; root: string | null }[]>('selftest_windows'),
   selftestEval: (label: string, js: string) => invoke<void>('selftest_eval', { label, js }),
