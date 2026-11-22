@@ -51,6 +51,9 @@ export class Saver {
 /** A place in the preview: the page at its top (from 0), and how far down that page (0 to 1). */
 export type PreviewPlace = { page: number; offset: number };
 
+/** What the preview typesets of the book: all of it, or only the chapter being edited (chapter-preview.ts). */
+export type PreviewScope = 'book' | 'chapter';
+
 /** The book's window as the author left it. */
 export type BookSession = {
   /** The files' tabs in order, and the file in front. */
@@ -67,9 +70,15 @@ export type BookSession = {
   previewTarget: 'book' | 'cover';
   previewChapter: string | null;
   previewPlace: Record<string, PreviewPlace>;
+  /**
+   * The book's preview shows all of it or the chapter being edited: this
+   * window's choice, not the other windows' (null: never chosen, from before
+   * it was the book's own).
+   */
+  previewScope: PreviewScope | null;
 };
 
-const EMPTY: BookSession = { tabs: [], active: null, views: {}, task: null, draft: '', sidebar: null, previewTarget: 'book', previewChapter: null, previewPlace: {} };
+const EMPTY: BookSession = { tabs: [], active: null, views: {}, task: null, draft: '', sidebar: null, previewTarget: 'book', previewChapter: null, previewPlace: {}, previewScope: null };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const isPlace = (v: unknown): v is PreviewPlace => isObject(v) && Number.isInteger(v.page) && (v.page as number) >= 0 && typeof v.offset === 'number' && v.offset >= 0 && v.offset <= 1;
@@ -88,6 +97,7 @@ export function readSession(raw: unknown): BookSession {
     previewTarget: raw.previewTarget === 'cover' ? 'cover' : 'book',
     previewChapter: text(raw.previewChapter),
     previewPlace: isObject(raw.previewPlace) ? Object.fromEntries(Object.entries(raw.previewPlace).filter((e): e is [string, PreviewPlace] => isPlace(e[1]))) : {},
+    previewScope: raw.previewScope === 'book' || raw.previewScope === 'chapter' ? raw.previewScope : null,
   };
 }
 

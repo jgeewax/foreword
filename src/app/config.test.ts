@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS } from '../services/agent/permissions';
-import { parseConfig, serializeConfig } from './config';
+import { formerPreviewScope, parseConfig, serializeConfig } from './config';
 import { DEFAULT_SETTINGS } from './settings';
 
 describe('the settings file', () => {
@@ -26,6 +26,15 @@ describe('the settings file', () => {
     expect(written.myNote).toBe('hi');
   });
 
+  it('drops the preview’s book or chapter, which is each window’s now, after saying where books start', () => {
+    const c = parseConfig('{ "previewScope": "chapter" }');
+    expect(c.settings).toEqual(DEFAULT_SETTINGS);
+    expect(formerPreviewScope(c.raw)).toBe('chapter');
+    expect(formerPreviewScope(parseConfig('{ "previewScope": "part" }').raw)).toBeNull();
+    expect(formerPreviewScope({})).toBeNull();
+    expect(JSON.parse(serializeConfig(c.raw, c.settings, 1))).not.toHaveProperty('previewScope');
+  });
+
   it('keeps where lines wrap and the rulers', () => {
     const c = parseConfig('{ "wordWrap": "column", "wordWrapColumn": 120, "rulers": [80, 120] }');
     expect(c.settings).toMatchObject({ wordWrap: 'column', wordWrapColumn: 120, rulers: [80, 120] });
@@ -33,7 +42,7 @@ describe('the settings file', () => {
   });
 
   it('keeps every setting through a write and a read, as at the next launch', () => {
-    const settings = { ...DEFAULT_SETTINGS, theme: 'light' as const, checkForUpdates: false, skippedUpdate: '0.2.0', wordWrap: 'off' as const, rulers: [80], previewPages: 'all' as const, previewScope: 'chapter' as const };
+    const settings = { ...DEFAULT_SETTINGS, theme: 'light' as const, checkForUpdates: false, skippedUpdate: '0.2.0', wordWrap: 'off' as const, rulers: [80], previewPages: 'all' as const };
     expect(parseConfig(serializeConfig({}, settings, 1)).settings).toEqual(settings);
   });
 

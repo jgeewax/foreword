@@ -18,6 +18,7 @@ import { matchesQuery } from '../services/agent/model-search';
 import type { EffortOption, ModelInfo, ModelRef } from '../services/agent/types';
 import { ZOOM_STEPS } from '../lib/zoom';
 import type { Level } from '../services/agent/permissions';
+import type { PreviewScope } from './book-state';
 import { describeTool, NO_NAMES } from './tool-labels';
 import { ASSISTANT_NAMES, ASSISTANTS, AUTO_SAVE_MINUTES, EDITOR_COLUMNS, EDITOR_FONT_SIZES, sanitize, type AppSettings, type AssistantId } from './settings';
 
@@ -63,6 +64,8 @@ export type StudioHost = {
   state(): {
     settings: AppSettings;
     zoom: number;
+    /** This window's preview: the whole book or one chapter (not a setting: each window has its own). */
+    previewScope: PreviewScope;
     assistant: AssistantId;
     models: ModelInfo[];
     model: ModelRef | null;
@@ -80,8 +83,8 @@ export type StudioHost = {
    * tools). "unanswered": no answer before the assistant would give up waiting.
    */
   approve(tool: string, what: string): Promise<'yes' | 'no' | 'unanswered'>;
-  /** App preferences (the settings file), and the UI zoom: at once. */
-  changePreferences(patch: Partial<AppSettings>, zoom?: number): void;
+  /** App preferences (the settings file), the UI zoom, and this window's preview (the whole book or one chapter): at once. */
+  changePreferences(patch: Partial<AppSettings>, zoom?: number, previewScope?: PreviewScope): void;
   /** Once the assistant's reply ends (the turn that asked). */
   whenIdle(run: () => unknown): void;
   /** Another assistant, then its model and effort when it has started. */
@@ -112,7 +115,7 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   },
   previewScope: {
     about:
-      'What the preview typesets: the whole book (book), or only the chapter being edited (chapter; quick to follow typing in a long book, but page numbers and references to other chapters are right only in the whole book). Same as the Book and Chapter buttons above the preview.',
+      'What this window’s preview typesets: the whole book (book), or only the chapter being edited (chapter; quick to follow typing in a long book, but page numbers and references to other chapters are right only in the whole book). Same as the Book and Chapter buttons above the preview; each window has its own.',
     values: 'book, chapter',
     schema: { type: 'string', enum: ['book', 'chapter'] },
   },
@@ -307,7 +310,7 @@ export const TOOLS: Tool[] = [
         },
         assistants: ASSISTANTS.map((id) => ({ id, name: ASSISTANT_NAMES[id] })),
         preferences: Object.fromEntries(
-          Object.entries(PREFERENCES).map(([key, p]) => [key, { value: key === 'zoom' ? s.zoom : s.settings[key as keyof AppSettings], about: p.about, values: p.values }]),
+          Object.entries(PREFERENCES).map(([key, p]) => [key, { value: key === 'zoom' ? s.zoom : key === 'previewScope' ? s.previewScope : s.settings[key as keyof AppSettings], about: p.about, values: p.values }]),
         ),
         changing: PERMISSION_WORDS[s.permission],
         authorOnly: AUTHOR_ONLY_NOTE,
@@ -333,20 +336,21 @@ export const TOOLS: Tool[] = [
       if (moved.length) throw new ToolError(`${moved.join(', ')}: use ${[...new Set(moved.map((k) => elsewhere[k]))].join(' and ')} instead.`);
       const unknown = keys.filter((k) => !PREFERENCES[k]);
       if (unknown.length) throw new ToolError(`No such preference: ${unknown.join(', ')}. The ones you can change: ${Object.keys(PREFERENCES).join(', ')}.`);
-      const { zoom, ...rest } = input;
+      const { zoom, previewScope, ...rest } = input;
       const patch = sanitize(rest);
       const bad = Object.keys(rest).filter((k) => !(k in patch));
       // Rulers are kept to those that are columns: one that isn't is a mistake to say.
       if (Array.isArray(rest.rulers) && patch.rulers && patch.rulers.length !== new Set(rest.rulers).size && !bad.includes('rulers')) bad.push('rulers');
       if (zoom !== undefined && !(typeof zoom === 'number' && zoom >= ZOOM_STEPS[0] && zoom <= ZOOM_STEPS[ZOOM_STEPS.length - 1])) bad.push('zoom');
+      if (previewScope !== undefined && previewScope !== 'book' && previewScope !== 'chapter') bad.push('previewScope');
       if (bad.length) throw new ToolError(`Not a value it takes: ${bad.map((k) => `${k} (${PREFERENCES[k].values})`).join('; ')}. Nothing was changed.`);
       await approved(host, 'change_settings', describeTool(`${STUDIO_TOOLS}_change_settings`, input, NO_NAMES).note ?? keys.join(', '));
       const before = host.state();
-      host.changePreferences(patch, zoom as number | undefined);
+      host.changePreferences(patch, zoom as number | undefined, previewScope as PreviewScope | undefined);
       // In the order asked.
-      const applied: Record<string, unknown> = { ...patch, ...(zoom !== undefined ? { zoom } : {}) };
+      const applied: Record<string, unknown> = { ...patch, ...(zoom !== undefined ? { zoom } : {}), ...(previewScope !== undefined ? { previewScope } : {}) };
       const changes = keys.map((k) => [k, applied[k]] as const).map(([k, v]) => {
-        const was = k === 'zoom' ? before.zoom : before.settings[k as keyof AppSettings];
+        const was = k === 'zoom' ? before.zoom : k === 'previewScope' ? before.previewScope : before.settings[k as keyof AppSettings];
         return JSON.stringify(was) === JSON.stringify(v) ? `${k} was already ${shown(k, v)}` : `${k}: ${shown(k, was)} → ${shown(k, v)}`;
       });
       return `Changed (in effect now): ${changes.join('; ')}.`;

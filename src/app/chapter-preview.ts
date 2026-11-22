@@ -1,4 +1,4 @@
-// The chapter preview (Settings ▸ General ▸ Preview, previewScope "chapter"):
+// The chapter preview (Chapter above the preview, previewScope "chapter"):
 // the book's main file with one chapter in it, so a change typesets that
 // chapter and not the whole book, and the preview shows that chapter alone.
 // What the main file sets up stays (its imports, definitions, set and show

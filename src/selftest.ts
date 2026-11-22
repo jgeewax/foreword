@@ -229,7 +229,7 @@ async function previewPagesChecks() {
  */
 async function chapterPreviewChecks() {
   const out: Record<string, unknown> = {};
-  const before = studio.state.settings.previewScope;
+  const before = studio.state.previewScope;
   const ready = (what: string) =>
     waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
   // With what the preview's header and the status bar say: the pages of what's shown, a chapter's own.
@@ -296,7 +296,7 @@ async function chapterPreviewChecks() {
     await ready('the whole book again');
     out.bookAgain = snapshot();
   } finally {
-    if (studio.state.settings.previewScope !== before) await studio.showInPreview(before);
+    if (studio.state.previewScope !== before) await studio.showInPreview(before);
   }
   return out;
 }
@@ -313,7 +313,7 @@ async function chapterPreviewChecks() {
 async function chapterRefsChecks() {
   const out: Record<string, unknown> = {};
   const ws = studio.state.workspace!;
-  const before = studio.state.settings.previewScope;
+  const before = studio.state.previewScope;
   const s = studio as unknown as { entryText: string; bookNumbers: unknown };
   const ready = (what: string) =>
     waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
@@ -413,7 +413,7 @@ async function chapterRefsChecks() {
     studio.typst.queryText = real;
     // The book's numbers are the scratch book's: none of the user's.
     localStorage.removeItem(key);
-    if (studio.state.settings.previewScope !== before) await studio.showInPreview(before);
+    if (studio.state.previewScope !== before) await studio.showInPreview(before);
   }
   return out;
 }
@@ -428,7 +428,7 @@ async function brokenRefChecks() {
   const out: Record<string, unknown> = {};
   const s = studio as unknown as { entryText: string; previewKeys: string[]; refList: { path: string; name: string }[] };
   const ws = studio.state.workspace!;
-  const before = studio.state.settings.previewScope;
+  const before = studio.state.previewScope;
   const ready = (what: string) => waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 240000, what);
   // The marks in the preview's pages on screen: how many show the reference, and the words of the one that does.
   const marks = async (tag: string, name: string) =>
@@ -514,7 +514,7 @@ async function brokenRefChecks() {
       await sleep(1000);
     }
   } finally {
-    if (studio.state.settings.previewScope !== before) await studio.showInPreview(before);
+    if (studio.state.previewScope !== before) await studio.showInPreview(before);
   }
   return out;
 }
@@ -6837,6 +6837,89 @@ async function windowsChecks() {
 }
 
 /**
+ * Each window's preview shows the whole book or one chapter of its own: a
+ * switch in one window isn't another's, even once that one reads the settings
+ * file again (as it does on coming forward), and each book keeps its choice in
+ * its session. A book never opened since this was a setting starts as the
+ * settings file had it. (Needs scratchpad/book-in-src, a book with chapters,
+ * next to the self-test output, and the run's settings file to say
+ * "previewScope": "chapter". Both books at paths never opened before: their
+ * state is kept by path, and a kept choice wins over the file's.)
+ */
+async function previewScopeWindowsChecks() {
+  const out: Record<string, unknown> = {};
+  const own = studio.state.workspace!.root;
+  const other = `${studio.state.launch!.selftestOut!.replace(/[^/]+$/, '')}book-in-src`;
+  // A window that isn't the self-test's opens a book: it becomes the author's last and recent one. Put them back after.
+  const kept = ['studio.lastWorkspace', 'studio.recentWorkspaces', 'studio.recentCommands'].map((k) => [k, localStorage.getItem(k)] as const);
+  const windows = () => ipc.selftestWindows();
+  const until = async (check: (ws: Awaited<ReturnType<typeof windows>>) => boolean, ms: number) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(200)) if (check(await windows())) return true;
+    return false;
+  };
+  // A preview restart can wait on a window that doesn't paint: the state is what's checked.
+  const settle = (p: Promise<unknown>) => Promise.race([p, sleep(15000)]);
+  let label: string | null = null;
+  let asked = 0;
+  // What the second window says, through the log: `js` is an expression there (a promise is waited for).
+  const fromSecond = async (js: string) => {
+    const tag = `scope-${++asked}`;
+    await ipc.selftestEval(label!, `Promise.resolve(${js}).then((v) => window.__TAURI_INTERNALS__.invoke('ui_log', { line: ${JSON.stringify(`${tag} `)} + JSON.stringify(v ?? null) }))`);
+    for (let i = 0; i < 50; i++) {
+      const line = (await ipc.logs('ui')).map((l) => l.line).find((l) => l.startsWith(`${tag} `));
+      if (line) return JSON.parse(line.slice(tag.length + 1)) as unknown;
+      await sleep(200);
+    }
+    return undefined;
+  };
+  const second = () => fromSecond('window.__studio?.state.previewScope');
+  // The other window comes forward: it reads the settings file again.
+  const secondForward = async () => {
+    await ipc.selftestEval(label!, `window.__studio.loadConfig().then(() => window.dispatchEvent(new Event('focus')))`);
+    await sleep(1500);
+  };
+  const mainForward = async () => {
+    await studio.loadConfig();
+    window.dispatchEvent(new Event('focus'));
+    await sleep(500);
+  };
+  try {
+    out.mainStart = studio.state.previewScope;
+    label = await ipc.windowNew();
+    await until((ws) => ws.some((w) => w.label === label), 10000);
+    await sleep(3000); // its page loads and starts
+    await ipc.selftestEval(label, `window.__studio.openWorkspace(${JSON.stringify(other)})`);
+    out.opened = await until((ws) => !!ws.find((w) => w.label === label)?.root, 20000);
+    await sleep(1500);
+    out.secondStart = await second();
+    // The main window shows the whole book; the second, brought forward, keeps its chapter.
+    await settle(studio.showInPreview('book'));
+    await sleep(800); // a settings write (300 ms after a change) is done by now
+    await secondForward();
+    out.afterMainBook = { main: studio.state.previewScope, second: await second() };
+    // The second shows the whole book, then the main one chapter: the second, brought forward, keeps the book.
+    await ipc.selftestEval(label, `void window.__studio.showInPreview('book')`);
+    await sleep(1500);
+    await mainForward();
+    out.afterSecondBook = { main: studio.state.previewScope, second: await second() };
+    await settle(studio.showInPreview('chapter'));
+    await sleep(800);
+    await secondForward();
+    out.afterMainChapter = { main: studio.state.previewScope, second: await second() };
+    // Kept with each book (its session, written half a second after a change), never in the settings file.
+    await sleep(1000);
+    // A window reads only its own book's state: the second's, from the second.
+    const read = (root: string) => `window.__TAURI_INTERNALS__.invoke('book_state_read', { root: ${JSON.stringify(root)}, name: 'session.json' }).then((t) => JSON.parse(t ?? '{}').previewScope ?? null)`;
+    out.sessions = { main: (JSON.parse((await ipc.bookStateRead(own, 'session.json')) ?? '{}') as { previewScope?: string }).previewScope ?? null, second: await fromSecond(read(other)) };
+    out.settingsFile = JSON.parse((await ipc.configRead()).text ?? '{}').previewScope ?? null;
+  } finally {
+    if (label) await ipc.selftestCloseWindow(label);
+    for (const [k, v] of kept) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  return out;
+}
+
+/**
  * The Dock's menu, as AppKit gets it from the app delegate: New Window, then
  * the recent books that are still there. Choosing an item does what AppKit's
  * choice would: a new window, or a book in a window of its own, or the window
@@ -11571,6 +11654,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
     if (only?.includes('chapterpreview')) result.chapterpreview = await chapterPreviewChecks();
+    if (only?.includes('previewscopewindows')) result.previewscopewindows = await previewScopeWindowsChecks();
     if (only?.includes('chapterrefs')) result.chapterrefs = await chapterRefsChecks();
     if (only?.includes('brokenref')) result.brokenref = await brokenRefChecks();
     if (only?.includes('epub')) result.epub = await epubChecks(outDir);

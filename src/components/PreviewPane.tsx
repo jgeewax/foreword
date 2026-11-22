@@ -18,7 +18,7 @@ export function PreviewPane() {
   const hasCover = useStore(studio.store, (s) => !!s.workspace?.files.includes(COVER_PREVIEW));
   // The book's chapters (two or more included files) can be shown one at a time.
   const hasChapters = useStore(studio.store, (s) => s.names.chapters.length > 1);
-  const scope = useStore(studio.store, (s) => s.settings.previewScope);
+  const scope = useStore(studio.store, (s) => s.previewScope);
   // Which chapter it shows, short: "ch. 13" (the status bar has its title), then its pages.
   const chapter = useStore(studio.store, (s) => {
     if (s.previewTarget !== 'book' || !s.previewChapter) return null;

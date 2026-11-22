@@ -46,9 +46,6 @@ export type WordWrap = 'window' | 'column' | 'off';
 /** Which pages the preview keeps drawn: those near the ones on screen, or every page. */
 export type PreviewPages = 'nearby' | 'all';
 
-/** What the preview typesets: the whole book, or only the chapter being edited. */
-export type PreviewScope = 'book' | 'chapter';
-
 /** Light or dark: as macOS is set (System Settings ▸ Appearance), or always one of them. */
 export type Theme = 'system' | 'light' | 'dark';
 
@@ -95,12 +92,6 @@ export type AppSettings = {
    * gigabytes (see PAGES_SCRIPT in preview.rs).
    */
   previewPages: PreviewPages;
-  /**
-   * What the preview typesets: the whole book, or only the chapter being
-   * edited, which keeps a long book's preview quick to follow typing (see
-   * chapter-preview.ts).
-   */
-  previewScope: PreviewScope;
   /** Programs chosen in Settings ▸ Tools (absent: found automatically). The Rust side reads these from the settings file. */
   toolPaths: Partial<Record<ToolName, string>>;
   /** Which program runs the writing assistant. */
@@ -146,7 +137,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wordWrapColumn: 80,
   rulers: [],
   previewPages: 'nearby',
-  previewScope: 'book',
   toolPaths: {},
   assistant: 'opencode',
   optionCount: DEFAULT_OPTION_COUNT,
@@ -251,7 +241,6 @@ export function sanitize(raw: Record<string, unknown>): Partial<AppSettings> {
     out.rulers = [...new Set(rulers)].sort((a, b) => a - b).slice(0, MAX_RULERS);
   }
   if (raw.previewPages === 'nearby' || raw.previewPages === 'all') out.previewPages = raw.previewPages;
-  if (raw.previewScope === 'book' || raw.previewScope === 'chapter') out.previewScope = raw.previewScope;
   if (raw.toolPaths && typeof raw.toolPaths === 'object' && !Array.isArray(raw.toolPaths)) out.toolPaths = sanitizeToolPaths(raw.toolPaths as Record<string, unknown>);
   if (ASSISTANTS.includes(raw.assistant as AssistantId)) out.assistant = raw.assistant as AssistantId;
   if (isOptionCount(raw.optionCount)) out.optionCount = raw.optionCount;

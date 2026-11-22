@@ -3637,7 +3637,9 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   over a 14-minute typing soak, and `compileStatus` off (word counts) made no
   difference. The same keystrokes with only one chapter typeset: 62 ms.
 - **Now:** Settings ▸ General ▸ Preview ▸ Shows (`previewScope`): **The whole
-  book** (the default) or **The chapter you're in**. The preview's header
+  book** (the default) or **The chapter you're in**. (Since 2026-11-22 each
+  window's own, not a setting: see "The whole book or one chapter is each
+  window's".) The preview's header
   switches it too (Book | Chapter | Cover), as do the palette (Show Only This
   Chapter, Show the Whole Book) and the preview's menu. The chapter follows the
   editor: opening another chapter's file (or a file one includes) shows that
@@ -5191,6 +5193,34 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
 - **Self-test** `mentions`: the list bare, by folder, by heading, mid-message,
   Esc, a label, an email; with Claude Code (Haiku), a note's code word read
   through `@memo.md`, and the link with no chip, also after reopening the task.
+
+### The whole book or one chapter is each window's (2026-11-22)
+
+- **The bug (from the user):** switching Book → Chapter above the preview in
+  one window switched the other window too. `previewScope` was an app
+  setting: the switch wrote `~/.foreword/settings.json`, and every window reads
+  that file again when it comes forward (`loadConfig` on focus), so the other
+  window took the change and restarted its preview. The user: "the two windows
+  cannot be sync'd that way". A long book wants Chapter, a short one Book, and
+  each window has a book of its own.
+- **Now:** it's the window's (`state.previewScope`), kept with its book in
+  `session.json` beside `previewTarget` (Book or Cover) and `previewChapter`,
+  so the book opens again as it was left. The switch above the preview, the
+  palette's Show Only This Chapter and Show the Whole Book, and the assistant's
+  `change_settings` (`previewScope`, handled like `zoom`, beside the settings)
+  change only this window.
+- **Out of Settings:** Settings ▸ General ▸ Preview ▸ Shows is gone, since a
+  control there would read as every window's. `previewScope` is retired from
+  the settings file (dropped at its next write). A book with no choice kept
+  (from before) starts as the file had it (`formerPreviewScope`), so a big book
+  left on Chapter doesn't open on the whole book once; after that, the whole
+  book.
+- **Self-test** `previewscopewindows`: two windows on never-opened copies of
+  the sample book, the settings file saying `"chapter"`. Both start on Chapter;
+  each window switches in turn and the other, brought forward (`loadConfig` and
+  a focus event), keeps its own; each book's session has its own choice, and
+  the file is never written. Book state is kept by path, so run it on fresh
+  paths.
 
 ### Open questions
 

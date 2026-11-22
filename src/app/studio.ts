@@ -30,13 +30,13 @@ import {
   validateProjectSettings,
   type ProjectSettings,
 } from './project-settings';
-import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, firstAssistant, loadSettings, saveSettings, settingsSaved, type AppSettings, type AssistantId, type PreviewScope, type ToolName } from './settings';
-import { BookStore, type BookSession, type PreviewPlace, type UnsavedText } from './book-state';
+import { ASSISTANT_NAMES, ASSISTANTS, assistantsFor, firstAssistant, loadSettings, saveSettings, settingsSaved, type AppSettings, type AssistantId, type ToolName } from './settings';
+import { BookStore, type BookSession, type PreviewPlace, type PreviewScope, type UnsavedText } from './book-state';
 import { handleMcp, STUDIO_TOOLS, type BookProblem, type CommentRow, type ModelChoice, type PageHeading, type StudioHost } from './studio-tools';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
 import { nextZoom, type ZoomAction } from '../lib/zoom';
 import { aiEdit, editMarks, readLabel, readOf, type AiEdit, type AiRead } from './ai-marks';
-import { parseConfig, serializeConfig } from './config';
+import { formerPreviewScope, parseConfig, serializeConfig } from './config';
 import { chapterNumber, describeTool, fileName, firstHeading, mainIncludes, NO_NAMES, toolActivity, unnumberedHeading, type BookNames } from './tool-labels';
 import {
   bookNumbersPath,
@@ -533,6 +533,11 @@ export type StudioState = {
   /** What the preview shows: the book, or its cover (cover/preview.typ, with guides). */
   previewTarget: 'book' | 'cover';
   /**
+   * Of the book, all of it or only the chapter being edited: this window's
+   * choice (the switch above the preview), kept with its book.
+   */
+  previewScope: PreviewScope;
+  /**
    * The chapter the preview shows, when it shows only one (previewScope
    * "chapter": chapter-preview.ts); null when it shows the whole book.
    */
@@ -649,6 +654,7 @@ const initialState: StudioState = {
   todos: [],
   review: { comments: [], draft: null, busy: [] },
   previewTarget: 'book',
+  previewScope: 'book',
   previewChapter: null,
   bookPages: null,
   coverDialogOpen: false,
@@ -1061,13 +1067,13 @@ export class Studio {
       if (sent) this.keepChat();
       else this.chatTimer ??= window.setTimeout(() => this.keepChat(), running ? 1000 : 300);
     });
-    // Which task the chat shows, the sidebar's view and what the preview shows: kept with the book as they change.
+    // Which task the chat shows, the sidebar's view and what the preview shows (the book, one chapter, the cover): kept with the book as they change.
     this.store.subscribe(() => {
       const book = this.bookStore;
       const s = this.state;
       if (!book || s.workspace?.root !== book.root) return;
-      const now: Partial<BookSession> = { task: s.agent.taskId, sidebar: s.sidebar, previewTarget: s.previewTarget };
-      if (now.task !== book.session.task || now.sidebar !== book.session.sidebar || now.previewTarget !== book.session.previewTarget) book.updateSession(now);
+      const now: Partial<BookSession> = { task: s.agent.taskId, sidebar: s.sidebar, previewTarget: s.previewTarget, previewScope: s.previewScope };
+      if (now.task !== book.session.task || now.sidebar !== book.session.sidebar || now.previewTarget !== book.session.previewTarget || now.previewScope !== book.session.previewScope) book.updateSession(now);
     });
     window.addEventListener('pagehide', () => {
       this.keepChat();
@@ -1378,7 +1384,9 @@ export class Studio {
     this.bookStore = book;
     this.restoringTabs = true;
     const sidebar = SIDEBAR_VIEWS.find((v) => v === book.session.sidebar) ?? this.state.sidebar;
-    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false, sidebar, previewTarget: book.session.previewTarget });
+    // The whole book or one chapter, as this book was left; one never chosen starts as the setting every window shared had it.
+    const previewScope = book.session.previewScope ?? this.formerPreviewScope ?? 'book';
+    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false, sidebar, previewTarget: book.session.previewTarget, previewScope });
     if (shown) this.showKeptTask(shown, kept);
     // The message being written, not sent yet.
     if (book.session.draft) {
@@ -4016,9 +4024,9 @@ export class Studio {
     // The book's citations, for the guard against references that go nowhere (refGuard): known before it's first typeset.
     await this.refRun;
     this.previewKeys = this.refs.citationKeys(ws.entry);
-    // Or one chapter of the book alone (Settings ▸ General ▸ Preview), when the book has chapters to leave out.
+    // Or one chapter of the book alone (Chapter, above the preview), when the book has chapters to leave out.
     const chapter =
-      this.state.previewTarget === 'book' && this.state.settings.previewScope === 'chapter'
+      this.state.previewTarget === 'book' && this.state.previewScope === 'chapter'
         ? await this.chapterPreviewFile()
             .then(async (c) => c && (await ipc.previewChapterFile(c.path), c))
             .catch(() => null)
@@ -4150,15 +4158,17 @@ export class Studio {
     return this.state.previewTarget === 'book' && !!this.state.previewChapter;
   }
 
-  /** What the preview shows: the whole book, the chapter being edited, or the cover. */
+  /**
+   * What this window's preview shows: the whole book, the chapter being
+   * edited, or the cover. Only this window's: another window's book shows what
+   * that window chose.
+   */
   async showInPreview(what: PreviewScope | 'cover') {
     if (what === 'cover') return this.setPreviewTarget('cover');
-    const fromCover = this.state.previewTarget === 'cover';
-    if (!fromCover && this.state.settings.previewScope === what) return;
-    if (fromCover) this.store.set({ previewTarget: 'book' });
-    // A change of the setting restarts the preview (updateSettings); from the cover, the same setting needs one too.
-    if (this.state.settings.previewScope !== what) this.updateSettings({ previewScope: what });
-    else await this.restartTypst();
+    if (this.state.previewTarget === 'book' && this.state.previewScope === what) return;
+    // The whole book or one chapter: another main file for Tinymist.
+    this.store.set({ previewTarget: 'book', previewScope: what });
+    if (this.state.workspace) await this.restartTypst();
   }
 
   /**
@@ -7044,8 +7054,6 @@ export class Studio {
     this.store.set({ settings });
     if (write) this.scheduleConfigWrite();
     if (settings.previewPages !== before.previewPages) this.configurePreview();
-    // The whole book or one chapter: another main file for Tinymist.
-    if (settings.previewScope !== before.previewScope && this.state.workspace && this.state.previewTarget === 'book') void this.restartTypst();
     if (PROOFING_KEYS.some((k) => JSON.stringify(settings[k]) !== JSON.stringify(before[k]))) this.proofing.recheckAll();
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
     else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
@@ -7321,6 +7329,8 @@ export class Studio {
 
   /** The file's last known text (to notice edits made elsewhere) and its parsed object (to keep unknown keys). */
   private config: { text: string | null; raw: Record<string, unknown> } = { text: null, raw: {} };
+  /** The preview's whole book or one chapter, from when the settings file had it for every window (null: it didn't). */
+  private formerPreviewScope: PreviewScope | null = null;
   private configTimer: number | undefined;
   /** Foreword's first start on this Mac: no settings kept here yet. */
   private readonly firstStart = !settingsSaved();
@@ -7349,6 +7359,8 @@ export class Studio {
         return;
       }
       this.config = { text, raw: parsed.raw };
+      // Where a book that never chose starts: the whole book or one chapter, as the file had it for every window.
+      this.formerPreviewScope ??= formerPreviewScope(parsed.raw);
       // A window keeps the assistant its mode runs on: the file has the one another window switched to.
       const own = this.setupFor(this.state.agent.mode) ? { assistant: this.state.settings.assistant } : {};
       this.updateSettings({ ...parsed.settings, ...own }, { write: false });
@@ -7880,6 +7892,7 @@ export class Studio {
       return {
         settings: this.state.settings,
         zoom: this.state.zoom,
+        previewScope: this.state.previewScope,
         assistant: this.state.settings.assistant,
         models: a.models,
         model: a.model,
@@ -7890,9 +7903,12 @@ export class Studio {
       };
     },
     approve: (tool, what) => this.approveStudioChange(tool, what),
-    changePreferences: (patch, zoom) => {
+    changePreferences: (patch, zoom, previewScope) => {
       if (Object.keys(patch).length) this.updateSettings(patch);
       if (zoom !== undefined) void this.setZoom(zoom);
+      // This window's, as the switch above the preview (the cover stays, if that's what it shows).
+      if (previewScope && this.state.previewTarget === 'book') void this.showInPreview(previewScope);
+      else if (previewScope) this.store.set({ previewScope });
     },
     whenIdle: (run) => {
       if (this.state.agent.running) this.idleQueue.push(run);

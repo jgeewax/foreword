@@ -210,7 +210,7 @@ export function StatusBar() {
             icon="book"
             label={compileLabel}
             title={
-              chapter ? 'Typesetting only this chapter, for a quicker preview (Settings ▸ General ▸ Preview): its pages and words, not the book’s' : 'Typesetting status of the whole book'
+              chapter ? 'Typesetting only this chapter, for a quicker preview (Chapter, above the preview): its pages and words, not the book’s' : 'Typesetting status of the whole book'
             }
           />
         )}

@@ -87,6 +87,7 @@ describe('readSession', () => {
       previewTarget: 'cover',
       previewChapter: 'one.typ',
       previewPlace: { book: { page: 3, offset: 0.25 }, cover: { page: -1, offset: 0 }, 'chapter:one.typ': { page: 1, offset: 2 } },
+      previewScope: 'chapter',
     });
     expect(s).toEqual({
       tabs: ['one.typ', 'two.typ'],
@@ -98,10 +99,14 @@ describe('readSession', () => {
       previewTarget: 'cover',
       previewChapter: 'one.typ',
       previewPlace: { book: { page: 3, offset: 0.25 } },
+      previewScope: 'chapter',
     });
     expect(readSession(null)).toEqual(readSession({}));
     expect(readSession('nonsense').tabs).toEqual([]);
     expect(readSession({ previewTarget: 'elsewhere' }).previewTarget).toBe('book');
+    // Never chosen (a session from before the book had its own): the window decides.
+    expect(readSession({}).previewScope).toBeNull();
+    expect(readSession({ previewScope: 'part' }).previewScope).toBeNull();
   });
 });
 

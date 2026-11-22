@@ -1,5 +1,6 @@
 // The settings file (~/.foreword/settings.json): every app preference as
 // JSON the author can edit by hand. Keys this version doesn't know are kept.
+import type { PreviewScope } from './book-state';
 import { DEFAULT_SETTINGS, sanitize, type AppSettings } from './settings';
 
 export type ParsedConfig = {
@@ -39,7 +40,17 @@ const RETIRED = [
   'historyPlacement',
   // Commands to allow, by name: rules now (alwaysAllow, with "python3" as "python3 *").
   'allowCommands',
+  // The whole book or one chapter in the preview: each window's own now, kept with its book (formerPreviewScope).
+  'previewScope',
 ];
+
+/**
+ * The preview's whole book or one chapter, as the file had it when that was
+ * every window's setting: where a book that hasn't chosen yet starts.
+ */
+export function formerPreviewScope(raw: Record<string, unknown>): PreviewScope | null {
+  return raw.previewScope === 'book' || raw.previewScope === 'chapter' ? raw.previewScope : null;
+}
 
 /** The file's text: the settings (and zoom) over what was there, in a stable order, 2-space JSON. */
 export function serializeConfig(raw: Record<string, unknown>, settings: AppSettings, zoom: number): string {
@@ -57,7 +68,6 @@ export function serializeConfig(raw: Record<string, unknown>, settings: AppSetti
     wordWrapColumn: settings.wordWrapColumn,
     rulers: settings.rulers,
     previewPages: settings.previewPages,
-    previewScope: settings.previewScope,
     toolPaths: settings.toolPaths,
     assistant: settings.assistant,
     optionCount: settings.optionCount,

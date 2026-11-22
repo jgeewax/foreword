@@ -49,10 +49,12 @@ function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' =
   const idle: (() => unknown)[] = [];
   let settings: AppSettings = { ...DEFAULT_SETTINGS };
   let zoom = 1;
+  let previewScope: 'book' | 'chapter' = 'book';
   const h: StudioHost = {
     state: () => ({
       settings,
       zoom,
+      previewScope,
       assistant: 'opencode' as AssistantId,
       models: [
         { providerID: 'opencode', id: 'beam-free', name: 'Beam Free', providerName: 'OpenCode', supportsTools: true },
@@ -64,10 +66,11 @@ function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' =
       mode: 'write' as AgentMode,
       permission,
     }),
-    changePreferences: (patch, z) => {
+    changePreferences: (patch, z, scope) => {
       settings = { ...settings, ...patch };
       if (z !== undefined) zoom = z;
-      did.push(`prefs ${JSON.stringify(patch)}${z !== undefined ? ` zoom ${z}` : ''}`);
+      if (scope !== undefined) previewScope = scope;
+      did.push(`prefs ${JSON.stringify(patch)}${z !== undefined ? ` zoom ${z}` : ''}${scope !== undefined ? ` preview ${scope}` : ''}`);
     },
     approve: async (tool, what) => {
       asked.push(`${tool}: ${what}`);
@@ -80,7 +83,7 @@ function host(permission: Level = 'allow', answer: 'yes' | 'no' | 'unanswered' =
     openSettings: (page) => void did.push(`settings ${page ?? ''}`),
     book: pages,
   };
-  return { h, did, idle, asked, settings: () => settings, zoom: () => zoom };
+  return { h, did, idle, asked, settings: () => settings, zoom: () => zoom, previewScope: () => previewScope };
 }
 
 /** The whole answer to a call: its words, its pictures, and whether it's an error. */
@@ -147,6 +150,17 @@ describe('Foreword’s tools, as an MCP server', () => {
     expect(t.settings()).toMatchObject({ editorFontSize: 14, rulers: [80, 120] });
     expect(t.zoom()).toBe(1.25);
     expect(r.text).toBe('Changed (in effect now): editorFontSize: 12 px → 14 px; rulers: none → 80, 120; zoom: 100% → 125%; formatOnSave was already true.');
+  });
+
+  it('change_settings: the preview’s whole book or one chapter is this window’s, not a setting', async () => {
+    const t = host();
+    expect(JSON.parse((await call(t.h, 'get_settings', {})).text).preferences.previewScope.value).toBe('book');
+    const r = await call(t.h, 'change_settings', { previewScope: 'chapter' });
+    expect(r.text).toBe('Changed (in effect now): previewScope: book → chapter.');
+    expect(t.previewScope()).toBe('chapter');
+    expect(t.settings()).not.toHaveProperty('previewScope');
+    expect(t.did).toEqual(['prefs {} preview chapter']);
+    expect((await call(t.h, 'change_settings', { previewScope: 'part' })).text).toMatch(/previewScope \(book, chapter\)/);
   });
 
   it('change_settings: also when an assistant wraps them in "settings"', async () => {
