@@ -2,6 +2,39 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.12.0 · 22 November 2026
+
+### The assistant
+
+- **Auto picks the mode for you.** Auto is the first choice in the mode menu (and /auto), and it's where the chat starts. As you type, Foreword works out which mode the message fits, and the mode button shows it ("✦ Auto · Review", in that mode's colour). Only a request to change the text goes in Write; a question, or anything it can't place, goes in a mode that can't change the book. Your message shows the mode it went in beside its time; hover over it to see why. A button that asks in a mode of its own leaves the chat in Auto, and choosing a mode from the menu takes you out of it. Auto runs on your usual assistant, model and effort, so pinned modes don't apply in it.
+- **Review, a new mode.** Ask Review to read a passage for anything you like, or pick one of the usual things (proofreading, clarity, what it could do without, the facts, your style guide). It gives a verdict, then a change for each problem, which you make from its card or skip. Nothing in the book changes until you choose. It's on the selection bar beside Revise, Options and Ask, and in /review, and the empty chat's proofread runs in it.
+- **Each mode gives one kind of answer.** Ask answers and changes nothing: no changes to make, no Go ahead. When it notices a problem, it offers to look at it in Review. Discuss reads first, gives its honest view, asks what would settle the question, and ends with *Ways forward*: a card for each direction, its favourite marked, that you can take to Write (*Write it*) or to Options.
+- **Ask about a change.** Right-click lines the assistant changed and choose *Ask About This Change…*, or click *Ask* beside a file in a History version. The change goes with your next message, in Ask, along with what was asked for when it was made and what the assistant said, when Foreword has them. It waits above the message box, where a click shows its lines.
+- **Name a book file with @.** Type @ in the message box for a list of the book's files and folders, the open ones first. Keep typing to narrow it by path or by a chapter's heading; Tab or Return picks, and a folder opens onto its files. The files you name go with the message for the assistant to open, and in the chat each one is a link to its file. A reference such as `@fig-plot` that isn't a file stays as you typed it.
+- **TODOs from the chapter you're in.** The empty chat's *From your TODOs* offers the open file's TODOs first, then the rest of its chapter's, then the book's.
+
+### Back where you left off
+
+- **A book opens as you left it, even after a crash.** Quit, force quit, a crash or the Mac restarting: open the book again and it's as if you never closed it. Its tabs, the file in front, where you were in each file, the sidebar, what the preview showed and where, the chat's task and the message you were half-way through writing all come back. Anything typed and not saved is kept within a second, and comes back as unsaved changes; if the file changed on disk in the meantime, that change is merged in. The chat is kept as each reply comes in, and shows as soon as the book opens. A reply cut off part-way says so, and Resume carries on.
+- **Every window comes back.** After a quit, a crash or a force quit, Foreword opens each window you had, with its book, where it was on the screen (or where a new window would go, if its screen is gone). A window you close yourself stays closed.
+- **New Window and your recent books from the Dock.** Right-click Foreword in the Dock. A book opens in a window of its own, or brings forward the window that has it.
+
+### Source Control and the file tree
+
+- **Start a repository.** Source Control is always down the left now. For a book that isn't in Git, it offers *Initialize Repository*, which starts one in the book's folder and commits nothing until you do. The first time you publish, push or sync with no remote, it asks you for one. Without Git on the Mac, it says so and points you to Settings ▸ Tools.
+- **The file tree shows each file's kind and its changes.** Each file has its type's icon, as on the tabs. In a Git repository, a changed file's name and letter take Git's colours (M changed, U new, A added, R renamed, ! conflict), and each folder with a change inside it has a dot; its tooltip says how many files changed.
+- **Editing in a diff has the editor's tools.** When you edit a file in its diff, the selection bar, a TODO's bar, spelling, the right-click menu, review comments, ▶ Run and ⌘-click are all there, as in the editor.
+
+### Settings
+
+- **Say a colour in words.** Under the swatches for the book's colour and the assistant's marks, type the colour you want: "brighter pink", "a bit darker", "bluish green", "more like the sea", "#2f6fde". The colour changes as you type. Return keeps it, and Return again goes a step further; Esc puts back the colour from before. The note under the box says how it read your words.
+- **See the book's colour as it'll look.** Settings no longer dims the window while you choose the book's colour, so the title bar, the icons down the left and the status bar show it as it really is.
+
+### Fixes
+
+- An option or a change whose new text had a block of code in it lost the code: only the words before it went in, and the code fell into the note below. The whole of it goes in now.
+- With two windows open, a book opened in one could drop off the other's recent books. Each window keeps the whole list now.
+
 ## 0.11.0 · 19 November 2026
 
 ### Source Control and History
