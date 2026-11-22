@@ -111,6 +111,8 @@ fn main() {
             "git_create_branch",
             "git_pull",
             "git_push",
+            "git_init",
+            "git_add_remote",
             "history_reveal",
             "history_snapshot",
             "history_list",

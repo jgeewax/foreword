@@ -798,6 +798,8 @@ pub fn run() {
             git::git_create_branch,
             git::git_pull,
             git::git_push,
+            git::git_init,
+            git::git_add_remote,
             history::history_reveal,
             history::history_snapshot,
             history::history_list,

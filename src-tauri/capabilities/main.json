@@ -120,6 +120,8 @@
     "allow-git-create-branch",
     "allow-git-pull",
     "allow-git-push",
+    "allow-git-init",
+    "allow-git-add-remote",
     "allow-history-reveal",
     "allow-history-snapshot",
     "allow-history-list",

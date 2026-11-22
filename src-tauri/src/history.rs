@@ -24,8 +24,9 @@ const KIND_TRAILER: &str = "Studio-Kind";
 /// In a snapshot label, replaced by the names of the files that changed.
 const FILES_PLACEHOLDER: &str = "{files}";
 
-/// Always excluded from snapshots (on top of the book's own .gitignore files).
-const BASE_EXCLUDES: &[&str] = &[
+/// Always excluded from snapshots (on top of the book's own .gitignore files),
+/// and from a repository Source Control starts.
+pub const BASE_EXCLUDES: &[&str] = &[
     ".DS_Store",
     "*.foreword.tmp",
     crate::workspace::CHAPTER_PREVIEW,

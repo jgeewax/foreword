@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-git-add-remote"
+description = "Enables the git_add_remote command without any pre-configured scope."
+commands.allow = ["git_add_remote"]
+
+[[permission]]
+identifier = "deny-git-add-remote"
+description = "Denies the git_add_remote command without any pre-configured scope."
+commands.deny = ["git_add_remote"]

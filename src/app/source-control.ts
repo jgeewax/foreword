@@ -1,12 +1,12 @@
-// Source Control: the author's own Git repository, when the book is in one.
-// As VS Code's: what's changed since the last commit (stage, unstage,
+// Source Control: the author's own Git repository, or Initialize Repository
+// to start one when the book isn't in one. As VS Code's: what's changed since the last commit (stage, unstage,
 // discard), committing (and amending, and undoing the last commit), pulling,
 // pushing, syncing and fetching, branches, and the recent commits, each with
 // "what changed" in words (the same view as History). Separate from History,
 // which keeps its own snapshots and never touches this repository; Discard
 // has History keep the book first.
 import { showContextMenu, type MenuEntry } from '../lib/context-menu';
-import { errorMessage, ipc, type GitBranch, type GitCommit, type GitFile, type GitStatus } from '../lib/ipc';
+import { errorMessage, ipc, isCmdError, type GitBranch, type GitCommit, type GitFile, type GitStatus } from '../lib/ipc';
 import type { ChangedFile } from './history';
 import { proseDiff } from './prose-diff';
 
@@ -25,11 +25,13 @@ export type GitState = {
   status: 'off' | 'loading' | 'ready' | 'error';
   /** null: the book isn't in a Git repository. */
   repo: GitStatus | null;
+  /** Git itself wasn't found (Settings ▸ Tools says how to get it). */
+  missing: boolean;
   log: GitCommit[];
   /** How many commits the graph asks for (Load More adds a page). */
   limit: number;
   /** What's running. */
-  busy: 'commit' | 'pull' | 'push' | 'sync' | 'fetch' | 'discard' | 'branch' | null;
+  busy: 'init' | 'commit' | 'pull' | 'push' | 'sync' | 'fetch' | 'discard' | 'branch' | null;
   error: string | null;
   view: GitChangesView | null;
   /** The commit message being written (kept while the view is closed; Undo Last Commit puts one back). */
@@ -53,14 +55,14 @@ export function mainAction(repo: GitStatus): 'commit' | 'sync' | 'publish' {
 /** Commits in the graph at first, and added by each Load More. */
 export const LOG_PAGE = 50;
 
-export const initialGit: GitState = { status: 'off', repo: null, log: [], limit: LOG_PAGE, busy: null, error: null, view: null, message: '' };
+export const initialGit: GitState = { status: 'off', repo: null, missing: false, log: [], limit: LOG_PAGE, busy: null, error: null, view: null, message: '' };
 
 export type GitHost = {
   get(): GitState;
   set(patch: Partial<GitState>): void;
   report(text: string, tone: 'info' | 'error'): void;
   confirm(message: string, title: string, ok: string): Promise<boolean>;
-  prompt(request: { title: string; label: string; okLabel: string; value?: string }): Promise<string | null>;
+  prompt(request: { title: string; label: string; okLabel: string; value?: string; placeholder?: string; help?: string }): Promise<string | null>;
   /** Before Discard: open files among these saved, and the book kept in History. Throws if it couldn't be. */
   keep(paths: string[]): Promise<void>;
   /** A new file, discarded: to the Trash. */
@@ -161,12 +163,59 @@ export class SourceControl {
       const repo = await ipc.gitStatus();
       const log = repo ? await ipc.gitLog(this.state.limit) : [];
       if (n !== this.refreshes) return;
-      this.host.set({ status: 'ready', repo, log, error: null });
+      this.host.set({ status: 'ready', repo, log, error: null, missing: false });
       // Staged, committed or changed meanwhile: what's changed now, shown again in place.
       if (this.working && this.state.view?.files) void this.showWorking(this.working.only, this.working.staged, true);
     } catch (e) {
-      if (n === this.refreshes) this.host.set({ status: 'error', error: errorMessage(e) });
+      if (n === this.refreshes) this.host.set({ status: 'error', error: errorMessage(e), missing: isCmdError(e) && e.kind === 'unavailable' });
     }
+  }
+
+  /**
+   * Initialize Repository, as VS Code's: a Git repository in the book's
+   * folder (Foreword's own files left out). Every file in the book is then a
+   * change to commit; nothing is committed until the author does.
+   */
+  async init() {
+    if (this.state.repo || this.state.busy) return;
+    this.host.set({ busy: 'init' });
+    try {
+      await ipc.gitInit();
+      this.host.report('The book has a Git repository now. Write a message and Commit to put its first version in.', 'info');
+    } catch (e) {
+      this.host.report(errorMessage(e), 'error');
+    } finally {
+      this.host.set({ busy: null });
+      await this.refresh();
+    }
+  }
+
+  /**
+   * Before a branch's first push: somewhere to send it. A repository with no
+   * remote (one just started, say) asks for one, as `origin`. False: none was given.
+   */
+  private async ensureRemote(): Promise<boolean> {
+    const repo = this.state.repo;
+    if (!repo || this.state.busy) return false;
+    if (repo.upstream || repo.remotes.length) return true;
+    const url = (
+      await this.host.prompt({
+        title: 'Add a Remote',
+        label: 'The address of the repository to push the book to',
+        placeholder: 'https://github.com/you/book.git',
+        help: 'Make an empty repository on GitHub (or another host) first: its page shows the address to copy. Push sends the book there from then on.',
+        okLabel: 'Add Remote',
+      })
+    )?.trim();
+    if (!url) return false;
+    try {
+      await ipc.gitAddRemote(url);
+    } catch (e) {
+      this.host.report(errorMessage(e), 'error');
+      return false;
+    }
+    await this.refresh();
+    return true;
   }
 
   /** The next page of older commits in the graph. */
@@ -254,17 +303,20 @@ export class SourceControl {
   }
 
   async push() {
+    if (!(await this.ensureRemote())) return;
     await this.remote('push', () => ipc.gitPush(), () => 'Sent to the remote.');
   }
 
-  /** Publish Branch: its first push, to origin, which it follows from then on. */
+  /** Publish Branch: its first push, to origin (asked for, if there's no remote yet), which it follows from then on. */
   async publish() {
+    if (!(await this.ensureRemote())) return;
     const branch = this.state.repo?.branch;
     await this.remote('push', () => ipc.gitPush(), () => `Published ${branch ?? 'the branch'}: it’s on the remote now.`);
   }
 
   /** Sync Changes, as VS Code's: pull, then push (a branch not on the remote yet is published). */
   async sync() {
+    if (!(await this.ensureRemote())) return;
     const upstream = this.state.repo?.upstream;
     await this.remote(
       'sync',

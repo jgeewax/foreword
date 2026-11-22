@@ -150,7 +150,8 @@ export type LaunchOptions = {
 /** A book file in Git: M modified, A added, D deleted, R renamed, ? new (not yet in Git), U conflict. */
 export type GitFile = { path: string; status: 'M' | 'A' | 'D' | 'R' | '?' | 'U' };
 /** `staged`: Staged Changes; `files`: changed and not staged (a file staged and changed again is in both). */
-export type GitStatus = { root: string; prefix: string; branch: string | null; upstream: string | null; ahead: number; behind: number; staged: GitFile[]; files: GitFile[] };
+/** `remotes`: their names (none: Publish asks where to send the book first). */
+export type GitStatus = { root: string; prefix: string; branch: string | null; upstream: string | null; ahead: number; behind: number; staged: GitFile[]; files: GitFile[]; remotes: string[] };
 export type GitRef = { name: string; kind: 'head' | 'branch' | 'remote' | 'tag' };
 /** A branch to check out: "main", or a remote's "origin/main". */
 export type GitBranch = { name: string; kind: 'local' | 'remote'; current: boolean };
@@ -200,6 +201,10 @@ export const ipc = {
   gitBranches: () => invoke<GitBranch[]>('git_branches'),
   gitCheckout: (branch: string, remote = false) => invoke<void>('git_checkout', { branch, remote }),
   gitCreateBranch: (name: string) => invoke<void>('git_create_branch', { name }),
+  /** Initialize Repository: one in the book's folder, Foreword's own files left out; nothing committed. */
+  gitInit: () => invoke<void>('git_init'),
+  /** Where Push sends the book (`origin`), for a repository with no remote yet. */
+  gitAddRemote: (url: string) => invoke<void>('git_add_remote', { url }),
   /** Whether another window has this book open (it comes to the front if so). */
   workspaceElsewhere: (path: string) => invoke<boolean>('workspace_elsewhere', { path }),
   workspaceOpen: (path: string, onChange: Channel<string[]>) => invoke<WorkspaceInfo>('workspace_open', { path, onChange }),

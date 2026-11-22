@@ -150,7 +150,7 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('show-review', 'Show Review', { keywords: ['comments'] }),
         menu('show-history', 'Show History', { keywords: ['versions'] }),
         menu('show-tasks', 'Show Tasks', { keywords: ['assistant tasks', 'conversations', 'chats'] }),
-        menu('show-git', 'Show Source Control', { keywords: ['git'], when: () => !!repo() }),
+        menu('show-git', 'Show Source Control', { keywords: ['git'] }),
         { id: 'show-code', title: 'Show Code Examples', when: hasCode, run: () => studio.revealSidebar('code') },
         { id: 'show-todos', title: 'Show TODOs', keywords: ['to do'], when: () => s().todos.length > 0, run: () => studio.revealSidebar('todos') },
         menu('show-in-preview', 'Show in Preview', { keywords: ['sync', 'jump'], when: typ }),
@@ -255,6 +255,16 @@ export function paletteCommands(studio: Studio): Command[] {
     [
       'Source Control',
       [
+        {
+          id: 'git-init',
+          title: 'Initialize Repository',
+          keywords: ['git init', 'start', 'new repository'],
+          when: () => s().git.status === 'ready' && !repo() && !s().git.busy,
+          run: () => {
+            studio.revealSidebar('git');
+            return studio.git.init();
+          },
+        },
         {
           id: 'git-commit',
           title: 'Commit…',

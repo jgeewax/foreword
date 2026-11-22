@@ -66,8 +66,8 @@ export function SourceControlPanel() {
   const [graphOpen, toggleGraph] = useOpen('graph');
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'studio-scm', storage: localStorage });
   const repo = git.repo;
-  if (git.status === 'loading' || git.status === 'off') return <div className="history-empty muted">Looking for a Git repository…</div>;
-  if (!repo) return <div className="history-empty muted">This book isn’t in a Git repository.</div>;
+  if (!repo && (git.status === 'loading' || git.status === 'off')) return <div className="history-empty muted">Looking for a Git repository…</div>;
+  if (!repo) return <StartRepository />;
   const write = (text: string) => studio.git.setMessage(text);
   const busy = git.busy;
   const changes = (
@@ -116,7 +116,13 @@ export function SourceControlPanel() {
         <button
           className={`icon scm-action${busy === 'push' ? ' running' : ''}`}
           disabled={!!busy || (!!repo.upstream && repo.ahead === 0)}
-          title={repo.upstream ? `Push: send ${repo.ahead || 'no'} commit${repo.ahead === 1 ? '' : 's'} to ${repo.upstream}` : 'Push: send this branch to the remote (origin) for the first time'}
+          title={
+            repo.upstream
+              ? `Push: send ${repo.ahead || 'no'} commit${repo.ahead === 1 ? '' : 's'} to ${repo.upstream}`
+              : repo.remotes.length
+                ? `Push: send this branch to the remote (${repo.remotes.includes('origin') ? 'origin' : repo.remotes[0]}) for the first time`
+                : 'Push: send this branch to a remote for the first time (asked for first: there’s none yet)'
+          }
           aria-label="Push"
           onClick={() => void studio.git.push()}
         >
@@ -145,6 +151,40 @@ export function SourceControlPanel() {
           {graph}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * No repository, as VS Code's empty Source Control: what one is for, and
+ * Initialize Repository. Without Git (or if it failed), why, and where to fix it.
+ */
+function StartRepository() {
+  const git = useStore(studio.store, (s) => s.git);
+  if (git.status === 'error') {
+    return (
+      <div className="scm-start">
+        <Icon name="branch" size={36} />
+        <div className="scm-start-title">{git.missing ? 'Git isn’t installed' : 'Git didn’t answer'}</div>
+        <p className="muted">
+          {git.missing ? 'Source Control needs Git. Settings ▸ Tools says how to install it, or which copy to use.' : `Foreword couldn’t ask Git about the book’s folder: ${git.error}`}
+        </p>
+        <div className="scm-start-buttons">
+          <button onClick={() => void studio.git.refresh()}>Try Again</button>
+          <button onClick={() => studio.openSettings('tools')}>Tools Settings…</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="scm-start">
+      <Icon name="branch" size={36} />
+      <div className="scm-start-title">No Git repository</div>
+      <p className="muted">The book’s folder isn’t in a Git repository. Start one to commit versions of the book yourself, and push them to GitHub or another remote to share them or keep them safe.</p>
+      <button className="primary" disabled={!!git.busy} onClick={() => void studio.git.init()}>
+        {git.busy === 'init' ? 'Initializing…' : 'Initialize Repository'}
+      </button>
+      <p className="muted scm-start-note">History keeps saving versions as you work either way.</p>
     </div>
   );
 }
@@ -222,7 +262,12 @@ function Changes({ repo, message, setMessage }: { repo: GitStatus; message: stri
               {repo.ahead > 0 && <span className="scm-sync-count">{repo.ahead}↑</span>}
             </button>
           ) : action === 'publish' ? (
-            <button className="primary scm-sync" disabled={!!busy} title={`Publish Branch: put ${repo.branch} on the remote (origin), and follow it from then on`} onClick={() => void studio.git.publish()}>
+            <button
+              className="primary scm-sync"
+              disabled={!!busy}
+              title={`Publish Branch: put ${repo.branch} on ${repo.remotes.length ? `the remote (${repo.remotes.includes('origin') ? 'origin' : repo.remotes[0]})` : 'a remote (asked for first: there’s none yet)'}, and follow it from then on`}
+              onClick={() => void studio.git.publish()}
+            >
               <Icon name="cloudUp" size={15} />
               <span className="scm-sync-label">{busy === 'push' ? 'Publishing…' : 'Publish Branch'}</span>
             </button>

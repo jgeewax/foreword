@@ -6491,6 +6491,59 @@ async function subRootChecks() {
  * repo and a local bare remote as the workspace): status, what changed,
  * commit, push, pull and a commit's changes.
  */
+/**
+ * A book not in Git (only when named: it makes a repository in the book):
+ * the Source Control icon is there anyway, Initialize Repository starts one
+ * without Foreword's own files, and the first Publish asks for a remote
+ * (a bare repository beside the book, `../remote.git`, made before the run).
+ */
+async function gitInitChecks() {
+  const out: Record<string, unknown> = {};
+  const g = () => studio.state.git;
+  await waitFor(() => g().status === 'ready' || g().status === 'error', 20000, 'git').catch(() => {});
+  await ipc.previewChapterFile('.foreword-chapter.typ').catch(() => {});
+  out.start = { status: g().status, repo: g().repo, missing: g().missing };
+  // The view fades in, and a background window's animations stall: the pictures would be blank.
+  const still = document.head.appendChild(document.createElement('style'));
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  const icon = () => document.querySelector<HTMLButtonElement>('.activity-bar button[aria-label^="Source control"]');
+  out.icon = icon()?.getAttribute('aria-label') ?? null;
+  out.palette = paletteCommands(studio).find((c) => c.id === 'git-init')?.when?.() ?? null;
+  // From another view: the open view's icon would close the sidebar.
+  studio.showSidebar('files');
+  await sleep(200);
+  icon()?.click();
+  await sleep(400);
+  const start = () => document.querySelector('.scm-start');
+  out.empty = { text: start()?.textContent, button: start()?.querySelector('button.primary')?.textContent };
+  out.snapshotEmpty = await snap('gitinit-empty');
+  start()?.querySelector<HTMLButtonElement>('button.primary')?.click();
+  await waitFor(() => !!g().repo, 10000, 'repository').catch(() => {});
+  await sleep(300);
+  out.started = { branch: g().repo?.branch, upstream: g().repo?.upstream, remotes: g().repo?.remotes, files: g().repo?.files.map((f) => `${f.status} ${f.path}`), toast: studio.state.toast?.text };
+  out.iconAfter = icon()?.getAttribute('aria-label') ?? null;
+  out.snapshotStarted = await snap('gitinit-started');
+  await studio.git.commit('The first version');
+  await waitFor(() => g().log.length === 1 && !g().busy, 10000, 'commit').catch(() => {});
+  await sleep(300);
+  const main = () => document.querySelector<HTMLButtonElement>('.git-commit .scm-commit-button button.primary');
+  out.committed = { log: g().log.map((c) => c.subject), button: main()?.textContent, title: main()?.title };
+  out.snapshotPublish = await snap('gitinit-publish');
+  // Publish Branch: no remote yet, so it asks for one first.
+  main()?.click();
+  await waitFor(() => !!studio.state.prompt, 5000, 'prompt').catch(() => {});
+  await sleep(300);
+  out.prompt = studio.state.prompt && { title: studio.state.prompt.title, label: studio.state.prompt.label, placeholder: studio.state.prompt.placeholder };
+  out.snapshotPrompt = await snap('gitinit-remote');
+  const root = studio.state.workspace!.root;
+  studio.answerPrompt(`${root.slice(0, root.lastIndexOf('/'))}/remote.git`);
+  await waitFor(() => !!g().repo?.upstream && !g().busy, 20000, 'published').catch(() => {});
+  await sleep(300);
+  out.published = { upstream: g().repo?.upstream, remotes: g().repo?.remotes, ahead: g().repo?.ahead, toast: studio.state.toast?.text };
+  still.remove();
+  return out;
+}
+
 async function gitChecks() {
   const out: Record<string, unknown> = {};
   await waitFor(() => studio.state.git.status === 'ready', 20000, 'git').catch(() => {});
@@ -11465,6 +11518,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('dock')) result.dock = await dockChecks();
     if (want('reloadwindow')) result.reloadwindow = await reloadWindowChecks();
     if (want('git')) result.git = await gitChecks();
+    if (launch.selftestEdits && only?.includes('gitinit')) result.gitinit = await gitInitChecks();
     if (want('subroot')) result.subroot = await subRootChecks();
     if (launch.selftestEdits && want('mathdiff')) result.mathdiff = await mathDiffChecks();
     if (launch.selftestEdits && want('difftabs')) result.difftabs = await diffTabChecks();

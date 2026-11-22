@@ -116,6 +116,8 @@ pub struct GitStatus {
     /// Changed and not staged: edits, new files, conflicts (Changes). A file
     /// staged and then changed again is in both.
     files: Vec<GitFile>,
+    /// The remotes' names (none: Publish asks where to send the book first).
+    remotes: Vec<String>,
 }
 
 /// `git status --porcelain=v1 -z --branch` (paths relative to the repo) for the book's folder.
@@ -215,7 +217,94 @@ pub async fn git_status(state: Win) -> CmdResult<Option<GitStatus>> {
     let mut status = parse_status(&out, &prefix);
     status.root = root;
     status.prefix = prefix;
+    status.remotes = remotes(&book).await?;
     Ok(Some(status))
+}
+
+async fn remotes(book: &Path) -> CmdResult<Vec<String>> {
+    let out = git_ok(book, &["remote"], READ_TIMEOUT).await?;
+    Ok(out
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect())
+}
+
+/// Initialize Repository, as VS Code's: a Git repository in the book's
+/// folder, on `main` unless the author's Git names its own first branch.
+/// What History leaves out (Foreword's own files, the Finder's) goes in its
+/// info/exclude, which is the author's and never committed. Nothing is
+/// committed yet.
+#[tauri::command]
+pub async fn git_init(state: Win) -> CmdResult<()> {
+    init(&state.root()?).await
+}
+
+async fn init(book: &Path) -> CmdResult<()> {
+    if git(book, &["rev-parse", "--git-dir"], READ_TIMEOUT)
+        .await?
+        .status
+        .success()
+    {
+        return Err(CmdError::Invalid(
+            "The book is in a Git repository already.".into(),
+        ));
+    }
+    let named = git(book, &["config", "--get", "init.defaultBranch"], READ_TIMEOUT)
+        .await?
+        .status
+        .success();
+    let args: &[&str] = if named {
+        &["init", "-q"]
+    } else {
+        &["init", "-q", "-b", "main"]
+    };
+    git_ok(book, args, WRITE_TIMEOUT)
+        .await
+        .map_err(|e| CmdError::Io(format!("Couldn't start a repository: {e}")))?;
+    let info = book.join(".git").join("info");
+    std::fs::create_dir_all(&info)?;
+    let exclude = info.join("exclude");
+    let text = std::fs::read_to_string(&exclude).unwrap_or_default();
+    let missing: Vec<&str> = crate::history::BASE_EXCLUDES
+        .iter()
+        .copied()
+        .filter(|p| !text.lines().any(|l| l.trim() == *p))
+        .collect();
+    if !missing.is_empty() {
+        let sep = if text.is_empty() || text.ends_with('\n') {
+            ""
+        } else {
+            "\n"
+        };
+        std::fs::write(
+            &exclude,
+            format!(
+                "{text}{sep}# Foreword's own files, never part of the book\n{}\n",
+                missing.join("\n")
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+/// Add Remote: where Push sends the book (as `origin`), for a repository with none yet.
+#[tauri::command]
+pub async fn git_add_remote(state: Win, url: String) -> CmdResult<()> {
+    add_remote(&state.root()?, url.trim()).await
+}
+
+async fn add_remote(book: &Path, url: &str) -> CmdResult<()> {
+    if url.is_empty() || url.starts_with('-') || url.chars().any(char::is_whitespace) {
+        return Err(CmdError::Invalid(format!(
+            "“{url}” isn't a repository's address: one is like https://github.com/you/book.git or git@github.com:you/book.git."
+        )));
+    }
+    git_ok(book, &["remote", "add", "origin", url], WRITE_TIMEOUT)
+        .await
+        .map(drop)
+        .map_err(|e| CmdError::Io(format!("Couldn't add the remote: {e}")))
 }
 
 /// A book file as it is in a commit (`HEAD`, a hash, or `hash^`) or staged
@@ -685,7 +774,8 @@ pub async fn git_pull(state: Win) -> CmdResult<String> {
         .map_err(|e| CmdError::Io(format!("Couldn't pull: {e}")))
 }
 
-/// Send commits to the remote (setting the upstream on a branch's first push to origin).
+/// Send commits to the remote (setting the upstream on a branch's first push:
+/// to origin, or the one remote there is).
 #[tauri::command]
 pub async fn git_push(state: Win) -> CmdResult<String> {
     let book = state.root()?;
@@ -697,12 +787,19 @@ pub async fn git_push(state: Win) -> CmdResult<String> {
     .await?
     .status
     .success();
-    let args: &[&str] = if has_upstream {
-        &["push"]
+    let args: Vec<String> = if has_upstream {
+        vec!["push".into()]
     } else {
-        &["push", "--set-upstream", "origin", "HEAD"]
+        let all = remotes(&book).await?;
+        let Some(remote) = all.iter().find(|r| *r == "origin").or(all.first()) else {
+            return Err(CmdError::Invalid(
+                "Couldn't push: the repository has no remote to send it to yet.".into(),
+            ));
+        };
+        ["push", "--set-upstream", remote, "HEAD"].map(String::from).into()
     };
-    let out = git(&book, args, WRITE_TIMEOUT).await?;
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = git(&book, &args, WRITE_TIMEOUT).await?;
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -1136,5 +1233,47 @@ mod tests {
             .collect();
         assert_eq!(names, ["draft-2", "ideas*", "main"]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn starts_a_repository_without_foreword_s_own_files() {
+        if git_bin().is_err() {
+            return;
+        }
+        let book = std::env::temp_dir().join(format!(
+            "foreword-init-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(book.join("src")).unwrap();
+        std::fs::write(book.join("src/main.typ"), "= Hi\n").unwrap();
+        std::fs::write(book.join("src").join(crate::workspace::CHAPTER_PREVIEW), "").unwrap();
+        std::fs::write(book.join(".DS_Store"), "").unwrap();
+        init(&book).await.unwrap();
+        // Once is enough: a second time is refused.
+        assert!(init(&book).await.is_err());
+        let out = git_ok(
+            &book,
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+            READ_TIMEOUT,
+        )
+        .await
+        .unwrap();
+        assert_eq!(out.trim(), "?? src/main.typ");
+        let branch = git_ok(&book, &["symbolic-ref", "--short", "HEAD"], READ_TIMEOUT)
+            .await
+            .unwrap();
+        let wanted = git(&book, &["config", "--get", "init.defaultBranch"], READ_TIMEOUT)
+            .await
+            .unwrap();
+        let wanted = String::from_utf8_lossy(&wanted.stdout).trim().to_string();
+        assert_eq!(branch.trim(), if wanted.is_empty() { "main" } else { &wanted });
+
+        // No remote: a push says so (and Publish asks for one first).
+        assert!(remotes(&book).await.unwrap().is_empty());
+        assert!(add_remote(&book, "-u").await.is_err());
+        assert!(add_remote(&book, "has space").await.is_err());
+        add_remote(&book, "https://example.invalid/book.git").await.unwrap();
+        assert_eq!(remotes(&book).await.unwrap(), ["origin"]);
+        let _ = std::fs::remove_dir_all(&book);
     }
 }

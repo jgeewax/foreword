@@ -195,7 +195,7 @@ function useViews() {
   // Review is always there: it's where comments are written about and checked.
   const hasReview = true;
   const reviewOpen = useStore(studio.store, (s) => s.review.comments.filter((c) => c.status === 'open').length);
-  // Source Control, when the book is in a Git repository: how many files changed since the last commit.
+  // Source Control is always there, as in VS Code: with no repository, it's where one is started.
   const hasGit = useStore(studio.store, (s) => !!s.git.repo);
   const gitChanged = useStore(studio.store, (s) => uncommitted(s.git.repo));
   const branch = useStore(studio.store, (s) => s.git.repo?.branch ?? null);
@@ -268,7 +268,7 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
   const { hasCode, todoCount, hasReview, reviewOpen, hasGit, gitChanged } = useViews();
   const tasks = useTaskCounts();
   // The views that are always there first, so they never move: the book's files, its
-  // review comments, its history, the assistant's tasks. Then those that come and go, the most fleeting last.
+  // review comments, its history, the assistant's tasks, Source Control. Then those that come and go, the most fleeting last.
   const items: { id: View; icon: IconName; label: string; badge?: number; tone?: 'attention' | 'busy'; tip: Tip }[] = [
     { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. Right-click one to rename it, add a chapter, and more.' } },
     { id: 'contents', icon: 'contents', label: 'Contents', tip: { name: 'Contents', about: 'The book’s chapters in order, numbered as the book numbers them, with their sections and about how long each is. Click one to go there.' } },
@@ -304,17 +304,17 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
         note: [tasks.needs && `${tasks.needs} need${tasks.needs === 1 ? 's' : ''} you`, tasks.working && `${tasks.working} at work`, tasks.open && `${tasks.open} open`].filter(Boolean).join(' · ') || undefined,
       },
     },
-    ...(hasGit
-      ? [
-          {
-            id: 'git' as const,
-            icon: 'branch' as const,
-            label: `Source control: ${gitChanged ? `${gitChanged} file${gitChanged === 1 ? '' : 's'} not committed` : 'everything committed'}`,
-            badge: gitChanged || undefined,
-            tip: { name: 'Source control', about: 'The book’s own Git repository: what changed since the last commit, and commit, pull and push.', note: gitChanged ? `${plural(gitChanged, 'file')} not committed` : 'Everything is committed' },
-          },
-        ]
-      : []),
+    {
+      id: 'git',
+      icon: 'branch',
+      label: `Source control: ${!hasGit ? 'not in a Git repository' : gitChanged ? `${gitChanged} file${gitChanged === 1 ? '' : 's'} not committed` : 'everything committed'}`,
+      badge: gitChanged || undefined,
+      tip: {
+        name: 'Source control',
+        about: 'The book’s own Git repository: what changed since the last commit, and commit, pull and push.',
+        note: !hasGit ? 'Not in a Git repository yet: open it to start one' : gitChanged ? `${plural(gitChanged, 'file')} not committed` : 'Everything is committed',
+      },
+    },
     ...(hasCode ? [{ id: 'code' as const, icon: 'code' as const, label: 'Code examples', tip: { name: 'Code examples', about: 'The book’s runnable code, and what it printed. Run one, or all of them.' } }] : []),
     ...(todoCount > 0
       ? [
@@ -441,9 +441,9 @@ function ViewBody({ view }: { view: View }) {
 /** The sidebar's view: a view with nothing in it falls back to the files. */
 function useSidebarView(): View {
   const sidebar = useStore(studio.store, (s) => s.sidebar);
-  const { hasCode, todoCount, hasReview, hasGit } = useViews();
+  const { hasCode, todoCount, hasReview } = useViews();
   const available =
-    sidebar === 'files' || sidebar === 'contents' || sidebar === 'search' || sidebar === 'spelling' || sidebar === 'history' || sidebar === 'tasks' || (sidebar === 'git' && hasGit) || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
+    sidebar === 'files' || sidebar === 'contents' || sidebar === 'search' || sidebar === 'spelling' || sidebar === 'history' || sidebar === 'tasks' || sidebar === 'git' || (sidebar === 'code' && hasCode) || (sidebar === 'todos' && todoCount > 0) || (sidebar === 'review' && hasReview);
   return available ? sidebar : 'files';
 }
 

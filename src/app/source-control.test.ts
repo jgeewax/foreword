@@ -13,12 +13,18 @@ const ipcMock = vi.hoisted(() => ({
   gitStage: vi.fn(),
   gitFile: vi.fn(),
   gitCommitFiles: vi.fn(),
+  gitInit: vi.fn(),
+  gitAddRemote: vi.fn(),
   fsRead: vi.fn(),
 }));
-vi.mock('../lib/ipc', () => ({ ipc: ipcMock, errorMessage: (e: unknown) => String(e instanceof Error ? e.message : e) }));
+vi.mock('../lib/ipc', () => ({
+  ipc: ipcMock,
+  errorMessage: (e: unknown) => String(e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? e.message : e),
+  isCmdError: (e: unknown) => typeof e === 'object' && e !== null && 'kind' in e && 'message' in e,
+}));
 
 
-const repo = (over: Partial<GitStatus> = {}): GitStatus => ({ root: '/book', prefix: '', branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, staged: [], files: [], ...over });
+const repo = (over: Partial<GitStatus> = {}): GitStatus => ({ root: '/book', prefix: '', branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, staged: [], files: [], remotes: ['origin'], ...over });
 const file = (path: string, status: GitFile['status'] = 'M'): GitFile => ({ path, status });
 
 /** A SourceControl over a made-up state, recording what it asked and did (and each view it showed). `open`: files open, with their text. */
@@ -175,6 +181,51 @@ describe('the rest of VS Code’s Source Control', () => {
     expect(labels).toEqual(['Create New Branch…', 'separator', 'main ✓', 'draft', 'separator', 'origin/ideas']);
     for (const e of entries) if (typeof e === 'object' && e && 'action' in e) e.action();
     expect(picked).toEqual(['create', 'main', 'draft', 'origin/ideas']);
+  });
+});
+
+describe('a book not in Git yet', () => {
+  it('starts a repository, then shows it', async () => {
+    ipcMock.gitStatus.mockResolvedValue(repo({ upstream: null, remotes: [], files: [file('main.typ', '?')] }));
+    const { git, state, calls } = rig({ repo: null });
+    await git.init();
+    expect(ipcMock.gitInit).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['info: The book has a Git repository now. Write a message and Commit to put its first version in.']);
+    expect(state()).toMatchObject({ busy: null, repo: { files: [file('main.typ', '?')] } });
+    // Once it has one, there's nothing to start.
+    await git.init();
+    expect(ipcMock.gitInit).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when Git itself is missing', async () => {
+    ipcMock.gitStatus.mockRejectedValue({ kind: 'unavailable', message: 'git was not found' });
+    const { git, state } = rig({ repo: null, status: 'off' });
+    await git.refresh();
+    expect(state()).toMatchObject({ status: 'error', missing: true, error: 'git was not found' });
+    ipcMock.gitStatus.mockResolvedValue(null);
+    await git.refresh();
+    expect(state()).toMatchObject({ status: 'ready', missing: false, repo: null });
+  });
+
+  it('asks where to push when there’s no remote yet, and pushes there', async () => {
+    const fresh = repo({ upstream: null, remotes: [] });
+    ipcMock.gitStatus.mockResolvedValue(fresh);
+    const cancelled = rig({ repo: fresh }, { prompt: null });
+    await cancelled.git.publish();
+    expect(cancelled.calls).toEqual(['prompt Add a Remote']);
+    expect(ipcMock.gitPush).not.toHaveBeenCalled();
+
+    ipcMock.gitAddRemote.mockImplementation(async () => ipcMock.gitStatus.mockResolvedValue(repo({ upstream: null })));
+    const given = rig({ repo: fresh }, { prompt: ' https://github.com/me/book.git ' });
+    await given.git.publish();
+    expect(ipcMock.gitAddRemote).toHaveBeenCalledWith('https://github.com/me/book.git');
+    expect(ipcMock.gitPush).toHaveBeenCalledTimes(1);
+    expect(given.calls.at(-1)).toBe('info: Published main: it’s on the remote now.');
+
+    // With a remote already, Push doesn't ask.
+    const { git, calls } = rig({ repo: repo({ upstream: null }) });
+    await git.push();
+    expect(calls).toEqual(['info: Sent to the remote.']);
   });
 });
 
