@@ -966,7 +966,9 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 
 /* dialogs */
 /* One cell the size of the window: a dialog's % height is of that, not of its own content (which ran past the bottom). */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; z-index: 100; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; z-index: 100; transition: background-color 0.2s ease-out; }
+/* Settings on the book's colour: the window behind as it really looks. */
+.modal-backdrop.undimmed { background: transparent; }
 .modal { width: min(560px, calc(100% - 32px)); max-height: calc(100% - 64px); display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); }
 .modal-header h1 { font-size: 14px; margin: 0; }
@@ -1168,7 +1170,16 @@ button.switch:active:not(:disabled) { transform: none; }
 .swatch.other[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
 .swatch:focus-visible, .swatch-none:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .color-picker-input { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
-.book-color-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.color-choice-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.color-choice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+/* The colour in words, under the swatches: as wide as they are. */
+.color-words { display: flex; flex-direction: column; gap: 2px; }
+.color-words-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.color-words-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; margin: 0; }
+.color-words-note .swatch-inline { align-self: center; }
+.color-words-note.bad { color: var(--muted); }
+.book-color-choice .color-choice-group { gap: 10px; }
+.book-color-choice .color-words { max-width: 420px; }
 .swatch-inline { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; background: var(--swatch); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
 .swatch-none { height: 22px; margin-left: 4px; padding: 0 9px; border-radius: 11px; font-size: 11.5px; color: var(--muted); background: transparent; border: 1px dashed var(--border); }
 .swatch-none:hover:not(:disabled) { color: var(--fg); background: transparent; }

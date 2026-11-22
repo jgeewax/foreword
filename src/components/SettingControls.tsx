@@ -2,6 +2,7 @@
 // buttons and selects: a switch for on or off, a segmented control for one
 // of a few, a colour picker, and a menu for one of many.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { colorFromWords, type ColorReading } from '../app/color-words';
 import { Icon } from './icons';
 
 /**
@@ -50,7 +51,8 @@ export function Choice<T extends string>({ label, value, options, onChange }: { 
 /**
  * A colour for a mark: swatches, any other colour (the Mac's colour picker),
  * or none: "Same as yours", the lines looking like the ones you wrote. Arrows
- * move along, as in a radio group.
+ * move along, as in a radio group. Under them, the colour can be said in
+ * words ("brighter pink").
  */
 export function ColorChoice({
   label,
@@ -59,6 +61,7 @@ export function ColorChoice({
   colors,
   onChange,
   none: noneChoice = { label: 'Same as yours', title: 'No mark: these lines look like the ones you wrote' },
+  after,
 }: {
   label: string;
   on: boolean;
@@ -67,6 +70,8 @@ export function ColorChoice({
   onChange: (choice: { on: boolean; color?: string }) => void;
   /** What "none" says (for a mark: the lines look like yours). */
   none?: { label: string; title: string };
+  /** Beside the swatches (the book's "Surprise me"). */
+  after?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
@@ -94,23 +99,144 @@ export function ColorChoice({
   };
   const radio = (i: number) => ({ role: 'radio', 'aria-checked': i === at, tabIndex: i === at ? 0 : -1 }) as const;
   return (
-    <div className="color-choice" role="radiogroup" aria-label={label} ref={ref} onKeyDown={onKeyDown}>
-      {colors.map((c, i) => (
-        <button key={c.color} type="button" className="swatch" style={{ '--swatch': c.color } as CSSProperties} aria-label={c.name} title={c.name} {...radio(i)} onClick={() => pick(i)} />
-      ))}
-      <button
-        type="button"
-        className={`swatch other${preset >= 0 ? '' : ' custom'}`}
-        style={preset >= 0 ? undefined : ({ '--swatch': color } as CSSProperties)}
-        aria-label="Another colour"
-        title={preset >= 0 ? 'Another colour…' : `${color}: click for another`}
-        {...radio(other)}
-        onClick={openPicker}
+    <div className="color-choice-group">
+      <div className="color-choice-row">
+        <div className="color-choice" role="radiogroup" aria-label={label} ref={ref} onKeyDown={onKeyDown}>
+          {colors.map((c, i) => (
+            <button key={c.color} type="button" className="swatch" style={{ '--swatch': c.color } as CSSProperties} aria-label={c.name} title={c.name} {...radio(i)} onClick={() => pick(i)} />
+          ))}
+          <button
+            type="button"
+            className={`swatch other${preset >= 0 ? '' : ' custom'}`}
+            style={preset >= 0 ? undefined : ({ '--swatch': color } as CSSProperties)}
+            aria-label="Another colour"
+            title={preset >= 0 ? 'Another colour…' : `${color}: click for another`}
+            {...radio(other)}
+            onClick={openPicker}
+          />
+          <input ref={pickerRef} type="color" className="color-picker-input" tabIndex={-1} aria-hidden value={color} onChange={(e) => onChange({ on: true, color: e.target.value })} />
+          <button type="button" className="swatch-none" title={noneChoice.title} {...radio(noneAt)} onClick={() => pick(noneAt)}>
+            {noneChoice.label}
+          </button>
+        </div>
+        {after}
+      </div>
+      <ColorWords label={label} on={on} color={color} colors={colors} onChange={onChange} />
+    </div>
+  );
+}
+
+/**
+ * A colour said in words, under the swatches: "brighter pink please", "a
+ * calmer blue", "#2f6fde" (app/color-words.ts reads them). It shows as you
+ * type. Enter keeps it and leaves the words chosen, so another Enter goes a
+ * step further ("brighter", brighter again); Esc puts back the colour from
+ * before the words.
+ */
+function ColorWords({ label, on, color, colors, onChange }: { label: string; on: boolean; color: string; colors: { color: string; name: string }[]; onChange: (choice: { on: boolean; color?: string }) => void }) {
+  const [text, setText] = useState('');
+  const [reading, setReading] = useState<ColorReading | null>(null);
+  // Enter pressed on these words: they're kept, and Enter again goes on from there.
+  const [kept, setKept] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // The colour the words change ("brighter" than it): from before typing, or the last Enter.
+  const from = useRef<{ on: boolean; color: string } | null>(null);
+  // The colour the words last showed, to tell it from one chosen another way (a swatch).
+  const showed = useRef<{ on: boolean; color: string } | null>(null);
+  const same = (a: { on: boolean; color: string } | null, b: { on: boolean; color: string }) => !!a && a.on === b.on && (!b.on || a.color === b.color);
+
+  // A swatch or the colour panel chose another: the words were about the old one.
+  useEffect(() => {
+    if (!showed.current || same(showed.current, { on, color })) return;
+    showed.current = null;
+    from.current = null;
+    setText('');
+    setReading(null);
+    setKept(false);
+  }, [on, color]);
+
+  const show = (next: { on: boolean; color: string }) => {
+    showed.current = next;
+    if (!same(next, { on, color })) onChange(next.on ? next : { on: false });
+  };
+  const read = (words: string, base: { on: boolean; color: string }) => (words.trim() ? colorFromWords(words, base.on ? base.color : null, colors) : null);
+  const type = (words: string) => {
+    const base = (from.current ??= { on, color });
+    const r = read(words, base);
+    setText(words);
+    setReading(r);
+    setKept(false);
+    // Nothing read (yet): the colour from before.
+    show(r?.color ? { on: true, color: r.color } : base);
+  };
+  const keep = () => {
+    const base = (from.current ??= { on, color });
+    // Enter again on the same words: a step further from where the last one left it.
+    const r = kept ? read(text, base) : reading;
+    setReading(r);
+    setKept(true);
+    if (r?.color) {
+      show({ on: true, color: r.color });
+      from.current = { on: true, color: r.color };
+    }
+    inputRef.current?.select();
+  };
+  const undo = () => {
+    if (from.current) show(from.current);
+    from.current = null;
+    setText('');
+    setReading(null);
+    setKept(false);
+  };
+
+  // Words not known, once they're finished: the one still being typed may be on its way to one.
+  const finished = kept || /[\s,.!?;:]$/.test(text);
+  const last = text.toLowerCase().split(/[^a-z0-9#%’']+/).filter(Boolean).at(-1);
+  const unknown = (reading?.unknown ?? []).filter((w) => finished || w !== last);
+  const again = kept && reading?.color ? colorFromWords(text, reading.color, colors).color : null;
+  let note: ReactNode = null;
+  if (reading?.color) {
+    note = (
+      <>
+        {reading.read !== reading.color && <>{reading.read} </>}
+        <span className="swatch-inline" style={{ '--swatch': reading.color } as CSSProperties} /> <code>{reading.color}</code>
+        {unknown.length > 0 && <> · didn’t know {unknown.map((w) => `“${w}”`).join(', ')}</>}
+        {again && again !== reading.color && <> · Enter again for more</>}
+      </>
+    );
+  } else if (reading?.read) note = reading.read;
+  else if (text.trim() && finished) note = <>Didn’t catch {unknown.length ? unknown.map((w) => `“${w}”`).join(', ') : 'that'}. Try a colour (teal, hot pink, #2f6fde) or a change (brighter, darker, warmer, more blue).</>;
+
+  return (
+    <div className="color-words">
+      <input
+        ref={inputRef}
+        className="settings-input color-words-input"
+        aria-label={`${label}: say a colour`}
+        placeholder="Or say it: brighter pink, a calmer blue"
+        spellCheck={false}
+        value={text}
+        onChange={(e) => type(e.target.value)}
+        onBlur={() => {
+          from.current = null;
+          setKept(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            keep();
+          } else if (e.key === 'Escape' && text) {
+            // Puts it back, not closing Settings.
+            e.stopPropagation();
+            undo();
+          }
+        }}
       />
-      <input ref={pickerRef} type="color" className="color-picker-input" tabIndex={-1} aria-hidden value={color} onChange={(e) => onChange({ on: true, color: e.target.value })} />
-      <button type="button" className="swatch-none" title={noneChoice.title} {...radio(noneAt)} onClick={() => pick(noneAt)}>
-        {noneChoice.label}
-      </button>
+      {note && (
+        <p className={`settings-help color-words-note${reading?.color ? '' : ' bad'}`} aria-live="polite">
+          {note}
+        </p>
+      )}
     </div>
   );
 }

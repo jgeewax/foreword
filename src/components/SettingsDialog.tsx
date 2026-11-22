@@ -51,10 +51,12 @@ function BookColorPage() {
           colors={BOOK_COLORS}
           none={{ label: 'None', title: 'The window’s usual colours' }}
           onChange={(c) => studio.setBookColor(c.on ? c.color! : peacock ? 'none' : null)}
+          after={
+            <button className="small" title="A colour of its own, at random" onClick={() => studio.setBookColor(randomBookColor())}>
+              Surprise me
+            </button>
+          }
         />
-        <button className="small" title="A colour of its own, at random" onClick={() => studio.setBookColor(randomBookColor())}>
-          Surprise me
-        </button>
       </div>
       {peacock && (
         <p className="settings-help">
@@ -777,7 +779,8 @@ export function SettingsDialog() {
   const scopeOf = (id: Page) => pages.find((p) => p.id === id)?.scope ?? 'app';
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && studio.closeSettings()}>
+    // On the book's colour, the window isn't dimmed: its bars show the colour as it will be.
+    <div className={`modal-backdrop${current === 'book-color' && !searching ? ' undimmed' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && studio.closeSettings()}>
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings" ref={dialogRef}>
         <header className="modal-header">
           <h1>Settings</h1>

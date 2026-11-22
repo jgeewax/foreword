@@ -8849,6 +8849,114 @@ async function assistantMenuChecks(real = false) {
  * anywhere on their row, segmented controls choose by click or arrow, and the
  * chosen one's note follows. Settings are put back, and never written to the file.
  */
+/**
+ * A colour said in words, on Settings ▸ This book ▸ Colour: the window
+ * behind isn't dimmed there, "brighter pink please" shows on its bars as it's
+ * typed, Enter again goes brighter still, Esc puts back the colour from before
+ * the words (Settings stays open), and a swatch clears them.
+ */
+async function colorWordsChecks() {
+  const out: Record<string, unknown> = {};
+  const savedColor = studio.state.project.settings.color;
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(still);
+  try {
+    const backdrop = () => getComputedStyle(document.querySelector('.modal-backdrop')!).backgroundColor;
+    studio.openSettings('editor');
+    await sleep(300);
+    out.dimmedOnEditor = backdrop();
+    const marks = document.querySelector<HTMLElement>('.color-choice[aria-label="Lines the assistant changed"]');
+    marks?.scrollIntoView({ block: 'center' });
+    await sleep(100);
+    out.marksBox = !!marks?.closest('.color-choice-group')?.querySelector('input[aria-label="Lines the assistant changed: say a colour"]');
+    out.marksSnapshot = await snap('color-words-marks');
+    studio.closeSettings();
+    await sleep(200);
+    studio.openSettings('book-color');
+    await sleep(300);
+    out.undimmedOnColour = backdrop();
+    const choice = document.querySelector<HTMLElement>('.color-choice[aria-label="Book colour"]')!;
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Book colour: say a colour"]')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    const type = async (text: string) => {
+      input.focus();
+      setValue.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(120);
+    };
+    const key = async (k: string) => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+      await sleep(120);
+    };
+    const now = () => ({
+      own: studio.state.project.settings.color,
+      worn: document.documentElement.dataset.bookColor,
+      titlebar: getComputedStyle(document.querySelector('.titlebar')!).backgroundColor,
+      checked: choice.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') ?? choice.querySelector('[aria-checked="true"]')?.textContent,
+      note: document.querySelector('.book-color-choice .color-words-note')?.textContent ?? null,
+      text: input.value,
+    });
+    choice.querySelector<HTMLElement>('[aria-label="Blue"]')!.click();
+    await sleep(150);
+    out.blue = now();
+    await type('brighter pink please');
+    out.typed = now();
+    out.typedSnapshot = await snap('color-words-typed');
+    await key('Enter');
+    out.kept = now();
+    await key('Enter');
+    out.again = now();
+    await type('a bit darker');
+    out.darker = now();
+    await key('Escape');
+    out.escaped = { ...now(), settingsOpen: !!document.querySelector('.modal.settings') };
+    await type('pinj');
+    out.typingPinj = now();
+    await type('pinj ');
+    out.unknownPinj = now();
+    await type('teal');
+    choice.querySelector<HTMLElement>('[aria-label="Gold"]')!.click();
+    await sleep(150);
+    out.swatch = now();
+    [...choice.querySelectorAll<HTMLElement>('[role="radio"]')].find((b) => b.textContent === 'None')!.click();
+    await sleep(150);
+    await type('brighter');
+    out.brighterThanNone = now();
+    const t = (o: unknown) => o as ReturnType<typeof now>;
+    const [blue, typed, kept, again, darker, escaped] = [out.blue, out.typed, out.kept, out.again, out.darker, out.escaped].map(t);
+    out.ok =
+      out.dimmedOnEditor === 'rgba(0, 0, 0, 0.5)' &&
+      out.undimmedOnColour === 'rgba(0, 0, 0, 0)' &&
+      out.marksBox === true &&
+      blue.own === '#2f6fde' &&
+      typed.own !== blue.own &&
+      typed.worn === typed.own &&
+      typed.titlebar !== blue.titlebar &&
+      typed.checked === 'Another colour' &&
+      !!typed.note?.startsWith('Brighter pink') &&
+      kept.own === typed.own &&
+      !!kept.note?.includes('Enter again for more') &&
+      again.own !== kept.own &&
+      darker.own !== again.own &&
+      escaped.own === again.own &&
+      escaped.text === '' &&
+      (escaped as { settingsOpen?: boolean }).settingsOpen === true &&
+      t(out.typingPinj).note === null &&
+      !!t(out.unknownPinj).note?.includes('“pinj”') &&
+      t(out.swatch).own === '#d4a20b' &&
+      t(out.swatch).text === '' &&
+      !!t(out.brighterThanNone).note?.startsWith('Brighter than what?') &&
+      t(out.brighterThanNone).worn === undefined;
+  } finally {
+    studio.setBookColor(savedColor ?? null);
+    studio.closeSettings();
+    still.remove();
+    await sleep(600);
+  }
+  return out;
+}
+
 async function settingControlsChecks() {
   const saved = studio.state.settings;
   const update = studio.updateSettings.bind(studio);
@@ -11151,6 +11259,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('taskbar')) result.taskbar = await taskBarChecks();
     if (want('assistantmenu')) result.assistantmenu = await assistantMenuChecks();
     if (want('settingcontrols')) result.settingcontrols = await settingControlsChecks();
+    if (want('colorwords')) result.colorwords = await colorWordsChecks();
     if (want('defaults')) result.defaults = await explicitDefaultsChecks();
     if (launch.selftestEdits && want('filespage')) result.filespage = await filesPageChecks();
     if (want('closebutton')) result.closebutton = await closeButtonChecks();
