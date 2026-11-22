@@ -318,34 +318,104 @@ const PATHS: Record<string, ReactNode> = {
   ),
 };
 
-/** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, images. */
+/**
+ * File kinds by extension, as VS Code's (Seti) file icons: each kind's colour
+ * (`ft-<kind>` in styles.css) and its glyph, a letter or two; kinds without
+ * one are drawn.
+ */
+const KINDS: Record<string, [kind: string, glyph?: string]> = Object.fromEntries(
+  Object.entries<[string, string?]>({
+    typ: ['typ', 't'],
+    'md markdown': ['md', '↓'],
+    json: ['json', '{}'],
+    bib: ['bib', '@'],
+    'csv tsv': ['csv', '▦'],
+    'toml yaml yml ini cfg': ['conf', '⚙'],
+    pdf: ['pdf'],
+    'png jpg jpeg gif svg webp heic tif tiff': ['image'],
+    txt: ['text'],
+    'ttf otf woff woff2': ['font', 'A'],
+    py: ['py', 'py'],
+    'js mjs cjs': ['js', 'JS'],
+    ts: ['ts', 'TS'],
+    'html htm xml': ['html', '<>'],
+    css: ['css', '#'],
+    'sh bash zsh': ['sh', '$'],
+    lock: ['lock'],
+  }).flatMap(([exts, kind]) => exts.split(' ').map((ext) => [ext, kind])),
+);
+
+/** Files known by their whole name, as Seti's: Makefiles, Git's own files, a README. */
+function namedKind(name: string): [kind: string, glyph?: string] | undefined {
+  if (/^(gnu)?makefile$/i.test(name)) return ['make', '⚙'];
+  if (/^\.git(ignore|attributes|modules|keep)$/.test(name)) return ['git'];
+  if (/^readme(\.|$)/i.test(name)) return ['info'];
+}
+
+/** A file's kind and glyph, by its name (its folders' dots aside). */
+export function fileKind(path: string): [kind: string, glyph?: string] {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  return namedKind(name) ?? (dot > 0 ? KINDS[name.slice(dot + 1).toLowerCase()] : undefined) ?? ['file'];
+}
+
+/** The drawn kinds, on a 16×16 grid; anything else is a page with its corner turned down. */
+const DRAWN: Record<string, ReactNode> = {
+  image: (
+    <>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <path d="M2.5 11.5l3.5-3.5 3 3 1.5-1.5 3 3" />
+    </>
+  ),
+  pdf: (
+    <>
+      <path d="M4 1.75h5l3.25 3.25v9.25H4z" />
+      <path d="M6 9.5h4.25M6 11.75h4.25M6 7.25h2" />
+    </>
+  ),
+  text: (
+    <>
+      <path d="M4 1.75h5l3.25 3.25v9.25H4z" />
+      <path d="M9 1.75V5h3.25M6 8.5h4.25M6 11h4.25" />
+    </>
+  ),
+  // Git's diamond, with a branch leaving the line.
+  git: (
+    <>
+      <path d="M8 1.6 14.4 8 8 14.4 1.6 8z" />
+      <path d="M6 5.6l2.6 2.6v2.6M8.6 8.2l1.6 1.6" strokeLinecap="round" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="8" cy="8" r="6.1" />
+      <path d="M8 7.3v3.9M8 4.85v.01" strokeLinecap="round" strokeWidth="1.5" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="3.5" y="7" width="9" height="7" rx="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M4 1.75h5l3.25 3.25v9.25H4z" />
+      <path d="M9 1.75V5h3.25" />
+    </>
+  ),
+};
+
+/** A file's kind, coloured as VS Code's file icons: Typst, PDF, Markdown, data, pictures, fonts, code. */
 export function FileIcon({ path }: { path: string }) {
-  const ext = path.includes('.') ? path.slice(path.lastIndexOf('.') + 1).toLowerCase() : '';
-  const glyph: Record<string, [kind: string, text: string]> = { typ: ['typ', 't'], json: ['json', '{}'], md: ['md', '↓'], bib: ['bib', '@'], csv: ['csv', '▦'], toml: ['conf', '⚙'], yaml: ['conf', '⚙'], yml: ['conf', '⚙'] };
-  if (glyph[ext]) {
-    const [kind, text] = glyph[ext];
-    return (
-      <span className={`file-icon ft-${kind}`} aria-hidden>
-        {text}
-      </span>
-    );
-  }
-  const kind = ext === 'pdf' ? 'pdf' : /^(png|jpe?g|gif|svg|webp)$/.test(ext) ? 'image' : 'file';
+  const [kind, glyph] = fileKind(path);
   return (
     <span className={`file-icon ft-${kind}`} aria-hidden>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
-        {kind === 'image' ? (
-          <>
-            <rect x="2" y="3" width="12" height="10" rx="1.5" />
-            <path d="M2.5 11.5l3.5-3.5 3 3 1.5-1.5 3 3" />
-          </>
-        ) : (
-          <>
-            <path d="M4 1.75h5l3.25 3.25v9.25H4z" />
-            {kind === 'pdf' ? <path d="M6 9.5h4.25M6 11.75h4.25M6 7.25h2" /> : <path d="M9 1.75V5h3.25" />}
-          </>
-        )}
-      </svg>
+      {glyph ?? (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+          {DRAWN[kind] ?? DRAWN.file}
+        </svg>
+      )}
     </span>
   );
 }

@@ -4,6 +4,7 @@ import { BOOK_PATHS } from '../app/attachments';
 import { uncommitted, unstaged } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-menu';
+import { GIT_STATUS, gitClass, gitMarks, type GitMark } from '../lib/git-marks';
 import type { GitStatus } from '../lib/ipc';
 import { isPicture } from '../lib/paths';
 import { useStore } from '../lib/store';
@@ -17,13 +18,23 @@ import { HistoryPanel } from './HistoryPanel';
 import { SearchPanel } from './SearchPanel';
 import { ContentsActions, ContentsPanel } from './ContentsPanel';
 import { TasksActions, TasksPanel, useTaskCounts } from './TasksPanel';
-import { Icon, type IconName } from './icons';
+import { FileIcon, Icon, type IconName } from './icons';
+
+/** A row's tooltip: its path, and what Git says of it (a folder: how many files in it changed). */
+function rowTitle(n: Node, mark: GitMark | undefined) {
+  if (!mark) return n.path;
+  if (n.dir) return `${n.path} · ${plural(mark.changed, 'file')} changed since the last commit`;
+  return `${n.path} · ${GIT_STATUS[mark.status].title}`;
+}
 
 function FileTree() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const active = useStore(studio.store, (s) => s.active);
   const dirty = useStore(studio.store, (s) => s.dirty);
   const tree = useMemo(() => buildTree(ws?.files ?? []), [ws?.files]);
+  // Git's colours and letters, as VS Code's Explorer: a changed file's, and a dot on each folder above it.
+  const repo = useStore(studio.store, (s) => s.git.repo);
+  const marks = useMemo(() => gitMarks(repo), [repo]);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const open = new Set<string>();
     for (const f of [ws?.entry, ...studio.state.tabs]) {
@@ -43,50 +54,55 @@ function FileTree() {
     });
 
   const render = (nodes: Node[], depth: number) =>
-    nodes.map((n) => (
-      <div key={n.path}>
-        <div
-          className={`tree-row${n.path === active ? ' active' : ''}`}
-          style={{ paddingLeft: 8 + depth * 12 }}
-          title={n.path}
-          // Onto the chat: attached to the next message, where it is in the book.
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData(BOOK_PATHS, JSON.stringify([n.path]));
-            e.dataTransfer.effectAllowed = 'copy';
-          }}
-          onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
-          onContextMenu={onContextMenu((): MenuEntry[] => {
-            const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
-            // Open, make something new here, change this item, then where it is.
-            return [
-              !n.dir && { label: /\.pdf$/i.test(n.path) || isPicture(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
-              'separator',
-              (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
-              { label: 'New File…', action: () => void studio.newFile(folder) },
-              { label: 'New Folder…', action: () => void studio.newFolder(folder) },
-              'separator',
-              { label: 'Rename…', action: () => void studio.renamePath(n.path) },
-              !n.dir && { label: 'Duplicate', action: () => void studio.duplicate(n.path) },
-              { label: 'Move to Trash…', action: () => void studio.trashPath(n.path) },
-              'separator',
-              !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
-              !n.dir && { label: 'History of This File', action: () => void studio.showFileHistory(n.path) },
-              'separator',
-              { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
-              { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(n.path), 'Path copied') },
-              { label: 'Copy Relative Path', action: () => studio.copy(n.path, 'Path copied') },
-            ];
-          })}
-        >
-          <span className={`twisty${n.dir && expanded.has(n.path) ? ' open' : ''}`}>{n.dir && <Icon name="chevronRight" size={16} />}</span>
-          <span className={n.dir ? 'dir' : 'file'}>{n.name}</span>
-          {n.path === ws?.entry && <span className="badge">main</span>}
-          {dirty[n.path] && <span className="dirty-dot">●</span>}
+    nodes.map((n) => {
+      const mark = marks.get(n.path);
+      return (
+        <div key={n.path}>
+          <div
+            className={`tree-row${n.path === active ? ' active' : ''}${mark ? ` ${gitClass(mark.status)}` : ''}`}
+            style={{ paddingLeft: 8 + depth * 12 }}
+            title={rowTitle(n, mark)}
+            // Onto the chat: attached to the next message, where it is in the book.
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(BOOK_PATHS, JSON.stringify([n.path]));
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
+            onContextMenu={onContextMenu((): MenuEntry[] => {
+              const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
+              // Open, make something new here, change this item, then where it is.
+              return [
+                !n.dir && { label: /\.pdf$/i.test(n.path) || isPicture(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
+                'separator',
+                (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+                { label: 'New File…', action: () => void studio.newFile(folder) },
+                { label: 'New Folder…', action: () => void studio.newFolder(folder) },
+                'separator',
+                { label: 'Rename…', action: () => void studio.renamePath(n.path) },
+                !n.dir && { label: 'Duplicate', action: () => void studio.duplicate(n.path) },
+                { label: 'Move to Trash…', action: () => void studio.trashPath(n.path) },
+                'separator',
+                !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry && { label: 'Use as Main File', action: () => void studio.setEntryPoint(n.path) },
+                !n.dir && { label: 'History of This File', action: () => void studio.showFileHistory(n.path) },
+                'separator',
+                { label: 'Reveal in Finder', action: () => void studio.reveal(n.path) },
+                { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(n.path), 'Path copied') },
+                { label: 'Copy Relative Path', action: () => studio.copy(n.path, 'Path copied') },
+              ];
+            })}
+          >
+            <span className={`twisty${n.dir && expanded.has(n.path) ? ' open' : ''}`}>{n.dir && <Icon name="chevronRight" size={16} />}</span>
+            {!n.dir && <FileIcon path={n.path} />}
+            <span className={n.dir ? 'dir' : 'file'}>{n.name}</span>
+            {n.path === ws?.entry && <span className="badge">main</span>}
+            {dirty[n.path] && <span className="dirty-dot">●</span>}
+            {mark && (n.dir ? <span className="tree-git tree-git-dot" /> : <span className="tree-git">{GIT_STATUS[mark.status].letter}</span>)}
+          </div>
+          {n.dir && expanded.has(n.path) && render(n.children, depth + 1)}
         </div>
-        {n.dir && expanded.has(n.path) && render(n.children, depth + 1)}
-      </div>
-    ));
+      );
+    });
 
   return (
     <div

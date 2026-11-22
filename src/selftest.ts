@@ -6556,6 +6556,27 @@ async function gitChecks() {
   await ipc.fsWrite('src/chapters/two.typ', '= Two\n\nA second chapter.\n', null);
   await waitFor(() => (g().repo?.files.length ?? 0) >= 2, 10000, 'changes').catch(() => {});
   out.changed = g().repo?.files.map((f) => `${f.status} ${f.path}`);
+  // The Files view marks them as VS Code's Explorer: each file's icon, a changed one's name and
+  // letter in Git's colour, and a dot on each folder above it.
+  studio.showSidebar('files');
+  await sleep(300);
+  const treeRow = (path: string) => [...document.querySelectorAll<HTMLElement>('.tree-row')].find((r) => r.title.split(' · ')[0] === path);
+  for (const folder of ['src', 'src/chapters']) if (!treeRow(folder)?.querySelector('.twisty.open')) treeRow(folder)?.click();
+  await sleep(300);
+  const treeRows = () =>
+    [...document.querySelectorAll<HTMLElement>('.tree-row')].map((r) => {
+      const name = r.querySelector<HTMLElement>('.file, .dir')!;
+      const mark = r.querySelector('.tree-git');
+      return { name: name.textContent, icon: r.querySelector('.file-icon')?.className.replace('file-icon ', ''), mark: mark && (mark.textContent || '•'), color: getComputedStyle(name).color, title: r.title };
+    });
+  out.tree = treeRows();
+  for (const theme of ['light', 'dark'] as const) {
+    await setAppTheme(theme);
+    await sleep(300);
+    out[`treeColors-${theme}`] = treeRows().map((r) => `${r.name} ${r.color}`);
+    out[`snapshotTree-${theme}`] = await snap(`git-tree-${theme}`);
+  }
+  await setAppTheme(null);
   studio.showSidebar('git');
   await sleep(400);
   out.badge = document.querySelector('.activity-bar button[aria-label^="Source control"] .activity-badge')?.textContent;

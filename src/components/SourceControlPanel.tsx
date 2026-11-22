@@ -4,18 +4,10 @@ import { conflicts, mainAction, unstaged } from '../app/source-control';
 import { studio } from '../app/studio';
 import { onContextMenu, showContextMenu } from '../lib/context-menu';
 import { layoutGraph, type GraphRow } from '../lib/git-graph';
+import { GIT_STATUS as STATUS } from '../lib/git-marks';
 import type { GitCommit, GitFile, GitRef, GitStatus } from '../lib/ipc';
 import { useStore } from '../lib/store';
 import { FileIcon, Icon, type IconName } from './icons';
-
-const STATUS: Record<GitFile['status'], { letter: string; title: string }> = {
-  M: { letter: 'M', title: 'Modified' },
-  A: { letter: 'A', title: 'Added' },
-  '?': { letter: 'U', title: 'Untracked: new, not in Git yet' },
-  D: { letter: 'D', title: 'Deleted' },
-  R: { letter: 'R', title: 'Renamed' },
-  U: { letter: '!', title: 'Conflict: both sides changed it' },
-};
 
 /** Whether a section is open, remembered between launches. */
 function useOpen(key: string): [boolean, () => void] {
