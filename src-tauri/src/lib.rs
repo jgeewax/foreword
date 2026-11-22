@@ -27,6 +27,7 @@ mod render;
 mod snapshot;
 mod tasks;
 mod updater;
+mod windows;
 mod workspace;
 
 use std::{
@@ -202,10 +203,16 @@ struct LaunchOptions {
     selftest_only: Option<String>,
     /// A window opened with New Window: it starts without a book, not the last one.
     fresh: bool,
+    /// A window brought back as it was left (windows.rs), and the book it had (none: the welcome screen).
+    restored: bool,
+    restore: Option<String>,
 }
 
 #[tauri::command]
-fn launch_options(state: Win) -> LaunchOptions {
+fn launch_options(app: tauri::AppHandle, state: Win) -> LaunchOptions {
+    let restore = app
+        .try_state::<windows::Windows>()
+        .and_then(|w| w.restore_for(state.label()));
     let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/sample-book");
     // The environment (a book to open, the self-test) is for the first window only.
     let first = state.label() == "main";
@@ -224,6 +231,8 @@ fn launch_options(state: Win) -> LaunchOptions {
         selftest_agent: env("FOREWORD_SELFTEST_AGENT").is_some_and(|v| v == "1"),
         selftest_edits: env("FOREWORD_SELFTEST_EDITS").is_some_and(|v| v == "1"),
         selftest_only: env("FOREWORD_SELFTEST_ONLY"),
+        restored: restore.is_some(),
+        restore: restore.flatten(),
     }
 }
 
@@ -365,12 +374,25 @@ fn selftest_finish(app: tauri::AppHandle, result: serde_json::Value) -> CmdResul
 
 /// A window with the app in it (its main webview has the window's label).
 /// Built by hand, not from tauri.conf.json, so the preview can be a second
-/// webview in the same window.
-fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Window> {
-    let builder = WindowBuilder::new(app, label)
+/// webview in the same window. `kept`: a window as it was left (windows.rs),
+/// brought back where it was, if a screen still shows that.
+fn open_window(
+    app: &tauri::AppHandle,
+    label: &str,
+    kept: Option<&windows::Kept>,
+) -> tauri::Result<tauri::Window> {
+    let mut builder = WindowBuilder::new(app, label)
         .title("Foreword")
         .inner_size(1600.0, 1000.0)
         .min_inner_size(960.0, 600.0);
+    if let Some(frame) = kept
+        .and_then(|k| k.frame)
+        .filter(|f| windows::on_screen(app, f))
+    {
+        builder = builder
+            .position(frame.x, frame.y)
+            .inner_size(frame.width.max(960.0), frame.height.max(600.0));
+    }
     // As in VS Code: no native title bar, the page draws its own and the
     // window's buttons sit in it. The title is still set (Window menu, Mission
     // Control), just not drawn.
@@ -395,25 +417,29 @@ fn open_window(app: &tauri::AppHandle, label: &str) -> tauri::Result<tauri::Wind
         LogicalPosition::new(0.0, 0.0),
         size,
     )?;
+    if let Some(windows) = app.try_state::<windows::Windows>() {
+        windows.opened(app, &window, kept);
+    }
     Ok(window)
 }
 
 /// A new window, without a book (it shows the welcome screen): "win-2", "win-3"…
-fn new_window(app: &tauri::AppHandle) -> tauri::Result<String> {
+/// `kept`: one brought back as it was left, with its book.
+fn new_window(app: &tauri::AppHandle, kept: Option<&windows::Kept>) -> tauri::Result<String> {
     let n = app
         .state::<AppState>()
         .next_window
         .fetch_add(1, Ordering::Relaxed)
         + 2;
     let label = format!("win-{n}");
-    open_window(app, &label)?.set_focus()?;
+    open_window(app, &label, kept)?.set_focus()?;
     Ok(label)
 }
 
 /// File → New Window, from the page.
 #[tauri::command]
 fn window_new(app: tauri::AppHandle) -> CmdResult<String> {
-    Ok(new_window(&app)?)
+    Ok(new_window(&app, None)?)
 }
 
 fn selftest_only() -> CmdResult<()> {
@@ -501,7 +527,7 @@ pub fn run() {
                 .map(|(label, _)| label);
             match event.id().as_ref() {
                 "new-window" => {
-                    if let Err(e) = new_window(app) {
+                    if let Err(e) = new_window(app, None) {
                         logs::push("app", format!("couldn't open a window: {e}"));
                     }
                 }
@@ -520,13 +546,28 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
-            // A closed window's helpers (Tinymist, OpenCode) stop with it.
-            if let WindowEvent::Destroyed = event {
-                let state = window.state::<AppState>();
-                if let Some(w) = state.windows.lock().unwrap().remove(window.label()) {
-                    w.kill_children();
+            let kept = window.try_state::<windows::Windows>();
+            match event {
+                // A closed window's helpers (Tinymist, OpenCode) stop with it.
+                WindowEvent::Destroyed => {
+                    let state = window.state::<AppState>();
+                    if let Some(w) = state.windows.lock().unwrap().remove(window.label()) {
+                        w.kill_children();
+                    }
+                    mcp::forget(window.app_handle(), window.label());
                 }
-                mcp::forget(window.app_handle(), window.label());
+                // Where it is, for next time; one the author closes doesn't come back.
+                WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                    if let Some(kept) = kept {
+                        kept.moved(window.app_handle(), window);
+                    }
+                }
+                WindowEvent::CloseRequested { .. } => {
+                    if let Some(kept) = kept {
+                        kept.closed(window.app_handle(), window.label());
+                    }
+                }
+                _ => {}
             }
         })
         .manage(AppState::default())
@@ -560,9 +601,18 @@ pub fn run() {
             if let Some(theme) = config::theme() {
                 app.handle().set_theme(Some(theme));
             }
-            let window = open_window(app.handle(), "main")?;
+            // The windows as they were left (windows.rs): the first is the main window, the others come back beside it.
+            let kept = windows::Windows::load(&app.path().app_data_dir()?);
+            let saved = kept.saved().to_vec();
+            app.manage(kept);
+            let window = open_window(app.handle(), "main", saved.first())?;
+            for k in saved.iter().skip(1) {
+                if let Err(e) = new_window(app.handle(), Some(k)) {
+                    logs::push("app", format!("couldn't open a window again: {e}"));
+                }
+            }
             // An occluded window gets no animation frames, which would stall the self-test.
-            if std::env::var_os("FOREWORD_SELFTEST").is_some() {
+            if std::env::var_os("FOREWORD_SELFTEST").is_some() || saved.len() > 1 {
                 let _ = window.set_focus();
             }
             Ok(())
@@ -691,6 +741,10 @@ pub fn run() {
         .run(|app, event| match event {
             // An update to install at quit goes in first; the app quits once it has.
             RunEvent::ExitRequested { api, .. } => {
+                // Its windows close as it quits: they all come back next time.
+                if let Some(kept) = app.try_state::<windows::Windows>() {
+                    kept.quitting();
+                }
                 if updater::hold_exit_for_install(app) {
                     api.prevent_exit();
                 }

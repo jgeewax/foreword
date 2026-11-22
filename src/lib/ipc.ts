@@ -143,6 +143,9 @@ export type LaunchOptions = {
   selftestOnly: string | null;
   /** A window from New Window: it starts without a book (not the last one). */
   fresh: boolean;
+  /** A window brought back as it was left when the app last ran (windows.rs), and the book it had (null: none). */
+  restored: boolean;
+  restore: string | null;
 };
 /** A book file in Git: M modified, A added, D deleted, R renamed, ? new (not yet in Git), U conflict. */
 export type GitFile = { path: string; status: 'M' | 'A' | 'D' | 'R' | '?' | 'U' };

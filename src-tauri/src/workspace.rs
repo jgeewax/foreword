@@ -367,6 +367,10 @@ pub async fn workspace_open(
 
     *state.watcher.lock().unwrap() = Some(watcher);
     *state.root.lock().unwrap() = Some(root.clone());
+    // The book it comes back with next time (windows.rs).
+    if let Some(kept) = app.try_state::<crate::windows::Windows>() {
+        kept.set_root(&app, state.label(), &root);
+    }
     // The window's title is its book, so Window ▸ tells windows apart.
     if let (Some(w), Some(name)) = (app.get_window(state.label()), root.file_name()) {
         let _ = w.set_title(&name.to_string_lossy());

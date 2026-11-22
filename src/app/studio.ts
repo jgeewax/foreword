@@ -1269,9 +1269,9 @@ export class Studio {
       }
     });
     // A new window starts on the welcome screen, not the last book (open in the first window).
-    // After Reload Window, the window's own book ('' for none).
+    // After Reload Window, the window's own book ('' for none). A window brought back as it was left, its own.
     const reloaded = takeSession(RELOAD_KEY);
-    const initial = reloaded !== null ? reloaded || null : (launch.workspace ?? (launch.fresh ? null : localStorage.getItem(LAST_WORKSPACE)));
+    const initial = reloaded !== null ? reloaded || null : (launch.workspace ?? (launch.restored ? launch.restore : launch.fresh ? null : localStorage.getItem(LAST_WORKSPACE)));
     if (initial) await this.openWorkspace(initial);
   }
 
