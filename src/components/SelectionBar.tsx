@@ -555,6 +555,19 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, 
   }
 
   // ---- when they show and go ----
+  /** The note says how a request ended (not while it waits or works): a key or a click elsewhere takes it away. */
+  const finished = () => {
+    if (!tracked || tracked.starting) return false;
+    const phase = barProgress(studio.state.agent, tracked.req).phase;
+    return phase !== 'queued' && phase !== 'working';
+  };
+  // A click anywhere but on the note: in the editor, the chat, the sidebar…
+  const clickAway = (e: PointerEvent) => {
+    if (finished() && !(e.target instanceof Node && noteNode.contains(e.target))) untrack();
+  };
+  document.addEventListener('pointerdown', clickAway, true);
+  // …or the preview, a native view over the page whose clicks never reach it.
+  const offPreviewClick = studio.events.on('preview-click', () => finished() && untrack());
   const subs = [
     editor.onDidChangeCursorSelection((e) => {
       clearTimeout(showTimer);
@@ -568,10 +581,7 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, 
     // Typing: the bar goes, and so does a finished request's note.
     editor.onKeyDown((e) => {
       if (view?.kind === 'bar') hideBar();
-      if (tracked && !tracked.starting && !['Meta', 'Shift', 'Alt', 'Control'].includes(e.browserEvent.key)) {
-        const phase = barProgress(studio.state.agent, tracked.req).phase;
-        if (phase !== 'queued' && phase !== 'working') untrack();
-      }
+      if (finished() && !['Meta', 'Shift', 'Alt', 'Control'].includes(e.browserEvent.key)) untrack();
     }),
     editor.onDidChangeModelContent(() => {
       if (view?.kind === 'bar') hideBar();
@@ -602,6 +612,8 @@ export function attachSelectionBar(editor: monaco.editor.IStandaloneCodeEditor, 
     clearTimeout(showTimer);
     untrack();
     for (const s of subs) s.dispose();
+    document.removeEventListener('pointerdown', clickAway, true);
+    offPreviewClick();
     offStore();
     offCard();
     editor.removeContentWidget(barWidget);

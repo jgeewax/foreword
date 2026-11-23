@@ -3834,6 +3834,10 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   edit (documents.ts applies small edits); what changed is read off it, not
   off the tool calls, so any assistant's edits count, Codex's patches too.
   Undo puts the passage back as one step (⌘Z brings the revision back).
+  Once it's done, a key or a click anywhere but on the note takes it away
+  (2026-11-23: it used to wait for a key, so it stayed through clicks until
+  Escape); the preview's clicks come as their own event (`preview-click`),
+  its native view's never reach the page. While it waits or works it stays.
   Options says "3 options are in the chat" until one is picked. The editor
   lets go of the selection once it's sent, so the mark shows and the passage
   isn't offered again with the next message. The chat shows "Revise this

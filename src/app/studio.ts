@@ -812,6 +812,8 @@ export class Studio {
     'fill-composer': [text: string, focus?: boolean];
     /** The selection bar's card, open on Revise, Options or Ask (the context menu, the command). */
     'selection-card': [kind: BarKind];
+    /** A click in the preview, a native view whose clicks the page never sees. */
+    'preview-click': [];
     'find-in-settings': [];
     'show-agent-pane': [];
     'show-explorer': [];
@@ -1118,6 +1120,7 @@ export class Studio {
       if (e.payload?.tag === 'jump') for (const w of [...this.jumpWaiters]) w();
       if (e.payload?.tag === 'click') {
         this.previewClick = { y: e.payload.y ?? 0, text: e.payload.text ?? '', at: performance.now() };
+        this.events.emit('preview-click');
         void this.revealClickedRef();
       }
       if (e.payload?.tag === 'contextmenu') void this.previewContextMenu(e.payload.x ?? 0, e.payload.y ?? 0, e.payload.selection ?? '');

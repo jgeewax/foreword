@@ -15,6 +15,7 @@ import { chapterNumber } from './app/tool-labels';
 import { todoPrompt } from './app/todos';
 import { handleMcp, pngSize } from './app/studio-tools';
 import { monaco } from './editor/monaco';
+import { barMessage } from './app/selection-bar';
 import { reviewPrompt, stockAction } from './app/stock-prompts';
 import { selectAll } from './editor/select-all';
 import { undoRedo } from './editor/undo-redo';
@@ -2020,6 +2021,72 @@ async function selectionCardChecks() {
   } finally {
     studio.sendFromBar = sendFromBar;
     await studio.setZoom(zoom, { persist: false, write: false });
+  }
+  return out;
+}
+
+/**
+ * The note under a revised passage, from a made-up reply (no model): it stays
+ * through clicks while the assistant works, and through clicks on itself (Show
+ * change) once it's done; then a click anywhere else takes it away, in the
+ * editor or the preview (a native view: its own event), as a key does.
+ */
+async function selectionNoteChecks() {
+  const out: Record<string, unknown> = {};
+  await studio.openFile('chapters/ch1-vectors.typ');
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const line = model.getLinesContent().findIndex((l) => /^A vector in/.test(l)) + 1;
+  const original = model.getLineContent(line);
+  const saved = { items: studio.state.agent.items, running: studio.state.agent.running, sessionId: studio.state.agent.sessionId };
+  const { sendFromBar } = studio;
+  const id = 'selftest-selnote';
+  studio.sendFromBar = async (kind, instruction) => {
+    const text = barMessage(kind, instruction, studio.state.settings.optionCount);
+    studio.store.set((s) => ({ agent: { ...s.agent, running: true, sessionId: id, items: [{ kind: 'user', id, text, attachments: [], at: Date.now() }] } }));
+    return true;
+  };
+  const note = () => document.querySelector<HTMLElement>('.selection-note');
+  const said = () => note()?.textContent ?? null;
+  const press = (el: Element | null | undefined) => el?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, composed: true }));
+  /** Revise from the card, then the "assistant" changes the passage and the turn ends. */
+  const revised = async () => {
+    editor.setSelection(new monaco.Range(line, 1, line, 30), 'mouse');
+    studio.events.emit('selection-card', 'revise');
+    await sleep(300);
+    document.querySelector<HTMLButtonElement>('.selection-card .sel-preset')?.click();
+    await sleep(200);
+    const working = said();
+    press(document.querySelector('.explorer') ?? document.body);
+    await sleep(100);
+    const afterClick = said();
+    editor.executeEdits('selftest', [{ range: new monaco.Range(line, 1, line, 30), text: 'A vector, put simply, is' }]);
+    studio.store.set((s) => ({ agent: { ...s.agent, running: false, items: s.agent.items.map((it) => (it.id === id && it.kind === 'user' ? { ...it, ended: Date.now() } : it)) } }));
+    // Redrawn from the store, on React's schedule.
+    await waitFor(() => /^Revised/.test(said() ?? ''), 3000, 'Revised').catch(() => {});
+    return { working, keptWhileWorking: afterClick, done: said() };
+  };
+  try {
+    out.first = await revised();
+    // On the note itself: it stays (and Show change opens it).
+    const show = note()?.querySelector<HTMLButtonElement>('.sel-revise');
+    press(show);
+    show?.click();
+    await sleep(150);
+    out.onItself = { shown: !!note(), open: !!note()?.classList.contains('open') };
+    // In the editor, away from it.
+    press(editor.getDomNode()?.querySelector('.view-lines'));
+    await sleep(100);
+    out.clickInEditor = { gone: !note() };
+    editor.executeEdits('selftest', [{ range: new monaco.Range(line, 1, line, model.getLineMaxColumn(line)), text: original }]);
+    out.second = await revised();
+    studio.events.emit('preview-click');
+    await sleep(100);
+    out.clickInPreview = { gone: !note() };
+  } finally {
+    studio.sendFromBar = sendFromBar;
+    editor.executeEdits('selftest', [{ range: new monaco.Range(line, 1, line, model.getLineMaxColumn(line)), text: original }]);
+    studio.store.set((s) => ({ agent: { ...s.agent, ...saved } }));
   }
   return out;
 }
@@ -11684,6 +11751,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('askcard')) result.askcard = await askCardChecks();
     if (only?.includes('modecards')) result.modecards = await modeCardsChecks();
     if (only?.includes('selcard')) result.selcard = await selectionCardChecks();
+    if (only?.includes('selnote')) result.selnote = await selectionNoteChecks();
     if (only?.includes('composerrow')) result.composerrow = await composerRowChecks();
     if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
