@@ -7776,6 +7776,137 @@ async function searchChecks(edits: boolean) {
   return out;
 }
 
+/**
+ * Rename Label (F2) and Find All References (⇧F12), through Monaco's own keys:
+ * the peek lists the label in one chapter and its reference in another, the
+ * box renames both (on disk too), Undo puts them back; a label on two things
+ * is renamed alone, and a citation, plain text or a name taken can't be.
+ */
+async function labelChecks() {
+  const out: Record<string, unknown> = {};
+  const ch1 = 'chapters/ch1-vectors.typ';
+  const ch2 = 'chapters/ch2-eigenvalues.typ';
+  const originals = { [ch1]: (await ipc.fsRead(ch1)).text, [ch2]: (await ipc.fsRead(ch2)).text };
+  await studio.openFile(ch2);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  // A run before on this copy can leave its text unsaved, and the book brings that back: start from the file.
+  if (model.getValue() !== originals[ch2]) {
+    model.setValue(originals[ch2]);
+    await studio.save(ch2);
+  }
+  const at = (needle: string, into = 2) => {
+    const p = model.getPositionAt(model.getValue().indexOf(needle) + into);
+    editor.setPosition(p);
+    editor.focus();
+    return p;
+  };
+  // A key as Monaco reads it (its keyCode), sent where the focus is.
+  const key = (code: string, keyCode: number, shiftKey = false) => {
+    const e = new KeyboardEvent('keydown', { key: code, code, shiftKey, bubbles: true, cancelable: true });
+    Object.defineProperty(e, 'keyCode', { get: () => keyCode });
+    (document.activeElement ?? document.body).dispatchEvent(e);
+  };
+  const toast = () => studio.state.toast?.text ?? null;
+  const where = (l: { uri: { path: string }; range: { startLineNumber: number; startColumn: number; endColumn: number } }) =>
+    `${l.uri.path.split('/').slice(-2).join('/')}:${l.range.startLineNumber}:${l.range.startColumn}-${l.range.endColumn}`;
+  try {
+    // ⇧F12 on @ch-vectors in chapter 2: its label in chapter 1, and the reference.
+    out.references = (await studio.labelReferences(model, at('@ch-vectors'), true)).map(where);
+    out.citation = (await studio.labelReferences(model, at('@axler2015'), true)).map(where);
+    // The peek, from ⇧F12 (on the reference: the label as well, though it has just the one) and from the palette.
+    const peek = async (open: () => void, name: string) => {
+      open();
+      await waitFor(() => document.querySelector('.peekview-widget .monaco-list-row'), 5000, 'the peek').catch(() => {});
+      await sleep(400);
+      // The peek's preview is an editor of its own.
+      for (const e of monaco.editor.getEditors()) e.render(true);
+      const widget = document.querySelector('.peekview-widget');
+      const seen = { open: !!widget, title: widget?.querySelector('.peekview-title')?.textContent, rows: [...(widget?.querySelectorAll('.monaco-list-row') ?? [])].map((r) => r.textContent), snapshot: await snap(name) };
+      key('Escape', 27);
+      await sleep(300);
+      return { ...seen, closed: !document.querySelector('.peekview-widget') };
+    };
+    out.peek = await peek(() => (at('@ch-vectors'), key('F12', 123, true)), 'labels-peek');
+    // In the light theme too (this window's only: nothing is saved).
+    await setAppTheme('light');
+    await sleep(300);
+    try {
+      out.peekPalette = await peek(() => (at('@eq-diag'), studio.editorAction('editor.action.referenceSearch.trigger')), 'labels-peek-palette');
+    } finally {
+      await setAppTheme(null);
+    }
+
+    // What can't be renamed says so where the cursor is, in Monaco's bubble.
+    out.rejects = {
+      citation: (await studio.renameLocation(model, at('@axler2015'))).rejectReason,
+      text: (await studio.renameLocation(model, at('Rearranging'))).rejectReason,
+    };
+    const bubbles: string[] = [];
+    const watch = new MutationObserver((changes) => {
+      for (const c of changes) for (const n of c.addedNodes) if (n instanceof HTMLElement && (n.matches('.monaco-editor-overlaymessage') || n.querySelector('.monaco-editor-overlaymessage'))) bubbles.push(n.textContent ?? '');
+    });
+    watch.observe(document.body, { childList: true, subtree: true });
+    at('@axler2015');
+    key('F2', 113);
+    await sleep(800);
+    watch.disconnect();
+    out.rejectMessage = { seen: bubbles, still: document.querySelector('.monaco-editor-overlaymessage')?.textContent ?? null, focus: editor.hasTextFocus(), windowFocus: document.hasFocus() };
+    key('Escape', 27);
+
+    // F2 on the reference: the box over its name, then a new name and Enter.
+    at('@ch-vectors', 3);
+    key('F2', 113);
+    const input = await waitFor(() => document.querySelector<HTMLInputElement>('.rename-box .rename-input'), 5000, 'the rename box').catch(() => null);
+    await sleep(300);
+    editor.render(true);
+    out.box = { value: input?.value, selected: input && input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0), focused: document.activeElement === input };
+    out.boxSnapshot = await snap('labels-rename-box');
+    if (input) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '@ch-linear');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      key('Enter', 13);
+    }
+    await waitFor(() => toast()?.startsWith('Renamed'), 8000, 'the rename').catch(() => {});
+    await sleep(500);
+    out.renamed = {
+      toast: toast(),
+      undo: studio.state.toast?.actions?.map((a) => a.label),
+      boxGone: !document.querySelector('.rename-box .rename-input:focus'),
+      ch1Disk: (await ipc.fsRead(ch1)).text.split('\n')[0],
+      ch2Editor: model.getLineContent(18).slice(0, 48),
+      ch2Disk: (await ipc.fsRead(ch2)).text.split('\n')[17].slice(0, 48),
+      ch2Dirty: !!studio.state.dirty[ch2],
+    };
+    await studio.state.toast?.actions?.find((a) => a.label === 'Undo')?.run();
+    await waitFor(() => toast()?.includes('again'), 5000, 'the undo').catch(() => {});
+    out.undone = { toast: toast(), ch1: (await ipc.fsRead(ch1)).text === originals[ch1], ch2: model.getValue() === originals[ch2] };
+
+    // A name taken, or one that can't be a label's.
+    await studio.renameLabel(model, at('@ch-vectors'), 'eq-eigen');
+    out.taken = toast();
+    await studio.renameLabel(model, at('@ch-vectors'), 'my chapter');
+    out.badName = toast();
+
+    // Two things labelled <eq-diag>: a reference can't say which, the label is renamed alone.
+    model.pushEditOperations([], [{ range: model.getFullModelRange().collapseToEnd(), text: '\n$ x $ <eq-diag>\n' }], () => null);
+    out.twiceRef = (await studio.renameLocation(model, at('@eq-diag'))).rejectReason;
+    const second = model.getPositionAt(model.getValue().lastIndexOf('<eq-diag>') + 2);
+    out.twiceLabel = (await studio.renameLocation(model, second)).text;
+    await studio.renameLabel(model, second, 'eq-diag-2');
+    const text = model.getValue();
+    out.twice = { toast: toast(), labels: [...text.matchAll(/<(eq-diag[^>]*)>/g)].map((m) => m[1]), refs: [...text.matchAll(/@(eq-diag\S*)/g)].map((m) => m[1]) };
+  } finally {
+    for (const [path, text] of Object.entries(originals)) {
+      const doc = studio.docs?.get(path);
+      if (doc) doc.model.setValue(text);
+      await ipc.fsWrite(path, text, await ipc.fsHash(path));
+    }
+    await studio.save(ch2).catch(() => {});
+  }
+  return out;
+}
+
 /** Contents: the chapters in order, numbered, with their sections and words; a click goes there, and the place the cursor is under is lit. */
 async function contentsChecks() {
   const out: Record<string, unknown> = {};
@@ -12096,6 +12227,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('tour')) result.tour = await tourChecks();
     if (want('contents')) result.contents = await contentsChecks();
     if (want('search')) result.search = await searchChecks(launch.selftestEdits);
+    if (launch.selftestEdits && want('labels')) result.labels = await labelChecks();
     if (want('textsize')) result.textsize = await textSizeChecks();
     if (want('wraprulers')) result.wraprulers = await wrapRulerChecks();
     if (want('booksizes')) result.booksizes = await bookSizeChecks();

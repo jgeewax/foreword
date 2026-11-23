@@ -38,6 +38,12 @@ export type RefScan = {
   names: string[];
   /** label("fig-" + …): any label whose name starts so may be made. */
   prefixes: string[];
+  /**
+   * The labels its code names otherwise: `#show <intro>: …`, `query(<fig-1>)`,
+   * `label("intro")` (each one's offsets, the `<…>` or the quotes included).
+   * A label renamed is renamed in them too.
+   */
+  uses: { name: string; start: number; end: number }[];
   /** The files its bibliography(…) calls name, as written; null when one names them some other way (a variable, bytes). */
   bibliographies: string[] | null;
 };
@@ -45,7 +51,7 @@ export type RefScan = {
 /** The labels, references and bibliography files in a Typst file. */
 export function scanRefs(text: string): RefScan {
   const s = text;
-  const out: RefScan = { labels: [], refs: [], names: [], prefixes: [], bibliographies: [] };
+  const out: RefScan = { labels: [], refs: [], names: [], prefixes: [], uses: [], bibliographies: [] };
   const match = (re: RegExp, i: number) => ((re.lastIndex = i), re.exec(s)?.[0] ?? null);
   const until = (i: number, end: string) => ((i = s.indexOf(end, i)) < 0 ? s.length : i);
   // The name of a `<label>` at i, or null.
@@ -140,6 +146,8 @@ export function scanRefs(text: string): RefScan {
         } else if (LABEL_NAME.test(value)) {
           out.names.push(value);
           if (args === 'label' && /^\s*\+/.test(s.slice(end + 1, end + 16))) out.prefixes.push(value);
+          // label("intro"), the whole name: not one put together, nor a string inside something given to it.
+          else if (args === 'label' && s[end] === '"' && /^\(\s*$/.test(s.slice(s.lastIndexOf('(', i), i))) out.uses.push({ name: value, start: i, end: end + 1 });
         }
         i = end + 1;
       } else if (c === '{') i = code(i + 1, '}', null);
@@ -149,6 +157,7 @@ export function scanRefs(text: string): RefScan {
       else if (c === '<' && label(i)) {
         const name = label(i)!;
         if (args && REF_CALL.test(args)) out.refs.push({ name, start: i, end: i + name.length + 2, link: args === 'link', email: false });
+        else out.uses.push({ name, start: i, end: i + name.length + 2 });
         i += name.length + 2;
       } else if (match(IDENT, i)) {
         const name = match(IDENT, i)!;
@@ -169,6 +178,25 @@ export function bibliographyKeys(path: string, text: string): string[] {
     return [...text.matchAll(/@([A-Za-z]+)\s*[{(]\s*([^\s,{}()]+)\s*,/g)].filter((m) => !/^(?:string|comment|preamble)$/i.test(m[1])).map((m) => m[2]);
   }
   return [...text.matchAll(/^(?:"([^"\n]+)"|'([^'\n]+)'|([^\s#'"-][^\n]*?))[ \t]*:[ \t]*(?:#.*)?$/gm)].map((m) => m[1] ?? m[2] ?? m[3]);
+}
+
+/** Where a bibliography file's entry for `key` names it (the offsets of the key, as bibliographyKeys reads it). */
+export function bibliographyKeyPlaces(path: string, text: string, key: string): { start: number; end: number }[] {
+  if (!text.includes(key)) return [];
+  if (/\.bib$/i.test(path)) {
+    return [...text.matchAll(/@([A-Za-z]+)\s*[{(]\s*([^\s,{}()]+)\s*,/g)]
+      .filter((m) => m[2] === key && !/^(?:string|comment|preamble)$/i.test(m[1]))
+      .map((m) => {
+        const start = m.index + m[0].indexOf(key, m[0].search(/[{(]/) + 1);
+        return { start, end: start + key.length };
+      });
+  }
+  return [...text.matchAll(/^(?:"([^"\n]+)"|'([^'\n]+)'|([^\s#'"-][^\n]*?))[ \t]*:[ \t]*(?:#.*)?$/gm)]
+    .filter((m) => (m[1] ?? m[2] ?? m[3]) === key)
+    .map((m) => {
+      const start = m.index + (m[3] === undefined ? 1 : 0);
+      return { start, end: start + key.length };
+    });
 }
 
 /** A reference that goes nowhere: where it is (0-based, as LSP counts), and why. */

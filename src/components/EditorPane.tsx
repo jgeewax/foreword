@@ -7,6 +7,7 @@ import { attachEditorTools } from './editor-tools';
 import { registerProofing } from './ProofingHover';
 import { headings, type Heading } from '../editor/outline';
 import { keepWidgetsInside } from '../editor/overflow-widgets';
+import { labelUrisInBook } from '../editor/uri-labels';
 import { onContextMenu } from '../lib/context-menu';
 import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -199,6 +200,31 @@ export function EditorPane() {
     const definitionProvider = monaco.languages.registerDefinitionProvider('typst', {
       provideDefinition: (model, position) => studio.definitionsAt(model, position),
     });
+    // Rename Label (F2, Monaco's box over the name) and Find All References (⇧F12, its peek): a label and
+    // the references to it, in the whole book. The rename is made in the book's files by renameLabel, as
+    // Replace All makes its changes (saved, with History's version from before): none for Monaco to make.
+    const renameProvider = monaco.languages.registerRenameProvider('typst', {
+      resolveRenameLocation: (model, position) => studio.renameLocation(model, position),
+      provideRenameEdits: async (model, position, newName) => {
+        await studio.renameLabel(model, position, newName);
+        return { edits: [] };
+      },
+    });
+    const referenceProvider = monaco.languages.registerReferenceProvider('typst', {
+      provideReferences: (model, position, context) => studio.labelReferences(model, position, context.includeDeclaration),
+    });
+    // The peek names each file by its place in the book ("chapters"), not its whole path on the Mac.
+    const offUriLabels = labelUrisInBook(() => studio.state.workspace?.root);
+    // ⇧F12 is Peek References: always the peek, the label with every reference. Monaco's own ⇧F12 (Go to
+    // References) leaves the label out when it has one reference, and then just goes to that one: where the cursor is.
+    const referenceKeys = monaco.editor.addKeybindingRules([
+      { keybinding: monaco.KeyMod.Shift | monaco.KeyCode.F12, command: '-editor.action.goToReferences' },
+      {
+        keybinding: monaco.KeyMod.Shift | monaco.KeyCode.F12,
+        command: 'editor.action.referenceSearch.trigger',
+        when: 'editorHasReferenceProvider && editorTextFocus && !inReferenceSearchEditor && !isInEmbeddedEditor',
+      },
+    ]);
     // Monaco only moves within the file it shows (the editor's, a diff's file side); a definition in another file opens in its tab.
     const definitionOpener = monaco.editor.registerEditorOpener({
       openCodeEditor: (source, uri, at) => (uri.toString() === source.getModel()?.uri.toString() ? false : studio.openDefinition(uri, at)),
@@ -244,6 +270,10 @@ export function EditorPane() {
       lenses.dispose();
       runCommand.dispose();
       definitionProvider.dispose();
+      renameProvider.dispose();
+      referenceProvider.dispose();
+      referenceKeys.dispose();
+      offUriLabels();
       definitionOpener.dispose();
       studio.editor = null;
       editor.dispose();

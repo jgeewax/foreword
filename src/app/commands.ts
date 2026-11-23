@@ -131,6 +131,8 @@ export function paletteCommands(studio: Studio): Command[] {
         menu('show-spelling', 'Show Spelling and Grammar', { keys: '⇧⌘;', keywords: ['spell check', 'typos', 'proofread', 'dictionary', 'whole book'] }),
         menu('add-comment', 'Add Comment…', { keys: '⌥⌘M', keywords: ['review'], when: selection }),
         editor('editor.action.gotoLine', 'Go to Line…', '⌃G'),
+        { ...editor('editor.action.rename', 'Rename Label…', 'F2', ['rename symbol', 'refactor', 'references', 'cross-reference']), when: typ },
+        { ...editor('editor.action.referenceSearch.trigger', 'Find All References', '⇧F12', ['go to references', 'peek references', 'usages', 'where cited', 'label']), when: typ },
         { id: 'next-error', title: 'Go to Next Error', keywords: ['problem'], when: errors, run: () => studio.nextProblem() },
         { id: 'fix-error', title: 'Fix Next Error with the Assistant', keywords: ['problem'], when: () => errors() && idle(), run: () => studio.fixProblem() },
         editor('editor.action.commentLine', 'Toggle Line Comment', '⌘/'),

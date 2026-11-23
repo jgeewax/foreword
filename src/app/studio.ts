@@ -70,7 +70,8 @@ import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printC
 import { shouldStartTour, TOUR_SEEN_KEY, TOUR_STEPS } from './tour';
 import { replaceText, searchPattern, searchText, SEARCHABLE, type FileMatches, type SearchMatch, type SearchOptions } from './book-search';
 import { fileContents, whereWritten, type FileContents } from './contents';
-import { bookPreviewText, inRefGuard, RefIndex, refDiagnostic, refGuard, type RefProblem } from './broken-refs';
+import { bibliographyKeyPlaces, bookPreviewText, inRefGuard, RefIndex, refDiagnostic, refGuard, type RefProblem } from './broken-refs';
+import { badLabelName, cleanLabelName, nameAt, placesOf, renameAt, type NamePlace } from './label-refs';
 import { peacockColor } from './book-color';
 import { COVER_DESIGN, COVER_DIR, COVER_PREVIEW, COVER_PRINT, COVER_SPEC, COVER_STYLES, coverFiles, namesFromMain, trimFromMain, updateSpec, type CoverInfo } from '../cover';
 import { snippetInsertion } from '../help/guide';
@@ -1238,7 +1239,10 @@ export class Studio {
     const editor = this.writer()?.editor;
     if (!editor) return;
     editor.focus();
-    void editor.getAction(id)?.run();
+    // Monaco's newer actions (Peek References, Go to Definition) aren't found by getAction, only run by their id.
+    const action = editor.getAction(id);
+    if (action) void action.run();
+    else editor.trigger('command-palette', id, null);
   }
 
   /** The writing style guide, created from the template if there isn't one. */
@@ -3415,6 +3419,125 @@ export class Studio {
       editor.revealRangeInCenterIfOutsideViewport(range, monaco.editor.ScrollType.Immediate);
     }
     return true;
+  }
+
+  // ---- labels: Rename Label (F2) and Find All References (⇧F12), as in VS Code (label-refs.ts) ----
+
+  /** The Typst files in the book's folder that name `names`, as they are now (open files as the editor has them), with where. */
+  private async labelsNamed(...names: string[]): Promise<Map<string, { path: string; places: NamePlace[] }[]>> {
+    const texts = await Promise.all(this.typFiles().map(async (path) => ({ path, text: await this.currentText(path) })));
+    return new Map(
+      names.map((name) => [
+        name,
+        texts.flatMap(({ path, text }) => {
+          const places = text ? placesOf(text, name) : [];
+          return places.length ? [{ path, places }] : [];
+        }),
+      ]),
+    );
+  }
+
+  /**
+   * F2's first step: the label under the cursor (`<intro>`, `@intro`,
+   * `#ref(<intro>)`, `#show <intro>: …`), its name in the box to rename it;
+   * or why it can't be renamed, said where the cursor is.
+   */
+  async renameLocation(model: monaco.editor.ITextModel, position: monaco.IPosition): Promise<monaco.languages.RenameLocation & monaco.languages.Rejection> {
+    const at = this.fileOf(model) ? nameAt(model.getValue(), model.getOffsetAt(position)) : null;
+    const range = at ? monaco.Range.fromPositions(model.getPositionAt(at.start), model.getPositionAt(at.end)) : monaco.Range.fromPositions(position);
+    const no = (rejectReason: string) => ({ range, text: at?.name ?? '', rejectReason });
+    if (!at) return no('Put the cursor on a label (<intro>) or a reference to one (@intro) to rename it.');
+    const labels = (await this.labelsNamed(at.name)).get(at.name)!.flatMap((f) => f.places.filter((p) => p.kind === 'label'));
+    const entry = this.state.workspace?.entry;
+    if (!labels.length && entry && this.refs.citationKeys(entry).includes(at.name)) return no(`@${at.name} is a citation: its key is in the bibliography, which Foreword doesn’t rename.`);
+    if (!labels.length) return no(`There’s no <${at.name}> written in the book to rename.`);
+    // Two things labelled the same: a reference can't say which it means, but a label can be renamed alone.
+    if (labels.length > 1 && at.kind !== 'label') return no(`${labels.length} things in the book are labelled <${at.name}>, so this can’t say which to rename. Rename one of the labels instead.`);
+    return { range, text: at.name };
+  }
+
+  /**
+   * F2: the label under the cursor renamed in the whole book, with every
+   * reference to it and every use in code, as Replace All makes its changes
+   * (History keeps the book as it was; an open file can be undone in the
+   * editor too). A label on more than one thing is renamed alone, which tells
+   * them apart. The toast says what changed, with Undo.
+   */
+  async renameLabel(model: monaco.editor.ITextModel, position: monaco.IPosition, typed: string) {
+    const path = this.fileOf(model);
+    const at = path ? nameAt(model.getValue(), model.getOffsetAt(position)) : null;
+    if (!path || !at) return;
+    const from = at.name;
+    const to = cleanLabelName(typed);
+    if (to === from) return;
+    const bad = badLabelName(to);
+    if (bad) return this.toast(bad, 'error');
+    const named = await this.labelsNamed(from, to);
+    const labels = named.get(from)!.flatMap((f) => f.places.filter((p) => p.kind === 'label'));
+    const taken = named.get(to)!.find((f) => f.places.some((p) => p.kind === 'label'));
+    if (taken) return this.toast(`There’s already a <${to}> in ${taken.path}: pick another name.`, 'error');
+    const entry = this.state.workspace?.entry;
+    if (entry && this.refs.citationKeys(entry).includes(to)) return this.toast(`${to} is a citation’s key in the bibliography: pick another name.`, 'error');
+    if (!labels.length) return this.toast(`There’s no <${from}> written in the book to rename.`, 'error');
+    const alone = labels.length > 1;
+    if (alone && at.kind !== 'label') return this.toast(`${labels.length} things in the book are labelled <${from}>: rename one of the labels instead.`, 'error');
+    await this.history.checkpoint().catch(() => null);
+    const done = await this.renameLabelIn(named.get(from)!.map((f) => f.path), from, to, (file, p) => !alone || (file === path && p.kind === 'label' && p.start === at.start));
+    if (!done.files) return;
+    const undo = [{ label: 'Undo', run: () => void this.renameLabelIn(this.typFiles(), to, from, (_, p) => !alone || p.kind === 'label').then(() => this.toast(`<${to}> is <${from}> again.`)) }];
+    if (alone) {
+      const others = labels.length - 1;
+      return this.toast(`Renamed this <${from}> to <${to}>. ${others === 1 ? `The book had two, and @${from} now refers to the other.` : `${others} other things are still labelled <${from}>.`}`, 'info', undo);
+    }
+    const refs = done.places - 1;
+    this.toast(`Renamed <${from}> to <${to}>${refs ? `, and ${refs} reference${refs === 1 ? '' : 's'} to it` : ''}${done.files > 1 ? ` in ${done.files} files` : ''}.`, 'info', undo);
+  }
+
+  /** `from` renamed `to` where `keep` says, in `paths` (each read again as it is now): how many places, in how many files. */
+  private async renameLabelIn(paths: string[], from: string, to: string, keep: (path: string, p: NamePlace) => boolean): Promise<{ places: number; files: number }> {
+    const done = { places: 0, files: 0 };
+    for (const path of paths) {
+      try {
+        const changed = await this.editFile(path, (text) => {
+          const places = placesOf(text, from).filter((p) => keep(path, p));
+          done.places += places.length;
+          return renameAt(text, places, to);
+        });
+        if (changed) done.files++;
+      } catch (e) {
+        this.toast(`Couldn’t rename <${from}> in ${path}: ${errorMessage(e)}`, 'error');
+      }
+    }
+    return done;
+  }
+
+  /**
+   * ⇧F12: every place the book names the label under the cursor (where it's
+   * put on something, with `includeDeclaration`, its references, its uses in
+   * code), for the editor's peek. A citation's are its citations, and its entry
+   * in the bibliography. Each file is opened (without a tab) so the peek can
+   * show it.
+   */
+  async labelReferences(model: monaco.editor.ITextModel, position: monaco.IPosition, includeDeclaration: boolean): Promise<monaco.languages.Location[]> {
+    const at = this.fileOf(model) ? nameAt(model.getValue(), model.getOffsetAt(position)) : null;
+    if (!at) return [];
+    const out: monaco.languages.Location[] = [];
+    const add = async (path: string, find: (text: string) => { start: number; end: number }[]) => {
+      const target = path === this.fileOf(model) ? model : (await this.docs?.open(path).catch(() => null))?.model;
+      for (const p of target ? find(target.getValue()) : []) out.push({ uri: target!.uri, range: monaco.Range.fromPositions(target!.getPositionAt(p.start), target!.getPositionAt(p.end)) });
+    };
+    const files = (await this.labelsNamed(at.name)).get(at.name)!;
+    for (const { path } of files) await add(path, (text) => placesOf(text, at.name).filter((p) => includeDeclaration || p.kind !== 'label'));
+    const ws = this.state.workspace;
+    const labelled = files.some((f) => f.places.some((p) => p.kind === 'label'));
+    if (includeDeclaration && !labelled && ws?.entry && this.refs.citationKeys(ws.entry).includes(at.name)) {
+      const { files: named, unknown } = this.refs.bibliographyFiles(ws.entry);
+      for (const path of unknown ? ws.files.filter((f) => /\.(?:bib|ya?ml)$/i.test(f)) : named) {
+        const text = await this.currentText(path);
+        if (text && bibliographyKeyPlaces(path, text, at.name).length) await add(path, (t) => bibliographyKeyPlaces(path, t, at.name));
+      }
+    }
+    return out;
   }
 
   /** The book's tasks (conversations): the sidebar's Tasks view. */

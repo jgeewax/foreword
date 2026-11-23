@@ -8,6 +8,7 @@ import { locate } from '../app/review';
 import { editMarks } from '../app/ai-marks';
 import { commentTags, type TagKind } from '../editor/comment-tags';
 import { todoAt } from '../app/todos';
+import { nameAt } from '../app/label-refs';
 import { attachTodoHover } from './TodoHover';
 import { todoMenu } from './todo-menu';
 import { attachSelectionBar } from './SelectionBar';
@@ -85,6 +86,10 @@ export function attachEditorTools(editor: monaco.editor.IStandaloneCodeEditor, {
           ? editMarks(studio.aiEditsFor(path), model.getValue()).find((m) => m.from <= pos.lineNumber && pos.lineNumber <= m.to)
           : undefined;
       const todo = pos && path && model ? todoAt(model.getLineContent(pos.lineNumber), path, pos.lineNumber) : null;
+      // A label or a reference to one (`<intro>`, `@intro`): where it's defined, where it's named, a new name for it.
+      const label = pos && model && path?.endsWith('.typ') && /[@<"]/.test(model.getLineContent(pos.lineNumber)) ? nameAt(model.getValue(), model.getOffsetAt(pos)) : null;
+      // By id: Go to Definition and Peek References are Monaco's newer actions, which getAction doesn't find.
+      const run = (id: string) => () => editor.trigger('menu', id, null);
       const ready = studio.state.agent.status === 'ready';
       // What's under the pointer first, then the selection, then editing. File- and
       // book-level commands live in the menu bar and the tab's menu.
@@ -95,6 +100,10 @@ export function attachEditorTools(editor: monaco.editor.IStandaloneCodeEditor, {
         ...(todo ? todoMenu(todo.todo, todo.fix) : []),
         mark && { label: 'What the Assistant Changed Here', action: () => void studio.showVersionChanges(mark.versionId) },
         mark && !!path && ready && { label: 'Ask About This Change…', action: () => void studio.askAboutChange(mark.versionId, path, mark.from) },
+        'separator',
+        label && label.kind !== 'label' && { label: 'Go to Definition', accelerator: 'F12', action: run('editor.action.revealDefinition') },
+        label && { label: 'Find All References', accelerator: 'Shift+F12', action: run('editor.action.referenceSearch.trigger') },
+        label && { label: 'Rename Label…', accelerator: 'F2', action: run('editor.action.rename') },
         'separator',
         hasSelection && { label: 'Add to Chat', accelerator: 'CmdOrCtrl+I', action: () => void studio.attachSelection() },
         hasSelection && ready && { label: 'Revise…', action: () => studio.events.emit('selection-card', 'revise') },

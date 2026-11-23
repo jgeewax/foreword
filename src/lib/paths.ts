@@ -5,6 +5,14 @@ export const baseName = (path: string) => path.replace(/\/+$/, '').split('/').po
 
 export const dirName = (path: string) => path.replace(/\/+$/, '').replace(/\/[^/]*$/, '') || '/';
 
+/** An absolute path as the book at `root` has it ("chapters/one.typ"; '' for the book's folder itself), or null outside it. */
+export function inBook(path: string, root: string | null | undefined): string | null {
+  const r = root?.replace(/\/+$/, '');
+  if (!r) return null;
+  if (path === r) return '';
+  return path.startsWith(`${r}/`) ? path.slice(r.length + 1) : null;
+}
+
 /** A picture the editor can't show as text (PNG, JPEG…), so it opens in Preview, as a PDF does. An SVG is text. */
 export const isPicture = (path: string) => /\.(png|jpe?g|gif|webp|bmp|tiff?|heic|avif)$/i.test(path);
 

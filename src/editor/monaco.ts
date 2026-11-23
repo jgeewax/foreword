@@ -58,12 +58,21 @@ const dark: monaco.editor.ITokenThemeRule[] = [
 export const THEME_PREFIXES = [...new Set(light.map((r) => r.token))];
 
 // *Strong* and _emph_ are on the end of a token's name, so every rule comes in those too.
-monaco.editor.defineTheme('studio-light', { base: 'vs', inherit: true, rules: themeWithEmphasis(light), colors: {} });
+// The peek (Find All References) in the app's own greys and blue (styles.css --bg-2, --accent), not Dark+'s navy or Light+'s pale blue.
+const peek = (ground: string, accent: string) => ({
+  'peekView.border': accent,
+  'peekViewTitle.background': ground,
+  'peekViewEditor.background': ground,
+  'peekViewEditorGutter.background': ground,
+  'peekViewResult.background': ground,
+  'peekViewResult.selectionBackground': `${accent}33`,
+});
+monaco.editor.defineTheme('studio-light', { base: 'vs', inherit: true, rules: themeWithEmphasis(light), colors: peek('#f6f7f9', '#2f6fde') });
 monaco.editor.defineTheme('studio-dark', {
   base: 'vs-dark',
   inherit: true,
   rules: themeWithEmphasis(dark),
-  colors: { 'editor.background': '#1b1d21', 'editorGutter.background': '#1b1d21' },
+  colors: { 'editor.background': '#1b1d21', 'editorGutter.background': '#1b1d21', ...peek('#222428', '#4c8bf5') },
 });
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
