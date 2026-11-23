@@ -194,7 +194,19 @@ pub async fn git_status(state: Win) -> CmdResult<Option<GitStatus>> {
     )
     .await?;
     if !top.status.success() {
-        return Ok(None); // not a Git repository
+        // Git ran and found no repository ("fatal: not a git repository", in
+        // any language): exit 128. Anything else is Git not running (Apple's
+        // shim before the Xcode license is accepted again exits 69), said as
+        // such, not shown as a book with no repository.
+        if top.status.code() == Some(128) {
+            return Ok(None);
+        }
+        let said = String::from_utf8_lossy(&top.stderr).trim().to_string();
+        return Err(CmdError::Io(if said.is_empty() {
+            format!("git stopped ({})", top.status)
+        } else {
+            said
+        }));
     }
     let text = String::from_utf8_lossy(&top.stdout);
     let mut lines = text.lines();

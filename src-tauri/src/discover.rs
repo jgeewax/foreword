@@ -7,7 +7,7 @@ use std::{
     ffi::OsString,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
     sync::{LazyLock, Mutex},
     time::{Duration, Instant},
 };
@@ -133,11 +133,13 @@ impl Tool {
     }
 
     /// Found without the settings: the first of its copies that can run
-    /// (an OpenCode older than 2.x speaks an API Foreword doesn't).
+    /// (an OpenCode older than 2.x speaks an API Foreword doesn't; a git that
+    /// won't run, as /usr/bin/git after an Xcode update, gives way to the next).
     fn automatic(self) -> Option<PathBuf> {
         let usable = |p: &PathBuf| match self {
             Tool::OpenCode => version_of(p).is_some_and(|v| v.starts_with("2.")),
-            _ => true,
+            Tool::Git => runs(p),
+            Tool::Tinymist => true,
         };
         copies(self).into_iter().map(|c| c.0).find(usable)
     }
@@ -329,9 +331,9 @@ pub struct ToolInfo {
     pub configured: Option<String>,
     /// `path` is the chosen one (not found automatically).
     pub from_settings: bool,
-    /// What would be used without a choice.
+    /// What would be used without a choice: the first copy that works.
     pub automatic: Option<String>,
-    /// Every copy found, the automatic one first.
+    /// Every copy found, in the order they're looked for.
     pub copies: Vec<Copy>,
 }
 
@@ -344,6 +346,37 @@ fn version_output(bin: &Path) -> Option<String> {
 /// What `bin args…` prints (stdout, then stderr), or None if it can't run or
 /// takes more than 3 seconds.
 pub fn output(bin: &Path, args: &[&str]) -> Option<String> {
+    run(bin, args).map(|(_, text)| text)
+}
+
+/// Whether `bin --version` succeeds, asked at most once a minute per program.
+/// /usr/bin/git is Apple's shim for the active developer folder's git; after
+/// an Xcode update it refuses to run (exit 69, "You have not agreed to the
+/// Xcode license agreements") until the license is accepted again, while the
+/// Command Line Tools' own git still runs. Asked again, so a shim that breaks
+/// or is mended while Foreword is open is noticed.
+fn runs(bin: &Path) -> bool {
+    const FOR: Duration = Duration::from_secs(60);
+    static SEEN: LazyLock<Mutex<HashMap<PathBuf, (Instant, bool)>>> =
+        LazyLock::new(Default::default);
+    let fresh = SEEN
+        .lock()
+        .ok()
+        .and_then(|seen| seen.get(bin).copied())
+        .filter(|(at, _)| at.elapsed() < FOR);
+    if let Some((_, ok)) = fresh {
+        return ok;
+    }
+    let ok = run(bin, &["--version"]).is_some_and(|(status, _)| status.success());
+    if let Ok(mut seen) = SEEN.lock() {
+        seen.insert(bin.to_path_buf(), (Instant::now(), ok));
+    }
+    ok
+}
+
+/// `bin args…`'s exit status and what it prints (stdout, then stderr), or
+/// None if it can't run or takes more than 3 seconds.
+fn run(bin: &Path, args: &[&str]) -> Option<(ExitStatus, String)> {
     let mut child = Command::new(bin)
         .args(args)
         .env("PATH", search_path())
@@ -365,10 +398,13 @@ pub fn output(bin: &Path, args: &[&str]) -> Option<String> {
         }
     }
     let out = child.wait_with_output().ok()?;
-    Some(format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+    Some((
+        out.status,
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        ),
     ))
 }
 
@@ -427,7 +463,10 @@ pub fn tool_info(tool: Tool) -> ToolInfo {
     let configured = configured(tool);
     let chosen = configured.clone().filter(|p| is_executable(p));
     let from_settings = chosen.is_some();
-    let automatic = copies.first();
+    // Not always the first copy: the first that can run.
+    let automatic = tool
+        .automatic()
+        .and_then(|p| copies.iter().find(|c| Path::new(&c.path) == p));
     let (path, version) = match &chosen {
         Some(p) => (Some(text(p)), version_of(p)),
         None => (
@@ -543,8 +582,10 @@ mod tests {
         let mut canonical: Vec<_> = all.iter().map(|(p, _)| p.canonicalize().unwrap()).collect();
         canonical.dedup();
         assert_eq!(canonical.len(), all.len());
-        assert_eq!(Tool::Git.automatic(), Some(all[0].0.clone()));
-        let git = probe(Tool::Git, &all[0].0.to_string_lossy());
+        // The first that runs: /usr/bin/git is passed over while it waits on the Xcode license.
+        let auto = Tool::Git.automatic().expect("a git that runs");
+        assert_eq!(all.iter().find(|(p, _)| runs(p)).map(|(p, _)| p), Some(&auto));
+        let git = probe(Tool::Git, &auto.to_string_lossy());
         assert!(
             git.problem.is_none() && git.version.is_some(),
             "{:?}",
@@ -575,6 +616,27 @@ mod tests {
         );
         assert_eq!(source_of(Path::new("/opt/homebrew/bin")), "Homebrew");
         assert_eq!(source_of(&home().unwrap().join("tools/bin")), "~/tools/bin");
+    }
+
+    #[test]
+    fn a_program_that_refuses_to_run_is_not_used() {
+        let dir = std::env::temp_dir().join(format!("foreword-runs-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = |name: &str, body: &str| {
+            let p = dir.join(name);
+            std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            p
+        };
+        // As /usr/bin/git does after an Xcode update.
+        let shim = script(
+            "shim",
+            "echo 'You have not agreed to the Xcode license agreements.' >&2; exit 69",
+        );
+        let git = script("git", "echo 'git version 2.50.1'");
+        assert!(!runs(&shim));
+        assert!(runs(&git));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

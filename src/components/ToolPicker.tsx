@@ -31,6 +31,8 @@ export function ToolPicker({ tool, label, info, install, error, notInstalled }: 
   // The chosen path with ~ expanded, and the copy in use (for where it came from).
   const configured = info?.configured ?? null;
   const inUse = copies.find((c) => c.path === info?.path);
+  // Not always the first found: the first that works (a git that won't run is passed over).
+  const auto = copies.find((c) => c.path === info?.automatic);
   const unusable = !!chosen && !!info && info.fromSettings === false;
 
   const apply = async (path: string) => {
@@ -89,8 +91,8 @@ export function ToolPicker({ tool, label, info, install, error, notInstalled }: 
       content: (
         <>
           <span className="tool-option-title">Automatic</span>
-          <span className="tool-option-detail">{copies[0] ? `The first one found: ${copies[0].version ?? 'version unknown'}, ${copies[0].source}` : 'Nothing found yet'}</span>
-          {copies[0] && <span className="tool-option-path">{tildePath(copies[0].path)}</span>}
+          <span className="tool-option-detail">{auto ? `The first one that works: ${auto.version ?? 'version unknown'}, ${auto.source}` : copies.length ? 'None of these works' : 'Nothing found yet'}</span>
+          {auto && <span className="tool-option-path">{tildePath(auto.path)}</span>}
         </>
       ),
     },
