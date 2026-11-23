@@ -2,6 +2,16 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.12.1 · 23 November 2026
+
+### The preview
+
+- **Each window shows what you chose in it.** Choosing **Book** or **Chapter** above the preview in one window no longer switches the preview in your other windows too. Each book keeps its own choice, and opens again showing what it showed when you left it. The choice is no longer in Settings: it's the Book and Chapter buttons above the preview (and Show Only This Chapter or Show the Whole Book in the command palette).
+
+### Books and windows
+
+- **File → Open Recent.** Your recent books, newest first, are in the File menu under Open Book…, by where they are on your Mac. Choose one to open it in the window in front, or to bring forward the window that already has it. *More…* (⌃R) searches them all, and *Clear Recently Opened…* empties the list here and in the Dock, after asking.
+
 ## 0.12.0 · 22 November 2026
 
 ### The assistant

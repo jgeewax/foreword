@@ -16,6 +16,8 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
+**New in 0.12.1:** each window's preview keeps its own Book or Chapter · File → Open Recent
+
 **New in 0.12:** Auto picks the mode for each message · Review, a mode that suggests a change for each problem · type @ to name a book file in the chat · a book and its windows open as you left them, even after a crash · start a Git repository from Source Control · Git's colours in the file tree · say a colour in words
 
 <br>
