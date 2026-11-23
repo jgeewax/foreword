@@ -2532,6 +2532,177 @@ async function optionsPassageChecks() {
 }
 
 /**
+ * Options that say what they replace (a ```replaces block), with nothing
+ * selected and the cursor elsewhere, as after talking about a passage: Use
+ * this puts the option over the passage the reply names, found by its words
+ * though its line is off, not at the cursor. Also an insertion at the line
+ * and column it names; and with no block, or words that aren't in the file,
+ * no Use this, and the card says why. Made-up replies; restores the buffer.
+ */
+async function optionsAnchorChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const s = studio as any;
+  const SID = 'selftest-anchor';
+  await studio.openFile(file);
+  const editor = studio.editor!;
+  const model = editor.getModel()!;
+  const original = model.getValue();
+  const diskBefore = await ipc.fsHash(file);
+  const saved = { mode: studio.state.agent.mode, sessionId: studio.state.agent.sessionId, items: studio.state.agent.items };
+  const sentence = 'The eigenvalues of $A$ are the roots of its characteristic polynomial';
+  const line = model.getLinesContent().indexOf(sentence) + 1;
+  const far = Math.min(model.getLineCount(), line + 12);
+  const farText = model.getLineContent(far);
+  const OPTIONS = ['Eigenvalues are roots.', 'The roots of the characteristic polynomial of $A$ are its eigenvalues.'];
+  const reply = (anchor: string) => `Two ways.\n\n${anchor}\n\n${OPTIONS.map((t, i) => `### Option ${i + 1}: Way ${i + 1}\n\`\`\`typst\n${t}\n\`\`\`\nVersion ${i + 1}.`).join('\n\n')}`;
+  const last = () => [...document.querySelectorAll('.options-reply')].at(-1);
+  const card = () => ({
+    says: last()?.querySelector('.options-target')?.textContent,
+    buttons: [...(last()?.querySelectorAll('.option-card')[0]?.querySelectorAll('.option-actions button') ?? [])].map((b) => b.textContent),
+    shownBlock: !!last()?.textContent?.includes('find:'),
+  });
+  const item = () => [...studio.state.agent.items].reverse().find((i) => i.kind === 'assistant' && i.options) as any;
+  let n = 0;
+  // As send does with nothing selected: the cursor goes with the message (attachForOptions), followed; then the reply.
+  const ask = async (text: string) => {
+    n++;
+    editor.setPosition({ lineNumber: far, column: 3 });
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
+    await s.attachForOptions();
+    const a = studio.state.agent.attachments[0];
+    s.optionsTurn = s.turnAsItIs(s.optionsTurnFor(a));
+    studio.store.set((st) => ({ agent: { ...st.agent, attachments: [], items: [...st.agent.items, { kind: 'user', id: `u${n}`, text: 'Shorter', attachments: a ? [a.label] : [], at: Date.now() }] } }));
+    s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: `m${n}`, ordinal: 0, text });
+    await sleep(400);
+    return { attached: a?.label };
+  };
+  const use = async () => {
+    const b = last()?.querySelectorAll('.option-card')[0]?.querySelector<HTMLButtonElement>('.option-actions button');
+    b?.focus();
+    b?.click();
+    await sleep(400);
+  };
+  try {
+    studio.store.set((st) => ({ agent: { ...st.agent, sessionId: SID, running: false, mode: 'options', items: [], attachments: [], queued: [] } }));
+    studio.events.emit('show-agent-pane');
+    await sleep(200);
+
+    // Named by its words, its line two off: over the sentence, the cursor's line untouched.
+    out.anchored = await ask(reply(`\`\`\`replaces\nat: ${file}:${line + 2}\nfind:\n${sentence}\n\`\`\``));
+    out.anchored = { ...(out.anchored as object), target: item()?.options?.target?.start, card: card() };
+    await use();
+    out.anchoredUsed = { inPlace: model.getLineContent(line) === OPTIONS[0], sentenceGone: !model.getValue().includes(sentence), cursorLine: model.getLineContent(far) === farText, applied: item()?.options?.applied };
+    model.setValue(original);
+    await sleep(200);
+
+    // Nothing replaced: in at the line and column it names.
+    out.insert = await ask(reply(`\`\`\`replaces\nat: ${file}:${line}:1\nfind:\n\`\`\``));
+    out.insert = { ...(out.insert as object), card: card() };
+    await use();
+    out.insertUsed = { ok: model.getLineContent(line) === OPTIONS[0] + sentence, cursorLine: model.getLineContent(far) === farText };
+    model.setValue(original);
+    await sleep(200);
+
+    // No block, a bare cursor: nowhere to put them.
+    out.unsaid = await ask(reply(''));
+    out.unsaid = { ...(out.unsaid as object), target: item()?.options?.target ?? null, unplaced: item()?.options?.unplaced, card: card() };
+
+    // Words that aren't in the file: nowhere either, and the card names the place.
+    out.notThere = await ask(reply(`\`\`\`replaces\nat: ${file}:${line}\nfind:\nA sentence the chapter never had.\n\`\`\``));
+    out.notThere = { ...(out.notThere as object), target: item()?.options?.target ?? null, unplaced: item()?.options?.unplaced, card: card() };
+    out.unchanged = model.getValue() === original;
+    try {
+      last()?.scrollIntoView({ block: 'center' });
+      await sleep(200);
+      out.snapshot = await snap('options-anchor');
+    } catch (e) {
+      out.snapshot = errorMessage(e);
+    }
+  } finally {
+    if (model.getValue() !== original) model.setValue(original);
+    await sleep(300);
+    out.restored = { buffer: model.getValue() === original, diskUnchanged: (await ipc.fsHash(file)) === diskBefore };
+    s.optionsTurn = null;
+    studio.store.set((st) => ({ agent: { ...st.agent, mode: saved.mode, sessionId: saved.sessionId, items: saved.items, attachments: [], queued: [] } }));
+  }
+  return out;
+}
+
+/**
+ * The bug as the author hit it, with a real assistant (Claude Code on Haiku, or Codex on Luna):
+ * a conversation about a sentence nobody selected (Ask), then options for it
+ * in Options mode, the cursor far away. The reply says what it replaces, and
+ * Use this puts the option in place of the sentence, not at the cursor. The
+ * chapter is put back on disk at the end: scratch book only.
+ */
+async function optionsAnchorLiveChecks(kind: 'claude' | 'codex' = 'claude') {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions, mode: studio.state.agent.mode };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.usualSetup', 'studio.modePins'].map((k) => [k, localStorage.getItem(k)] as const);
+  const original = (await ipc.fsRead(file)).text;
+  try {
+    studio.updateSettings({ assistant: kind, permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+    if (studio.state.agent.status !== 'ready') return { status: studio.state.agent.status, error: studio.state.agent.error };
+    const small = studio.state.agent.models.find((m) => /haiku|luna/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.model = studio.state.agent.model?.id;
+    studio.newSession();
+    await studio.openFile(file);
+    const editor = studio.editor!;
+    const model = editor.getModel()!;
+    const sentence = 'The eigenvalues of $A$ are the roots of its characteristic polynomial';
+    const line = model.getLinesContent().indexOf(sentence) + 1;
+    const far = Math.min(model.getLineCount(), line + 12);
+    const farText = model.getLineContent(far);
+    // Talking about it, nothing selected.
+    await studio.setMode('ask');
+    editor.setPosition({ lineNumber: far, column: 1 });
+    await sleep(300);
+    await askAgent(`In ${file}, is the sentence that starts "The eigenvalues of $A$ are the roots" clear for a first-time reader?`);
+    out.asked = { mode: studio.state.agent.mode, replied: !!studio.state.agent.items.filter((i) => i.kind === 'assistant').length };
+    // Then options for it, the cursor still far away.
+    await studio.setMode('options');
+    editor.setPosition({ lineNumber: far, column: 1 });
+    await sleep(300);
+    const reply = await askAgent('Give me options for that sentence: shorter and plainer.');
+    await sleep(500);
+    const item = [...studio.state.agent.items].reverse().find((i) => i.kind === 'assistant' && i.options) as any;
+    const parsed = parseOptions(reply);
+    out.reply = {
+      attached: ([...studio.state.agent.items].reverse().find((i) => i.kind === 'user') as any)?.attachments,
+      anchor: parsed.anchor,
+      options: parsed.options.map((o) => o.text),
+      target: item?.options?.target ? { start: item.options.target.start, end: item.options.target.end, text: item.options.target.text } : null,
+      unplaced: item?.options?.unplaced,
+      says: [...document.querySelectorAll('.options-reply')].at(-1)?.querySelector('.options-target')?.textContent,
+    };
+    if (!parsed.options[0]?.text) return out;
+    [...document.querySelectorAll('.options-reply')].at(-1)?.querySelectorAll('.option-card')[0]?.querySelector<HTMLButtonElement>('.option-actions button')?.click();
+    await sleep(600);
+    // Its lines where the sentence was (an option may start with the sentence's words: they don't tell).
+    const put = parsed.options[0].text;
+    out.used = {
+      inPlace: model.getLinesContent().slice(line - 1, line - 1 + put.split('\n').length).join('\n') === put,
+      lineNow: model.getLineContent(line),
+      cursorLine: model.getLineContent(far) === farText,
+    };
+  } finally {
+    await ipc.fsWrite(file, original, await ipc.fsHash(file));
+    await studio.reloadFromDisk(file);
+    studio.newSession();
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    studio.store.set((s) => ({ agent: { ...s.agent, mode: saved.mode } }));
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  out.restored = { disk: (await ipc.fsRead(file)).text === original };
+  return out;
+}
+
+/**
  * Options with a real assistant (Claude Code on Haiku), as the author hit it:
  * Options from the selection bar on a sentence; while the reply is written,
  * they click elsewhere, select other words and add a line above; Use this
@@ -11904,6 +12075,9 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('selnote')) result.selnote = await selectionNoteChecks();
     if (only?.includes('composerrow')) result.composerrow = await composerRowChecks();
     if (only?.includes('optionslive')) result.optionslive = await optionsLiveChecks();
+    if (only?.includes('optionsanchor')) result.optionsanchor = await optionsAnchorChecks();
+    if (only?.includes('optionsanchorlive')) result.optionsanchorlive = await optionsAnchorLiveChecks();
+    if (only?.includes('optionsanchorlive-codex')) result['optionsanchorlive-codex'] = await optionsAnchorLiveChecks('codex');
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);

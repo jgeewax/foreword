@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closestOurs, locatePassage } from './option-passage';
+import { closestOurs, findPassage, locatePassage } from './option-passage';
 
 const before = 'Intro. ';
 const passage = 'The cat sat on the mat.';
@@ -85,5 +85,48 @@ describe('what the author changed', () => {
     expect(closestOurs('A cat lay on the big mat.', [option, passage])).toBe(option);
     expect(closestOurs('The cat sat on a mat.', [option, passage])).toBe(passage);
     expect(closestOurs('Anything', [])).toBe('');
+  });
+});
+
+describe('the passage a reply says its options replace', () => {
+  const lines = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i + 1)).join('\n');
+  const span = (doc: string, words: string, from = 0) => ({ start: doc.indexOf(words, from), end: doc.indexOf(words, from) + words.length });
+
+  it('is where its words are, wherever the line it gives', () => {
+    const doc = 'Intro.\n\nThe span of a list is the set of its combinations.\nIt is the smallest subspace.\n\nNext.';
+    const find = 'The span of a list is the set of its combinations.\nIt is the smallest subspace.';
+    expect(findPassage(doc, find, 3)).toEqual(span(doc, find));
+    expect(findPassage(doc, find, 400)).toEqual(span(doc, find));
+    expect(findPassage(doc, find, null)).toEqual(span(doc, find));
+  });
+
+  it('words in the file more than once: the place nearest its line, if there is one', () => {
+    const doc = lines(200, (i) => (i === 10 || i === 150 ? 'Same words.' : `Line ${i}.`));
+    const second = doc.indexOf('Same words.', doc.indexOf('Same words.') + 1);
+    expect(findPassage(doc, 'Same words.', 148)).toEqual({ start: second, end: second + 11 });
+    expect(findPassage(doc, 'Same words.', 12)).toEqual(span(doc, 'Same words.'));
+    // No line, too far from both, or halfway: nowhere, rather than a guess.
+    expect(findPassage(doc, 'Same words.', null)).toBeNull();
+    expect(findPassage(doc, 'Same words.', 80)).toBeNull();
+  });
+
+  it('tolerates blank space at its ends, quotes around it, and retyped spaces and quote marks', () => {
+    const doc = 'Before.\n  It’s the “smallest” subspace\n  that holds them.\nAfter.';
+    const passage = 'It’s the “smallest” subspace\n  that holds them.';
+    expect(findPassage(doc, `\n${passage}\n`, 2)).toEqual(span(doc, passage));
+    expect(findPassage(doc, `"${passage}"`, 2)).toEqual(span(doc, passage));
+    expect(findPassage(doc, 'It\'s the "smallest" subspace\nthat holds them.', 2)).toEqual(span(doc, passage));
+    expect(findPassage(doc, "It's the smallest subspace that holds them.", 2)).toBeNull();
+  });
+
+  it('no words, or words that aren’t there: nowhere', () => {
+    expect(findPassage('Some text.', '', 1)).toBeNull();
+    expect(findPassage('Some text.', ' \n ', 1)).toBeNull();
+    expect(findPassage('Some text.', 'Other text.', 1)).toBeNull();
+  });
+
+  it('a regex character in the words is only itself', () => {
+    const doc = 'Let $x in (a, b)$ [see @ref].\nThen $x^2 + 1 > 0$.';
+    expect(findPassage(doc, 'Let $x in (a, b)$  [see @ref].', 1)).toEqual(span(doc, 'Let $x in (a, b)$ [see @ref].'));
   });
 });

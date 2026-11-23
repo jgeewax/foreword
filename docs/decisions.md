@@ -5226,6 +5226,48 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   the file is never written. Book state is kept by path, so run it on fresh
   paths.
 
+### An Options reply says what it replaces (2026-11-23)
+
+- **The bug (from the user):** talking about a passage without selecting it,
+  then asking for options, gave the right options, but Apply "doesn't replace
+  the passage it just inserts it at the cursor position". With nothing
+  selected, `attachForOptions` sends the cursor, and that bare cursor was the
+  reply's target, whatever the options were written for. The user: "each
+  suggestion MUST be anchored and say what start/end position it overwrites.
+  if it wants to just insert thats ok, just start=end in that case".
+- **The format:** every Options reply starts with a ```` ```replaces ```` block,
+  hidden like the answer card's blocks: `at:` the file and line, `find:` the
+  passage's words exactly as they are in the file. Empty `find` is an
+  insertion (start = end) at the line and column `at` gives. Words, not just
+  line numbers: an assistant counts loosely, and a wrong line would overwrite
+  the author's sentence. It's like Review's ```` ```change ```` (`at` + `find`),
+  which the assistants already write well. One block for the reply, not one
+  per option: options are versions of the same passage, and the words would
+  be repeated three times. One put inside an option is still read as the
+  anchor, never as the option's text.
+- **Placing it** (`placeOptions`, when the reply ends): `findPassage` looks
+  for the words (as written, trimmed, unquoted, then with spaces, line
+  breaks and quote marks matched loosely), the one place they are or the
+  nearest to the line (within 60 lines, and nearer than any other). That
+  becomes the followed passage, so the author can type elsewhere before
+  picking, as before. The file is opened unseen if it isn't open.
+- **When it can't be placed:** no block, or words not in the file, falls back
+  on the selection the message was about, if there was one; a bare cursor
+  isn't a fallback any more (it goes with every message). Then the card has
+  no Use this and says why ("The reply doesn't say where these go" / "The
+  passage these replace (two.typ:140) isn't in the file as the reply quotes
+  it"), with Copy. The card's line says the place with its line range
+  (`two.typ:140–146`, `two.typ:147:1` for an insertion), as the reply gives it
+  while it's still coming.
+- **Verified:** unit tests for the parser and `findPassage`; self-test
+  `optionsanchor` (made-up replies, cursor 12 lines away): the sentence
+  replaced though `at` was 2 lines off, an insertion at 13:1, and both
+  unplaceable cases with no Use this. `optionsanchorlive` (Ask about a
+  sentence nobody selected, then Options with the cursor elsewhere): Claude
+  Code on Haiku 3/3 and Codex on Luna 2/2 wrote the block with the right line
+  and words, and Use this replaced the sentence, the cursor's line untouched.
+  `optionslive` (from a selection) still passes.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

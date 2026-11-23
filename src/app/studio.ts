@@ -97,8 +97,8 @@ import { AUTO_MENU, MODE_INSTRUCTIONS_KEY, modeChoiceMessage, modeConfig, modeOf
 import { AUTO_INSTRUCTIONS, autoReminder, pickMode, type AutoPick } from '../services/agent/auto-mode';
 import { answerOf, removalLines, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
 import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
-import { optionsReminder, parseOptions } from '../services/agent/options-mode';
-import { closestOurs, locatePassage, type PassageAt } from './option-passage';
+import { optionsReminder, parseOptions, withoutAnchor, type OptionsAnchor } from '../services/agent/options-mode';
+import { closestOurs, findPassage, locatePassage, type PassageAt } from './option-passage';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, STYLE_REVISE_PLACEHOLDER, styleDraftBrief, styleInstructions, styleInterviewBrief, styleReviseBrief, styleReviseMessage, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
@@ -346,9 +346,19 @@ export type OptionTarget = { path: string; start: { line: number; column: number
  * An Options-mode reply: where a picked option goes (null: nothing to replace,
  * copy only), the passage as it was asked about, and the option in use.
  * `passage`: the passage followed through edits (Studio's, shared by the
- * replies about it); `conflict`: why the option last picked didn't go in.
+ * replies about it); `conflict`: why the option last picked didn't go in;
+ * `unplaced`: why there's nowhere to put them (target null), the place the
+ * reply named whose words aren't there (`at`), or null for a reply that
+ * didn't say.
  */
-export type OptionsState = { target: OptionTarget | null; original: OptionTarget | null; applied: number | null; passage?: string; conflict?: OptionConflict | null };
+export type OptionsState = {
+  target: OptionTarget | null;
+  original: OptionTarget | null;
+  applied: number | null;
+  passage?: string;
+  conflict?: OptionConflict | null;
+  unplaced?: { at: string | null };
+};
 /**
  * An option that couldn't simply go in, and the card asks what to do: the
  * author changed the passage since it was asked about (`was`, the version it
@@ -2292,7 +2302,7 @@ export class Studio {
     const { items, title } = this.state.agent;
     const turn = turnsOf(items).find((t) => t.user?.version === versionId);
     if (turn?.user) {
-      const said = turn.reply ? withoutAnswerBlocks(withoutMarker(turn.reply.text)).trim() : '';
+      const said = turn.reply ? withoutAnswerBlocks(withoutAnchor(withoutMarker(turn.reply.text))).trim() : '';
       return { ...(title && { task: title }), asked: messageLine(turn.user.text), ...(said && { said }) };
     }
     const task = this.state.agent.tasks.find((t) => Object.values(t.files ?? {}).some((f) => f?.version === versionId));
@@ -4680,7 +4690,7 @@ export class Studio {
       const { sessionId, taskId } = this.state.agent;
       // Its latest reply, for the Tasks view's search; and the assistant has seen all of the chat.
       const reply = [...this.state.agent.items].reverse().find((it) => it.kind === 'assistant' && it.text.trim());
-      if (taskId && reply?.kind === 'assistant') this.updateTaskRecord(taskId, { said: plainLine(answerOf([reply.text])?.answer || withoutAnswerBlocks(withoutMarker(reply.text)), 300), updated: Date.now() });
+      if (taskId && reply?.kind === 'assistant') this.updateTaskRecord(taskId, { said: plainLine(answerOf([reply.text])?.answer || withoutAnswerBlocks(withoutAnchor(withoutMarker(reply.text))), 300), updated: Date.now() });
       this.noteSeen();
       void this.history.afterAgent(this.turnMessage).then((turn) => {
         this.recordTurn(taskId, turn);
@@ -6279,7 +6289,8 @@ export class Studio {
     // A reply's questions, passed over: the author wrote something else instead.
     const passedOver = (it: ChatItem): it is QuestionItem => it.kind === 'question' && it.via === 'message' && it.state === 'pending';
     if (state.items.some(passedOver)) this.setAgent((a) => ({ items: a.items.map((it) => (passedOver(it) ? { ...it, state: 'dismissed' as const } : it)) }));
-    // Options replace a passage: the one selected or attached; else, a follow-up, the one the last options were about; else the cursor.
+    // Options replace a passage: the one selected or attached; else, a follow-up, the one the last options were about; else
+    // the cursor goes, for the assistant to know where it is. Where they go in the end is where the reply says (placeOptions).
     this.prunePassages();
     if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachForOptions();
     const attachments = this.outgoingAttachments();
@@ -6623,6 +6634,54 @@ export class Studio {
     return turn ? { options: { target: turn.target, original: turn.target, applied: null, ...(turn.passage ? { passage: turn.passage } : {}) } } : {};
   }
 
+  /** Replies being placed (placeOptions), so a pick waits for where it goes. */
+  private placing = new Map<string, Promise<void>>();
+
+  /**
+   * Where an Options reply's options go, once it's in: the place its
+   * ```replaces block names (the passage found by its words, near the line it
+   * gives; or with no words, the line and column), followed from now on. A
+   * reply that doesn't say, or whose words aren't in the file, falls back on
+   * the selection it was asked about; a bare cursor isn't one (it goes with
+   * every message, whatever the message is about), so then there's nowhere,
+   * and the card says why: copy only.
+   */
+  private placeOptions(itemId: string, text: string) {
+    const parsed = parseOptions(text);
+    if (!parsed.options.length && !parsed.anchor) return;
+    const run = (async () => {
+      const place = parsed.anchor?.complete ? await this.anchorTarget(parsed.anchor) : null;
+      const item = this.state.agent.items.find((i) => i.id === itemId);
+      const asked = item?.kind === 'assistant' ? item.options?.target : null;
+      if (item?.kind !== 'assistant' || !item.options || item.options.applied != null) return;
+      let options: OptionsState;
+      if (place) {
+        const passage = this.followPassage(place);
+        options = { ...item.options, target: place, original: place, passage, unplaced: undefined };
+      } else if (asked?.text) return;
+      else options = { ...item.options, target: null, original: null, passage: undefined, unplaced: { at: parsed.anchor?.at || null } };
+      this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, options } : it));
+      this.prunePassages();
+    })().finally(() => this.placing.delete(itemId));
+    this.placing.set(itemId, run);
+  }
+
+  /** The place a reply's ```replaces block names, in its file as it is now (opened for it, unseen), or null if it isn't there. */
+  private async anchorTarget(anchor: OptionsAnchor): Promise<OptionTarget | null> {
+    const ws = this.state.workspace;
+    const ref = ws && anchor.at ? refNamed(bookFiles(ws.files, ws.root), anchor.at) : null;
+    if (!ref) return null;
+    const model = (this.docs?.get(ref.path) ?? (await this.docs?.open(ref.path).catch(() => null)))?.model;
+    if (!model || model.isDisposed()) return null;
+    if (!anchor.find.trim()) {
+      // Nothing replaced: in at the line and column it gives (the line's start without one).
+      if (!ref.line || ref.line > model.getLineCount()) return null;
+      return targetIn(ref.path, model, monaco.Range.fromPositions(model.validatePosition({ lineNumber: ref.line, column: ref.column ?? 1 })));
+    }
+    const at = findPassage(model.getValue(), anchor.find, ref.line ?? null);
+    return at && targetIn(ref.path, model, offsetsRange(model, at.start, at.end));
+  }
+
   // ---- the passage Options replies are about ------------------------------------------
   // Followed by decorations from the moment the message goes (option-passage.ts):
   // the cursor, another selection, or writing before or after it never move it.
@@ -6739,6 +6798,7 @@ export class Studio {
    * the card showed (not anything changed since), or put it back where it was.
    */
   async applyOption(itemId: string, index: number, { anyway = false } = {}) {
+    await this.placing.get(itemId);
     const item = this.state.agent.items.find((i) => i.id === itemId);
     if (item?.kind !== 'assistant' || !item.options?.target) return;
     const option = parseOptions(item.text).options[index];
@@ -7138,6 +7198,7 @@ export class Studio {
             ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true, ...taskCheck, ...offer } : it)) }
             : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState(), ...taskCheck, ...offer }] },
         );
+        if (this.state.agent.items.some((it) => it.id === id && it.kind === 'assistant' && it.options)) this.placeOptions(id, e.text);
         this.addReplyQuestions(id, e.text);
         break;
       }

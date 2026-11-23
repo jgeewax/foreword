@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom';
 import { activityWords, clockTime, stepTimes, thinkingSoFar, thoughtHeading, waitedPrefix, waitingTip, workerName } from '../app/activity';
 import { ASSISTANT_NAMES } from '../app/settings';
-import { studio, type Activity, type ChatItem, type OptionConflict, type QuestionItem, type TurnBy } from '../app/studio';
+import { studio, type Activity, type ChatItem, type OptionConflict, type OptionTarget, type QuestionItem, type TurnBy } from '../app/studio';
 import { withoutAddressed } from '../app/review';
 import { actionText, messageLine, stockAction, type StockAction } from '../app/stock-prompts';
 import { withoutMarker } from '../app/tasks';
@@ -23,7 +23,7 @@ import { directionsOf, withoutDirections, type Direction } from '../services/age
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { modeConfig, withoutModeOffer, type AgentMode } from '../services/agent/modes';
 import { answerOf, answerText as answerPlainText, markedTerms, markPieces, proseAndCharts, quoteOf, withoutAnswerBlocks, type AnswerChange, type AnswerPlace, type AskAnswer, type Sure } from '../services/agent/ask-answer';
-import { parseOptions } from '../services/agent/options-mode';
+import { parseOptions, withoutAnchor } from '../services/agent/options-mode';
 import { answerText, questionText, splitQuestions } from '../services/agent/questions';
 import { AssistantMark } from './AssistantSettings';
 import { AttachedFiles, filesBelow, MentionText } from './AttachedFiles';
@@ -548,19 +548,29 @@ function lastOptionsView(): OptionsView {
   }
 }
 
+/** Where an option goes, as the card says it: `two.typ:140–146` for lines, `two.typ:140`, or `two.typ:147:12` for a point. */
+function placeLabel(t: OptionTarget): string {
+  const file = t.path.split('/').pop();
+  if (!t.text) return `${file}:${t.start.line}:${t.start.column}`;
+  return t.end.line > t.start.line ? `${file}:${t.start.line}–${t.end.line}` : `${file}:${t.start.line}`;
+}
+
 function OptionsReply({ item }: { item: AssistantItem }) {
   const parsed = useMemo(() => parseOptions(item.text), [item.text]);
-  const { target, applied, conflict } = item.options!;
+  const { target, applied, conflict, unplaced } = item.options!;
   const [view, setView] = useState<OptionsView>(lastOptionsView);
   const optionCount = useStore(studio.store, (s) => s.settings.optionCount);
   if (!parsed.options.some((o) => o.text != null)) {
     return (
       <div className={`msg assistant md${item.done ? '' : ' streaming'}`}>
-        <Markdown text={item.text} />
+        <Markdown text={withoutAnchor(item.text)} />
       </div>
     );
   }
-  const where = target && `${target.path.split('/').pop()}:${target.start.line}`;
+  // Where they go: as the reply says while it's still coming (found in the file once it's in), else as found.
+  const said = !item.done && parsed.anchor?.at ? parsed.anchor : null;
+  const where = said ? said.at.split('/').pop()! : target && placeLabel(target);
+  const inserts = said ? !said.find.trim() : !target?.text;
   // The passage as this reply was asked about: what an option that's empty takes out.
   const asked = (item.options!.original ?? target)?.text ?? '';
   const pick = (v: OptionsView) => {
@@ -580,10 +590,16 @@ function OptionsReply({ item }: { item: AssistantItem }) {
       )}
       <div className="options-bar">
         <div className="options-target">
-          {target ? (
+          {where ? (
             <>
-              Pick one to {target.text ? 'replace' : 'insert at'} <span className="options-where">{where}</span>
+              Pick one to {inserts ? 'insert at' : 'replace'} <span className="options-where">{where}</span>
             </>
+          ) : unplaced?.at ? (
+            <>
+              The passage these replace (<span className="options-where">{unplaced.at.split('/').pop()}</span>) isn’t in the file as the reply quotes it: copy the one you want, or select the passage and ask again.
+            </>
+          ) : unplaced ? (
+            'The reply doesn’t say where these go: copy the one you want, or select the passage and ask again.'
           ) : (
             'Nothing was selected: copy the one you want.'
           )}
@@ -1101,7 +1117,7 @@ function TurnFooter({ turn, last, copy, answered }: { turn: Turn; last: boolean;
   const outcome = failed ? 'failed' : stopped ? 'stopped' : 'done';
   const done = answered ? 'Answered' : 'Done';
   const words = outcome === 'done' ? (time ? `${done} in ${time}` : done) : outcome === 'stopped' ? `Stopped${time ? ` after ${time}` : ''}` : 'Didn’t finish';
-  const reply = copy ?? (turn.reply && withoutAnswerBlocks(withoutModeOffer(withoutMarker(splitQuestions(turn.reply.text).text))).trim());
+  const reply = copy ?? (turn.reply && withoutAnswerBlocks(withoutAnchor(withoutModeOffer(withoutMarker(splitQuestions(turn.reply.text).text)))).trim());
   return (
     <div className={`turn-foot ${outcome}`}>
       <span className="turn-outcome">

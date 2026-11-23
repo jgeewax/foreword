@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isOptionCount, OPTIONS_INSTRUCTIONS, optionsReminder, parseOptions } from './options-mode';
+import { isOptionCount, OPTIONS_INSTRUCTIONS, optionsReminder, parseOptions, withoutAnchor } from './options-mode';
 import { REMINDER_START } from './message-context';
 
 const REPLY = `Three ways to tighten it.
@@ -83,19 +83,62 @@ describe('parseOptions', () => {
   });
 });
 
+describe('what the options replace', () => {
+  const ANCHOR = '```replaces\nat: chapters/02-spaces.typ:140-141\nfind:\nThe span of a list.\n  at: an indented line that isn’t a key\n```';
+
+  it('the replaces block is the reply’s anchor, not part of its intro', () => {
+    const parsed = parseOptions(`Two ways.\n\n${ANCHOR}\n\n${REPLY.split('\n\n').slice(1).join('\n\n')}`);
+    expect(parsed.anchor).toEqual({ at: 'chapters/02-spaces.typ:140-141', find: 'The span of a list.\n  at: an indented line that isn’t a key', complete: true });
+    expect(parsed.intro).toBe('Two ways.');
+    expect(parsed.options.map((o) => o.label)).toEqual(['Shorter', 'Warmer', 'Formal']);
+  });
+
+  it('on one line, in backticks, or with nothing to replace (an insertion: line and column)', () => {
+    expect(parseOptions('```replaces\nat: `ch.typ:3`\nfind: One sentence.\n```').anchor).toEqual({ at: 'ch.typ:3', find: 'One sentence.', complete: true });
+    expect(parseOptions('```replaces\nat: ch.typ:147:1\nfind:\n```\n### Option 1\n```typst\nNew.\n```').anchor).toEqual({ at: 'ch.typ:147:1', find: '', complete: true });
+  });
+
+  it('put in an option by mistake: still the anchor, never the option’s text', () => {
+    const { anchor, options } = parseOptions(`### Option 1: Short\n${ANCHOR}\n\`\`\`typst\nShort.\n\`\`\`\nNote.`);
+    expect(anchor?.at).toBe('chapters/02-spaces.typ:140-141');
+    expect(options[0]).toMatchObject({ text: 'Short.', note: 'Note.', complete: true });
+  });
+
+  it('still coming: not complete; and a reply without one has none', () => {
+    expect(parseOptions('```replaces\nat: ch.typ:3\nfind:\nThe sp').anchor).toEqual({ at: 'ch.typ:3', find: 'The sp', complete: false });
+    expect(parseOptions(REPLY).anchor).toBeNull();
+  });
+
+  it('isn’t shown: the reply without it', () => {
+    expect(withoutAnchor(`Two ways.\n\n${ANCHOR}\n\n### Option 1\n\`\`\`typst\nA.\n\`\`\``)).toBe('Two ways.\n\n### Option 1\n```typst\nA.\n```');
+    expect(withoutAnchor('Thinking.\n\n```replaces\nat: ch.typ:3\nfind:\nThe sp')).toBe('Thinking.');
+    expect(withoutAnchor(REPLY)).toBe(REPLY);
+  });
+});
+
 describe('OPTIONS_INSTRUCTIONS', () => {
   it('forbids edits and asks for as many complete replacements as the author chose, in the parsable format', () => {
     expect(OPTIONS_INSTRUCTIONS).toMatch(/must not edit, create, or delete files/);
-    expect(OPTIONS_INSTRUCTIONS).toMatch(/exactly as many alternative versions .* as the author chose: the app says how many with each message \(three options if it doesn't\)/);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/exactly as many alternative versions of the passage the author means as they chose: the app says how many with each message \(three options if it doesn't\)/);
     expect(OPTIONS_INSTRUCTIONS).toContain('### Option 1: <a two to five word label>\n```typst');
-    expect(parseOptions(OPTIONS_INSTRUCTIONS.split('Use exactly this format:')[1]).options.length).toBeGreaterThanOrEqual(1);
+    const format = parseOptions(OPTIONS_INSTRUCTIONS.split('Use exactly this format:')[1].split('Rules:')[0]);
+    expect(format.options.length).toBeGreaterThanOrEqual(1);
+    // Where they go, as the example says it.
+    expect(format.anchor).toMatchObject({ at: 'chapters/02-spaces.typ:140-141', complete: true });
+    expect(format.anchor?.find).toMatch(/^The span of a list .*\nIn other words, .*list\.$/);
+  });
+
+  it('says the options go where the reply says, and how to say an insertion', () => {
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/goes in where your reply says, in place of the passage it names: nowhere else, whatever the cursor is doing/);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/leave `find` empty and give the line and column it goes at: `at: chapters\/02-spaces\.typ:147:1`/);
   });
 });
 
 describe('how many options', () => {
   it('each message says, as a reminder the chat leaves out', () => {
-    expect(optionsReminder(3)).toBe('(Foreword, Options mode: write exactly three options, Option 1 to Option 3, in the format your Options mode instructions give.)');
-    expect(optionsReminder(1)).toBe('(Foreword, Options mode: write exactly one option, in the format your Options mode instructions give.)');
+    const start = '(Foreword, Options mode: start with the ```replaces block that says what they replace (`at:` the file and line, `find:` the passage exactly as it is in the file), then write exactly';
+    expect(optionsReminder(3)).toBe(`${start} three options, Option 1 to Option 3, in the format your Options mode instructions give.)`);
+    expect(optionsReminder(1)).toBe(`${start} one option, in the format your Options mode instructions give.)`);
     expect(optionsReminder(5).startsWith(REMINDER_START)).toBe(true);
   });
 

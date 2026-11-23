@@ -49,6 +49,55 @@ export function locatePassage(doc: string, tracked: { outer: Span; inner: Span }
   return { kind: 'lost' };
 }
 
+/** How far from the line a reply names its words may be, when they're in the file more than once (it counts loosely). */
+const NEAR = 60;
+
+/** 1-based line of `offset` in `doc`. */
+const lineAt = (doc: string, offset: number) => {
+  let n = 1;
+  for (let i = doc.indexOf('\n'); i >= 0 && i < offset; i = doc.indexOf('\n', i + 1)) n++;
+  return n;
+};
+
+/** Of the places `found`, the one place there is, or the one nearest `line` (and nearer than any other). */
+function pick(doc: string, found: Span[], line: number | null): Span | null {
+  if (found.length === 1) return found[0];
+  if (!found.length || line == null) return null;
+  const near = found.map((s) => ({ s, d: Math.abs(lineAt(doc, s.start) - line) })).sort((a, b) => a.d - b.d);
+  return near[0].d <= NEAR && near[1].d > near[0].d ? near[0].s : null;
+}
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Where the passage an Options reply names is in `doc` (its file as it is
+ * now), from its words (`find`) and the line it gives (`line`, null if none):
+ * the one place the words are, or the one nearest that line. Tried as written,
+ * then without blank space at its ends, without quotes around it, and last
+ * with its spaces, line breaks and quote marks matched loosely (an assistant
+ * retypes them). Null if they aren't there, or are in more than one place and
+ * none is the nearest.
+ */
+export function findPassage(doc: string, find: string, line: number | null): Span | null {
+  const trimmed = find.trim();
+  if (!trimmed) return null;
+  const unquoted = trimmed.replace(/^["“'`](.*)["”'`]$/s, '$1');
+  for (const words of new Set([find, trimmed, unquoted])) {
+    const found: Span[] = [];
+    for (let at = doc.indexOf(words); at >= 0; at = doc.indexOf(words, at + 1)) found.push({ start: at, end: at + words.length });
+    const hit = pick(doc, found, line);
+    if (hit) return hit;
+    if (found.length) return null;
+  }
+  const loose = unquoted
+    .trim()
+    .split(/\s+/)
+    .map((w) => escape(w).replace(/['‘’]/g, "['‘’]").replace(/["“”]/g, '["“”]'))
+    .join('\\s+');
+  const found = [...doc.matchAll(new RegExp(loose, 'g'))].map((m) => ({ start: m.index!, end: m.index! + m[0].length }));
+  return pick(doc, found, line);
+}
+
 /** Which of ours the author's version comes from (the fewest characters changed): what the card shows them changing. */
 export function closestOurs(now: string, ours: readonly string[]): string {
   let best = ours[0] ?? '';
