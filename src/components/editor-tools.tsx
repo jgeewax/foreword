@@ -102,6 +102,7 @@ export function attachEditorTools(editor: monaco.editor.IStandaloneCodeEditor, {
         hasSelection && ready && { label: 'Ask About This…', action: () => studio.events.emit('selection-card', 'ask') },
         hasSelection && ready && { label: 'Review This…', action: () => studio.events.emit('selection-card', 'review') },
         hasSelection && { label: 'Add Comment…', accelerator: 'CmdOrCtrl+Alt+M', action: () => void studio.addComment() },
+        hasSelection && !!path?.endsWith('.typ') && { label: 'Move to a New File…', action: () => void studio.moveSelectionToFile() },
         hasSelection && !!path?.endsWith('.typ') && { label: 'Set Language', items: languageEntries() },
         'separator',
         'cut',

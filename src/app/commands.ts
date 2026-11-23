@@ -10,6 +10,7 @@ import { wordMatch } from '../lib/fuzzy';
 import { baseName, tildePath } from '../lib/paths';
 import { CHAT_MODES, menuEntry, modeConfig } from '../services/agent/modes';
 import { effectiveBookColor, randomBookColor } from './book-color';
+import { partTitle } from './new-parts';
 import { uncommitted, unstaged } from './source-control';
 import type { Studio } from './studio';
 
@@ -69,7 +70,17 @@ export function paletteCommands(studio: Studio): Command[] {
       [
         menu('new-book', 'New Book…', { keys: '⇧⌘N', anywhere: true }),
         { id: 'open-sample', title: 'Open a Sample Book…', keywords: ['example', 'demo'], anywhere: true, run: () => studio.openNewBook('sample') },
-        menu('new-chapter', 'New Chapter…', { keys: '⌥⌘N' }),
+        // A paper's are sections; then a section in each heading the cursor is under, as the Files pane's + has them.
+        menu('new-chapter', `New ${partTitle(1, studio.bookKind())}…`, { keys: '⌥⌘N', keywords: ['add chapter', 'section'] }),
+        ...studio.partPlaces().map(
+          (p): Spec => ({
+            id: `new-part:${p.heading.level + 1}`,
+            title: `New ${partTitle(p.heading.level + 1, studio.bookKind())} in “${p.heading.title}”…`,
+            keywords: ['add section', 'subsection', 'include'],
+            run: () => studio.newPart(p),
+          }),
+        ),
+        { id: 'move-to-file', title: 'Move Selection to a New File…', keywords: ['extract', 'split', 'include', 'own file'], when: () => typ() && selection(), run: () => studio.moveSelectionToFile() },
         menu('new-file', 'New File…', { keys: '⌘N' }),
         { id: 'new-folder', title: 'New Folder…', run: () => studio.newFolder() },
         { id: 'new-window', title: 'New Window', keys: '⌥⇧⌘N', anywhere: true, run: () => ipc.windowNew() },

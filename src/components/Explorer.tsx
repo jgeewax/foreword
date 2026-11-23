@@ -7,6 +7,7 @@ import { onContextMenu, showContextMenu, type MenuEntry } from '../lib/context-m
 import { GIT_STATUS, gitClass, gitMarks, type GitMark } from '../lib/git-marks';
 import type { GitStatus } from '../lib/ipc';
 import { isPicture } from '../lib/paths';
+import { partTitle } from '../app/new-parts';
 import { useStore } from '../lib/store';
 import { buildTree, type Node } from '../lib/tree';
 import { CodePanel } from './CodePanel';
@@ -82,11 +83,16 @@ function FileTree() {
             onClick={() => (n.dir ? toggle(n.path) : void studio.openFile(n.path))}
             onContextMenu={onContextMenu((): MenuEntry[] => {
               const folder = n.dir ? n.path : n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
+              const kind = studio.bookKind();
+              const top = studio.topFolder();
+              // A chapter's (or a section's) file: a section in it, at its end.
+              const heading = !n.dir && n.path.endsWith('.typ') && n.path !== ws?.entry ? studio.state.contents[n.path]?.headings[0] : undefined;
               // Open, make something new here, change this item, then where it is.
               return [
                 !n.dir && { label: /\.pdf$/i.test(n.path) || isPicture(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
                 'separator',
-                (n.path === 'chapters' || n.path.startsWith('chapters/')) && { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+                (n.path === top || n.path.startsWith(`${top}/`)) && { label: `New ${partTitle(1, kind)}…`, accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+                !!heading && heading.level < 6 && { label: `New ${partTitle(heading.level + 1, kind)} in “${studio.menuTitle(heading.title)}”…`, action: () => void studio.newPart({ file: n.path, heading }) },
                 { label: 'New File…', action: () => void studio.newFile(folder) },
                 { label: 'New Folder…', action: () => void studio.newFolder(folder) },
                 'separator',
@@ -132,7 +138,7 @@ function FileTree() {
       className="tree"
       // Book-level commands (cover, runnable code, Makefile) are in the menu bar's Book menu.
       onContextMenu={onContextMenu(() => [
-        { label: 'New Chapter…', accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
+        { label: `New ${partTitle(1, studio.bookKind())}…`, accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
         { label: 'New File…', accelerator: 'CmdOrCtrl+N', action: () => void studio.newFile('') },
         { label: 'New Folder…', action: () => void studio.newFolder('') },
         'separator',
@@ -145,8 +151,9 @@ function FileTree() {
   );
 }
 
-const NewChapterButton = () => (
-  <button className="icon" title="New chapter (⌥⌘N)" aria-label="New chapter" onClick={() => void studio.newChapter()}>
+/** The +: a menu of what can be made where the cursor is (a chapter, a section in it, a file). */
+const NewButton = () => (
+  <button className="icon" title="New chapter, section or file" aria-label="New" aria-haspopup="menu" onClick={() => void studio.showNewMenu()}>
     ＋
   </button>
 );
@@ -309,7 +316,7 @@ export function ActivityBar({ open, onPick }: { open: boolean; onPick: (view: Vi
   // The views that are always there first, so they never move: the book's files, its
   // review comments, its history, the assistant's tasks, Source Control. Then those that come and go, the most fleeting last.
   const items: { id: View; icon: IconName; label: string; badge?: number; tone?: 'attention' | 'busy'; tip: Tip }[] = [
-    { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. Right-click one to rename it, add a chapter, and more.' } },
+    { id: 'files', icon: 'files', label: 'Files', tip: { name: 'Files', about: 'The book’s chapters, pictures and other files. The + adds a chapter, a section in the one you’re in, or a file; right-click one to rename it and more.' } },
     { id: 'contents', icon: 'contents', label: 'Contents', tip: { name: 'Contents', about: 'The book’s chapters in order, numbered as the book numbers them, with their sections and about how long each is. Click one to go there.' } },
     { id: 'search', icon: 'search', label: 'Search the book', tip: { name: 'Search', keys: '⇧⌘F', about: 'Find words, or a pattern, in every chapter at once, and replace them all.' } },
     {
@@ -442,7 +449,7 @@ function ViewHeader({ view }: { view: View }) {
       <span className="spacer" />
       {view === 'files' && (
         <>
-          <NewChapterButton />
+          <NewButton />
           <RefreshButton />
         </>
       )}

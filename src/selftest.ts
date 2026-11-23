@@ -4312,6 +4312,152 @@ async function codeChecks(withAgent: boolean) {
   return out;
 }
 
+/**
+ * The Files pane's +, on the scratch sample book: its menu where the cursor
+ * is, a subsection and a section in their own files (and from a section's own
+ * file), the selection moved to a file, the tree's and the palette's items;
+ * then a paper (newparts-paper beside the book: a main.typ with its sections inline),
+ * whose parts are sections. Each change typesets without errors.
+ */
+async function newPartsChecks() {
+  const out: Record<string, unknown> = {};
+  const original = studio.state.workspace!.root;
+  const plus = () => document.querySelector<HTMLButtonElement>('.explorer .pane-header button[aria-label="New"]');
+  const menuOf = async (open: () => void) => {
+    let recorded: { label?: string; action?: () => void }[] = [];
+    menuRecorder.record = (entries) => (recorded = entries as typeof recorded);
+    open();
+    await sleep(150);
+    menuRecorder.record = undefined;
+    return recorded;
+  };
+  const labels = (entries: { label?: string }[]) => entries.map((e) => e.label ?? '—');
+  const run = (entries: { label?: string; action?: () => void }[], start: string) => entries.find((e) => e.label?.startsWith(start))?.action?.();
+  const settled = async (what: string) => {
+    await sleep(600);
+    await waitFor(() => studio.state.compile.status === 'ok' || studio.state.problems.errors > 0, 30000, what).catch(() => {});
+    return { status: studio.state.compile.status, errors: studio.state.problems.errors, pages: studio.state.compile.pages };
+  };
+  const text = async (path: string) => (await ipc.fsRead(path)).text;
+  const around = (t: string, needle: string) => {
+    const lines = t.split('\n');
+    const i = lines.findIndex((l) => l.includes(needle));
+    return i < 0 ? null : lines.slice(Math.max(0, i - 2), i + 3);
+  };
+  try {
+    studio.showSidebar('files');
+    await waitFor(() => studio.state.compile.status === 'ok', 60000, 'compile').catch(() => {});
+    const pages0 = studio.state.compile.pages;
+    out.kind = studio.bookKind();
+
+    // In ch1, under "Inner products".
+    await studio.openAt('chapters/ch1-vectors.typ', 28);
+    await sleep(500);
+    const menu1 = await menuOf(() => plus()?.click());
+    out.plusTitle = plus()?.title;
+    out.menuInSection = labels(menu1);
+    run(menu1, 'New Subsection in “Inner products”');
+    await waitFor(() => !!studio.state.prompt, 5000, 'prompt');
+    out.prompt = { ...studio.state.prompt };
+    // A dialog fades in, and a window behind others doesn't animate: still, for its picture.
+    const still = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '*{animation:none!important;transition:none!important}' }));
+    await sleep(200);
+    out.snapshotPrompt = await snap('newparts-prompt');
+    still.remove();
+    studio.answerPrompt('Cauchy–Schwarz');
+    await waitFor(() => studio.state.active !== 'chapters/ch1-vectors.typ', 10000, 'new subsection');
+    const sub = studio.state.active!;
+    const ch1 = await text('chapters/ch1-vectors.typ');
+    out.subsection = { path: sub, text: await text(sub), included: around(ch1, sub.split('/').pop()!), ch1Dirty: !!studio.state.dirty['chapters/ch1-vectors.typ'], toast: studio.state.toast };
+    studio.editor?.trigger('selftest', 'type', { text: 'For any vectors, $|u dot v| <= ||u|| ||v||$.' });
+    await studio.save(sub);
+    out.afterSubsection = await settled('subsection typeset');
+
+    // From the subsection's own file: still in its chapter.
+    await sleep(500);
+    const menu2 = await menuOf(() => plus()?.click());
+    out.menuInSectionFile = labels(menu2);
+    run(menu2, 'New Section in “Vectors”');
+    await answerPrompt('Further Reading');
+    await waitFor(() => studio.state.active !== sub, 10000, 'new section');
+    const sec = studio.state.active!;
+    const ch1b = await text('chapters/ch1-vectors.typ');
+    out.section = { path: sec, text: await text(sec), ch1Tail: ch1b.trimEnd().split('\n').slice(-6) };
+    out.afterSection = await settled('section typeset');
+
+    // ch2: "A worked example" (lines 20–26) moved to a file of its own.
+    await studio.openAt('chapters/ch2-eigenvalues.typ', 20);
+    const editor = studio.editor!;
+    editor.setSelection(new monaco.Range(20, 1, 27, 1));
+    const before = editor.getModel()!.getValue();
+    const menu3 = await menuOf(() => plus()?.click());
+    out.menuWithSelection = labels(menu3);
+    run(menu3, 'Move Selection to a New File');
+    await waitFor(() => !!studio.state.prompt, 5000, 'move prompt');
+    out.movePrompt = { ...studio.state.prompt };
+    studio.answerPrompt(studio.state.prompt!.value);
+    await waitFor(() => (studio.state.workspace?.files ?? []).some((f) => f.startsWith('chapters/ch2-eigenvalues/')), 10000, 'moved file');
+    const moved = studio.state.workspace!.files.find((f) => f.startsWith('chapters/ch2-eigenvalues/'))!;
+    const ch2 = await text('chapters/ch2-eigenvalues.typ');
+    out.moved = { path: moved, text: await text(moved), ch2Lines: ch2.split('\n').slice(17, 25), ch2Dirty: !!studio.state.dirty['chapters/ch2-eigenvalues.typ'], active: studio.state.active, toast: studio.state.toast };
+    out.afterMove = await settled('move typeset');
+    // Undo puts the passage back, in one step.
+    editor.trigger('selftest', 'undo', null);
+    await sleep(200);
+    out.undoRestores = editor.getModel()!.getValue() === before;
+    editor.trigger('selftest', 'redo', null);
+    await sleep(200);
+    await studio.save('chapters/ch2-eigenvalues.typ');
+
+    // The tree: a chapter's file has a section in it; the chapters folder a chapter.
+    const row = (name: string) => [...document.querySelectorAll<HTMLElement>('.tree-row')].find((r) => r.querySelector('.file, .dir')?.textContent === name);
+    const click = (el: HTMLElement | undefined) => {
+      const r = el?.getBoundingClientRect();
+      el?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: (r?.left ?? 0) + 20, clientY: (r?.top ?? 0) + 5, button: 2 }));
+    };
+    if (!row('ch2-eigenvalues.typ')) row('chapters')?.click();
+    await sleep(200);
+    out.treeChapterMenu = labels(await menuOf(() => click(row('ch2-eigenvalues.typ'))));
+    out.treeFolderMenu = labels(await menuOf(() => click(row('chapters'))));
+    out.palette = available(paletteCommands(studio))
+      .filter((c) => /^New |^Move Selection/.test(c.title))
+      .map((c) => `${c.id} · ${c.title}`);
+    out.pages = { before: pages0, after: studio.state.compile.pages };
+
+    // A paper: sections, and subsections.
+    const paper = `${original.slice(0, original.lastIndexOf('/'))}/newparts-paper`;
+    {
+      await studio.openWorkspace(paper);
+      await waitFor(() => studio.state.workspace?.root === paper && studio.state.compile.status === 'ok', 60000, 'paper compile').catch(() => {});
+      await sleep(800);
+      out.paperKind = studio.bookKind();
+      await studio.openAt('main.typ', 10);
+      await sleep(500);
+      const menu4 = await menuOf(() => plus()?.click());
+      out.paperMenu = labels(menu4);
+      run(menu4, 'New Section…');
+      out.paperPrompt = (await waitFor(() => studio.state.prompt, 5000, 'paper prompt').catch(() => null)) && { ...studio.state.prompt };
+      studio.answerPrompt('Related Work');
+      await waitFor(() => studio.state.active !== 'main.typ', 10000, 'paper section');
+      const related = studio.state.active!;
+      await studio.openAt('main.typ', 10);
+      await sleep(500);
+      const menu5 = await menuOf(() => plus()?.click());
+      run(menu5, 'New Subsection in “Methods”');
+      await answerPrompt('Sampling');
+      await waitFor(() => studio.state.active !== 'main.typ', 10000, 'paper subsection');
+      const sampling = studio.state.active!;
+      out.paper = { related, relatedText: await text(related), sampling, samplingText: await text(sampling), main: await text('main.typ') };
+      out.afterPaper = await settled('paper typeset');
+      out.snapshotPaper = await snap('newparts-paper');
+    }
+  } finally {
+    menuRecorder.record = undefined;
+    if (studio.state.workspace?.root !== original) await studio.openWorkspace(original);
+  }
+  return out;
+}
+
 /** Answer the next text prompt (New File, Rename…) as the author would. */
 async function answerPrompt(value: string) {
   await waitFor(() => !!studio.state.prompt, 5000, 'prompt');
@@ -11685,6 +11831,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (want('journey')) {
       log('journey');
       result.journey = await journeyChecks();
+    }
+    if (launch.selftestEdits && want('newparts')) {
+      log('newparts');
+      result.newparts = await newPartsChecks();
     }
     if (want('shot')) result.shot = await shotChecks();
     if (want('previewclose')) result.previewclose = await previewCloseChecks();

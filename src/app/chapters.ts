@@ -13,8 +13,8 @@ export function escapeMarkup(text: string): string {
     .replace(/^([=+-]|\d+\.)(?=\s)/, '\\$1');
 }
 
-/** "The Island, Part 2" → "the-island-part-2". */
-export function slugify(title: string): string {
+/** "The Island, Part 2" → "the-island-part-2"; `fallback` when nothing's left. */
+export function slugify(title: string, fallback = 'chapter'): string {
   return (
     title
       .normalize('NFKD')
@@ -23,7 +23,7 @@ export function slugify(title: string): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 40)
-      .replace(/-+$/, '') || 'chapter'
+      .replace(/-+$/, '') || fallback
   );
 }
 

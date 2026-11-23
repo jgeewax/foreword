@@ -77,8 +77,10 @@ import { snippetInsertion } from '../help/guide';
 import { CodeRunner, initialCode, type CodeState } from '../code/runner';
 import { OUTPUTS_FILE } from '../code/cells';
 import { message } from '@tauri-apps/plugin-dialog';
-import { copyText, showContextMenu } from '../lib/context-menu';
-import { chapterImports, chapterText, includePath, nextChapterPath, withInclude } from './chapters';
+import { copyText, showContextMenu, type MenuEntry } from '../lib/context-menu';
+import { includePath, nextChapterPath, withInclude } from './chapters';
+import { bookKind, headingOver, importsFor, includeInPlace, includeLines, insertLine, movedText, partName, partPath, partText, partTitle, placesOver, sectionEnd, sectionIncludes, topFolder, wholeLines, type BookKind, type PartPlace } from './new-parts';
+import { headingPath, headings } from '../editor/outline';
 import { turnsOf } from './trace';
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
@@ -1809,40 +1811,54 @@ export class Studio {
   confirmAction: (message: string, title: string, okLabel: string) => Promise<boolean> = (message, title, okLabel) =>
     ask(message, { title, kind: 'warning', okLabel, cancelLabel: 'Cancel' });
 
-  // ---- chapters -----------------------------------------------------------------------
+  // ---- chapters, sections and other new parts ------------------------------------------
 
-  /** File → New Chapter: ask for a title, then add the chapter. */
+  /** Whether the book is in chapters or (a paper) in sections: what the + menu and New Chapter call its parts. */
+  bookKind(): BookKind {
+    const entry = this.state.workspace?.entry;
+    return bookKind((entry && this.state.contents[entry]?.headings) || [], this.state.names.chapters);
+  }
+
+  /** The folder the main file's parts (chapters, a paper's sections) go in. */
+  topFolder() {
+    return topFolder(this.state.workspace?.entry ?? null, this.state.names.chapters, this.bookKind());
+  }
+
+  /** File → New Chapter (New Section, in a paper): ask for a title, then add it after the last one. */
   async newChapter() {
     const ws = this.state.workspace;
     if (!ws) return;
+    const kind = this.bookKind();
+    const name = partName(1, kind);
     const title = await this.prompt({
-      title: 'New chapter',
-      label: 'Chapter title',
-      placeholder: 'e.g. The Island',
-      okLabel: 'Add chapter',
+      title: `New ${name}`,
+      label: `${partTitle(1, kind)} title`,
+      placeholder: kind === 'book' ? 'e.g. The Island' : 'e.g. Related Work',
+      okLabel: `Add ${name}`,
       help: ws.entry
-        ? `Creates a numbered file in the chapters folder and adds it to ${ws.entry} after the last chapter.`
-        : 'Creates a numbered file in the chapters folder.',
+        ? `In a file of its own in ${this.topFolder()}/, added to ${ws.entry} after the last ${name}.`
+        : `In a file of its own in ${this.topFolder()}/.`,
     });
     if (title?.trim()) await this.addChapter(title.trim());
   }
 
   /**
-   * Create chapters/NN-title.typ (numbered after the last one, with the same
-   * #import lines) and add its #include to the main file, then open it. The
-   * main file is changed in its buffer (undoable) and saved unless it already
-   * had unsaved edits.
+   * Create chapters/NN-title.typ (numbered after the last one, in the folder
+   * the main file's parts are in, with their #import lines, or the main
+   * file's) and add its #include to the main file, then open it. The main
+   * file is changed in its buffer (undoable) and saved unless it already had
+   * unsaved edits.
    */
   async addChapter(title: string): Promise<string | null> {
     const ws = this.state.workspace;
     if (!ws || !this.docs) return null;
-    // Chapters live next to the main file, in "chapters".
-    const folder = `${ws.entry?.includes('/') ? ws.entry.slice(0, ws.entry.lastIndexOf('/') + 1) : ''}chapters`;
+    const folder = this.topFolder();
     const path = nextChapterPath(ws.files, title, folder);
-    const sample = ws.files.filter((f) => f.startsWith(`${folder}/`) && f.endsWith('.typ')).sort()[0];
-    const imports = sample ? chapterImports((await ipc.fsRead(sample).catch(() => ({ text: '' }))).text) : [];
+    const sample = ws.files.filter((f) => f.startsWith(`${folder}/`) && f.endsWith('.typ')).sort()[0] ?? ws.entry;
+    const imports = sample ? importsFor((await this.currentText(sample).catch(() => null)) ?? '', sample, path, this.typstRoot()) : [];
     try {
-      await ipc.fsWrite(path, chapterText(title, imports), null);
+      await ipc.fsMkdir(folder).catch(() => {});
+      await ipc.fsWrite(path, partText(title, 1, imports), null);
     } catch (e) {
       this.toast(`Couldn't create ${path}: ${errorMessage(e)}`, 'error');
       return null;
@@ -1863,6 +1879,13 @@ export class Studio {
         this.toast(`Created ${path}, but couldn't add it to ${ws.entry}: ${errorMessage(e)}`, 'error');
       }
     }
+    await this.openNewPart(path);
+    this.toast(ws.entry ? `Added ${path} to ${ws.entry}` : `Created ${path}`);
+    return path;
+  }
+
+  /** A new part's file, open at its end, ready to write in. */
+  private async openNewPart(path: string) {
     await this.refreshFiles();
     await this.openFile(path);
     const model = this.editor?.getModel();
@@ -1871,8 +1894,200 @@ export class Studio {
       this.editor!.setPosition({ lineNumber: last, column: model.getLineMaxColumn(last) });
       this.editor!.focus();
     }
-    this.toast(ws.entry ? `Added ${path} to ${ws.entry}` : `Created ${path}`);
+  }
+
+  /** A .typ file's headings: as it is in the editor when it's open, else as last read. */
+  private headingsOf(path: string) {
+    const doc = this.docs?.get(path);
+    return doc ? headings(doc.model.getLinesContent(), 'typst') : (this.state.contents[path]?.headings ?? []);
+  }
+
+  /**
+   * Where a new section can go from where the cursor is: the headings it's
+   * under, outermost first (the deepest four), in the file in front and, above
+   * that file's #include, in the files that include it (so a section's own
+   * file is still in its chapter). None away from a .typ file.
+   */
+  partPlaces(): PartPlace[] {
+    const path = this.state.viewTab ? null : this.state.active;
+    if (!this.state.workspace || !path?.endsWith('.typ')) return [];
+    const w = this.writer();
+    const line = w?.path === path ? (w.editor.getPosition()?.lineNumber ?? 1) : 1;
+    const chains: PartPlace[][] = [headingPath(this.headingsOf(path), line).map((heading) => ({ file: path, heading }))];
+    const root = this.typstRoot();
+    for (let file = path, seen = new Set([path]); ; ) {
+      const parent = [...this.includeLines.keys()].find((p) => !seen.has(p) && this.includeLines.get(p)!.some((x) => x.file === file));
+      if (!parent) break;
+      seen.add(parent);
+      // Its #include's line as it is now, when the file's open with changes.
+      const doc = this.docs?.get(parent);
+      const lines = doc ? includeLines(doc.model.getValue(), parent, root) : this.includeLines.get(parent)!;
+      const at = lines.find((x) => x.file === file)?.line;
+      if (at) chains.unshift(headingPath(this.headingsOf(parent), at).map((heading) => ({ file: parent, heading })));
+      file = parent;
+    }
+    return placesOver(chains)
+      .filter((p) => p.heading.level < 6)
+      .slice(-4);
+  }
+
+  /** "New Section in “Methods”…": ask for its title, then add it. */
+  async newPart(place: PartPlace) {
+    const kind = this.bookKind();
+    const level = place.heading.level + 1;
+    const name = partName(level, kind);
+    const title = await this.prompt({
+      title: `New ${name} in “${place.heading.title}”`,
+      label: `${partTitle(level, kind)} title`,
+      placeholder: level === 2 ? 'e.g. Sampling' : 'e.g. Random samples',
+      okLabel: `Add ${name}`,
+      help: `In a file of its own, added at the end of “${place.heading.title}” in ${place.file}.`,
+    });
+    if (title?.trim()) await this.addPart(place, title.trim());
+  }
+
+  /**
+   * A section in a file of its own: the file (beside the parts the heading's
+   * file already includes, named as they are, else in a folder named after
+   * that file), starting with its heading one level under `place`'s and with
+   * the imports its siblings have, and its #include at the end of `place`'s
+   * section. The including file is changed in its buffer (undoable) and saved
+   * unless it had unsaved edits. Opens the new file.
+   */
+  async addPart(place: PartPlace, title: string): Promise<string | null> {
+    const ws = this.state.workspace;
+    if (!ws || !this.docs) return null;
+    const from = place.file;
+    const root = this.typstRoot();
+    const text = (await this.docs.open(from).catch(() => null))?.model.getValue();
+    if (text == null) {
+      this.toast(`Couldn't read ${from}`, 'error');
+      return null;
+    }
+    // The heading as it is now: the text may have changed since the menu was made.
+    const now = (t: string) => {
+      const all = headings(t.split('\n'), 'typst');
+      const same = (h: (typeof all)[number]) => h.title === place.heading.title && h.level === place.heading.level;
+      return { all, heading: all.find((h) => same(h) && h.line === place.heading.line) ?? all.find(same) };
+    };
+    const { heading } = now(text);
+    if (!heading) {
+      this.toast(`“${place.heading.title}” isn't in ${from} any more.`, 'error');
+      return null;
+    }
+    const siblings = sectionIncludes(text, from, heading, root).filter((f) => ws.files.includes(f));
+    const path = partPath(ws.files, from, siblings, title, ws.entry);
+    const sample = siblings[0] ?? from;
+    const sampleText = sample === from ? text : ((await this.currentText(sample).catch(() => null)) ?? '');
+    try {
+      await ipc.fsMkdir(path.slice(0, path.lastIndexOf('/'))).catch(() => {});
+      await ipc.fsWrite(path, partText(title, heading.level + 1, importsFor(sampleText, sample, path, root)), null);
+    } catch (e) {
+      this.toast(`Couldn't create ${path}: ${errorMessage(e)}`, 'error');
+      return null;
+    }
+    let line = 0;
+    try {
+      await this.editFile(from, (t) => {
+        const { all, heading: h } = now(t);
+        const r = insertLine(t, sectionEnd(t.split('\n'), all, h ?? heading), `#include "${includePath(from, path)}"`);
+        line = r.line + 1;
+        return r.text;
+      });
+    } catch (e) {
+      this.toast(`Created ${path}, but couldn't add it to ${from}: ${errorMessage(e)}`, 'error');
+    }
+    await this.openNewPart(path);
+    this.toast(`Added ${path} at the end of “${heading.title}” in ${from}`, 'info', line ? [{ label: 'Show the #include', run: () => void this.openAt(from, line) }] : undefined);
     return path;
+  }
+
+  /** The selected lines in the file in front (a .typ file), when there are some. */
+  private selectedLines() {
+    const w = this.writer();
+    const path = this.state.viewTab ? null : this.state.active;
+    const model = w?.editor.getModel();
+    const sel = w?.editor.getSelection();
+    if (!path?.endsWith('.typ') || w?.path !== path || !model || !sel || sel.isEmpty()) return null;
+    const { from, to } = wholeLines(sel.getStartPosition(), sel.getEndPosition());
+    return { path, editor: w.editor, model, from, to, range: new monaco.Range(from, 1, to, model.getLineMaxColumn(to)) };
+  }
+
+  /**
+   * Move the selected lines (whole lines) into a new file and put an #include
+   * of it in their place, undoable in the editor. The file is named after the
+   * first heading in them, beside the parts the file already includes; it
+   * starts with the file's imports, which it needs on its own.
+   */
+  async moveSelectionToFile() {
+    const ws = this.state.workspace;
+    const sel = this.selectedLines();
+    const passage = sel?.model.getValueInRange(sel.range);
+    if (!ws || !sel || !passage?.trim()) return this.toast('Select the lines to move first, in a .typ file.');
+    const { path, editor, model, from, to, range } = sel;
+    const root = this.typstRoot();
+    const first = headings(passage.split('\n'), 'typst')[0];
+    // Named as the parts already in the section it's in are.
+    const over = headingOver(headings(model.getLinesContent(), 'typst'), from, first?.level ?? null);
+    const siblings = sectionIncludes(model.getValue(), path, over, root).filter((f) => ws.files.includes(f));
+    const title = first?.title ?? 'untitled';
+    const answer = await this.prompt({
+      title: 'Move to a new file',
+      label: 'File',
+      value: partPath(ws.files, path, siblings, title, ws.entry),
+      okLabel: 'Move',
+      help: `Lines ${from}–${to} of ${path} go into this file, and an #include of it takes their place.`,
+    });
+    const named = answer && Studio.validName(answer);
+    if (answer && !named) return this.toast(`“${answer}” isn't a usable file name`, 'error');
+    if (!named) return;
+    const target = /\.typ$/i.test(named) ? named : `${named}.typ`;
+    if (ws.files.includes(target)) return this.toast(`${target} already exists`, 'error');
+    // The lines as they are now (the prompt was open a while), if they're still there.
+    if (model.isDisposed() || model.getValueInRange(range) !== passage) return this.toast('The text changed while the dialog was open; select it again.', 'error');
+    try {
+      if (target.includes('/')) await ipc.fsMkdir(target.slice(0, target.lastIndexOf('/'))).catch(() => {});
+      await ipc.fsWrite(target, movedText(passage, importsFor(model.getValue(), path, target, root)), null);
+    } catch (e) {
+      return this.toast(`Couldn't create ${target}: ${errorMessage(e)}`, 'error');
+    }
+    const wasDirty = !!this.state.dirty[path];
+    editor.pushUndoStop();
+    editor.executeEdits('move-to-file', [{ range, text: includeInPlace(passage, `#include "${includePath(path, target)}"`) }]);
+    editor.pushUndoStop();
+    editor.setPosition({ lineNumber: from, column: 1 });
+    if (!wasDirty) await this.save(path, { format: false });
+    await this.refreshFiles();
+    this.toast(`Moved lines ${from}–${to} to ${target}`, 'info', [{ label: 'Open', run: () => void this.openFile(target) }]);
+  }
+
+  /** What a menu shows of a heading: short, and with its & as a literal one (a lone & is a mnemonic). */
+  menuTitle(title: string) {
+    return (title.length > 40 ? `${title.slice(0, 39).trimEnd()}…` : title).replace(/&/g, '&&');
+  }
+
+  /**
+   * The Files pane's +: a chapter (a paper's section) after the last one, a
+   * section in each heading the cursor is under, the selection moved to a file
+   * of its own, then a plain file or folder.
+   */
+  newMenu(): MenuEntry[] {
+    const kind = this.bookKind();
+    return [
+      { label: `New ${partTitle(1, kind)}…`, accelerator: 'CmdOrCtrl+Alt+N', action: () => void this.newChapter() },
+      ...this.partPlaces().map((p) => ({
+        label: `New ${partTitle(p.heading.level + 1, kind)} in “${this.menuTitle(p.heading.title)}”…`,
+        action: () => void this.newPart(p),
+      })),
+      !!this.selectedLines() && { label: 'Move Selection to a New File…', action: () => void this.moveSelectionToFile() },
+      'separator',
+      { label: 'New File…', accelerator: 'CmdOrCtrl+N', action: () => void this.newFile() },
+      { label: 'New Folder…', action: () => void this.newFolder() },
+    ];
+  }
+
+  showNewMenu() {
+    return showContextMenu(this.newMenu());
   }
 
   // ---- help for writers new to Typst ------------------------------------------------
@@ -7581,6 +7796,8 @@ export class Studio {
     const unnumbered = new Set(only ? this.unnumberedFiles : []);
     const contents = only ? { ...this.state.contents } : {};
     const uses = new Map(only ? this.fileUses : []);
+    const included = new Map(only ? this.includeLines : []);
+    const root = this.typstRoot();
     for (const f of only ? only.filter((p) => p.endsWith('.typ')) : typ) {
       const text = await this.currentText(f).catch(() => null);
       const heading = text == null ? null : firstHeading(text);
@@ -7592,9 +7809,10 @@ export class Studio {
       else delete contents[f];
       if (text != null) uses.set(f, fileUses(text));
       else uses.delete(f);
+      if (text != null) included.set(f, includeLines(text, f, root));
+      else included.delete(f);
     }
     const main = ws.entry ? await this.currentText(ws.entry).catch(() => null) : null;
-    const root = this.typstRoot();
     const includes = main && ws.entry ? mainIncludes(main, ws.entry, root) : [];
     const chapters = includes.map((x) => x.file);
     // Unnumbered too: what the main file includes with heading numbers off around it (a preface, an afterword).
@@ -7605,6 +7823,7 @@ export class Studio {
     if (this.state.workspace?.root !== ws.root) return;
     this.unnumberedFiles = unnumbered;
     this.fileUses = uses;
+    this.includeLines = included;
     this.store.set({ names: { root: ws.root, entry: ws.entry, chapters, titles, unnumbered: [...new Set([...unnumbered, ...front])] }, contents, snippetBook });
   }
 
@@ -7613,6 +7832,9 @@ export class Studio {
 
   /** What each .typ file imports and includes (refreshNames keeps it), for the snippets' imports. */
   private fileUses = new Map<string, FileUses>();
+
+  /** The files each .typ file includes, and on which line (refreshNames keeps it): which file a section's file is in, for the + menu. */
+  private includeLines = new Map<string, { file: string; line: number }[]>();
 
   /** The last PDF exported in this session (Open Exported PDF). */
   lastExport: string | null = null;

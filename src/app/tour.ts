@@ -21,7 +21,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: '.explorer',
     title: 'Your book’s files',
-    text: 'Its chapters, pictures and the main file, which pulls the chapters in, in order. Right-click for New Chapter, Rename and more.',
+    text: 'Its chapters, pictures and the main file, which pulls the chapters in, in order. The + adds a chapter, or a section in the one you’re in; right-click a file to rename it and more.',
   },
   {
     target: '.activity-bar',
