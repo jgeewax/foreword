@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { BOOK_PATHS } from '../app/attachments';
 import { uncommitted, unstaged } from '../app/source-control';
@@ -27,9 +27,20 @@ function rowTitle(n: Node, mark: GitMark | undefined) {
   return `${n.path} · ${GIT_STATUS[mark.status].title}`;
 }
 
+/*
+ * VS Code's Explorer: each level steps in 8px, a file's icon stands where a
+ * folder's chevron does, and a folder's children hang from a guide line just
+ * left of its chevron's middle.
+ */
+const PAD = 8;
+const INDENT = 8;
+const GUIDE = 5;
+
 function FileTree() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const active = useStore(studio.store, (s) => s.active);
+  // As VS Code's: the guide down the open file's folder is drawn at all times, the rest while the pointer is over the tree.
+  const activeDir = active?.includes('/') ? active.slice(0, active.lastIndexOf('/')) : null;
   const dirty = useStore(studio.store, (s) => s.dirty);
   const tree = useMemo(() => buildTree(ws?.files ?? []), [ws?.files]);
   // Git's colours and letters, as VS Code's Explorer: a changed file's, and a dot on each folder above it.
@@ -60,7 +71,7 @@ function FileTree() {
         <div key={n.path}>
           <div
             className={`tree-row${n.path === active ? ' active' : ''}${mark ? ` ${gitClass(mark.status)}` : ''}`}
-            style={{ paddingLeft: 8 + depth * 12 }}
+            style={{ paddingLeft: PAD + depth * INDENT }}
             title={rowTitle(n, mark)}
             // Onto the chat: attached to the next message, where it is in the book.
             draggable
@@ -92,14 +103,26 @@ function FileTree() {
               ];
             })}
           >
-            <span className={`twisty${n.dir && expanded.has(n.path) ? ' open' : ''}`}>{n.dir && <Icon name="chevronRight" size={16} />}</span>
-            {!n.dir && <FileIcon path={n.path} />}
+            {n.dir ? (
+              <span className={`twisty${expanded.has(n.path) ? ' open' : ''}`}>
+                <Icon name="chevronRight" size={16} />
+              </span>
+            ) : (
+              <FileIcon path={n.path} />
+            )}
             <span className={n.dir ? 'dir' : 'file'}>{n.name}</span>
             {n.path === ws?.entry && <span className="badge">main</span>}
             {dirty[n.path] && <span className="dirty-dot">●</span>}
             {mark && (n.dir ? <span className="tree-git tree-git-dot" /> : <span className="tree-git">{GIT_STATUS[mark.status].letter}</span>)}
           </div>
-          {n.dir && expanded.has(n.path) && render(n.children, depth + 1)}
+          {n.dir && expanded.has(n.path) && (
+            <div
+              className={`tree-children${n.path === activeDir ? ' active' : ''}`}
+              style={{ '--guide-x': `${PAD + depth * INDENT + GUIDE}px` } as CSSProperties}
+            >
+              {render(n.children, depth + 1)}
+            </div>
+          )}
         </div>
       );
     });

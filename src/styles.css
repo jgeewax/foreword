@@ -318,6 +318,17 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .twisty.open .icon-svg { transform: rotate(90deg); }
 .tree-row:hover .twisty { color: var(--fg); }
 .file, .dir { overflow: hidden; text-overflow: ellipsis; }
+/*
+ * Indent guides, as VS Code's: a line down an open folder's children, left of
+ * its chevron's middle. The open file's folder's at all times, the others
+ * fainter while the pointer is over the tree. Drawn over the rows' hover and
+ * selection fills, as VS Code's are.
+ */
+.tree-children { position: relative; --tree-guide: #a9a9a9; }
+@media (prefers-color-scheme: dark) { .tree-children { --tree-guide: #585858; } }
+.tree-children::before { content: ""; position: absolute; top: 0; bottom: 0; left: var(--guide-x); border-left: 1px solid transparent; pointer-events: none; }
+.tree:hover .tree-children::before { border-color: color-mix(in srgb, var(--tree-guide) 40%, transparent); }
+.tree .tree-children.active::before { border-color: var(--tree-guide); }
 .badge { font-size: 9.5px; padding: 0 4px; border-radius: 3px; background: var(--bg-3); color: var(--muted); }
 .dirty-dot { color: var(--accent); font-size: 9px; margin-left: auto; }
 /*
