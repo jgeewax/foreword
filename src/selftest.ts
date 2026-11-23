@@ -1545,8 +1545,9 @@ async function optionsDoneChecks() {
   const line = model.getLinesContent().findIndex((l) => /^The eigenvalues of/.test(l)) + 1;
   const text = model.getLineContent(line);
   const target = { path: file, start: { line, column: 1 }, end: { line, column: text.length + 1 }, text };
+  // The second is the assistant's pick.
   const reply = (tag: string) =>
-    [1, 2, 3].map((n) => `### Option ${n}: ${tag} ${n}\n\`\`\`typst\n${tag} ${n}: the eigenvalues of $A$ are the roots.\n\`\`\`\nVersion ${n}.`).join('\n\n');
+    [1, 2, 3].map((n) => `### Option ${n}: ${tag} ${n}${n === 2 ? ' (my pick)' : ''}\n\`\`\`typst\n${tag} ${n}: the eigenvalues of $A$ are the roots.\n\`\`\`\nVersion ${n}.`).join('\n\n');
   // Each reply is about the line as it is when it's asked.
   const optionsItem = (id: string, tag: string) => {
     const now = model.getLineContent(line);
@@ -1560,6 +1561,13 @@ async function optionsDoneChecks() {
     await sleep(400);
   };
   const check = () => [...document.querySelectorAll('.options-reply')].at(-1)?.querySelector('.task-check')?.textContent ?? null;
+  // Its pick is marked on its card (expect [false, true, false]), and "(my pick)" isn't in the label.
+  const cards = [...([...document.querySelectorAll('.options-reply')].at(-1)?.querySelectorAll<HTMLElement>('.option-card') ?? [])];
+  out.pick = {
+    badge: cards.map((c) => c.querySelector('.option-pick')?.textContent ?? null),
+    picked: cards.map((c) => c.classList.contains('picked')),
+    labels: cards.map((c) => c.querySelector('.option-label')?.textContent),
+  };
   // Preview: each option set as it would print (an image as wide as its card at most); Text puts the Typst back.
   const view = localStorage.getItem('studio.optionsView');
   const tab = (name: string) => [...document.querySelectorAll<HTMLButtonElement>('.options-view [role="tab"]')].find((b) => b.textContent === name);

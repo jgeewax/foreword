@@ -39,7 +39,38 @@ describe('parseOptions', () => {
 
   it('marks a still-streaming option incomplete', () => {
     const { options } = parseOptions('### Option 1: Short\n```typst\nhalf of it');
-    expect(options).toEqual([{ n: 1, label: 'Short', text: 'half of it', complete: false, note: '' }]);
+    expect(options).toEqual([{ n: 1, label: 'Short', text: 'half of it', complete: false, note: '', pick: false }]);
+  });
+
+  it('marks the one the assistant would pick, without the mark in its label', () => {
+    expect(parseOptions(REPLY).options.map((o) => o.pick)).toEqual([false, false, false]);
+    const heading = (h: string) => parseOptions(`${h}\n\`\`\`typst\nA.\n\`\`\``).options[0];
+    for (const h of [
+      '### Option 2: Lead with it (my pick)',
+      '### Option 2: Lead with it (My Pick)',
+      '### Option 2: Lead with it [my pick]',
+      '### Option 2: Lead with it (**my pick**)',
+      '### Option 2: **Lead with it** (my pick)',
+      '**Option 2: Lead with it (my pick)**',
+      '### Option 2: Lead with it — my pick',
+      '### Option 2: Lead with it (recommended)',
+      '### Option 2: Lead with it ★',
+      '### Option 2 (my pick): Lead with it',
+    ]) {
+      expect(heading(h), h).toMatchObject({ n: 2, label: 'Lead with it', pick: true });
+    }
+    for (const h of ['### Option 2: Lead with it', '### Option 2: Picked apart', '### Option 2: Pick-me-up', '### Option 2: Recommended reading']) {
+      expect(heading(h).pick, h).toBe(false);
+    }
+  });
+
+  it('one pick at most: the first marked', () => {
+    const marked = REPLY.replace('Option 2 — Warmer', 'Option 2 — Warmer (my pick)').replace('Option 3: Formal', 'Option 3: Formal (my pick)');
+    expect(parseOptions(marked).options.map((o) => [o.label, o.pick])).toEqual([
+      ['Shorter', false],
+      ['Warmer', true],
+      ['Formal', false],
+    ]);
   });
 
   it('ignores "Option" lines inside code blocks and replies without options', () => {
@@ -123,6 +154,9 @@ describe('OPTIONS_INSTRUCTIONS', () => {
     expect(OPTIONS_INSTRUCTIONS).toContain('### Option 1: <a two to five word label>\n```typst');
     const format = parseOptions(OPTIONS_INSTRUCTIONS.split('Use exactly this format:')[1].split('Rules:')[0]);
     expect(format.options.length).toBeGreaterThanOrEqual(1);
+    // The pick, marked as the parser reads it.
+    expect(format.options.filter((o) => o.pick)).toHaveLength(1);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/With more than one option, end the heading of the one you'd pick with `\(my pick\)`: just one/);
     // Where they go, as the example says it.
     expect(format.anchor).toMatchObject({ at: 'chapters/02-spaces.typ:140-141', complete: true });
     expect(format.anchor?.find).toMatch(/^The span of a list .*\nIn other words, .*list\.$/);
@@ -137,7 +171,7 @@ describe('OPTIONS_INSTRUCTIONS', () => {
 describe('how many options', () => {
   it('each message says, as a reminder the chat leaves out', () => {
     const start = '(Foreword, Options mode: start with the ```replaces block that says what they replace (`at:` the file and line, `find:` the passage exactly as it is in the file), then write exactly';
-    expect(optionsReminder(3)).toBe(`${start} three options, Option 1 to Option 3, in the format your Options mode instructions give.)`);
+    expect(optionsReminder(3)).toBe(`${start} three options, Option 1 to Option 3, with (my pick) at the end of the heading of the one you'd pick, in the format your Options mode instructions give.)`);
     expect(optionsReminder(1)).toBe(`${start} one option, in the format your Options mode instructions give.)`);
     expect(optionsReminder(5).startsWith(REMINDER_START)).toBe(true);
   });

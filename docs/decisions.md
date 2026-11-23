@@ -5268,6 +5268,35 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   and words, and Use this replaced the sentence, the cursor's line untouched.
   `optionslive` (from a selection) still passes.
 
+### Options says which one it would pick (2026-11-23)
+
+- **The ask (from the user):** "for each option in options mode, can we have a
+  suggested option? like 'my pick' in other modes". Discuss already marks its
+  favourite direction (`| *` in its block, a "My pick" chip on the card).
+- **The format:** with more than one option, the assistant ends one heading
+  with `(my pick)` (`### Option 2: Lead with it (my pick)`), and that option's
+  sentence says why. A mark on the heading, not a line after the options: the
+  format already says "write nothing after the last option", and the heading
+  is where a small model puts it unprompted. Said in the instructions' example
+  and rule, and again in the per-message reminder (only when more than one is
+  asked for), as the small models need.
+- **Parsing:** `parseOptions` takes the mark off the label and sets `pick`. It
+  also reads `[my pick]`, `(**my pick**)`, `— my pick`, `(recommended)`, a star,
+  or the mark before the label. Only the first marked option counts. Labels
+  that only contain the words ("Picked apart", "Recommended reading") aren't
+  picks.
+- **The card:** a "My pick" chip after the label and a light green tint
+  (Options' colour, as Discuss's pick is in its amber). The card in use keeps
+  its accent border. A reply with only one option shows no chip.
+- **Verified:** unit tests for the marks and the one-pick rule. A headless
+  eval (`claude -p` with the app's real system prompt and message, three
+  passages in the test book, two samples each): Haiku 6/6 and Sonnet 6/6
+  marked exactly one option, all in the asked form, and the parser read each
+  one. The picks weren't always Option 1 (Haiku chose 1, 2 and 3; Sonnet
+  mostly 1). Self-test `optionsdone` now records `pick` (expect the chip on
+  the second card only). It hasn't run yet: the screen was locked, and WebKit
+  pauses the page while it is.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

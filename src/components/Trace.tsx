@@ -616,11 +616,18 @@ function OptionsReply({ item }: { item: AssistantItem }) {
         // Nothing in its place: a cut, shown as what it takes out, in either view (there's nothing to set).
         const empty = o.complete && o.text != null && !o.text.trim();
         const cut = empty && !!asked.trim();
+        // The one it would pick, as Discuss marks its direction: a lone option is the pick anyway.
+        const mine = o.pick && parsed.options.length > 1;
         return (
-          <div key={i} className={`option-card${applied === i ? ' applied' : ''}`}>
+          <div key={i} className={`option-card${mine ? ' picked' : ''}${applied === i ? ' applied' : ''}`}>
             <div className="option-head">
               <span className="option-n">Option {o.n}</span>
               {o.label && <span className="option-label">{o.label}</span>}
+              {mine && (
+                <span className="option-pick" title="The one the assistant would pick: its note says why">
+                  My pick
+                </span>
+              )}
             </div>
             {empty ? (
               <OptionCut passage={asked} />
