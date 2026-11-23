@@ -86,7 +86,7 @@ import { turnsOf } from './trace';
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
-import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type KeptChat, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
+import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, endedAway, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type KeptChat, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
 import { chatSoFar, fromModeSetups, readModeSetups, readSetup, sameSetup, setupLine, setupOf, type ModeSetup, type Setups } from './mode-setups';
 import { EARLIER_CHIP } from '../services/agent/message-context';
 import { addressPrompt, locate, makeComment, nextCommentId, parseReport, parseReview, passageChange, REVIEW_FILE, serializeReview, undoChange, type ReviewComment } from './review';
@@ -274,6 +274,7 @@ export type ChatItem =
   | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error'; action?: { label: string; prompt?: string; mode?: RequestMode; resume?: boolean } };
 
 export type QuestionItem = Extract<ChatItem, { kind: 'question' }>;
+type AssistantItem = Extract<ChatItem, { kind: 'assistant' }>;
 
 /** Who answered a turn, for its reply's byline. */
 export type TurnBy = { assistant: AssistantId; model: string | null; effort: string | null };
@@ -1024,6 +1025,8 @@ export class Studio {
   private optionsTurn: OptionsTurn | null = null;
   /** The same for each message queued in Options mode, until it's handed to the conversation. */
   private queuedOptions = new Map<string, OptionsTurn | null>();
+  /** The same for each conversation left while at work, by its id: its replies get it when its task is shown again. */
+  private awayOptions = new Map<string, OptionsTurn | null>();
   /** Options passages, followed through edits (OptionsState's `passage`). */
   private passages = new Map<string, OptionPassage>();
   private syncTimer: number | undefined;
@@ -5820,6 +5823,7 @@ export class Studio {
         : null;
     if (!a.running && !attention) return;
     this.turnMessages.set(a.sessionId, this.turnMessage);
+    if (a.running) this.awayOptions.set(a.sessionId, this.optionsTurn);
     this.setBackground(a.sessionId, { running: a.running, attention, unread: false, label: activityText(a.activity), since: a.activity?.since ?? Date.now() });
   }
 
@@ -6111,7 +6115,20 @@ export class Studio {
       // This assistant had its latest turn: its own record of it, if that went on after the chat was kept.
       const latest = !record?.assistant || record.assistant === assistant;
       const theirs = itemsFromContext(messages, root);
-      const items: ChatItem[] = kept ? keptItems(kept.running && sessionId && latest ? withLatestTurn(kept.items, theirs) : kept.items) : theirs;
+      // Kept while a turn was going: that turn as its assistant has it now.
+      const merged = !!kept?.running && !!sessionId && latest;
+      const items: ChatItem[] = kept ? keptItems(merged ? withLatestTurn(kept.items, theirs) : kept.items) : theirs;
+      // An Options turn: its replies written out of sight are option cards too, about the turn's passage.
+      const away = sessionId ? this.awayOptions.get(sessionId) : undefined;
+      if (sessionId) this.awayOptions.delete(sessionId);
+      const optionsTurn = merged ? (away !== undefined ? away : this.optionsTurnIn(items)) : null;
+      if (optionsTurn) {
+        const last = items.map((it) => it.kind).lastIndexOf('user');
+        for (let i = last + 1; i < items.length; i++) {
+          const it = items[i];
+          if (it.kind === 'assistant' && !it.options) items[i] = { ...it, ...this.newOptionsState(optionsTurn) };
+        }
+      }
       for (const p of permissions) items.push({ kind: 'permission', id: p.requestId, action: p.action, resources: p.resources, patches: p.patches, state: 'pending' });
       // What this assistant hasn't seen of the chat goes with the next message.
       const turns = items.some((it) => it.kind === 'user' || it.kind === 'assistant');
@@ -6146,6 +6163,10 @@ export class Studio {
           },
         };
       });
+      // A turn still going: its replies to come are about its passage, not the last task's.
+      this.optionsTurn = running ? optionsTurn : null;
+      // Replies that ended out of sight: finished as they would have been shown.
+      if (merged) for (const id of endedAway(kept!.items, items, running)) this.replyEnded(id);
       this.setAiReads(sessionId ? readsFromContext(messages, root) : []);
       if (this.handover) this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: `With ${ASSISTANT_NAMES[assistant]}: ${this.carryOverWords()}.` });
       if (!sessionId) return void this.refreshEfforts();
@@ -6752,9 +6773,32 @@ export class Studio {
     }
   }
 
-  private newOptionsState(): { options?: OptionsState } {
-    const turn = this.optionsTurn;
+  private newOptionsState(turn = this.optionsTurn): { options?: OptionsState } {
     return turn ? { options: { target: turn.target, original: turn.target, applied: null, ...(turn.passage ? { passage: turn.passage } : {}) } } : {};
+  }
+
+  /**
+   * The latest turn's passage, as its chat has it (its task left at work in
+   * another window, or Foreword closed meanwhile): a reply's that has one; else,
+   * for a message sent in Options mode, none (its replies say where theirs go);
+   * null for a turn in another mode.
+   */
+  private optionsTurnIn(items: readonly ChatItem[]): OptionsTurn | null {
+    const last = items.map((it) => it.kind).lastIndexOf('user');
+    const reply = items.slice(last + 1).find((it): it is AssistantItem => it.kind === 'assistant' && !!it.options);
+    if (reply?.options) return { target: reply.options.original ?? reply.options.target, passage: reply.options.passage ?? null };
+    const asked = items[last];
+    return asked?.kind === 'user' && asked.mode === 'options' ? { target: null, passage: null } : null;
+  }
+
+  /** A reply in, as the chat finishes it: its options placed where it says, an offer of another mode, whether the task is done. */
+  private replyEnded(id: string) {
+    const item = this.state.agent.items.find((it) => it.id === id);
+    if (item?.kind !== 'assistant') return;
+    const taskCheck = !item.taskCheck && asksTaskDone(item.text) ? ({ taskCheck: 'ask' } as const) : {};
+    const offer = item.modeSuggestion ? {} : this.modeSuggestionIn(item.text);
+    if (Object.keys(taskCheck).length || Object.keys(offer).length) this.updateItem(id, (it) => (it.kind === 'assistant' ? { ...it, ...taskCheck, ...offer } : it));
+    if (item.options) this.placeOptions(id, item.text);
   }
 
   /** Replies being placed (placeOptions), so a pick waits for where it goes. */
@@ -6882,7 +6926,7 @@ export class Studio {
   /** A follow-up in Options mode with nothing selected or attached: the passage the last options were about, as it is now; else the cursor. */
   private async attachForOptions() {
     const reply = [...this.state.agent.items].reverse().find((it) => it.kind === 'assistant' && it.options);
-    const id = reply?.kind === 'assistant' ? reply.options?.passage : undefined;
+    const id = reply && (await this.passageOf(reply.id));
     const sel = id ? await this.passageSelection(id) : null;
     if (!id || !sel) return this.attachSelection({ focus: false });
     const label = selectionLabel(sel);
@@ -6898,11 +6942,33 @@ export class Studio {
     return captureSelection(p.path, model, { startLineNumber: now.start.line, startColumn: now.start.column, endLineNumber: now.end.line, endColumn: now.end.column });
   }
 
+  /**
+   * A reply's passage, followed: as it is, or followed again where the reply
+   * last put its options (or was asked about) if it was let go meanwhile (its
+   * task was out of sight, or Foreword has opened again since), for every
+   * reply about it. Its file is opened for it, unseen.
+   */
+  private async passageOf(itemId: string): Promise<string | undefined> {
+    const item = this.state.agent.items.find((i) => i.id === itemId);
+    const opts = item?.kind === 'assistant' ? item.options : undefined;
+    const p = opts?.passage ? this.passages.get(opts.passage) : undefined;
+    const path = p?.path ?? opts?.target?.path;
+    if (path && !this.docs?.get(path)) await this.docs?.open(path).catch(() => null);
+    if (!opts || p) return opts?.passage;
+    if (!opts.target) return undefined;
+    const lost = opts.passage;
+    const id = this.followPassage(opts.target);
+    this.setAgent((a) => ({
+      items: a.items.map((it) => (it.kind === 'assistant' && it.options && (it.id === itemId || (lost && it.options.passage === lost)) ? { ...it, options: { ...it.options, passage: id } } : it)),
+    }));
+    return id;
+  }
+
   /** Let go of the passages no reply, turn or queued message is about any more. */
   private prunePassages() {
     const used = new Set<string>();
     for (const it of this.state.agent.items) if (it.kind === 'assistant' && it.options?.passage) used.add(it.options.passage);
-    for (const turn of [this.optionsTurn, ...this.queuedOptions.values()]) if (turn?.passage) used.add(turn.passage);
+    for (const turn of [this.optionsTurn, ...this.queuedOptions.values(), ...this.awayOptions.values()]) if (turn?.passage) used.add(turn.passage);
     for (const [id, p] of this.passages) {
       if (used.has(id)) continue;
       if (p.model && p.decorations && !p.model.isDisposed()) p.model.deltaDecorations(p.decorations, []);
@@ -6983,8 +7049,7 @@ export class Studio {
 
   /** "New options for it as it is": the passage, as the author has changed it, asked about again in Options mode. */
   async optionsAgain(itemId: string) {
-    const item = this.state.agent.items.find((i) => i.id === itemId);
-    const id = item?.kind === 'assistant' ? item.options?.passage : undefined;
+    const id = await this.passageOf(itemId);
     const sel = id ? await this.passageSelection(id) : null;
     if (!id || !sel) return this.toast('The passage can’t be found any more: select it and ask again.', 'error');
     this.dismissOptionConflict(itemId);
@@ -7003,7 +7068,8 @@ export class Studio {
     if (item?.kind !== 'assistant' || !item.options) return;
     const option = parseOptions(item.text).options[index];
     if (option?.text == null || !option.complete) return;
-    const id = item.options.passage;
+    await this.placing.get(itemId);
+    const id = await this.passageOf(itemId);
     const sel = id ? await this.passageSelection(id) : null;
     if (id && !sel) return this.toast('The passage can’t be found any more: select it and ask again.', 'error');
     // Nothing was selected for these (a title, say): as a follow-up typed in the box.
@@ -7315,14 +7381,12 @@ export class Studio {
       }
       case 'text-ended': {
         const id = `${e.messageId}:${e.ordinal}`;
-        const taskCheck = asksTaskDone(e.text) ? ({ taskCheck: 'ask' } as const) : {};
-        const offer = this.modeSuggestionIn(e.text);
         this.setAgent((a) =>
           a.items.some((it) => it.id === id)
-            ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true, ...taskCheck, ...offer } : it)) }
-            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState(), ...taskCheck, ...offer }] },
+            ? { items: a.items.map((it) => (it.id === id ? { ...it, text: e.text, done: true } : it)) }
+            : { items: [...a.items, { kind: 'assistant', id, text: e.text, done: true, ...this.newOptionsState() }] },
         );
-        if (this.state.agent.items.some((it) => it.id === id && it.kind === 'assistant' && it.options)) this.placeOptions(id, e.text);
+        this.replyEnded(id);
         this.addReplyQuestions(id, e.text);
         break;
       }

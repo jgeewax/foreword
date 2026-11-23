@@ -180,9 +180,33 @@ export function withLatestTurn(kept: readonly ChatItem[], theirs: readonly ChatI
     const it = theirs[j];
     if (it.kind !== 'user' || it.text.trim() !== said) continue;
     const turn = theirs.slice(j + 1);
-    return steps(turn) >= steps(kept.slice(last + 1)) ? [...kept.slice(0, last + 1), ...turn] : [...kept];
+    if (steps(turn) < steps(kept.slice(last + 1))) return [...kept];
+    // A reply kept (by its id, as the live events make it): what Foreword added to it goes on (its options, its offers, what was made from it).
+    const ours = new Map(kept.slice(last + 1).map((k) => [k.id, k]));
+    return [...kept.slice(0, last + 1), ...turn.map((t) => withOwnState(t, ours.get(t.id)))];
   }
   return [...kept];
+}
+
+/** A reply as the assistant has it, with what Foreword added to it when it was kept. */
+function withOwnState(theirs: ChatItem, kept: ChatItem | undefined): ChatItem {
+  if (theirs.kind !== 'assistant' || kept?.kind !== 'assistant') return theirs;
+  const { options, taskCheck, modeSuggestion, made, removed } = kept;
+  return { ...theirs, ...(options && { options }), ...(taskCheck && { taskCheck }), ...(modeSuggestion && { modeSuggestion }), ...(made && { made }), ...(removed && { removed }) };
+}
+
+/**
+ * The replies of a chat's latest turn that ended out of sight (the turn went
+ * on in the background, or Foreword closed in the middle of it): in `items`
+ * after the author's last message, not ended in what was kept. While the turn
+ * still runs, its last reply is still being written (its end comes live).
+ */
+export function endedAway(kept: readonly ChatItem[], items: readonly ChatItem[], running: boolean): string[] {
+  const done = new Set(kept.filter((k) => k.kind === 'assistant' && k.done).map((k) => k.id));
+  const last = items.map((it) => it.kind).lastIndexOf('user');
+  if (last < 0) return [];
+  const replies = items.slice(last + 1).filter((it) => it.kind === 'assistant');
+  return (running ? replies.slice(0, -1) : replies).filter((r) => !done.has(r.id)).map((r) => r.id);
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -2711,6 +2711,99 @@ async function optionsAnchorLiveChecks(kind: 'claude' | 'codex' = 'claude') {
 }
 
 /**
+ * Options left while they're written (Claude Code on Haiku): asked for a
+ * selected sentence, the author goes to another task as the reply comes, and
+ * back once it has finished out of sight, or back while it's still going.
+ * Either way the reply is option cards with Use this, and Use this puts the
+ * option in place of the sentence.
+ */
+async function optionsAwayChecks() {
+  const out: Record<string, unknown> = {};
+  const file = 'chapters/ch2-eigenvalues.typ';
+  const saved = { assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions, mode: studio.state.agent.mode };
+  const savedKeys = ['studio.model', 'studio.recentModels', 'studio.settings', 'studio.usualSetup', 'studio.modePins'].map((k) => [k, localStorage.getItem(k)] as const);
+  const original = (await ipc.fsRead(file)).text;
+  const a = () => studio.state.agent;
+  const last = () => [...document.querySelectorAll('.options-reply')].at(-1);
+  const item = () => [...a().items].reverse().find((i) => i.kind === 'assistant' && i.options) as any;
+  const shown = () => ({
+    cards: last()?.querySelectorAll('.option-card').length ?? 0,
+    buttons: [...(last()?.querySelectorAll('.option-card')[0]?.querySelectorAll('.option-actions button') ?? [])].map((b) => b.textContent),
+    says: last()?.querySelector('.options-target')?.textContent,
+    target: item()?.options?.target ? { start: item().options.target.start, text: item().options.target.text } : null,
+    unplaced: item()?.options?.unplaced,
+  });
+  const sentence = 'The eigenvalues of $A$ are the roots of its characteristic polynomial';
+  // Asked in a new task, the sentence selected; Use this on the first, and the file back as it was.
+  const ask = async () => {
+    studio.newSession();
+    await studio.openFile(file);
+    const editor = studio.editor!;
+    const model = editor.getModel()!;
+    const line = model.getLinesContent().findIndex((l) => l.includes(sentence)) + 1;
+    editor.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: model.getLineMaxColumn(line) });
+    await sleep(300);
+    void studio.send('Give me options for this sentence: shorter and plainer.');
+    const sessionId = await waitFor(() => a().sessionId, 30000, 'session');
+    return { taskId: a().taskId!, sessionId };
+  };
+  const use = async () => {
+    const put = parseOptions(item()?.text ?? '').options[0]?.text;
+    last()?.querySelectorAll('.option-card')[0]?.querySelector<HTMLButtonElement>('.option-actions button.primary')?.click();
+    await sleep(800);
+    const text = studio.editor!.getModel()!.getValue();
+    const result = { inPlace: !!put && text.includes(put), sentenceGone: !text.includes(sentence), applied: item()?.options?.applied };
+    await ipc.fsWrite(file, original, await ipc.fsHash(file));
+    await studio.reloadFromDisk(file);
+    return result;
+  };
+  try {
+    studio.updateSettings({ assistant: 'claude', permissions: PRESETS.edit.permissions }, { write: false });
+    await sleep(500);
+    await waitFor(() => ['ready', 'error'].includes(a().status) && (a().status === 'error' || a().models.length > 0), 180000, 'agent').catch(() => {});
+    if (a().status !== 'ready') return { status: a().status, error: a().error };
+    const small = a().models.find((m) => /haiku/i.test(m.id) && !/^claude-haiku-4/.test(m.id));
+    if (small) await studio.selectModel(small);
+    out.model = a().model?.id;
+    await studio.setMode('options');
+
+    // Away until it has finished: back to a turn its assistant finished out of sight.
+    const one = await ask();
+    await waitFor(() => a().activity && a().activity!.phase !== 'sending', 60000, 'working');
+    studio.newSession();
+    out.leftRunning = !!a().background[one.sessionId]?.running;
+    await waitFor(() => a().background[one.sessionId] && !a().background[one.sessionId].running, 180000, 'done out of sight').catch(() => {});
+    await sleep(500);
+    await studio.switchTask(one.taskId);
+    await sleep(1500);
+    out.backAfter = shown();
+    out.backAfterUsed = await use();
+
+    // Back while it's still being written: the rest comes live.
+    const two = await ask();
+    await waitFor(() => a().activity?.phase === 'writing', 120000, 'writing').catch(() => {});
+    studio.newSession();
+    out.leftWriting = !!a().background[two.sessionId]?.running;
+    await sleep(1500);
+    await studio.switchTask(two.taskId);
+    out.backWhileRunning = a().running;
+    await waitFor(() => !a().running, 180000, 'done').catch(() => {});
+    await sleep(1500);
+    out.backDuring = shown();
+    out.backDuringUsed = await use();
+  } finally {
+    await ipc.fsWrite(file, original, await ipc.fsHash(file));
+    await studio.reloadFromDisk(file);
+    studio.newSession();
+    studio.updateSettings({ assistant: saved.assistant, permissions: saved.permissions }, { write: false });
+    studio.store.set((s) => ({ agent: { ...s.agent, mode: saved.mode } }));
+    for (const [k, v] of savedKeys) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+  }
+  out.restored = { disk: (await ipc.fsRead(file)).text === original };
+  return out;
+}
+
+/**
  * Options with a real assistant (Claude Code on Haiku), as the author hit it:
  * Options from the selection bar on a sentence; while the reply is written,
  * they click elsewhere, select other words and add a line above; Use this
@@ -12255,6 +12348,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('optionsanchor')) result.optionsanchor = await optionsAnchorChecks();
     if (only?.includes('optionsanchorlive')) result.optionsanchorlive = await optionsAnchorLiveChecks();
     if (only?.includes('optionsanchorlive-codex')) result['optionsanchorlive-codex'] = await optionsAnchorLiveChecks('codex');
+    if (only?.includes('optionsaway')) result.optionsaway = await optionsAwayChecks();
     if (only?.includes('bookmath')) result.bookmath = await bookMathChecks();
     if (only?.includes('activitylook')) result.activitylook = await activityLookChecks();
     for (const kind of ['claude', 'codex', 'opencode'] as const) if (only?.includes(`styledraft-${kind}`)) result[`styledraft-${kind}`] = await styleDraftChecks(kind);

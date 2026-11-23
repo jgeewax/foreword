@@ -5297,6 +5297,38 @@ the app with SIGKILL on Rust changes, so the next start reaps the old helpers.
   the second card only). It hasn't run yet: the screen was locked, and WebKit
   pauses the page while it is.
 
+### Options survive going to another task (2026-11-23)
+
+The author got options, went to another task, and came back to a reply with
+no cards and no buttons.
+
+- **Why:** leaving a task while its turn still runs (and it often still runs
+  for a moment after the options are in, though Use this already works)
+  keeps the chat marked as at work. Opened again, that turn is taken from the
+  assistant's own record (`withLatestTurn`), which has the words but none of
+  what Foreword added: no `options`, so the reply drew as plain text. The
+  same lost a reply's mode offer and its "Is this task done?".
+- **Now:** a reply kept with the same id keeps what Foreword added to it
+  (options, offers, what was made from it). Replies written out of sight in
+  an Options turn get the turn's passage (kept per conversation when it's
+  left at work, `awayOptions`; else a reply's, or none for a message sent in
+  Options mode), and each reply that ended out of sight is finished as it
+  would have been on screen (`replyEnded`, shared with `text-ended`): its
+  options placed where its `replaces` block says, its offers made. A turn
+  still going when the author comes back gets its own passage for the
+  replies still to come, not the last task's.
+- **Passages:** they're let go by what the shown chat refers to, so working
+  in another task let go of this one's, and More like this then said the
+  passage couldn't be found. A conversation at work out of sight keeps its
+  passage, and a reply whose passage was let go (or Foreword has opened
+  again since) follows it again from where the reply last put an option, its
+  file opened unseen (`passageOf`).
+- **Verified:** unit tests (`withLatestTurn` keeps the options, `endedAway`),
+  typecheck, the whole suite. Self-test `optionsaway` (Claude Code on Haiku:
+  away until the reply is done, and away and back while it's written; expect
+  cards with Use this, a target, and the option in place of the sentence)
+  hasn't run: the screen was locked.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

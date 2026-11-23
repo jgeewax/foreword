@@ -3,7 +3,7 @@ import { formatAuthorEdits } from '../services/agent/author-edits';
 import { ASK_REMINDER } from '../services/agent/ask-mode';
 import { messageText } from '../services/agent/message-context';
 import type { ChatItem } from './studio';
-import { asksTaskDone, contextTokens, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, splitUserText, TASK_INSTRUCTIONS, TASK_MARKER, withLatestTurn, withoutMarker, type TaskRecord } from './tasks';
+import { asksTaskDone, contextTokens, endedAway, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, splitUserText, TASK_INSTRUCTIONS, TASK_MARKER, withLatestTurn, withoutMarker, type TaskRecord } from './tasks';
 
 describe('the task-done marker', () => {
   it('is recognised at the end of a reply, even bolded, and hidden for display', () => {
@@ -183,6 +183,27 @@ describe('tasks across assistants', () => {
     expect(withLatestTurn(kept, theirs).map((i) => i.id)).toEqual(['u1', 'a1', 'u2', 'm4:0', 'm4:1']);
     // Their record doesn't have the message (another assistant's turn): as kept.
     expect(withLatestTurn(kept, [user('m1', 'Hi')]).map((i) => i.id)).toEqual(['u1', 'a1', 'u2', 'a2:0']);
+  });
+
+  it('keeps what Foreword added to a reply of that turn: its options, its offers', () => {
+    const target = { path: 'two.typ', start: { line: 3, column: 1 }, end: { line: 3, column: 20 }, text: 'The old sentence.' };
+    const options = { target, original: target, applied: null, passage: 'p1' };
+    const kept: ChatItem[] = [user('u1', 'Options for this'), { kind: 'assistant', id: 'm2:0', text: '## Option 1\n```', done: false, options }];
+    const theirs = [user('m1', 'Options for this'), reply('m2:0', '## Option 1\n```\nA\n```\n## Option 2\n```\nB\n```'), reply('m2:1', 'Pick one.')];
+    const items = withLatestTurn(kept, theirs);
+    expect(items[1]).toMatchObject({ id: 'm2:0', text: theirs[1].kind === 'assistant' ? theirs[1].text : '', done: true, options });
+    expect(items[2]).not.toHaveProperty('options');
+  });
+
+  it('knows the replies of that turn that ended out of sight', () => {
+    const kept = [user('u1', 'Hi'), reply('a1', 'Hello'), user('u2', 'Options for this'), { ...reply('m2:0', 'Option 1'), done: false }];
+    const items = [user('u1', 'Hi'), reply('a1', 'Hello'), user('u2', 'Options for this'), reply('m2:0', 'Option 1…'), reply('m2:1', 'Pick one.')];
+    expect(endedAway(kept, items, false)).toEqual(['m2:0', 'm2:1']);
+    // Still going: its last reply ends live.
+    expect(endedAway(kept, items, true)).toEqual(['m2:0']);
+    // Ended before the chat was kept: as it was.
+    expect(endedAway([...kept.slice(0, 3), reply('m2:0', 'Option 1')], items, false)).toEqual(['m2:1']);
+    expect(endedAway([], [reply('a1', 'Hello')], false)).toEqual([]);
   });
 
   it('keeps what it had of a turn that Foreword closed in the middle of, when the assistant wrote down less', () => {
