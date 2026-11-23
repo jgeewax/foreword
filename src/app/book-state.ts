@@ -6,6 +6,7 @@
 // the Mac going down loses that moment at most, and opening the book again is
 // the same as never having closed it.
 
+import { COVER_PREVIEW } from '../cover';
 import { ipc } from '../lib/ipc';
 import { readTaskRecords, type TaskRecord } from './tasks';
 
@@ -66,8 +67,13 @@ export type BookSession = {
   draft: string;
   /** The sidebar's view. */
   sidebar: string | null;
-  /** What the preview showed (the book or its cover), the chapter it last showed alone, and where it was in each ("book", "cover", "chapter:<path>"). */
-  previewTarget: 'book' | 'cover';
+  /**
+   * What the preview showed: the book (null), or a Typst file on its own (the
+   * cover, a scratch file: preview-files.ts); the chapter it last showed
+   * alone; and where it was in each ("book", "cover", "chapter:<path>",
+   * "file:<path>").
+   */
+  previewFile: string | null;
   previewChapter: string | null;
   previewPlace: Record<string, PreviewPlace>;
   /**
@@ -78,7 +84,7 @@ export type BookSession = {
   previewScope: PreviewScope | null;
 };
 
-const EMPTY: BookSession = { tabs: [], active: null, views: {}, task: null, draft: '', sidebar: null, previewTarget: 'book', previewChapter: null, previewPlace: {}, previewScope: null };
+const EMPTY: BookSession = { tabs: [], active: null, views: {}, task: null, draft: '', sidebar: null, previewFile: null, previewChapter: null, previewPlace: {}, previewScope: null };
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const isPlace = (v: unknown): v is PreviewPlace => isObject(v) && Number.isInteger(v.page) && (v.page as number) >= 0 && typeof v.offset === 'number' && v.offset >= 0 && v.offset <= 1;
@@ -94,7 +100,8 @@ export function readSession(raw: unknown): BookSession {
     task: text(raw.task),
     draft: text(raw.draft) ?? '',
     sidebar: text(raw.sidebar),
-    previewTarget: raw.previewTarget === 'cover' ? 'cover' : 'book',
+    // Before any file could be shown alone, the cover was its own target.
+    previewFile: text(raw.previewFile) ?? (raw.previewTarget === 'cover' ? COVER_PREVIEW : null),
     previewChapter: text(raw.previewChapter),
     previewPlace: isObject(raw.previewPlace) ? Object.fromEntries(Object.entries(raw.previewPlace).filter((e): e is [string, PreviewPlace] => isPlace(e[1]))) : {},
     previewScope: raw.previewScope === 'book' || raw.previewScope === 'chapter' ? raw.previewScope : null,

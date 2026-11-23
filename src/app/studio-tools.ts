@@ -32,8 +32,8 @@ export type ToolsSettingsPage = (typeof SETTINGS_PAGES)[number];
 /** Model and effort to use once an assistant is switched to (or now): a model's id or part of its name ("default": its own), an effort level. */
 export type ModelChoice = { model?: string; effort?: string };
 
-/** What the preview typesets: the whole book, one chapter of it alone (named as the chat names it), or the cover. */
-export type PreviewShows = { kind: 'book' } | { kind: 'chapter'; chapter: string } | { kind: 'cover' };
+/** What the preview typesets: the whole book, one chapter of it alone (named as the chat names it), the cover, or another Typst file on its own (its path). */
+export type PreviewShows = { kind: 'book' } | { kind: 'chapter'; chapter: string } | { kind: 'cover' } | { kind: 'file'; file: string };
 
 /** A heading as typeset: its page (from 1) and, when Foreword can tell, where it's written ("chapters/one.typ:12"). */
 export type PageHeading = { level: number; title: string; page: number; at?: string };
@@ -275,6 +275,7 @@ function previewWords(shows: PreviewShows): string {
   if (shows.kind === 'chapter')
     return `The preview shows ${shows.chapter} alone (the author previews one chapter at a time), so these are that chapter's pages, not the whole book's: its page numbers, and its references to other chapters, are right only in the whole book.`;
   if (shows.kind === 'cover') return 'The preview shows the book’s cover now, with its guides (trim, bleed and spine), not the book’s pages.';
+  if (shows.kind === 'file') return `The preview shows ${shows.file} on its own now (the author chose it above the preview), not the book’s pages.`;
   return '';
 }
 
@@ -481,7 +482,7 @@ export const TOOLS: Tool[] = [
       const book = host.book;
       const settled = await book.settled();
       const { shows, pages: count } = book.preview();
-      const what = shows.kind === 'cover' ? 'The cover' : shows.kind === 'chapter' ? capital(shows.chapter) : 'The book';
+      const what = shows.kind === 'cover' ? 'The cover' : shows.kind === 'file' ? shows.file : shows.kind === 'chapter' ? capital(shows.chapter) : 'The book';
       const beyond = count ? asked.pages.filter((p) => p > count) : [];
       const want = asked.pages.filter((p) => !beyond.includes(p));
       if (!want.length) throw new ToolError(`${what} has ${plural(count!, 'page')}: there's no ${pagesWords(beyond)}.`);

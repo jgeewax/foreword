@@ -84,7 +84,7 @@ describe('readSession', () => {
       task: 'ses_1',
       draft: 'Half a',
       sidebar: 'search',
-      previewTarget: 'cover',
+      previewFile: 'cover/cover.typ',
       previewChapter: 'one.typ',
       previewPlace: { book: { page: 3, offset: 0.25 }, cover: { page: -1, offset: 0 }, 'chapter:one.typ': { page: 1, offset: 2 } },
       previewScope: 'chapter',
@@ -96,14 +96,18 @@ describe('readSession', () => {
       task: 'ses_1',
       draft: 'Half a',
       sidebar: 'search',
-      previewTarget: 'cover',
+      previewFile: 'cover/cover.typ',
       previewChapter: 'one.typ',
       previewPlace: { book: { page: 3, offset: 0.25 } },
       previewScope: 'chapter',
     });
     expect(readSession(null)).toEqual(readSession({}));
     expect(readSession('nonsense').tabs).toEqual([]);
-    expect(readSession({ previewTarget: 'elsewhere' }).previewTarget).toBe('book');
+    expect(readSession({ previewTarget: 'elsewhere' }).previewFile).toBeNull();
+    // From before any file could be shown alone: the cover was its own target.
+    expect(readSession({ previewTarget: 'cover' }).previewFile).toBe('cover/preview.typ');
+    expect(readSession({ previewTarget: 'cover', previewFile: null }).previewFile).toBe('cover/preview.typ');
+    expect(readSession({ previewFile: 7 }).previewFile).toBeNull();
     // Never chosen (a session from before the book had its own): the window decides.
     expect(readSession({}).previewScope).toBeNull();
     expect(readSession({ previewScope: 'part' }).previewScope).toBeNull();

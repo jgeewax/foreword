@@ -141,9 +141,11 @@ export function StatusBar() {
   const zoom = useStore(studio.store, (s) => s.zoom);
   const canAsk = agent === 'ready' && !running;
   const todos = useStore(studio.store, (s) => s.todos.length);
-  const previewTarget = useStore(studio.store, (s) => s.previewTarget);
+  // A file typeset on its own instead of the book (the cover, a scratch file): its pages, not the book's.
+  const alone = useStore(studio.store, (s) => s.previewFile);
+  const cover = useStore(studio.store, () => studio.showsCover());
   // A chapter typeset alone: its pages and words are its own, not the book's.
-  const chapter = useStore(studio.store, (s) => (s.previewTarget === 'book' && s.previewChapter ? (numberedTitle(s.previewChapter, s.names) ?? 'One chapter') : null));
+  const chapter = useStore(studio.store, (s) => (!s.previewFile && s.previewChapter ? (numberedTitle(s.previewChapter, s.names) ?? 'One chapter') : null));
   const repo = useStore(studio.store, (s) => s.git.repo);
   const gitBusy = useStore(studio.store, (s) => s.git.busy);
 
@@ -152,8 +154,10 @@ export function StatusBar() {
     ? `${compile.pages} ${compile.pages === 1 ? 'page' : 'pages'}${compile.words != null ? ` · ${compile.words.toLocaleString()} words` : ''}`
     : null;
   const compileLabel =
-    compile.status === 'ok' && previewTarget === 'cover'
+    compile.status === 'ok' && cover
       ? 'Cover'
+      : compile.status === 'ok' && alone
+        ? `${baseName(alone)} alone${pages ? `: ${pages}` : ''}`
       : compile.status === 'ok' && chapter
         ? `${chapter} alone${pages ? `: ${pages}` : ''}`
       : compile.status === 'ok'
@@ -210,7 +214,11 @@ export function StatusBar() {
             icon="book"
             label={compileLabel}
             title={
-              chapter ? 'Typesetting only this chapter, for a quicker preview (Chapter, above the preview): its pages and words, not the book’s' : 'Typesetting status of the whole book'
+              alone
+                ? `Typesetting ${alone} on its own, not the book (chosen above the preview): its pages and words`
+                : chapter
+                  ? 'Typesetting only this chapter, for a quicker preview (Chapter, above the preview): its pages and words, not the book’s'
+                  : 'Typesetting status of the whole book'
             }
           />
         )}

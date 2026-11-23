@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { isPicture, tildePath } from '../lib/paths';
+import { baseName, isPicture, tildePath } from '../lib/paths';
 import { bookFiles, refNamed, type SourceRef } from '../lib/source-links';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type Doc, type MergeQuestion } from '../editor/documents';
@@ -55,6 +55,7 @@ import {
 } from './chapter-preview';
 import { scanImports, scanIncludes } from './includes';
 import { labelPlaces, referenceAt } from './labels';
+import { aloneRoot, canPreviewAlone, filesOutsideBook } from './preview-files';
 import { fileUses, snippetPrelude, type FileUses } from './snippet-book';
 import { nextActivity, waitedFor } from './activity';
 import { initialGit, SourceControl, type GitState } from './source-control';
@@ -544,8 +545,12 @@ export type StudioState = {
    * being written in the editor (a passage of the open file).
    */
   review: { comments: ReviewComment[]; draft: { path: string; start: number; end: number } | null; busy: string[] };
-  /** What the preview shows: the book, or its cover (cover/preview.typ, with guides). */
-  previewTarget: 'book' | 'cover';
+  /**
+   * What the preview shows: the book (null: all of it or one chapter, as
+   * previewScope says), or a Typst file on its own (the cover, with guides;
+   * any file outside the book: preview-files.ts).
+   */
+  previewFile: string | null;
   /**
    * Of the book, all of it or only the chapter being edited: this window's
    * choice (the switch above the preview), kept with its book.
@@ -667,7 +672,7 @@ const initialState: StudioState = {
   code: initialCode,
   todos: [],
   review: { comments: [], draft: null, busy: [] },
-  previewTarget: 'book',
+  previewFile: null,
   previewScope: 'book',
   previewChapter: null,
   bookPages: null,
@@ -1085,13 +1090,13 @@ export class Studio {
       if (sent) this.keepChat();
       else this.chatTimer ??= window.setTimeout(() => this.keepChat(), running ? 1000 : 300);
     });
-    // Which task the chat shows, the sidebar's view and what the preview shows (the book, one chapter, the cover): kept with the book as they change.
+    // Which task the chat shows, the sidebar's view and what the preview shows (the book, one chapter, a file on its own): kept with the book as they change.
     this.store.subscribe(() => {
       const book = this.bookStore;
       const s = this.state;
       if (!book || s.workspace?.root !== book.root) return;
-      const now: Partial<BookSession> = { task: s.agent.taskId, sidebar: s.sidebar, previewTarget: s.previewTarget, previewScope: s.previewScope };
-      if (now.task !== book.session.task || now.sidebar !== book.session.sidebar || now.previewTarget !== book.session.previewTarget || now.previewScope !== book.session.previewScope) book.updateSession(now);
+      const now: Partial<BookSession> = { task: s.agent.taskId, sidebar: s.sidebar, previewFile: s.previewFile, previewScope: s.previewScope };
+      if (now.task !== book.session.task || now.sidebar !== book.session.sidebar || now.previewFile !== book.session.previewFile || now.previewScope !== book.session.previewScope) book.updateSession(now);
     });
     window.addEventListener('pagehide', () => {
       this.keepChat();
@@ -1109,7 +1114,7 @@ export class Studio {
           pages: s.pageCount || st.compile.pages,
           words: s.wordsCount?.words ?? st.compile.words,
         },
-        ...(st.previewTarget === 'book' && !st.previewChapter && s.pageCount ? { bookPages: s.pageCount } : {}),
+        ...(!st.previewFile && !st.previewChapter && s.pageCount ? { bookPages: s.pageCount } : {}),
       }));
     });
     this.typst.on('scrollSource', (jump) => {
@@ -1408,7 +1413,7 @@ export class Studio {
     const sidebar = SIDEBAR_VIEWS.find((v) => v === book.session.sidebar) ?? this.state.sidebar;
     // The whole book or one chapter, as this book was left; one never chosen starts as the setting every window shared had it.
     const previewScope = book.session.previewScope ?? this.formerPreviewScope ?? 'book';
-    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false, sidebar, previewTarget: book.session.previewTarget, previewScope });
+    this.store.set({ workspace: info, opening: null, tabs: [], active: null, viewTab: null, guideOpen: false, sidebar, previewFile: book.session.previewFile, previewScope });
     if (shown) this.showKeptTask(shown, kept);
     // The message being written, not sent yet.
     if (book.session.draft) {
@@ -1736,6 +1741,10 @@ export class Studio {
     let updated = 0;
     const files: string[] = [];
     const moved = (f: string) => (f === path || f.startsWith(`${path}/`) ? to + f.slice(path.length) : f);
+    // The file the preview shows on its own, under its new name (shown again from it below), so it isn't taken for gone.
+    const alone = this.state.previewFile;
+    const aloneMoved = !!alone && moved(alone) !== alone;
+    if (aloneMoved) this.store.set({ previewFile: moved(alone) });
     for (const was of this.typFiles()) {
       const now = moved(was);
       try {
@@ -1755,7 +1764,9 @@ export class Studio {
     }
     // The file list must know the new name before the main file can point at it.
     await this.refreshFiles();
-    if (ws.entry && (ws.entry === path || ws.entry.startsWith(`${path}/`))) await this.setEntryPoint(moved(ws.entry));
+    const entryMoved = !!ws.entry && (ws.entry === path || ws.entry.startsWith(`${path}/`));
+    if (entryMoved) await this.setEntryPoint(moved(ws.entry!));
+    else if (aloneMoved) await this.restartTypst();
     for (const t of open) await this.openFile(moved(t), { activate: false }).catch(() => {});
     if (active && open.includes(active)) await this.openFile(moved(active)).catch(() => {});
     this.toast(`Renamed to ${newName}${updated ? `; updated ${updated} reference${updated > 1 ? 's' : ''} in ${files.join(', ')}` : ''}`);
@@ -2462,11 +2473,15 @@ export class Studio {
       !!selection.trim() && { label: 'Copy', action: () => this.copy(selection) },
       'separator',
       { label: 'Show the Text Here', action: () => void click() },
-      ...(this.state.previewTarget === 'cover'
+      ...(this.state.previewFile
         ? [
-            { label: 'Show the Book', action: () => void this.setPreviewTarget('book') },
-            { label: 'Update Cover from Book', action: () => void this.updateCoverFromBook() },
-            { label: 'Export Cover', action: () => void this.exportCover(), enabled: !this.state.exporting },
+            { label: 'Show the Book', action: () => void this.showBook() },
+            ...(this.showsCover()
+              ? [
+                  { label: 'Update Cover from Book', action: () => void this.updateCoverFromBook() },
+                  { label: 'Export Cover', action: () => void this.exportCover(), enabled: !this.state.exporting },
+                ]
+              : [{ label: `Export ${baseName(this.state.previewFile)} to PDF`, action: () => void this.exportPreviewFile(), enabled: !this.state.exporting }]),
           ]
         : [
             { label: 'Export PDF…', accelerator: 'CmdOrCtrl+Shift+E', action: () => void this.exportPdf(), enabled: !this.state.exporting },
@@ -2874,9 +2889,25 @@ export class Studio {
     return (this.state.workspace?.files ?? []).includes(COVER_PREVIEW);
   }
 
+  /** Whether the cover has the designer's measurements (cover/spec.typ), for Update Cover from Book. */
+  hasCoverSpec() {
+    return (this.state.workspace?.files ?? []).includes(COVER_SPEC);
+  }
+
+  /** Whether the preview shows the cover the designer made, with its guides (cover/preview.typ, cover/spec.typ beside it). */
+  showsCover() {
+    return this.state.previewFile === COVER_PREVIEW && this.hasCover() && this.hasCoverSpec();
+  }
+
+  /** The cover in the preview, with its guides; the cover designer when the book has none yet. */
+  async showCover() {
+    if (!this.hasCover()) return this.openCoverDialog();
+    await this.showFileInPreview(COVER_PREVIEW);
+  }
+
   openCoverDialog() {
     if (this.hasCover()) {
-      void this.setPreviewTarget('cover');
+      void this.showFileInPreview(COVER_PREVIEW);
       void this.openFile(COVER_DESIGN);
       return;
     }
@@ -2913,17 +2944,9 @@ export class Studio {
     for (const f of files) await ipc.fsWrite(f.path, f.text, null);
     await this.refreshFiles();
     this.closeCoverDialog();
-    await this.setPreviewTarget('cover');
+    await this.showFileInPreview(COVER_PREVIEW);
     await this.openFile(COVER_DESIGN);
     this.toast('Cover created: edit cover/design.typ; the preview shows it with guides. Switch back with Book in the preview.');
-  }
-
-  /** Book ↔ cover in the preview (restarts the preview on the other file). */
-  async setPreviewTarget(target: 'book' | 'cover') {
-    if (target === this.state.previewTarget) return;
-    if (target === 'cover' && !this.hasCover()) return this.openCoverDialog();
-    this.store.set({ previewTarget: target });
-    await this.restartTypst();
   }
 
   /** Bring the cover's page size and page count (spine) in line with the book. */
@@ -3228,7 +3251,7 @@ export class Studio {
         interior,
         cover,
         // Problems are the previewed document's: the book's only while the book is showing.
-        errors: this.state.previewTarget === 'book' ? this.state.problems.errors : 0,
+        errors: !this.state.previewFile ? this.state.problems.errors : 0,
         staleCode: this.code.problems().length,
         edgeToEdge,
       };
@@ -3295,6 +3318,34 @@ export class Studio {
       return rel;
     } catch (e) {
       this.toast(`Cover export failed: ${errorMessage(e)}`, 'error');
+    } finally {
+      this.store.set({ exporting: false });
+    }
+  }
+
+  /**
+   * Export the file the preview shows on its own to PDF, as it is (the
+   * cover's has guides: Export Cover prints it without), beside it or in the
+   * export folder. The book's PDF is Export PDF's, whatever the preview shows.
+   */
+  async exportPreviewFile() {
+    const ws = this.state.workspace;
+    const file = this.state.previewFile;
+    if (!ws || !file || this.state.exporting) return;
+    if (this.showsCover()) return this.exportCover();
+    if (!this.typst.running) return this.toast('Export needs the Typst preview running. Restart the preview and try again.', 'error');
+    this.store.set({ exporting: true });
+    try {
+      const failures = (await this.docs?.saveAll()) ?? [];
+      if (failures.length) throw new Error(`couldn't save ${failures.map((f) => f.path).join(', ')}`);
+      const path = await this.typst.exportPdf(`${ws.root}/${file}`);
+      this.toast(`Exported ${baseName(file)} to ${tildePath(path)}`, 'info', [
+        { label: 'Open', run: () => void this.openPdf(path) },
+        { label: 'Show in Finder', run: () => void ipc.revealPdf(path).catch((e) => this.toast(errorMessage(e), 'error')) },
+      ]);
+      void this.refreshFiles();
+    } catch (e) {
+      this.toast(`Export failed: ${errorMessage(e)}`, 'error');
     } finally {
       this.store.set({ exporting: false });
     }
@@ -3574,7 +3625,7 @@ export class Studio {
     this.composerDraft = '';
     this.setAgent({ files: [] });
     this.code.reset();
-    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewTarget: 'book', previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
+    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewFile: null, previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
     await this.history.stop();
     this.git.reset();
     this.unsubscribeAgent?.();
@@ -3621,6 +3672,9 @@ export class Studio {
     // Update only the file list, against the current workspace: other fields (the
     // entry point) may have changed while the listing was in flight.
     this.store.set((s) => (s.workspace?.root === root ? { workspace: { ...s.workspace, files } } : {}));
+    // The file the preview showed on its own went (to the Trash, or renamed outside Foreword): the book again.
+    const alone = this.state.previewFile;
+    if (alone && this.state.workspace?.root === root && !files.includes(alone)) void this.showBook();
   }
 
   private onDiskChange(paths: string[]) {
@@ -4373,38 +4427,40 @@ export class Studio {
     }
     this.store.set({ preview: { status: 'starting' } });
     this.pageOutline = null;
-    // The cover is its own document: preview it instead of the book on request.
-    if (this.state.previewTarget === 'cover' && !ws.files.includes(COVER_PREVIEW)) this.store.set({ previewTarget: 'book' });
+    // A file on its own instead of the book (the cover, a scratch file), while it's there and isn't the main file.
+    const was = this.state.previewFile;
+    if (was && !(ws.files.includes(was) && canPreviewAlone(was, ws.entry))) this.store.set({ previewFile: null });
+    const alone = this.state.previewFile;
     // The book's citations, for the guard against references that go nowhere (refGuard): known before it's first typeset.
     await this.refRun;
     this.previewKeys = this.refs.citationKeys(ws.entry);
     // Or one chapter of the book alone (Chapter, above the preview), when the book has chapters to leave out.
     const chapter =
-      this.state.previewTarget === 'book' && this.state.previewScope === 'chapter'
+      !alone && this.state.previewScope === 'chapter'
         ? await this.chapterPreviewFile()
             .then(async (c) => c && (await ipc.previewChapterFile(c.path), c))
             .catch(() => null)
         : null;
     // The whole book: the main file, included after the guard by a file beside it (bookPreviewText).
     const book =
-      this.state.previewTarget === 'book' && !chapter
+      !alone && !chapter
         ? await ipc.previewChapterFile(chapterPreviewPath(ws.entry)).then(
             () => ({ path: chapterPreviewPath(ws.entry!), text: bookPreviewText(ws.entry!, this.previewKeys) }),
             () => null,
           )
         : null;
     this.entryText = chapter?.text ?? book?.text ?? '';
-    // Nothing typeset yet: the page count is the last document's (the book's, a chapter's, the cover's) until it is.
+    // Nothing typeset yet: the page count is the last document's (the book's, a chapter's, a file's) until it is.
     this.store.set((st) => ({ previewChapter: chapter?.chapter ?? null, compile: { status: 'idle', words: st.compile.words } }));
     if (chapter) this.keepPreviewChapter(ws.root, chapter.chapter);
-    const entry = this.state.previewTarget === 'cover' ? COVER_PREVIEW : (chapter?.path ?? book?.path ?? ws.entry);
+    const entry = alone ?? chapter?.path ?? book?.path ?? ws.entry;
     try {
       const project = this.state.project.settings;
       const { previewUrl } = await this.typst.start(ws.root, entry, {
         outputPath: outputPathPattern(project, ws.root),
         fontPaths: absoluteFontPaths(project, ws.root),
-        // The book's root; the cover's files live outside it, in .foreword/.
-        rootPath: this.state.previewTarget === 'cover' ? ws.root : `${ws.root}/${this.typstRoot()}`.replace(/\/$/, ''),
+        // The book's root; a file alone outside it (the cover, in cover/ beside src/) has the folder opened.
+        rootPath: `${ws.root}/${alone ? aloneRoot(alone, this.typstRoot()) : this.typstRoot()}`.replace(/\/$/, ''),
         entryText: chapter?.text ?? book?.text,
       });
       this.docs?.syncLsp();
@@ -4466,13 +4522,14 @@ export class Studio {
     void ipc.previewEval(`window.__studioPreview && window.__studioPreview.configure(${JSON.stringify(options)})`).catch(() => {});
   }
 
-  /** What the preview shows now, for remembering where it was: the book, the cover, or one chapter. */
+  /** What the preview shows now, for remembering where it was: the book, one chapter, the cover, or another file. */
   private placeKey(): string {
-    const { previewTarget, previewChapter } = this.state;
-    return previewTarget === 'book' && previewChapter ? `chapter:${previewChapter}` : previewTarget;
+    const { previewFile, previewChapter } = this.state;
+    if (previewFile) return previewFile === COVER_PREVIEW ? 'cover' : `file:${previewFile}`;
+    return previewChapter ? `chapter:${previewChapter}` : 'book';
   }
 
-  /** Where the preview was in what it shows now (the book, its cover, a chapter), if it's been shown. */
+  /** Where the preview was in what it shows now (the book, a chapter, a file), if it's been shown. */
   private previewPlace(): PreviewPlace | null {
     const root = this.state.workspace?.root;
     if (!root) return null;
@@ -4507,22 +4564,74 @@ export class Studio {
 
   // ---- the chapter preview ------------------------------------------------------------
 
-  /** Whether the preview shows one chapter alone (see chapter-preview.ts), rather than the whole book or the cover. */
+  /** Whether the preview shows one chapter alone (see chapter-preview.ts), rather than the whole book or a file on its own. */
   get chapterPreview(): boolean {
-    return this.state.previewTarget === 'book' && !!this.state.previewChapter;
+    return !this.state.previewFile && !!this.state.previewChapter;
   }
 
   /**
-   * What this window's preview shows: the whole book, the chapter being
-   * edited, or the cover. Only this window's: another window's book shows what
-   * that window chose.
+   * What this window's preview shows of the book: all of it, or the chapter
+   * being edited (instead of a file on its own, if one's shown). Only this
+   * window's: another window's book shows what that window chose.
    */
-  async showInPreview(what: PreviewScope | 'cover') {
-    if (what === 'cover') return this.setPreviewTarget('cover');
-    if (this.state.previewTarget === 'book' && this.state.previewScope === what) return;
+  async showInPreview(what: PreviewScope) {
+    if (!this.state.previewFile && this.state.previewScope === what) return;
     // The whole book or one chapter: another main file for Tinymist.
-    this.store.set({ previewTarget: 'book', previewScope: what });
+    this.store.set({ previewFile: null, previewScope: what });
     if (this.state.workspace) await this.restartTypst();
+  }
+
+  /** The book in the preview again, as it was shown (all of it or one chapter), instead of a file on its own. */
+  async showBook() {
+    if (!this.state.previewFile) return;
+    this.store.set({ previewFile: null });
+    if (this.state.workspace) await this.restartTypst();
+  }
+
+  /**
+   * A Typst file on its own in the preview instead of the book: the cover, a
+   * title page being tried out, a scratch file (preview-files.ts). It stays
+   * while other files are edited (a cover that takes its title from the
+   * book's metadata), until the book is shown again. The main file is the book.
+   */
+  async showFileInPreview(path: string) {
+    const ws = this.state.workspace;
+    if (!ws) return;
+    if (path === ws.entry) return this.showBook();
+    if (!canPreviewAlone(path, ws.entry) || this.state.previewFile === path) return;
+    this.store.set({ previewFile: path });
+    await this.restartTypst();
+  }
+
+  /**
+   * The Typst files the preview can show on their own, as offered above it:
+   * those outside the book that aren't modules (filesOutsideBook), the one
+   * shown now among them.
+   */
+  filesToPreview(): string[] {
+    const ws = this.state.workspace;
+    if (!ws) return [];
+    const shown = this.state.previewFile;
+    const root = this.typstRoot();
+    // Asked on every change to the state (the switch above the preview): again only when the files or their uses change.
+    const was = this.previewFilesMemo;
+    if (was && was.files === ws.files && was.uses === this.fileUses && was.entry === ws.entry && was.root === root && was.shown === shown) return was.list;
+    const outside = filesOutsideBook(ws.files, ws.entry, (p) => this.fileUses.get(p), root);
+    const list = shown && !outside.includes(shown) ? [...outside, shown].sort((a, b) => a.localeCompare(b)) : outside;
+    this.previewFilesMemo = { files: ws.files, uses: this.fileUses, entry: ws.entry, root, shown, list };
+    return list;
+  }
+
+  private previewFilesMemo: { files: string[]; uses: Map<string, FileUses>; entry: string | null; root: string; shown: string | null; list: string[] } | null = null;
+
+  /**
+   * Whether "Show in Preview" applies to a file: a Typst file but the main
+   * file, a chapter (Chapter shows it, with the book's setup) and the one
+   * shown now. A module or a file outside the book.
+   */
+  canShowInPreview(path: string | null): boolean {
+    const ws = this.state.workspace;
+    return !!ws && !!path && canPreviewAlone(path, ws.entry) && !this.state.names.chapters.includes(path) && this.state.previewFile !== path && ws.files.includes(path);
   }
 
   /**
@@ -4755,7 +4864,7 @@ export class Studio {
   /** The bibliographies' keys changed: the preview's guard gets them (refGuard), and Tinymist sets the book again. */
   private refreshPreviewKeys() {
     const entry = this.state.workspace?.entry;
-    if (!entry || this.state.previewTarget !== 'book' || !this.typst.running) return;
+    if (!entry || this.state.previewFile || !this.typst.running) return;
     const keys = this.refs.citationKeys(entry);
     if (keys.join('\n') === this.previewKeys.join('\n')) return;
     this.previewKeys = keys;
@@ -8380,8 +8489,8 @@ export class Studio {
     changePreferences: (patch, zoom, previewScope) => {
       if (Object.keys(patch).length) this.updateSettings(patch);
       if (zoom !== undefined) void this.setZoom(zoom);
-      // This window's, as the switch above the preview (the cover stays, if that's what it shows).
-      if (previewScope && this.state.previewTarget === 'book') void this.showInPreview(previewScope);
+      // This window's, as the switch above the preview (a file on its own stays, if that's what it shows).
+      if (previewScope && !this.state.previewFile) void this.showInPreview(previewScope);
       else if (previewScope) this.store.set({ previewScope });
     },
     whenIdle: (run) => {
@@ -8400,9 +8509,9 @@ export class Studio {
     openSettings: (page) => this.openSettings(page),
     book: {
       preview: () => {
-        const { previewTarget, previewChapter, names, compile } = this.state;
+        const { previewFile, previewChapter, names, compile } = this.state;
         return {
-          shows: previewTarget === 'cover' ? { kind: 'cover' } : previewChapter ? { kind: 'chapter', chapter: fileName(previewChapter, names) } : { kind: 'book' },
+          shows: this.showsCover() ? { kind: 'cover' } : previewFile ? { kind: 'file', file: previewFile } : previewChapter ? { kind: 'chapter', chapter: fileName(previewChapter, names) } : { kind: 'book' },
           pages: compile.pages ?? null,
           status: compile.status,
         };

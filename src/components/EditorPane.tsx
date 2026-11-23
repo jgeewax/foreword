@@ -302,6 +302,7 @@ export function EditorPane() {
                   { label: 'Close Saved', enabled: tabs.some((x) => !dirty[x]), action: () => void studio.closeSavedTabs() },
                   { label: 'Close All', action: () => void studio.closeAllTabs() },
                   !view && 'separator',
+                  !view && studio.canShowInPreview(t) && { label: 'Show in Preview', action: () => void studio.showFileInPreview(t) },
                   !view && { label: 'History of This File', action: () => void studio.showFileHistory(t) },
                   !view && { label: 'Reveal in Finder', action: () => void studio.reveal(t) },
                   !view && { label: 'Copy Path', action: () => studio.copy(studio.absolutePath(t), 'Path copied') },

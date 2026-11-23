@@ -1117,6 +1117,9 @@ button.modal-close { display: grid; place-items: center; width: 26px; height: 26
 .kind-switch button.active { background: var(--accent); color: var(--accent-fg); }
 .kind-switch.preview-switch { margin-left: 2px; flex: none; }
 .kind-switch.preview-switch button { padding: 1px 8px; font-size: 11.5px; white-space: nowrap; }
+/* A file on its own (or "Other"): a menu of them, its name cut short in a narrow pane. */
+.kind-switch.preview-switch button.preview-other { display: inline-flex; align-items: center; gap: 2px; padding-right: 5px; min-width: 0; }
+.preview-other-name { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
 /* In a narrow preview pane the status shortens, and the export buttons go (one line; what doesn't fit wraps out of sight), first of all. */
 .preview-pane .pane-header .pill { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preview-pane .pane-header :is(.pill, .pane-title) { flex-shrink: 0.01; }

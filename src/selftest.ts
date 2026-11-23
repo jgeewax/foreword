@@ -303,6 +303,115 @@ async function chapterPreviewChecks() {
 }
 
 /**
+ * Any Typst file in the preview on its own (preview-files.ts), the book first:
+ * on a book in src/ (main.typ including two chapters, metadata.typ) with a
+ * cover beside it in cover/ that imports ../src/metadata.typ, and
+ * src/title-page.typ that imports /metadata.typ (typeset from src/). The
+ * Other menu lists those two, not the module; each is shown, stays while a
+ * chapter is edited, follows its edits, exports, follows a rename, and goes
+ * back to the book once it's trashed. Renames and trashes: scratch book only.
+ */
+async function previewFileChecks() {
+  const out: Record<string, unknown> = {};
+  const scope = studio.state.previewScope;
+  const confirm = studio.confirmAction;
+  studio.confirmAction = async () => true;
+  const ready = (what: string) =>
+    waitFor(() => studio.state.preview.status === 'ready' && studio.state.compile.status === 'ok' && (studio.state.compile.pages ?? 0) > 0, 120000, what);
+  const shown = () => ({
+    file: studio.state.previewFile,
+    pages: studio.state.compile.pages,
+    errors: studio.state.problems.errors,
+    switch: [...document.querySelectorAll('.preview-switch button')].map((b) => `${b.textContent}${b.classList.contains('active') ? '*' : ''}`),
+    pill: document.querySelector('.preview-pane .pane-header .pill')?.textContent,
+    actions: [...document.querySelectorAll('.preview-actions button')].map((b) => b.textContent),
+    statusBar: document.querySelector('.statusbar .indicator[title^="Typesetting"] .indicator-label')?.textContent,
+    kept: (studio as any).bookStore?.session.previewFile,
+  });
+  const menu = async () => {
+    let entries: MenuEntry[] = [];
+    menuRecorder.record = (e) => (entries = e);
+    document.querySelector<HTMLButtonElement>('.preview-switch .preview-other')?.click();
+    await sleep(200);
+    menuRecorder.record = undefined;
+    return entries.filter((e): e is Extract<MenuEntry, { action: () => void }> => typeof e === 'object' && !!e && 'action' in e);
+  };
+  const palette = () =>
+    paletteCommands(studio)
+      .filter((c) => c.category === 'Preview' && (c.when?.() ?? true))
+      .map((c) => c.title);
+  try {
+    if (studio.state.previewFile) await studio.showBook();
+    await ready('the book');
+    out.book = shown();
+    out.offered = studio.filesToPreview();
+    out.paletteOnBook = palette();
+
+    // The Other menu: the files outside the book, none ticked; the cover chosen from it.
+    const first = await menu();
+    out.menu = first.map((e) => `${e.label}${e.checked ? ' ✓' : ''}`);
+    first.find((e) => e.label === 'cover/cover.typ')?.action();
+    await waitFor(() => studio.state.previewFile === 'cover/cover.typ', 5000, 'the cover chosen');
+    await sleep(500);
+    await ready('the cover alone');
+    out.cover = shown();
+    out.snapshotCover = await ipc.previewSnapshot('file-alone-cover').catch(errorMessage);
+    out.menuOnCover = (await menu()).map((e) => `${e.label}${e.checked ? ' ✓' : ''}`);
+
+    // Editing a chapter: the cover stays. Editing the cover: the preview follows, unsaved.
+    await studio.openFile('src/chapters/one.typ');
+    await sleep(1500);
+    out.whileInChapter = { file: studio.state.previewFile, chapter: studio.state.previewChapter };
+    out.paletteOnChapter = palette();
+    await studio.openFile('cover/cover.typ');
+    const model = studio.editor!.getModel()!;
+    model.pushEditOperations([], [{ range: model.getFullModelRange().collapseToEnd(), text: '\n#pagebreak()\nThe back.\n' }], () => null);
+    await waitFor(() => studio.state.compile.pages === 2, 20000, 'the edit typeset').catch(() => {});
+    out.edited = { pages: studio.state.compile.pages, dirty: !!studio.state.dirty['cover/cover.typ'] };
+    for (let i = 0; i < 5 && model.canUndo(); i++) await model.undo();
+    await waitFor(() => studio.state.compile.pages === 1, 20000, 'the edit undone').catch(() => {});
+
+    // A file in the book's root, with a root-absolute import: typeset from src/. Exported beside itself.
+    await studio.showFileInPreview('src/title-page.typ');
+    await sleep(500);
+    await ready('the title page alone');
+    out.titlePage = shown();
+    await studio.exportPreviewFile();
+    out.exported = !!(await ipc.fsHash('src/title-page.pdf'));
+
+    // Renamed: shown under its new name. Trashed: the book again.
+    void studio.renamePath('src/title-page.typ');
+    await waitFor(() => studio.state.prompt, 5000, 'the rename prompt');
+    studio.answerPrompt('opening.typ');
+    await waitFor(() => studio.state.previewFile === 'src/opening.typ', 10000, 'renamed').catch(() => {});
+    await sleep(1000);
+    await ready('the renamed file');
+    out.renamed = shown();
+    await studio.trashPath('src/opening.typ');
+    await waitFor(() => studio.state.previewFile === null, 10000, 'the book again').catch(() => {});
+    await sleep(1000);
+    await ready('the book after the trash');
+    out.trashed = shown();
+
+    // Any file at all from the file list, a module too; Chapter from a file shows the chapter.
+    out.canShow = Object.fromEntries(['src/main.typ', 'src/chapters/one.typ', 'src/metadata.typ', 'cover/cover.typ'].map((f) => [f, studio.canShowInPreview(f)]));
+    await studio.showFileInPreview('cover/cover.typ');
+    await ready('the cover again');
+    await studio.openFile('src/chapters/two.typ');
+    await studio.showInPreview('chapter');
+    await sleep(500);
+    await ready('a chapter');
+    out.chapterFromFile = { ...shown(), chapter: studio.state.previewChapter, scope: studio.state.previewScope };
+  } finally {
+    menuRecorder.record = undefined;
+    studio.confirmAction = confirm;
+    if (studio.state.previewFile) await studio.showBook();
+    if (studio.state.previewScope !== scope) await studio.showInPreview(scope);
+  }
+  return out;
+}
+
+/**
  * References out of a chapter shown alone (bookNumbersText, chapter-preview.ts):
  * on a book whose chapters refer to each other's figures. With nothing learned
  * yet, the chapter is typeset first, then the whole book beside it, and the
@@ -4433,7 +4542,7 @@ async function coverChecks() {
   await sleep(1500);
   out.created = {
     files: studio.state.workspace?.files.filter((f) => f.startsWith('cover/')),
-    target: studio.state.previewTarget,
+    shows: studio.state.previewFile,
     active: studio.state.active,
     spec: await spec(),
     switch: [...document.querySelectorAll('.preview-switch button')].map((b) => `${b.textContent}${b.classList.contains('active') ? '*' : ''}`),
@@ -4448,14 +4557,14 @@ async function coverChecks() {
   );
 
   // The book grows; the cover follows on request.
-  await studio.setPreviewTarget('book');
+  await studio.showBook();
   await compiled();
   const before = studio.state.bookPages ?? 0;
   for (const name of ['The Long Night', 'Morning', 'Evening']) await studio.addChapter(name);
   await studio.save();
   await waitFor(() => (studio.state.bookPages ?? 0) > before, 30000, 'pages').catch(() => {});
   out.grew = { before, after: studio.state.bookPages };
-  await studio.setPreviewTarget('cover');
+  await studio.showCover();
   await compiled();
   await studio.updateCoverFromBook();
   await sleep(500);
@@ -4466,7 +4575,7 @@ async function coverChecks() {
   await studio.exportPdf();
   out.exports = { cover: !!(await ipc.fsHash('export/cover.pdf')), book: !!(await ipc.fsHash('export/main.pdf')) };
   out.book = studio.state.workspace?.root;
-  await studio.setPreviewTarget('book');
+  await studio.showBook();
   await studio.openWorkspace(original);
   return out;
 }
@@ -4509,7 +4618,7 @@ async function printChecksRun() {
   studio.closeCoverDialog();
   await studio.designCover('classic', { title: 'The Quiet Harbour', author: 'Ada Example', paper: '0.0025in', spineWidth: null });
   await compiled();
-  await studio.setPreviewTarget('book');
+  await studio.showBook();
   await compiled();
   studio.openPrint();
   out.withCover = await run();
@@ -12312,6 +12421,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('previewjump')) result.previewjump = await previewJumpChecks();
     if (only?.includes('previewpages')) result.previewpages = await previewPagesChecks();
     if (only?.includes('chapterpreview')) result.chapterpreview = await chapterPreviewChecks();
+    if (only?.includes('previewfile')) result.previewfile = await previewFileChecks();
     if (only?.includes('previewscopewindows')) result.previewscopewindows = await previewScopeWindowsChecks();
     if (only?.includes('chapterrefs')) result.chapterrefs = await chapterRefsChecks();
     if (only?.includes('brokenref')) result.brokenref = await brokenRefChecks();

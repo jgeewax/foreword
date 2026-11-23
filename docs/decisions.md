@@ -5329,6 +5329,53 @@ no cards and no buttons.
   cards with Use this, a target, and the option in place of the sentence)
   hasn't run: the screen was locked.
 
+### Any Typst file in the preview, the book first (2026-11-24)
+
+- **Asked for (from the user):** "it works well for the main.typ (and
+  previewing a single chapter inside the main file), but the cover (and maybe
+  any other supplementary material that we just want to experiment with) is
+  impossible to preview… can we think of 'main' preview (chapter/book) as the
+  primary way of previewing, but allow us to preview ANY other typ file
+  also?" Cover appeared only for a cover the designer made
+  (`cover/preview.typ`): the linear algebra book got its own `cover/cover.typ`
+  into the preview with a one-line `cover/preview.typ` (`#include
+  "cover.typ"`), which then had Update from book, which needs the designer's
+  `spec.typ`.
+- **Now:** the switch above the preview is Book | Chapter | Other ▾. Book and
+  Chapter are as before. Other opens a menu of the Typst files outside the
+  book (`filesOutsideBook`, preview-files.ts): not the main file or what it
+  includes or imports, however deep, not Foreword's own (a name or folder
+  starting with a dot), and not a file another file imports (a module of
+  definitions, like a designed cover's design.typ, typesets as a blank page).
+  The one shown is ticked, and the file in front is offered too when it's
+  another that can be shown. Once one is shown, the button reads its name
+  ("cover.typ"; "Cover" for the designer's, with guides). Any Typst file but
+  the main file and the chapters can also be shown from its right-click menu
+  in Files and on its tab (Show in Preview), and from the palette (Show This
+  File in the Preview, `Show in the Preview: cover/cover.typ`, Show the Book).
+- **A file shown stays** while other files are edited (a cover that takes its
+  title from the book's metadata.typ), until Book or Chapter is chosen. It's
+  kept with the book (`session.json` `previewFile`; a session that said
+  `previewTarget: "cover"` opens on cover/preview.typ). Renamed, it's shown
+  under its new name; trashed or gone, the book is shown again. The status
+  bar says "cover.typ alone: 1 page", and the assistant's page tools say the
+  preview shows that file on its own, not the book's pages.
+- **Typeset from where:** the book's Typst root if the file is in it (a page
+  in src/ that imports "/metadata.typ"), else the folder opened (a cover in
+  cover/ beside src/, importing "../src/metadata.typ"), as the cover was.
+- **Export PDF** for a file shown alone exports that file, beside it or in
+  the export folder; the book's Export PDF (⇧⌘E) still exports the book. The
+  designer's cover keeps Update from book and Export cover (printed without
+  guides), now only when it has its spec.typ; a hand-made cover/preview.typ
+  is just a file.
+- **Verified:** unit tests (preview-files.test.ts; the session; the
+  assistant's words), typecheck, the whole suite. Self-test `previewfile` on
+  a book in src/ with a cover in cover/: the menu lists the cover and
+  src/title-page.typ, not metadata.typ; each is typeset without errors, the
+  cover stays while a chapter is open and follows an unsaved edit; the
+  export lands beside the file; a rename follows, a trash goes back to the
+  book; Chapter from a file shows the chapter.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

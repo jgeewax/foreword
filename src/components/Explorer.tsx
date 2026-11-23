@@ -90,6 +90,8 @@ function FileTree() {
               // Open, make something new here, change this item, then where it is.
               return [
                 !n.dir && { label: /\.pdf$/i.test(n.path) || isPicture(n.path) ? 'Open in Preview' : 'Open', action: () => void studio.openFile(n.path) },
+                // A Typst file on its own in Foreword's preview, instead of the book (a cover, a scratch file).
+                !n.dir && studio.canShowInPreview(n.path) && { label: 'Show in Preview', action: () => void studio.showFileInPreview(n.path) },
                 'separator',
                 (n.path === top || n.path.startsWith(`${top}/`)) && { label: `New ${partTitle(1, kind)}…`, accelerator: 'CmdOrCtrl+Alt+N', action: () => void studio.newChapter() },
                 !!heading && heading.level < 6 && { label: `New ${partTitle(heading.level + 1, kind)} in “${studio.menuTitle(heading.title)}”…`, action: () => void studio.newPart({ file: n.path, heading }) },

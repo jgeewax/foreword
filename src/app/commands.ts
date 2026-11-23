@@ -9,6 +9,7 @@ import { errorMessage, ipc } from '../lib/ipc';
 import { wordMatch } from '../lib/fuzzy';
 import { baseName, tildePath } from '../lib/paths';
 import { CHAT_MODES, menuEntry, modeConfig } from '../services/agent/modes';
+import { COVER_PREVIEW } from '../cover';
 import { effectiveBookColor, randomBookColor } from './book-color';
 import { partTitle } from './new-parts';
 import { uncommitted, unstaged } from './source-control';
@@ -212,24 +213,46 @@ export function paletteCommands(studio: Studio): Command[] {
       'Preview',
       [
         { id: 'restart-preview', title: 'Restart Preview', keywords: ['reload preview', 'refresh', 'tinymist'], run: () => studio.restartTypst() },
-        { id: 'preview-cover', title: 'Show the Cover', when: () => studio.hasCover() && s().previewTarget === 'book', run: () => studio.setPreviewTarget('cover') },
-        { id: 'preview-book', title: 'Show the Book', when: () => s().previewTarget === 'cover', run: () => studio.setPreviewTarget('book') },
+        { id: 'preview-cover', title: 'Show the Cover', when: () => studio.hasCover() && s().previewFile !== COVER_PREVIEW, run: () => studio.showCover() },
+        { id: 'preview-book', title: 'Show the Book', keywords: ['main file'], when: () => !!s().previewFile, run: () => studio.showBook() },
         {
           id: 'preview-chapter',
           title: 'Show Only This Chapter',
           keywords: ['chapter preview', 'one chapter', 'faster preview', 'slow preview', 'long book'],
-          when: () => s().names.chapters.length > 1 && !(s().previewTarget === 'book' && s().previewScope === 'chapter'),
+          when: () => s().names.chapters.length > 1 && !(!s().previewFile && s().previewScope === 'chapter'),
           run: () => studio.showInPreview('chapter'),
         },
         {
           id: 'preview-whole-book',
           title: 'Show the Whole Book',
           keywords: ['book preview', 'every chapter', 'all chapters'],
-          when: () => s().previewTarget === 'book' && s().previewScope === 'chapter',
+          when: () => !s().previewFile && s().previewScope === 'chapter',
           run: () => studio.showInPreview('book'),
         },
-        { id: 'update-cover', title: 'Update Cover from Book', keywords: ['spine'], when: () => studio.hasCover(), run: () => studio.updateCoverFromBook() },
+        // Any Typst file on its own: the one in front, and those outside the book (a cover, a scratch file).
+        {
+          id: 'preview-this-file',
+          title: 'Show This File in the Preview',
+          keywords: ['preview file', 'on its own', 'alone', 'scratch'],
+          when: () => studio.canShowInPreview(s().active),
+          run: () => studio.showFileInPreview(s().active!),
+        },
+        ...studio.filesToPreview().map((file) => ({
+          id: `preview-file:${file}`,
+          title: `Show in the Preview: ${file}`,
+          keywords: ['preview file', 'on its own', 'alone'],
+          when: () => s().previewFile !== file && file !== s().active,
+          run: () => studio.showFileInPreview(file),
+        })),
+        { id: 'update-cover', title: 'Update Cover from Book', keywords: ['spine'], when: () => studio.hasCover() && studio.hasCoverSpec(), run: () => studio.updateCoverFromBook() },
         { id: 'export-cover', title: 'Export Cover', when: () => studio.hasCover() && !s().exporting, run: () => studio.exportCover() },
+        {
+          id: 'export-preview-file',
+          title: 'Export the Previewed File to PDF',
+          keywords: ['export file', 'pdf'],
+          when: () => !!s().previewFile && !studio.showsCover() && !s().exporting,
+          run: () => studio.exportPreviewFile(),
+        },
       ],
     ],
     [

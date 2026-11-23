@@ -324,6 +324,11 @@ describe('the book as the author sees it', () => {
     expect((await callAll(host('allow', 'yes', chapter).h, 'view_pages', { pages: '31' })).text).toBe("“The Storm” (chapter 1) has 30 pages: there's no page 31.");
     const cover = book({ preview: () => ({ shows: { kind: 'cover' }, pages: 1, status: 'ok' }) });
     expect((await callAll(host('allow', 'yes', cover).h, 'view_pages', { pages: '1' })).text).toMatch(/^Page 1 of 120\. The preview shows the book’s cover now/);
+    const file = book({ preview: () => ({ shows: { kind: 'file', file: 'extras/title-page.typ' }, pages: 2, status: 'ok' }) });
+    expect((await callAll(host('allow', 'yes', file).h, 'view_pages', { pages: '1' })).text).toBe(
+      'Page 1 of 120. The preview shows extras/title-page.typ on its own now (the author chose it above the preview), not the book’s pages.',
+    );
+    expect((await callAll(host('allow', 'yes', file).h, 'view_pages', { pages: '3' })).text).toBe("extras/title-page.typ has 2 pages: there's no page 3.");
   });
 
   it('view_pages: with an error, says there are no pages until it’s fixed; and when the typesetting hasn’t caught up', async () => {
