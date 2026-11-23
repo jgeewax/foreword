@@ -6996,8 +6996,9 @@ export class Studio {
    * count), for the same passage as it is now, starting from that one, for when
    * it's the closest but not there yet. Again from the new ones, until one is.
    * What they asked for goes with it, so the assistant needn't remember it.
+   * "Like this, but…" says what's still wrong (`but`): the new ones change that.
    */
-  async moreLikeOption(itemId: string, index: number) {
+  async moreLikeOption(itemId: string, index: number, but = '') {
     const item = this.state.agent.items.find((i) => i.id === itemId);
     if (item?.kind !== 'assistant' || !item.options) return;
     const option = parseOptions(item.text).options[index];
@@ -7007,7 +7008,7 @@ export class Studio {
     if (id && !sel) return this.toast('The passage can’t be found any more: select it and ask again.', 'error');
     // Nothing was selected for these (a title, say): as a follow-up typed in the box.
     const asked = optionsAskedFor(this.state.agent.items, itemId);
-    await this.sendForOptions(moreLikePrompt({ n: option.n, label: option.label, text: option.text }, this.state.settings.optionCount, asked), id && sel ? { id, sel } : null);
+    await this.sendForOptions(moreLikePrompt({ n: option.n, label: option.label, text: option.text }, this.state.settings.optionCount, asked, but), id && sel ? { id, sel } : null);
   }
 
   /** `message` in Options mode, about `passage` as it is now; a reply running in another mode finishes first, as from the selection bar. */

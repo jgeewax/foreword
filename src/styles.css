@@ -454,7 +454,14 @@ kbd { font: inherit; opacity: 0.75; margin-left: 6px; }
 .option-cut .diff-text { padding: 3px 8px 6px; max-height: 160px; overflow-y: auto; }
 .option-cut .diff-text del { padding: 0; background: none; color: color-mix(in srgb, var(--fg) 55%, var(--muted)); text-decoration-color: color-mix(in srgb, var(--bad) 75%, transparent); }
 .option-note { margin-top: 5px; font-size: 12px; color: var(--muted); }
-.option-actions { display: flex; gap: 6px; margin-top: 7px; }
+.option-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+/* Like this, but…: what to change about an option, for new ones that start from it. */
+.option-actions button[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+.option-steer { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
+.option-steer label { font-size: 11.5px; color: var(--muted); }
+.option-steer textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); font: 12.5px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+.option-steer textarea:focus { outline: none; border-color: var(--accent); }
+.option-steer-actions { display: flex; justify-content: flex-end; gap: 6px; }
 /* An option that couldn't simply go in: the passage changed (the author's changes shown), was deleted, or can't be found. */
 .option-conflict { margin-top: 7px; padding: 6px 8px 7px; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border)); border-radius: 6px; background: var(--warn-bg); font-size: 12px; }
 .option-conflict-head { display: flex; gap: 6px; align-items: flex-start; }

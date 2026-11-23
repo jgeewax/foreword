@@ -71,13 +71,19 @@ const unquoted = (s: string) => s.split('\n').map((l) => l.replace(/^> ?/, '')).
  * however long ago it was written (in a fence longer than any in it), and so
  * does what the author asked the options for (`asked`, oldest first: the ask,
  * then what they typed after it), so the new ones still aim at that.
+ * "Like this, but…" is the same with what the author says to change (`but`):
+ * the new ones make that change to it, and otherwise stay close to it.
  */
-export const moreLikePrompt = (option: { n: number; label: string; text: string }, count = DEFAULT_OPTION_COUNT, asked: string[] = []) => {
+export const moreLikePrompt = (option: { n: number; label: string; text: string }, count = DEFAULT_OPTION_COUNT, asked: string[] = [], but = '') => {
   const fence = '`'.repeat(Math.max(3, ...(option.text.match(/`+/g) ?? []).map((run) => run.length + 1)));
   const label = option.label ? ` (“${option.label}”)` : '';
   const goals = asked.map((a) => a.trim()).filter(Boolean);
   const goal = goals.length ? `\n\nWhat I asked for${goals.length > 1 ? ', in order' : ''}:\n\n${goals.map(quoted).join('\n\n')}` : '';
-  return `${moreInWords(count)} like Option ${option.n}${label}. That one is closest to what I want: write new options that start from it and take it further, each in its own way, rather than going back toward the others. ${goals.length ? "They're still for what I asked, and" : 'They'} replace the selected passage, as before.${goal}\n\nOption ${option.n} was:\n\n${fence}typst\n${option.text}\n${fence}`;
+  const rest = `${goals.length ? "They're still for what I asked, and" : 'They'} replace the selected passage, as before.`;
+  const tail = `${goal}\n\nOption ${option.n} was:\n\n${fence}typst\n${option.text}\n${fence}`;
+  if (but.trim())
+    return `${moreInWords(count)} like Option ${option.n}${label}, but changed as I say. That one is closest to what I want, but not right yet: write new options that start from it and make the change I describe below, each in its own way, and otherwise stay as close to it as the change allows. ${rest}\n\nWhat to change about it:\n\n${quoted(but)}${tail}`;
+  return `${moreInWords(count)} like Option ${option.n}${label}. That one is closest to what I want: write new options that start from it and take it further, each in its own way, rather than going back toward the others. ${rest}${tail}`;
 };
 
 /** "Ask" on a selection (the selection bar), sent in Ask mode: the author's question about the passage, answered in the chat. */
@@ -147,8 +153,10 @@ const REVIEW_SELECTION = new RegExp(`^${esc(reviewPrompt('\0')).replace('\0', '(
 // Also on one line, as Claude Code names a task after it.
 const DIRECTION_WRITE = new RegExp(`^${esc(directionWritePrompt({ name: '\0', what: '\x01' })).replace('\0', '([^\\n]*?)').replace('\x01', '([\\s\\S]+?)').replace('\n\n', '\\s+')}$`);
 const DIRECTION_OPTIONS = new RegExp(`^(${OPTION_COUNTS.map((n) => capitalized(optionsInWords(n))).join('|')}) for this direction from our discussion: “([^\\n]*?)”: ([\\s\\S]+)$`);
-// What the author asked for is in it after 0.10.0.
-const MORE_LIKE = new RegExp(`^(${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (\\d+)(?: \\(“([^\\n]*)”\\))?\\. That one is closest to what I want: [\\s\\S]*?(?:\\n\\nWhat I asked for(?:, in order)?:\\n\\n([\\s\\S]*?))?\\n\\nOption \\d+ was:\\n\\n(\`{3,})typst\\n([\\s\\S]*)\\n\\5$`);
+// What the author asked for is in it after 0.10.0; what to change, from Like this, but….
+const MORE_LIKE = new RegExp(
+  `^(?<count>${OPTION_COUNTS.map(moreInWords).join('|')}) like Option (?<n>\\d+)(?: \\(“(?<label>[^\\n]*)”\\))?(?:, but changed as I say)?\\. That one is closest to what I want[,:][\\s\\S]*?(?:\\n\\nWhat to change about it:\\n\\n(?<but>[\\s\\S]*?))?(?:\\n\\nWhat I asked for(?:, in order)?:\\n\\n(?<asked>[\\s\\S]*?))?\\n\\nOption \\d+ was:\\n\\n(?<fence>\`{3,})typst\\n(?<text>[\\s\\S]*)\\n\\k<fence>$`,
+);
 
 /** Each kind of message, read back: what it asked for, or null if it isn't that one. */
 const READERS: ((text: string) => StockAction | null)[] = [
@@ -174,10 +182,13 @@ const READERS: ((text: string) => StockAction | null)[] = [
   },
   (text) => (text === OPTIONS_AGAIN_PROMPT || text === OPTIONS_AGAIN_THREE ? { verb: 'New options for this passage', note: 'as I’ve changed it', tone: 'other', icon: 'check', mode: 'options' } : null),
   (text) => {
-    // "Three more like Option 2", and its label (or, without one, its first line).
-    const m = MORE_LIKE.exec(text);
-    const what = m && (m[3] || m[6].trim().split('\n')[0]);
-    return m ? { verb: `${m[1].replace(/ options?$/, '')} like Option ${m[2]}`, ...(what ? { rows: [{ text: what }] } : {}), tone: 'other', icon: 'check', mode: 'options' } : null;
+    // "Three more like Option 2", and its label (or, without one, its first line); with Like this, but…, what to change instead.
+    const g = MORE_LIKE.exec(text)?.groups;
+    if (!g) return null;
+    const verb = `${g.count.replace(/ options?$/, '')} like Option ${g.n}`;
+    if (g.but) return { verb: `${verb}, but`, rows: [{ text: unquoted(g.but) }], tone: 'other', icon: 'check', mode: 'options' };
+    const what = g.label || g.text.trim().split('\n')[0];
+    return { verb, ...(what ? { rows: [{ text: what }] } : {}), tone: 'other', icon: 'check', mode: 'options' };
   },
   (text) => {
     const m = ASK_SELECTION.exec(text);
@@ -262,8 +273,9 @@ export function optionsAsked(message: string, selected: boolean): { asked: strin
   if (ask) return { asked: [ask[2].trim()], whole: true };
   const direction = DIRECTION_OPTIONS.exec(text);
   if (direction) return { asked: [`${direction[2].trim()}: ${direction[3].trim()}`], whole: true };
-  const more = MORE_LIKE.exec(text);
-  if (more) return more[4] ? { asked: more[4].split('\n\n').map(unquoted), whole: true } : { asked: [], whole: false };
+  // What to change, from Like this, but…, is the latest thing asked: it goes on with what came before.
+  const more = MORE_LIKE.exec(text)?.groups;
+  if (more) return { asked: [...(more.asked ? more.asked.split('\n\n').map(unquoted) : []), ...(more.but ? [unquoted(more.but)] : [])], whole: !!more.asked };
   if (text === OPTIONS_AGAIN_PROMPT || text === OPTIONS_AGAIN_THREE) return { asked: [], whole: false };
   return { asked: text ? [text] : [], whole: selected };
 }

@@ -63,6 +63,9 @@ describe('how a request from the selection bar is getting on', () => {
     // More like this, then More like this from those: the ask goes along each time.
     const more1 = [...typed, selected('u3', moreLikePrompt(option, 3, optionsAskedFor(typed, 'a2'))), about(said('a3', THREE), 'p1')];
     expect(optionsAskedFor(more1, 'a3')).toEqual(['Shorter', 'Less formal, too']);
+    // Like this, but…: what to change goes on with the ask, to the next More like this.
+    const but = [...more1, selected('u4', moreLikePrompt(option, 3, optionsAskedFor(more1, 'a3'), 'Keep the last line')), about(said('a4', THREE), 'p1')];
+    expect(optionsAskedFor(but, 'a4')).toEqual(['Shorter', 'Less formal, too', 'Keep the last line']);
     // One sent before it carried the ask (0.10.0) goes back further for it.
     const older = [...bar, selected('u3', moreLikePrompt(option)), about(said('a3', THREE), 'p1')];
     expect(optionsAskedFor(older, 'a3')).toEqual(['Shorter']);

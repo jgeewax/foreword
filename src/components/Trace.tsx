@@ -559,6 +559,8 @@ function OptionsReply({ item }: { item: AssistantItem }) {
   const parsed = useMemo(() => parseOptions(item.text), [item.text]);
   const { target, applied, conflict, unplaced } = item.options!;
   const [view, setView] = useState<OptionsView>(lastOptionsView);
+  // Like this, but…: the option it's open under, and what's typed so far.
+  const [steer, setSteer] = useState<{ index: number; text: string } | null>(null);
   const optionCount = useStore(studio.store, (s) => s.settings.optionCount);
   if (!parsed.options.some((o) => o.text != null)) {
     return (
@@ -679,12 +681,60 @@ function OptionsReply({ item }: { item: AssistantItem }) {
                   <button disabled={!item.done || !o.complete || o.text == null} title={`${optionCount === 1 ? 'A new option that starts' : `${optionCount} new options that start`} from this one and take it further`} onClick={() => void studio.moreLikeOption(item.id, i)}>
                     More like this
                   </button>
+                  <button
+                    aria-expanded={steer?.index === i}
+                    disabled={!item.done || !o.complete || o.text == null}
+                    title={`Say what to change, and ${optionCount === 1 ? 'a new option starts' : `${optionCount} new options start`} from this one with that changed`}
+                    onClick={() => setSteer(steer?.index === i ? null : { index: i, text: '' })}
+                  >
+                    Like this, but…
+                  </button>
                   <button disabled={!o.complete || o.text == null} onClick={() => copyText(o.text ?? '')}>
                     Copy
                   </button>
                 </>
               )}
             </div>
+            {steer?.index === i && !empty && (
+              <form
+                className="option-steer"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const but = steer.text.trim();
+                  if (!but || !item.done) return;
+                  setSteer(null);
+                  void studio.moreLikeOption(item.id, i, but);
+                }}
+              >
+                <label htmlFor={`steer-${item.id}-${i}`}>Like Option {o.n}, but…</label>
+                <textarea
+                  id={`steer-${item.id}-${i}`}
+                  rows={2}
+                  value={steer.text}
+                  autoFocus
+                  placeholder="What’s wrong with it, or what to change: shorter, less formal, keep the last line…"
+                  onChange={(e) => setSteer({ index: i, text: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setSteer(null);
+                    }
+                  }}
+                />
+                <div className="option-steer-actions">
+                  <button type="button" className="small" onClick={() => setSteer(null)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="small primary" disabled={!steer.text.trim() || !item.done}>
+                    Write {optionCount} more
+                  </button>
+                </div>
+              </form>
+            )}
             {conflict?.index === i && <OptionConflictNote id={item.id} conflict={conflict} />}
           </div>
         );

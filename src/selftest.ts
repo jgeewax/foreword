@@ -2800,6 +2800,44 @@ async function optionsLiveChecks() {
     };
     await use(2);
     out.moreLikeThisUsed = { inPlace: !!options3[2]?.text && model.getLineContent(line + 1) === options3[2].text };
+    // Like this, but… on the second of those: a box for what to change, Escape closes it, Enter sends it.
+    const butButton = () => [...(lastReply()?.querySelectorAll('.option-card')[1]?.querySelectorAll<HTMLButtonElement>('.option-actions button') ?? [])].find((b) => b.textContent === 'Like this, but…');
+    const steerBox = () => lastReply()?.querySelector<HTMLTextAreaElement>('.option-card .option-steer textarea') ?? null;
+    butButton()?.click();
+    await sleep(200);
+    const opened = { found: !!butButton(), expanded: butButton()?.getAttribute('aria-expanded'), box: !!steerBox(), focused: document.activeElement === steerBox(), label: lastReply()?.querySelector('.option-steer label')?.textContent };
+    steerBox()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(200);
+    const closedByEscape = !steerBox();
+    butButton()?.click();
+    await sleep(200);
+    const box = steerBox();
+    if (box) {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'Make it a question.');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(100);
+      steerBox()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    }
+    await waitFor(() => studio.state.agent.running, 30000, 'like this, but to start').catch(() => {});
+    await waitFor(() => !studio.state.agent.running, 180000, 'like this, but').catch(() => {});
+    await sleep(500);
+    const steered = [...studio.state.agent.items].reverse().find((i) => i.kind === 'user') as { text: string; attachments: string[] } | undefined;
+    const fourth = replyOf();
+    const options4 = fourth && fourth !== third ? parseOptions(fourth.text).options : [];
+    out.likeThisBut = {
+      opened,
+      closedByEscape,
+      boxGoneAfterSending: !document.querySelector('.option-steer'),
+      shown: [...document.querySelectorAll('.msg.user.by-button .step-verb')].at(-1)?.textContent,
+      row: [...document.querySelectorAll('.msg.user.by-button .user-action-rows li')].at(-1)?.textContent,
+      carriesOption: !!options3[1]?.text && !!steered?.text.includes(options3[1].text),
+      // The follow-up went with the passage selected, so it's the ask now.
+      carriesAsk: !!steered?.text.includes('What I asked for:\n\n> Even shorter, please.') && !steered.text.includes('> Shorter'),
+      carriesChange: !!steered?.text.includes('What to change about it:\n\n> Make it a question.'),
+      samePassage: !!fourth && fourth !== third && fourth.options.passage === first?.options?.passage,
+      options: options4.map((o) => o.text),
+      allQuestions: options4.length > 0 && options4.every((o) => /\?\W*$/.test(o.text?.trim() ?? '')),
+    };
   } finally {
     await ipc.fsWrite(file, original, await ipc.fsHash(file));
     await studio.reloadFromDisk(file);

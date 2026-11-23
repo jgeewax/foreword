@@ -76,6 +76,17 @@ describe('what a button asked for, read back from its message', () => {
     expect(optionsAsked(aimed, true)).toEqual({ asked: ['More vivid', 'Less formal\n\nand > shorter'], whole: true });
     expect(moreLikePrompt({ n: 1, label: '', text: 'A.' }, 3, ['Shorter'])).toContain('\n\nWhat I asked for:\n\n> Shorter\n\nOption 1 was:');
     expect(optionsAsked(moreLikePrompt({ n: 1, label: '', text: 'A.' }), true)).toEqual({ asked: [], whole: false });
+    // Like this, but…: what to change goes with it, quoted, and is shown instead of the label.
+    const but = moreLikePrompt({ n: 2, label: 'Warmer', text: 'She smiled.\n```' }, 3, ['More vivid'], ' Too sweet.\n\nKeep > the smile ');
+    expect(but).toMatch(/^Three more options like Option 2 \(“Warmer”\), but changed as I say\. That one is closest to what I want, but not right yet: .*make the change I describe below/);
+    expect(but).toContain("They're still for what I asked, and replace the selected passage, as before.\n\nWhat to change about it:\n\n> Too sweet.\n>\n> Keep > the smile\n\nWhat I asked for:\n\n> More vivid\n\nOption 2 was:\n\n````typst\nShe smiled.\n```\n````");
+    expect(stockAction(but)).toMatchObject({ verb: 'Three more like Option 2, but', rows: [{ text: 'Too sweet.\n\nKeep > the smile' }], mode: 'options' });
+    expect(messageLine(moreLikePrompt({ n: 1, label: '', text: 'A.' }, 1, [], 'shorter'))).toBe('One more like Option 1, but: “shorter”');
+    // It's the latest thing asked: it goes after the ask, and with nothing carried, the messages before it count too.
+    expect(optionsAsked(but, true)).toEqual({ asked: ['More vivid', 'Too sweet.\n\nKeep > the smile'], whole: true });
+    expect(optionsAsked(moreLikePrompt({ n: 1, label: '', text: 'A.' }, 3, [], 'shorter'), true)).toEqual({ asked: ['shorter'], whole: false });
+    // Blank, it's More like this.
+    expect(moreLikePrompt({ n: 1, label: '', text: 'A.' }, 3, [], '  ')).toBe(moreLikePrompt({ n: 1, label: '', text: 'A.' }));
     expect(optionsAsked(optionsPrompt('Shorter', 2), true)).toEqual({ asked: ['Shorter'], whole: true });
     expect(optionsAsked(OPTIONS_AGAIN_PROMPT, true)).toEqual({ asked: [], whole: false });
     expect(optionsAsked(' Make it rhyme ', false)).toEqual({ asked: ['Make it rhyme'], whole: false });
