@@ -63,7 +63,8 @@ import { initialProofing, Proofing, type ProofingState } from './proofing';
 import { bookLanguage, checkable, languageName, PROOFING_KEYS, proofOptions } from './proofing-core';
 import { History, initialHistory, type ChangedFile, type HistoryState } from './history';
 import { proseDiff } from './prose-diff';
-import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from './view-tabs';
+import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab, TODO_TAB } from './view-tabs';
+import { todoKey, type BookChapter, type TodoRef, type TodoScope } from './todo-tab';
 import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { makefile } from '../templates/makefile';
@@ -86,7 +87,7 @@ import { headingPath, headings } from '../editor/outline';
 import { turnsOf } from './trace';
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
-import { parseTodos, todoPrompt, withoutTodo, type Todo } from './todos';
+import { parseTodos, restoreTodo, takeOutTodo, todoAt, todoPrompt, type DoneTodo, type Todo } from './todos';
 import { asksTaskDone, AUTHOR_EDIT_CHIP, contextTokens, endedAway, itemsFromContext, keptItems, mergeTasks, readKeptChat, readsFromContext, readTaskRecords, TASK_INSTRUCTIONS, TASK_INSTRUCTIONS_KEY, withLatestTurn, withoutMarker, type KeptChat, type ListedConversation, type TaskRecord, type TaskSummary } from './tasks';
 import { chatSoFar, fromModeSetups, readModeSetups, readSetup, sameSetup, setupLine, setupOf, type ModeSetup, type Setups } from './mode-setups';
 import { EARLIER_CHIP } from '../services/agent/message-context';
@@ -541,6 +542,12 @@ export type StudioState = {
   /** TODOs left in the book's files. */
   todos: Todo[];
   /**
+   * The To do tab: the book's TODOs or one chapter's (`chapter`: the one
+   * picked above the list; null, the one being written in), the one picked,
+   * and those marked done there, struck through until the tab is left.
+   */
+  todoTab: { scope: TodoScope; chapter: string | null; selected: TodoRef | null; done: DoneTodo[] };
+  /**
    * Review comments (beside the text, in .foreword/review.json), and the one
    * being written in the editor (a passage of the open file).
    */
@@ -671,6 +678,7 @@ const initialState: StudioState = {
   git: initialGit,
   code: initialCode,
   todos: [],
+  todoTab: { scope: 'chapter', chapter: null, selected: null, done: [] },
   review: { comments: [], draft: null, busy: [] },
   previewFile: null,
   previewScope: 'book',
@@ -839,6 +847,8 @@ export class Studio {
     'toggle-pane': [pane: 'explorer' | 'preview' | 'agent'];
     /** ⌘P, ⇧⌘P or ⌃R, pressed again while the box is open: it starts over in that mode. */
     'quick-open': [mode: QuickOpenMode];
+    /** Next or Previous TODO while the To do tab is in front: the next row in its list (1) or the one before (-1). */
+    'todo-tab-move': [step: 1 | -1];
   }>();
   readonly perf = new PerfTracker();
   readonly typst = new TypstService();
@@ -1194,6 +1204,7 @@ export class Studio {
     'show-history': () => this.revealSidebar('history'),
     'show-tasks': () => this.showTasks(),
     'show-git': () => this.revealSidebar('git'),
+    'show-todo-tab': () => this.openTodoTab(),
     'show-in-preview': () => this.syncPreviewToCursor(),
     'show-spelling': () => this.revealSidebar('spelling'),
     'zoom-in': () => this.zoom('in', 'menu'),
@@ -2608,25 +2619,139 @@ export class Studio {
     this.store.set({ todos: [...this.todoFiles.values()].flat() });
   }
 
-  /** "Done": remove the TODO comment (undoable in the editor, and kept in History). */
-  async todoDone(todo: Todo) {
-    let removed = false;
+  /**
+   * "Done": remove the TODO comment (undoable in the editor, and kept in
+   * History). Done in the To do tab, its row stays there, struck through with
+   * Undo, until the tab is left. Returns how to put it back (null: not taken out).
+   */
+  async todoDone(todo: Todo): Promise<DoneTodo | null> {
+    const taken: { done: DoneTodo | null } = { done: null };
     try {
       await this.editFile(todo.path, (text) => {
-        const lines = text.split('\n');
-        const line = lines[todo.line - 1];
-        const next = line === undefined ? null : withoutTodo(line, todo);
-        if (next === null) return text;
-        removed = true;
-        if (next === '') lines.splice(todo.line - 1, 1);
-        else lines[todo.line - 1] = next;
-        return lines.join('\n');
+        const out = takeOutTodo(text, todo);
+        taken.done = out?.done ?? null;
+        return out?.text ?? text;
       });
     } catch (e) {
-      return this.toast(`Couldn't update ${todo.path}: ${errorMessage(e)}`, 'error');
+      this.toast(`Couldn't update ${todo.path}: ${errorMessage(e)}`, 'error');
+      return null;
     }
-    if (!removed) this.toast('Remove this one in the editor (it isn’t a // TODO comment).', 'error');
+    const { done } = taken;
+    if (!done) this.toast('Remove this one in the editor (it isn’t a // TODO comment).', 'error');
+    else if (this.state.viewTab === TODO_TAB) {
+      this.store.set((s) => ({ todoTab: { ...s.todoTab, done: [...s.todoTab.done.filter((d) => todoKey(d.todo) !== todoKey(todo)), done] } }));
+    }
     await this.scanTodos();
+    return done;
+  }
+
+  /** Undo on a TODO the To do tab marked done: the comment back where it was (⌘Z in the editor does it too). */
+  async todoUndo(done: DoneTodo) {
+    const put = { back: false };
+    try {
+      await this.editFile(done.todo.path, (text) => {
+        const next = restoreTodo(text, done);
+        put.back = next !== null;
+        return next ?? text;
+      });
+    } catch (e) {
+      return this.toast(`Couldn't update ${done.todo.path}: ${errorMessage(e)}`, 'error');
+    }
+    if (!put.back && !this.state.todos.some((t) => t.path === done.todo.path && t.text === done.todo.text)) {
+      return this.toast('The text around this TODO has changed since: use ⌘Z in the editor to put it back.', 'error');
+    }
+    this.store.set((s) => ({ todoTab: { ...s.todoTab, done: s.todoTab.done.filter((d) => d !== done), selected: done.todo } }));
+    await this.scanTodos();
+  }
+
+  /**
+   * The To do tab, in front: the book's TODOs, or a chapter's: the one being
+   * written in, or `todo`'s when that's another (picked above the list).
+   * `todo` is picked; without one, the tab keeps what it had picked.
+   */
+  openTodoTab({ scope = 'chapter', todo }: { scope?: TodoScope; todo?: TodoRef } = {}) {
+    if (!this.state.workspace) return;
+    let chapter: string | null = null;
+    if (todo && scope === 'chapter') {
+      // A TODO in another chapter than the one being written in: that chapter, picked (a file in none: itself).
+      const { here, chapterOf } = this.todoBook();
+      const its = chapterOf(todo.path) ?? todo.path;
+      if (its !== (here ?? this.state.active)) chapter = its;
+    }
+    this.store.set((s) => ({ todoTab: { ...s.todoTab, scope, chapter, selected: todo ?? s.todoTab.selected } }));
+    this.openViewTab(TODO_TAB);
+  }
+
+  /** The To do tab: show the book's TODOs or a chapter's, or pick a TODO (null: none). */
+  setTodoTab(patch: Partial<Pick<StudioState['todoTab'], 'scope' | 'chapter' | 'selected'>>) {
+    this.store.set((s) => ({ todoTab: { ...s.todoTab, ...patch } }));
+  }
+
+  /** The To do tab left (another tab in front, or closed): the TODOs marked done there lose their rows. */
+  leftTodoTab() {
+    if (this.state.todoTab.done.length) this.store.set((s) => ({ todoTab: { ...s.todoTab, done: [] } }));
+  }
+
+  /**
+   * The book's chapters for the To do tab, in order, each with its files (the
+   * chapter, then what it includes), and the one being written in. Without a
+   * main file that includes chapters, none: then a chapter is its file.
+   */
+  todoBook(): { chapters: BookChapter[]; here: string | null; chapterOf: (path: string) => string | null } {
+    // From what each file includes, read with the book's names (so it follows them: `names` changes with it).
+    const tree = (path: string, seen: Set<string>): string[] => {
+      if (seen.has(path)) return [];
+      seen.add(path);
+      return [path, ...(this.includeLines.get(path) ?? []).flatMap((x) => tree(x.file, seen))];
+    };
+    const chapters = this.state.names.chapters.map((path) => ({ path, files: tree(path, new Set()) }));
+    const chapterOf = (path: string) => chapters.find((c) => c.files.includes(path))?.path ?? null;
+    const active = this.state.active;
+    return { chapters, here: active ? chapterOf(active) : null, chapterOf };
+  }
+
+  /** The file the To do tab's editor shows (opened for it if it has no tab), kept open while it does. */
+  private todoPassage: string | null = null;
+
+  /** The open file for the To do tab's editor, opened for it if need be (null: it can't be read). */
+  async todoPassageDoc(path: string): Promise<Doc | null> {
+    const doc = await this.diffDoc(path);
+    if (doc && this.state.tabs.includes(TODO_TAB)) {
+      if (this.todoPassage !== path) this.scheduleDiffRelease();
+      this.todoPassage = path;
+    }
+    return doc;
+  }
+
+  /** The files the "what changed" tabs and the To do tab edit as they are now: kept open while they show them. */
+  private editedInViewTabs(): Set<string> {
+    const paths = this.liveDiffPaths();
+    if (this.todoPassage && this.state.tabs.includes(TODO_TAB)) paths.add(this.todoPassage);
+    return paths;
+  }
+
+  /**
+   * The next TODO in the chapter being written in, after the cursor (`back`:
+   * before it), round to the first again: in the To do tab, the next one in
+   * its list.
+   */
+  async nextTodo(back = false) {
+    if (this.state.viewTab === TODO_TAB) return this.events.emit('todo-tab-move', back ? -1 : 1);
+    const w = this.writer();
+    const path = w?.path ?? this.state.active;
+    if (!path) return;
+    const files = await this.chapterFiles(path);
+    const order = (t: Todo) => files.indexOf(t.path);
+    const list = this.state.todos.filter((t) => files.includes(t.path)).sort((a, b) => order(a) - order(b) || a.line - b.line);
+    if (!list.length) return this.toast('No TODOs in this chapter.');
+    const line = w?.editor.getPosition()?.lineNumber ?? 0;
+    const here = files.indexOf(path);
+    const after = (t: Todo) => order(t) > here || (t.path === path && t.line > line);
+    const before = (t: Todo) => order(t) < here || (t.path === path && t.line < line);
+    const target = back ? ([...list].reverse().find(before) ?? list[list.length - 1]) : (list.find(after) ?? list[0]);
+    const text = (await this.textOf(target.path)) ?? '';
+    const at = todoAt(text.split('\n')[target.line - 1] ?? '', target.path, target.line);
+    await this.openAt(target.path, target.line, at?.from ?? 1);
   }
 
   /**
@@ -3625,7 +3750,8 @@ export class Studio {
     this.composerDraft = '';
     this.setAgent({ files: [] });
     this.code.reset();
-    this.store.set({ todos: [], review: { comments: [], draft: null, busy: [] }, previewFile: null, previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
+    this.todoPassage = null;
+    this.store.set({ todos: [], todoTab: { scope: 'chapter', chapter: null, selected: null, done: [] }, review: { comments: [], draft: null, busy: [] }, previewFile: null, previewChapter: null, bookPages: null, compile: { status: 'idle' }, snippetBook: null });
     await this.history.stop();
     this.git.reset();
     this.unsubscribeAgent?.();
@@ -3856,6 +3982,11 @@ export class Studio {
     if (key === HISTORY_TAB) this.history.closeChanges();
     if (key === HISTORY_FILE_TAB) this.history.closeDiff();
     if (key === GIT_TAB) this.git.closeView();
+    if (key === TODO_TAB) {
+      this.todoPassage = null;
+      this.leftTodoTab();
+      this.scheduleDiffRelease();
+    }
     const next = tabs[tabs.length - 1];
     if (front && next) this.activate(next);
   }
@@ -3916,7 +4047,7 @@ export class Studio {
     const { git, history } = this.state;
     // Still loading: what it will show isn't known yet.
     if (git.view?.files === null || history.changes?.files === null) return;
-    const shown = this.liveDiffPaths();
+    const shown = this.editedInViewTabs();
     const kept: string[] = [];
     for (const path of this.diffDocs) {
       if (shown.has(path)) continue;
@@ -3952,6 +4083,7 @@ export class Studio {
   /** A "what changed" tab with unsaved words in a file it edits (its tab's ●). */
   viewTabDirty(key: string): boolean {
     const { git, history, dirty } = this.state;
+    if (key === TODO_TAB) return !!this.todoPassage && !!dirty[this.todoPassage];
     const files = key === GIT_TAB ? git.view?.files : key === HISTORY_TAB ? history.changes?.files : null;
     return !!files?.some((f) => f.live && dirty[f.path]);
   }
@@ -4010,8 +4142,8 @@ export class Studio {
       if (!discard) return;
     }
     const tabs = this.state.tabs.filter((t) => t !== path);
-    if (this.liveDiffPaths().has(path)) {
-      // A "what changed" tab edits it too: the text stays open there, as it is on disk.
+    if (this.editedInViewTabs().has(path)) {
+      // A "what changed" tab (or the To do tab) edits it too: the text stays open there, as it is on disk.
       if (this.state.dirty[path]) await this.docs?.reload(path);
       this.diffDocs.add(path);
     } else {

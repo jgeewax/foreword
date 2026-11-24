@@ -5,6 +5,7 @@
 // assistant's button; each other mode is a choice of its own.
 import { studio } from '../app/studio';
 import { removable, type Todo } from '../app/todos';
+import { TODO_TAB } from '../app/view-tabs';
 import type { MenuEntry } from '../lib/context-menu';
 import type { AgentMode } from '../services/agent/modes';
 
@@ -28,12 +29,14 @@ export function otherTodoWays(todo: Todo, then?: () => void): MenuEntry[] {
   }));
 }
 
-/** Ask the assistant to do it (a FIXME: fix it), the other ways, and Mark as Done. */
+/** Ask the assistant to do it (a FIXME: fix it), the other ways, Mark as Done, and the To do tab at it (unless that's where it is). */
 export function todoMenu(todo: Todo, fix = false): MenuEntry[] {
   const ready = studio.state.agent.status === 'ready';
   return [
     ready && { label: fix ? 'Fix This with the Assistant' : 'Do This TODO with the Assistant', action: () => void studio.askTodo(todo) },
     ready && { label: 'Other Ways with the Assistant', items: otherTodoWays(todo) },
     removable(todo) && { label: 'Mark as Done', action: () => void studio.todoDone(todo) },
+    studio.state.viewTab !== TODO_TAB && 'separator',
+    studio.state.viewTab !== TODO_TAB && { label: 'Show in To Do Tab', action: () => studio.openTodoTab({ todo }) },
   ];
 }

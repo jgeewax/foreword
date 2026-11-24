@@ -13,6 +13,7 @@ import { studio, type ChatItem } from './app/studio';
 import type { TaskSummary } from './app/tasks';
 import { chapterNumber } from './app/tool-labels';
 import { todoPrompt } from './app/todos';
+import { TODO_TAB } from './app/view-tabs';
 import { handleMcp, pngSize } from './app/studio-tools';
 import { monaco } from './editor/monaco';
 import { barMessage } from './app/selection-bar';
@@ -5346,7 +5347,7 @@ async function todoChecks(withAgent: boolean) {
   await sleep(800);
   out.fromBuffer = studio.state.todos.map((t) => `${t.path}:${t.line} ${t.kind} ${t.text}`);
   await studio.save();
-  out.status = document.querySelector('.statusbar .indicator[title="TODOs left in the book"]')?.textContent;
+  out.status = document.querySelector('.statusbar .indicator[title^="TODOs left in the book"]')?.textContent;
   studio.showSidebar('todos');
   studio.newSession();
   await sleep(400);
@@ -5402,6 +5403,161 @@ async function todoChecks(withAgent: boolean) {
   await ipc.fsWrite(other, otherOriginal, await ipc.fsHash(other));
   await sleep(500);
   studio.showSidebar('files');
+  return out;
+}
+
+/**
+ * The To do tab: a chapter's TODOs by section beside the chapter's own text,
+ * ↓ moving through them, Done keeping its row (struck, with Undo), Undo
+ * putting it back, typing there typing in the file, Book | Chapter, a file
+ * opened only for it closed with it, and the ways in (the TODO's bar, the
+ * status bar, the sidebar's header, Next TODO).
+ */
+async function todoTabChecks() {
+  const out: Record<string, unknown> = {};
+  const ch1 = 'chapters/ch1-vectors.typ';
+  const ch2 = 'chapters/ch2-eigenvalues.typ';
+  const originals: Record<string, string> = { [ch1]: (await ipc.fsRead(ch1)).text, [ch2]: (await ipc.fsRead(ch2)).text };
+  const insertAfter = (text: string, heading: string, line: string) => {
+    const lines = text.split('\n');
+    lines.splice(lines.findIndex((l) => l.startsWith(heading)) + 1, 0, line);
+    return lines.join('\n');
+  };
+  const text1 = insertAfter(insertAfter(originals[ch1], '= Vectors', '// TODO: say what a vector is before the arrows'), '== Inner products', '// FIXME check the sign in the example');
+  const text2 = insertAfter(originals[ch2], '= Eigenvalues', '// TODO: name the matrix in the first example');
+  const put = async (path: string, text: string) => {
+    await ipc.fsWrite(path, text, await ipc.fsHash(path));
+    if (studio.docs?.get(path)) await studio.docs.reload(path);
+  };
+  await put(ch1, text1);
+  await put(ch2, text2);
+  if (studio.state.tabs.includes(ch2)) await studio.closeTab(ch2);
+  await studio.openFile(ch1);
+  await studio.scanTodos();
+  const lineOf = (text: string, words: string) => text.split('\n').findIndex((l) => l.includes(words)) + 1;
+  const todoLine = lineOf(text1, 'say what a vector');
+  const fixLine = lineOf(text1, 'check the sign');
+  const texts = () => [...document.querySelectorAll('.todo-tab-row .todo-tab-text')].map((e) => e.textContent);
+  const passage = () => monaco.editor.getEditors().find((e) => e.getContainerDomNode().closest('.todo-tab-editor'));
+  const passageState = () => {
+    const p = passage();
+    return {
+      file: p ? studio.fileOf(p.getModel()) : null,
+      line: p?.getPosition()?.lineNumber,
+      bar: [...document.querySelectorAll('.todo-tab-editor .todo-hover button')].map((b) => b.textContent || b.getAttribute('aria-label')),
+    };
+  };
+  try {
+    // From the sidebar's header: the chapter being written in.
+    studio.showSidebar('todos');
+    await sleep(300);
+    (document.querySelector('.explorer .pane-action[aria-label="Open in a Tab"]') as HTMLElement | null)?.click();
+    await waitFor(() => document.querySelector('.todo-tab-row'), 5000, 'todo tab');
+    await sleep(600);
+    out.chapter = {
+      tab: [...document.querySelectorAll('.tabs .tab.active .tab-name')].map((e) => e.textContent),
+      scope: [...document.querySelectorAll('.todo-tab-scope button')].map((b) => `${b.textContent}${b.classList.contains('active') ? ' *' : ''}`),
+      picker: document.querySelector('.todo-tab-chapter')?.textContent,
+      hint: document.querySelector('.todo-tab-hint')?.textContent,
+      groups: [...document.querySelectorAll('.todo-tab-group-title')].map((e) => e.textContent),
+      rows: texts(),
+      near: [...document.querySelectorAll('.todo-tab-row .todo-tab-near')].map((e) => e.textContent),
+      lines: [...document.querySelectorAll('.todo-tab-row .todo-tab-line')].map((e) => e.textContent),
+      rest: document.querySelector('.todo-tab-rest')?.textContent,
+      expect: { todoLine, fixLine },
+    };
+    out.passage = { ...passageState(), sameModel: passage()?.getModel() === studio.docs?.get(ch1)?.model, tabs: [...document.querySelectorAll('.tabs .tab .tab-name')].map((e) => e.textContent) };
+    // Monaco draws on animation frames, which a window behind others doesn't get.
+    passage()?.render(true);
+    await sleep(100);
+    out.snapshot = await snap('todotab');
+
+    // ↓ picks the next one, and the chapter beside it follows.
+    const list = document.querySelector('.todo-tab-groups') as HTMLElement;
+    list.focus();
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await sleep(500);
+    out.afterDown = { picked: document.querySelector('.todo-tab-row.picked .todo-tab-text')?.textContent, ...passageState() };
+
+    // Done: the FIXME goes from the text, its row stays (struck, with Undo), nothing moves.
+    const heights = () => [...document.querySelectorAll('.todo-tab-row')].map((r) => Math.round(r.getBoundingClientRect().height));
+    const before = heights();
+    (document.querySelector('.todo-tab-row.picked .todo-check') as HTMLElement).click();
+    await waitFor(() => document.querySelector('.todo-tab-row.done'), 5000, 'done row');
+    await sleep(300);
+    out.done = {
+      rows: texts(),
+      doneRow: document.querySelector('.todo-tab-row.done .todo-tab-text')?.textContent,
+      undo: !!document.querySelector('.todo-tab-row.done .todo-tab-undo'),
+      sameHeights: heights().join() === before.join(),
+      fixmeInText: (await studio.textOf(ch1))?.includes('FIXME'),
+      sum: document.querySelector('.todo-tab-sum')?.textContent,
+    };
+    (document.querySelector('.todo-tab-row.done .todo-tab-undo') as HTMLElement).click();
+    await waitFor(() => !document.querySelector('.todo-tab-row.done'), 5000, 'undone');
+    await sleep(300);
+    out.undone = { rows: texts(), backAsItWas: (await studio.textOf(ch1)) === text1, picked: document.querySelector('.todo-tab-row.picked .todo-tab-text')?.textContent };
+
+    // Typing beside the list is typing in the file (its tab's ●), and ⌘Z there takes it back.
+    const p = passage()!;
+    p.focus();
+    p.setPosition({ lineNumber: todoLine, column: 1 });
+    p.trigger('selftest', 'type', { text: 'X' });
+    await sleep(300);
+    out.typed = { dirty: !!studio.state.dirty[ch1], dot: !!document.querySelector('.tab.active .tab-close.dirty'), inFile: studio.docs?.get(ch1)?.model.getLineContent(todoLine).startsWith('X//'), picked: document.querySelector('.todo-tab-row.picked .todo-tab-text')?.textContent };
+    p.trigger('selftest', 'undo', null);
+    await sleep(300);
+    out.typedUndone = { dirty: !!studio.state.dirty[ch1], text: studio.docs?.get(ch1)?.model.getValue() === text1 };
+
+    // Book: by chapter, the one being written in marked; another chapter's TODO opens its file for the tab alone.
+    (document.querySelector('.todo-tab-scope button') as HTMLElement).click();
+    await sleep(400);
+    out.book = {
+      groups: [...document.querySelectorAll('.todo-tab-group-title')].map((e) => e.textContent),
+      here: [...document.querySelectorAll('.todo-tab-group-head')].filter((g) => g.querySelector('.todo-tab-here')).map((g) => g.querySelector('.todo-tab-group-title')?.textContent),
+      rows: texts(),
+    };
+    const other = [...document.querySelectorAll('.todo-tab-row')].find((r) => r.textContent?.includes('name the matrix')) as HTMLElement | undefined;
+    other?.click();
+    await waitFor(() => passageState().file === ch2, 8000, 'the other chapter beside the list').catch(() => {});
+    await sleep(300);
+    out.otherChapter = { ...passageState(), picked: document.querySelector('.todo-tab-row.picked .todo-tab-text')?.textContent, ch2Tab: studio.state.tabs.includes(ch2), ch2Open: !!studio.docs?.get(ch2) };
+    passage()?.render(true);
+    await sleep(100);
+    out.bookSnapshot = await snap('todotab-book');
+    await studio.closeTab(TODO_TAB);
+    await sleep(400);
+    out.closed = { tabs: studio.state.tabs.filter((t) => t.startsWith('view:')), ch2Open: !!studio.docs?.get(ch2), done: studio.state.todoTab.done.length };
+
+    // The TODO's bar in the editor: this chapter's, in the tab, at that TODO.
+    await studio.openAt(ch1, fixLine, 4);
+    await sleep(700);
+    const all = document.querySelector('.editor-host .todo-hover .todo-hover-all') as HTMLElement | null;
+    out.fromBar = { label: all?.textContent };
+    all?.click();
+    await sleep(500);
+    out.fromBar = { ...(out.fromBar as object), front: studio.state.viewTab, scope: studio.state.todoTab.scope, picked: document.querySelector('.todo-tab-row.picked .todo-tab-text')?.textContent };
+    // The status bar: the book's.
+    (document.querySelector('.statusbar .indicator[title^="TODOs left in the book"]') as HTMLElement | null)?.click();
+    await sleep(400);
+    out.fromStatus = { scope: studio.state.todoTab.scope, active: document.querySelector('.todo-tab-scope button.active')?.textContent };
+    // Next TODO, from the tab: the next row; from the editor: the next TODO after the cursor.
+    await studio.nextTodo();
+    await sleep(300);
+    out.nextInTab = document.querySelector('.todo-tab-row.picked .todo-tab-text')?.textContent;
+    await studio.closeTab(TODO_TAB);
+    await studio.openAt(ch1, 1, 1);
+    await studio.nextTodo();
+    const first = studio.editor?.getPosition()?.lineNumber;
+    await studio.nextTodo();
+    out.nextInEditor = { first, second: studio.editor?.getPosition()?.lineNumber, expect: [todoLine, fixLine] };
+  } finally {
+    if (studio.state.tabs.includes(TODO_TAB)) await studio.closeTab(TODO_TAB);
+    await put(ch1, originals[ch1]);
+    await put(ch2, originals[ch2]);
+    await studio.scanTodos();
+    studio.showSidebar('files');
+  }
   return out;
 }
 
@@ -12549,6 +12705,10 @@ export async function runSelftest(launch: LaunchOptions) {
     if (launch.selftestEdits && want('todos')) {
       log('todos');
       result.todos = await todoChecks(launch.selftestAgent);
+    }
+    if (launch.selftestEdits && want('todotab')) {
+      log('todotab');
+      result.todotab = await todoTabChecks();
     }
     if (want('selection')) {
       log('selection');

@@ -9,7 +9,8 @@ import { headings, type Heading } from '../editor/outline';
 import { keepWidgetsInside } from '../editor/overflow-widgets';
 import { labelUrisInBook } from '../editor/uri-labels';
 import { onContextMenu } from '../lib/context-menu';
-import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab } from '../app/view-tabs';
+import { GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab, TODO_TAB } from '../app/view-tabs';
+import { TodoTab } from './TodoTab';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GitChanges } from './GitChanges';
 import { HistoryChanges } from './HistoryChanges';
@@ -51,6 +52,7 @@ function useViewTabLabel(): (key: string) => { name: string; icon: IconName; tit
     }
     if (key === HISTORY_FILE_TAB && diff) return { name: `${basename(diff.path)} (${diff.version.label})`, icon: 'history', title: `${diff.path}: what changed in “${diff.version.label}”` };
     if (key === GIT_TAB && git) return { name: git.title, icon: 'branch', title: `${git.title} · ${git.subtitle}` };
+    if (key === TODO_TAB) return { name: 'To do', icon: 'todos', title: 'The TODOs left in the book, beside the text they’re in' };
     return { name: 'Typst basics', icon: 'help', title: 'Typst basics' };
   };
 }
@@ -352,6 +354,7 @@ export function EditorPane() {
       {viewTab === HISTORY_TAB && <HistoryChanges />}
       {viewTab === HISTORY_FILE_TAB && <HistoryDiff />}
       {viewTab === GIT_TAB && <GitChanges />}
+      {viewTab === TODO_TAB && <TodoTab />}
       {!front && <div className="empty-hint">Open a file from the explorer.</div>}
     </section>
   );

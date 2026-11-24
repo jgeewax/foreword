@@ -5376,6 +5376,73 @@ no cards and no buttons.
   export lands beside the file; a rename follows, a trash goes back to the
   book; Chapter from a file shows the chapter.
 
+### The To do tab (2026-11-24)
+
+- **Asked for:** "todo's need to be easier to navigate. right now its just a
+  narrow side bar... i think that we shoudl be able to open a tab that has
+  the todo items for the current chapter, etc." Mockup first (a Design
+  canvas); the author's answers: no bulk resolution (the mockup's "Do all 5
+  with the assistant" went), the text beside the list is editable, the
+  scopes are Book and Chapter only, and NOTE/IDEA/QUESTION comments stay out
+  until decided.
+- **Now:** a tab like History's (`view:todos`, TodoTab.tsx, logic in
+  todo-tab.ts), not reopened at launch, ⌘W closes it.
+  - Above the list: Book | Chapter (the preview's switch, in its order;
+    Chapter by default), each with its count. Chapter is the chapter being
+    written in (the file in the editor; with no chapters, that file), or
+    one picked from the chapter button's menu, which has "The Chapter You're
+    Writing In" first. TODO and FIXME chips hide either kind; a filter box
+    looks in the TODO's words and the line it sits by. They're kept for
+    the session, in sight above the list.
+  - The list: in Chapter, by the heading each TODO is under (the chapter's
+    own title before its first section; an included file's after it); in
+    Book, by chapter in the book's order ("You're here" on the one being
+    written in), then the files in none (the main file, notes). Each row
+    has the TODO, a FIXME label, the book's line it sits by (markup read as
+    text, in the book's serif; code as written, in the code font) and its
+    line number. ↑ ↓, Home and End move through it, ⏎ (or a double-click)
+    opens the TODO in its file's tab, and its menu is the TODO's (Ask, the
+    other ways, Mark as Done).
+  - Beside it, the file's own text in an editor of its own, at the TODO
+    picked, with the editor's tools: the TODO's bar (Ask, Done) shows above
+    it while the list has the keys, and typing there is typing in the file
+    (its undo, ⌘S, and the tab's ● while it's unsaved). A click on another
+    TODO's line there picks it in the list; while it has the keys, the
+    list's moves (a TODO's words being typed) don't move the text. A file
+    with no tab is opened for it as for a diff's live side, and closed with
+    the tab (or given a tab of its own if it has unsaved words).
+  - Done takes the comment out at once but keeps its row, struck through,
+    with Undo in the line number's place, until the tab is left: nothing
+    moves under the pointer. Undo puts the line back between the lines it
+    was between, nearest where it was (`restoreTodo`), so it still works
+    after typing above it; ⌘Z in the text does it too, and the struck row
+    then gives way to the TODO's own.
+  - Ways in, each saying where it lands (nothing remembered behind the
+    author's back): the sidebar's To do header has Open in a Tab (the
+    chapter being written in) and a row's menu Show in To Do Tab (at that
+    TODO, its chapter picked if it's another); the TODO's bar in the editor
+    has "This chapter's N" in place of "All N TODOs" (the book's, when the
+    chapter has only that one); the status bar's "N to do" opens it at
+    Book; View ▸ To Do and the palette's Open To Do in a Tab. The palette
+    also has Next and Previous TODO in This Chapter, which move the cursor
+    in the editor (or the pick, in the tab). No new shortcut.
+- A TODO now knows whether it's a FIXME, the heading it's under and the line
+  it sits by (parseTodos); the chapters' files come from what each file
+  includes, read with the book's names, so the bar can count its chapter's
+  TODOs without reading the book.
+- **Verified:** unit tests (todo-tab.test.ts: grouping, filters, done rows,
+  finding the pick again, Undo after the lines move, the line shown), the
+  whole suite, typecheck. Self-test `todotab` on the sample book: the
+  sidebar's Open in a Tab opens the chapter being written in (Vectors and
+  Inner products, with the lines they sit by), the text beside it is the
+  file's own model at the TODO with its bar; ↓ moves both; Done takes the
+  FIXME out and the rows keep their heights, Undo puts the text back as it
+  was; typing there marks the file's tab unsaved and ⌘Z undoes it; Book
+  marks "You're here", and another chapter's TODO opens its file for the
+  tab alone, closed with the tab; the bar's "This chapter's 2", the status
+  bar (Book) and Next TODO in the tab and the editor. The `todos` group
+  still passes.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

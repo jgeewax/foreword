@@ -10,11 +10,20 @@ import { otherTodoWays } from './todo-menu';
 
 type Found = { todo: Todo; fix: boolean; from: number };
 
-/** What a TODO's bar offers: the To do list's own actions, in its icons. */
-function TodoActions({ found, close }: { found: Found; close: () => void }) {
+/**
+ * What a TODO's bar offers: the To do list's own actions, in its icons, and
+ * the To do tab with its chapter's TODOs (the book's, when it's the only one
+ * there); not in the tab's own editor (`inTab`), where the list is beside it.
+ */
+function TodoActions({ found, close, inTab }: { found: Found; close: () => void; inTab: boolean }) {
   const { todo, fix } = found;
   const ready = studio.state.agent.status === 'ready';
-  const left = studio.state.todos.length;
+  const todos = studio.state.todos;
+  const left = todos.length;
+  const { chapters, chapterOf } = studio.todoBook();
+  const chapter = chapterOf(todo.path);
+  const files = chapters.find((c) => c.path === chapter)?.files ?? [todo.path];
+  const here = todos.filter((t) => files.includes(t.path)).length;
   const run = (action: () => void) => () => {
     close();
     action();
@@ -39,12 +48,18 @@ function TodoActions({ found, close }: { found: Found; close: () => void }) {
           Done
         </button>
       )}
-      {left > 1 && (
-        <button className="todo-hover-all" title="The book’s TODOs, in the To do list" onClick={run(() => studio.revealSidebar('todos'))}>
-          <Icon name="todos" size={14} />
-          All {left} TODOs
-        </button>
-      )}
+      {!inTab &&
+        (here > 1 ? (
+          <button className="todo-hover-all" title={`${chapter ? 'This chapter’s' : 'This file’s'} TODOs, in the To do tab`} onClick={run(() => studio.openTodoTab({ todo }))}>
+            <Icon name="todos" size={14} />
+            {chapter ? 'This chapter’s' : 'This file’s'} {here}
+          </button>
+        ) : left > 1 ? (
+          <button className="todo-hover-all" title="The book’s TODOs, in the To do tab" onClick={run(() => studio.openTodoTab({ scope: 'book', todo }))}>
+            <Icon name="todos" size={14} />
+            The book’s {left}
+          </button>
+        ) : null)}
     </div>
   );
 }
@@ -67,9 +82,11 @@ const lineOf = (s: Shown) => `${s.found.todo.path}:${s.found.todo.line}`;
  * the cursor is on the TODO's line, and comes up when the pointer rests on
  * one. `visibleTop`, in a diff (as tall as its text): it may spill out of the
  * editor, and goes under its line where above it would be out of sight, under
- * the file's name (the page's y the text shows below). Returns its cleanup.
+ * the file's name (the page's y the text shows below). `inTab`, the To do
+ * tab's editor: the cursor's TODO (the one picked in the list) has its bar
+ * while the list has the keys too. Returns its cleanup.
  */
-export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor, { visibleTop }: { visibleTop?: () => number } = {}): () => void {
+export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor, { visibleTop, inTab = false }: { visibleTop?: () => number; inTab?: boolean } = {}): () => void {
   const node = document.createElement('div');
   // Clicks keep the editor's focus and selection.
   node.onmousedown = (e) => e.preventDefault();
@@ -97,7 +114,7 @@ export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor, { v
       shown ? { position: { lineNumber: shown.found.todo.line, column: shown.found.from }, preference: above(shown.found.todo.line) ? [ABOVE, BELOW] : [BELOW, ABOVE] } : null,
   };
   editor.addContentWidget(widget);
-  const bar = () => (shown ? <TodoActions found={shown.found} close={dismiss} /> : null);
+  const bar = () => (shown ? <TodoActions found={shown.found} close={dismiss} inTab={inTab} /> : null);
   const update = () => {
     const next = hovered ?? (caret && lineOf(caret) !== dismissed ? caret : null);
     if (next?.key === shown?.key) return;
@@ -106,11 +123,11 @@ export function attachTodoHover(editor: monaco.editor.IStandaloneCodeEditor, { v
     flushSync(() => root.render(bar()));
     editor.layoutContentWidget(widget);
   };
-  /** The cursor's TODO: with nothing selected (that's the selection bar's), while the editor has the keys. */
+  /** The cursor's TODO: with nothing selected (that's the selection bar's), while the editor has the keys (in the To do tab, either way). */
   const caretTodo = () => {
     const model = editor.getModel();
     const sel = editor.getSelection();
-    return model && sel && sel.isEmpty() && editor.hasTextFocus() ? todoOn(model, sel.positionLineNumber) : null;
+    return model && sel && sel.isEmpty() && (inTab || editor.hasTextFocus()) ? todoOn(model, sel.positionLineNumber) : null;
   };
   /** Moving onto a TODO's line: after a moment (not at each line the arrow keys pass), or at once (a click). */
   function followCaret(wait = 0) {

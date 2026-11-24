@@ -835,6 +835,66 @@ button.contents-row:hover:not(:disabled), .contents-row.chapter:hover { backgrou
 .todo-hover .todo-hover-done { --tone: var(--good); }
 .todo-hover .todo-hover-all { color: var(--muted); }
 .todo-hover .todo-hover-all:hover { color: var(--fg); }
+
+/* The To do tab (TodoTab.tsx): the book's TODOs, or a chapter's, beside the chapter at the one picked. */
+.todo-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+.todo-tab-head { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 42px; padding: 6px 12px 6px 14px; border-bottom: 1px solid var(--border); }
+.todo-tab-scope.kind-switch { margin-left: 0; flex: none; }
+.todo-tab-scope button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.todo-tab-count { font-size: 11px; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.todo-tab-chapter { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 320px; height: 24px; padding: 0 6px 0 10px; background: var(--bg); font-weight: 600; }
+.todo-tab-chapter-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-tab-chapter .icon-svg { flex: none; color: var(--muted); }
+.todo-tab-hint { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.todo-tab-kinds { display: flex; gap: 6px; }
+.todo-tab-kind { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 11px; background: transparent; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.todo-tab-kind.on { background: var(--bg); color: var(--fg); border-color: color-mix(in srgb, var(--muted) 45%, var(--border)); }
+.todo-tab-kind .todo-tab-count { font-weight: 400; }
+.todo-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: light-dark(#d4a017, #e3b341); opacity: 0.35; }
+.todo-tab-kind.kind-fix .todo-tab-dot { background: light-dark(#cf222e, #ff7b72); }
+.todo-tab-kind.on .todo-tab-dot { opacity: 1; }
+.todo-tab-search { width: 180px; padding-left: 7px; color: var(--muted); }
+.todo-tab-search input { padding-left: 5px; }
+.todo-tab-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(240px, 38%) minmax(0, 1fr); }
+.todo-tab-list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
+.todo-tab-sum { flex: none; height: 30px; display: flex; align-items: center; padding: 0 12px 0 16px; border-bottom: 1px solid var(--bg-3); font-size: 12px; color: var(--muted); }
+.todo-tab-groups { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 16px; outline: none; }
+.todo-tab-group-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 12px 4px 16px; font-size: 12px; }
+.todo-tab-group-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.todo-tab-group-file { color: var(--muted); font: 10.5px "SF Mono", Menlo, monospace; white-space: nowrap; }
+.todo-tab-here { flex: none; padding: 0 7px; border-radius: 9px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: 10.5px; font-weight: 600; line-height: 17px; }
+.todo-tab-group-count { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* A row keeps its shape: done only changes colours and the line (Undo in the line number's place). */
+.todo-tab-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 40px; column-gap: 10px; align-items: start; padding: 7px 10px 7px 16px; cursor: default; }
+.todo-tab-row:hover { background: var(--bg-2); }
+.todo-tab-row.picked { background: var(--bg-3); }
+.todo-tab-groups:focus .todo-tab-row.picked { background: var(--sel); }
+.todo-tab-row .todo-check { margin-top: 2px; }
+.todo-tab-main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.todo-tab-text { font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.todo-tab-tag { display: inline-block; margin-right: 6px; padding: 0 4px; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 15px; vertical-align: 1px; color: light-dark(#cf222e, #ff7b72); background: light-dark(rgba(207, 34, 46, 0.14), rgba(255, 123, 114, 0.16)); }
+.todo-tab-near { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-family: "Iowan Old Style", Palatino, Georgia, serif; font-size: 12.5px; line-height: 18px; }
+.todo-tab-near.code { font: 11px/18px "SF Mono", Menlo, monospace; }
+.todo-tab-line { justify-self: end; color: var(--muted); font-size: 11px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.todo-tab-undo { justify-self: end; font-size: 11.5px; line-height: 18px; }
+.todo-tab-row.done .todo-tab-text { color: var(--muted); text-decoration: line-through; }
+.todo-tab-row.done .todo-tab-tag { opacity: 0.6; }
+.todo-check.checked, .todo-check.checked:hover:not(:disabled) { border-color: var(--good); background: var(--good); color: var(--bg); }
+.todo-tab-rest { display: flex; align-items: center; gap: 8px; margin: 14px 12px 0 16px; padding-top: 12px; border-top: 1px solid var(--bg-3); color: var(--muted); font-size: 12px; }
+.todo-tab-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; color: var(--muted); text-align: center; }
+.todo-tab-empty-title { color: var(--fg); font-size: 13.5px; font-weight: 600; }
+.todo-tab-empty .muted { max-width: 300px; line-height: 1.45; }
+.todo-tab-empty button { margin-top: 6px; }
+.todo-tab-passage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.todo-tab-passage-head { flex: none; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--bg-3); background: var(--bg-2); }
+.todo-tab-passage-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.todo-tab-passage-where { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 11px "SF Mono", Menlo, monospace; }
+.todo-tab-pos { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.todo-tab-up .icon-svg { transform: rotate(180deg); }
+.todo-tab-passage-head button.small { margin-left: 2px; white-space: nowrap; }
+.todo-tab-editor { flex: 1; min-height: 0; }
+.todo-tab-editor[hidden] { display: none; }
+.todo-tab-passage-empty { flex: 1; display: grid; place-items: center; padding: 24px; }
 /*
  * Under a selection (SelectionBar.tsx), drawn as the TODO bar: each action in
  * the colour of what it does (purple changes the book, as the assistant's

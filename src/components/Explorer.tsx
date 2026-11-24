@@ -458,6 +458,11 @@ function ViewHeader({ view }: { view: View }) {
       {view === 'contents' && <ContentsActions />}
       {view === 'tasks' && <TasksActions />}
       {view === 'git' && <SourceControlActions />}
+      {view === 'todos' && (
+        <button className="icon pane-action" title="Open in a Tab: the chapter you’re writing in, beside its text" aria-label="Open in a Tab" onClick={() => studio.openTodoTab()}>
+          <Icon name="openInTab" size={16} />
+        </button>
+      )}
     </header>
   );
 }

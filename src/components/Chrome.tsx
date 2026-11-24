@@ -222,7 +222,7 @@ export function StatusBar() {
             }
           />
         )}
-        {todos > 0 && <Indicator icon="checklist" label={`${todos} to do`} title="TODOs left in the book" onClick={() => studio.showSidebar('todos')} />}
+        {todos > 0 && <Indicator icon="checklist" label={`${todos} to do`} title="TODOs left in the book: the To do tab" onClick={() => studio.openTodoTab({ scope: 'book' })} />}
       </div>
       <div className="statusbar-side">
         {cursor && active && <Indicator label={`Ln ${cursor.line}, Col ${cursor.column}`} />}

@@ -210,6 +210,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M13 3.5v5h5M9 14.5h6.5M13 12l2.5 2.5L13 17" />
     </>
   ),
+  // Open in a Tab (the To do view's header): out of the sidebar, into a tab of its own.
+  openInTab: (
+    <>
+      <path d="M13 4.5h6.5V11M19.5 4.5L11 13" />
+      <path d="M17 14.5v4a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7h4" />
+    </>
+  ),
   // The book's contents: a list of chapters with sections under them.
   contents: (
     <>

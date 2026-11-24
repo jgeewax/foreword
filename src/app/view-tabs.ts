@@ -7,6 +7,8 @@ export const GUIDE_TAB = 'view:guide';
 export const HISTORY_TAB = 'view:history';
 export const HISTORY_FILE_TAB = 'view:history-file';
 export const GIT_TAB = 'view:git';
+/** The book's TODOs, or one chapter's, beside the chapter itself (TodoTab.tsx). */
+export const TODO_TAB = 'view:todos';
 
 /** A tab that shows something other than a file (no file's path starts with "view:"). */
 export const isViewTab = (tab: string) => tab.startsWith('view:');

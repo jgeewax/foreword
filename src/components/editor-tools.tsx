@@ -45,7 +45,7 @@ function Measured({ onHeight, children }: { onHeight: (h: number) => void; child
  * scrolls), so its bars may spill out of it, and this is the page's y its text
  * shows below (under the file's name, stuck at the top). Returns its cleanup.
  */
-export function attachEditorTools(editor: monaco.editor.IStandaloneCodeEditor, { visibleTop }: { visibleTop?: () => number } = {}): () => void {
+export function attachEditorTools(editor: monaco.editor.IStandaloneCodeEditor, { visibleTop, inTodoTab = false }: { visibleTop?: () => number; inTodoTab?: boolean } = {}): () => void {
   const pathOf = () => studio.fileOf(editor.getModel());
   const actions = [
     editor.addAction({
@@ -155,7 +155,7 @@ export function attachEditorTools(editor: monaco.editor.IStandaloneCodeEditor, {
   );
   paintTags();
   // The cursor on a TODO comment, or the pointer resting on one: ask the assistant to do it, mark it done, or see the others.
-  const offTodoHover = attachTodoHover(editor, { visibleTop });
+  const offTodoHover = attachTodoHover(editor, { visibleTop, inTab: inTodoTab });
   // Spelling: the caret that holds back the word being typed (the hover and ⌘. are the file's, in ProofingHover).
   const offProofing = studio.proofing.attach(editor);
   // Review comments: their passages highlighted, and a card under each (open, or changed
