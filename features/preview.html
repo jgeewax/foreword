@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live preview · Foreword</title>
-<meta name="description" content="How Foreword&#x27;s live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; and exporting the PDF.">
+<meta name="description" content="How Foreword&#x27;s live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; any other Typst file on its own, such as the cover; and exporting the PDF.">
 <meta property="og:title" content="Live preview · Foreword">
-<meta property="og:description" content="How Foreword&#x27;s live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; and exporting the PDF.">
+<meta property="og:description" content="How Foreword&#x27;s live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; any other Typst file on its own, such as the cover; and exporting the PDF.">
 <meta property="og:image" content="https://jgeewax.github.io/foreword/images/f/preview-chapter.webp">
 <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e17" media="(prefers-color-scheme: dark)">
@@ -71,7 +71,10 @@
 <p>On a long book the preview keeps only the pages near you drawn, and draws the others again as you scroll back to them, so it stays quick even after you’ve read through the whole thing. If it ever has to reload, it comes back to where you were.</p>
 
 <h2 id="export">Export</h2>
-<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it offers to run them first, so a PDF never goes out with old output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one. The <strong>Cover</strong> view above the preview shows the <a href="printing.html">print cover</a>, with its guides.</p>
+<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it offers to run them first, so a PDF never goes out with old output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one.</p>
+
+<h2 id="any-page-on-its-own">Any page on its own</h2>
+<p>After Book and Chapter above the preview, <strong>Other</strong> lists the Typst files that aren’t part of the book: the <a href="printing.html">print cover</a>, with its guides, or a page you’re trying out. Pick one and the preview shows it alone, and keeps showing it while you edit other files, until you go back to <strong>Book</strong>. <span class="ui">Show in Preview</span> on a file’s or a tab’s right-click does the same. The book remembers it, even when you rename the file, and the preview’s right-click exports it to a PDF of its own; <span class="ui">Export PDF…</span> still exports the book.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>
@@ -86,7 +89,7 @@
   </article>
   <nav class="doc-next"><a href="editor.html"><small>← Previous</small><b>The editor</b></a><a class="next" href="spelling.html"><small>Next →</small><b>Spelling and grammar</b></a></nav>
   <div class="doc-cta">
-    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.12.1</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
+    <p><strong>Foreword is free, for Macs with Apple Silicon.</strong> <span data-version>Version 0.13.0</span>, macOS 13 or later. It carries Typst’s tools inside, and keeps itself up to date.</p>
     <a class="button" data-download href="https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.27 1.86-3.36 1.94-3.41-1.06-1.55-2.7-1.76-3.28-1.78-1.4-.14-2.73.82-3.44.82-.71 0-1.8-.8-2.96-.78-1.52.02-2.93.89-3.71 2.25-1.59 2.75-.41 6.81 1.13 9.04.75 1.09 1.65 2.31 2.82 2.27 1.13-.05 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.11 2.73-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.34-3.64zM14.12 5.94c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.73-.95 2.75 1 .08 2.03-.51 2.65-1.25z"/></svg> Download for Mac</a>
   </div>
 </main>

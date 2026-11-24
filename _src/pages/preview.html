@@ -2,7 +2,7 @@
 title: Live preview
 heading: The pages, as you type
 lede: Beside your text, the typeset pages, as they’ll print. They change as you type, whether you’ve saved or not. Click a word on a page and you’re at it in your text. Click in your text and the pages scroll there.
-description: How Foreword's live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; and exporting the PDF.
+description: How Foreword's live preview works: the typeset pages beside your text, changing as you type; click a page to find its words, and back; mistakes shown without losing the pages, and a reference that points nowhere marked in red; just one chapter for a long book; any other Typst file on its own, such as the cover; and exporting the PDF.
 image: images/f/preview-chapter.webp
 -->
 <figure class="lead">
@@ -36,7 +36,10 @@ image: images/f/preview-chapter.webp
 <p>On a long book the preview keeps only the pages near you drawn, and draws the others again as you scroll back to them, so it stays quick even after you’ve read through the whole thing. If it ever has to reload, it comes back to where you were.</p>
 
 <h2>Export</h2>
-<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it offers to run them first, so a PDF never goes out with old output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one. The <strong>Cover</strong> view above the preview shows the <a href="printing.html">print cover</a>, with its guides.</p>
+<p><span class="ui">Export PDF…</span> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd>) asks where to save, starting where you saved this book’s PDF last time, and says where it went. If the book has <a href="code.html">code examples</a> that are out of date, it offers to run them first, so a PDF never goes out with old output. <span class="ui">Open PDF</span> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>E</kbd>) opens the last one.</p>
+
+<h2>Any page on its own</h2>
+<p>After Book and Chapter above the preview, <strong>Other</strong> lists the Typst files that aren’t part of the book: the <a href="printing.html">print cover</a>, with its guides, or a page you’re trying out. Pick one and the preview shows it alone, and keeps showing it while you edit other files, until you go back to <strong>Book</strong>. <span class="ui">Show in Preview</span> on a file’s or a tab’s right-click does the same. The book remembers it, even when you rename the file, and the preview’s right-click exports it to a PDF of its own; <span class="ui">Export PDF…</span> still exports the book.</p>
 
 <div class="limits">
   <h3>What it doesn’t do</h3>

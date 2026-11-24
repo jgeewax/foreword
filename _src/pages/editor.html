@@ -2,7 +2,7 @@
 title: The editor
 heading: The editor
 lede: Where you write. A Typst book is plain text with a little markup, and the editor shows it close to how it will print: headings in bold, emphasis in italic. Around it are the things a long book needs: search across every chapter, a table of contents to move by, and chapters you can find by number. If you’ve used VS Code, it’s the same editor, with the same keys.
-description: Foreword's editor: Typst shown close to how it prints, a book that opens as you left it, even after a crash, typing that wraps a selection, spelling and grammar as you type, ⌘-click to where a name is defined, to what a reference points to, or to a file, a TODO the assistant can do for you, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
+description: Foreword's editor: Typst shown close to how it prints, a book that opens as you left it, even after a crash, typing that wraps a selection, spelling and grammar as you type, ⌘-click to where a name is defined, to what a reference points to, or to a file, labels renamed across the book, a TODO the assistant can do for you and a To do tab, sections in files of their own, tidying on save, search and replace across the whole book, a table of contents, chapters by number, a colour for each book, and light or dark.
 image: images/f/editor-search.webp
 -->
 <figure class="lead">
@@ -11,7 +11,7 @@ image: images/f/editor-search.webp
 </figure>
 
 <h2>Writing in it</h2>
-<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way. Rest the pointer on a TODO, or put the cursor on its line, and a small bar offers <span class="ui">Ask the assistant to do it</span>, with a ▾ for other ways (ask about it, talk it through, or draw it), <span class="ui">Done</span>, which takes the note out, and <span class="ui">All 12 TODOs</span>, the To do list.</p>
+<p>Headings are bold, maths is coloured, <code>_emphasis_</code> is in italic and <code>*strong*</code> in bold, as they’ll print. A note to yourself, like <code>// TODO: check this date</code>, gets a coloured tag, and a mark in the scrollbar so you can find it again. <code>FIXME</code> and <code>NOTE</code> work the same way. Rest the pointer on a TODO, or put the cursor on its line, and a small bar offers <span class="ui">Ask the assistant to do it</span>, with a ▾ for other ways (ask about it, talk it through, or draw it), <span class="ui">Done</span>, which takes the note out, and <span class="ui">This chapter’s 12</span>, which opens them in the To do tab.</p>
 <p>Select a word and type <code>_</code>, and the word is wrapped, <code>_word_</code>, and still selected, so typing <code>*</code> makes it bold as well. The same works for <code>*</code>, <code>$</code>, brackets and quotes. <kbd>⌘</kbd><kbd>Z</kbd> undoes a word or so at a time, and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> redoes. A change Foreword makes for you, like taking out a TODO, is a step of its own.</p>
 <figure class="small">
   <img src="../images/f/editor-wrap.webp" width="1500" height="560" alt="The word lovable selected in Jekyll and Hyde and wrapped as _lovable_ by typing an underscore, shown in italic in the editor and on the typeset page beside it.">
@@ -43,8 +43,17 @@ image: images/f/editor-search.webp
 <h3>⌘-click to go there</h3>
 <p>As in VS Code, hold <kbd>⌘</kbd> over a name your book defines, like <code>#key-idea</code>, and it’s underlined as a link, with its definition and the comments above it under the pointer. <kbd>⌘</kbd>-click opens its file at the definition. A reference works the same way: hold <kbd>⌘</kbd> over <code>@ch:vectors</code> to see the heading, figure or table it points to, and <kbd>⌘</kbd>-click to open that chapter there, whether the preview shows the whole book or just one chapter. A citation opens your bibliography at its entry. A file’s name in quotes works the same way: <code>#include "chapters/one.typ"</code> opens the chapter, and <code>image("figures/map.png")</code> opens the picture in Preview. Typst’s own functions, like <code>#figure</code>, are part of Typst, so there’s nowhere to go.</p>
 
+<h3>Rename a label</h3>
+<p>Put the cursor on a label or a reference to it, <code>&lt;intro&gt;</code> or <code>@intro</code>, and press <kbd>F2</kbd>. Type the new name and press Return, and every reference to it, in every file of the book, changes with it. As with <span class="ui">Replace All</span>, History keeps a version from before, and the message that says what changed has <span class="ui">Undo</span>. A label on two things is renamed only where you are, which tells them apart. <kbd>⇧</kbd><kbd>F12</kbd> shows every place the book names a label, in a panel over the text; on a citation, its entry in the bibliography too.</p>
+
+<h3>Your TODOs, in a tab</h3>
+<p>The To do tab lists the TODOs of the chapter you’re writing in (or another you pick) by section, or the whole book’s by chapter, each with the line of the book it’s next to. Beside the list is the chapter itself, at the TODO you picked, with its bar, so you can work through them without leaving the tab: ask the assistant, mark one done, or type in the chapter. <kbd>↑</kbd> and <kbd>↓</kbd> move through the list. Open it from the sidebar’s To do, from View ▸ To Do, or from the count of TODOs in the status bar.</p>
+
 <h3>Chapters by number</h3>
 <p>Go to File (<kbd>⌘</kbd><kbd>P</kbd>) lists chapters as “4. Simplest Cases”, so typing <code>4</code> finds chapter 4, whatever its file is called. The numbers are the book’s own: a preface or prologue without a number doesn’t throw the count off. Contents, Search and the assistant use the same numbers.</p>
+
+<h3>New chapters and sections</h3>
+<p>The + at the top of Files makes a chapter after the last one, or a section (or subsection) in a file of its own, inside the heading you’re in. The new file goes beside the chapter’s other parts, named as they are, and starts with its heading; the chapter includes it at the end of that section. With lines selected, <span class="ui">Move Selection to a New File</span> moves them to a file named after their first heading. In a paper, it’s New Section and New Subsection.</p>
 
 <h3>Keys and commands</h3>
 <p>The command palette (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>) lists Foreword’s commands, each with its shortcut, your recent ones first, so you can find a command by typing a word of it. Tabs work as they do in VS Code: <kbd>⌘</kbd><kbd>W</kbd> to close, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>T</kbd> to reopen, <kbd>⌃</kbd><kbd>⇥</kbd> to step through. Under the tabs, a bar shows where you are in the chapter, heading by heading.</p>
