@@ -2,6 +2,36 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.13.0 · 24 November 2026
+
+### To do
+
+- **A To do tab.** Your TODOs open in a tab of their own, beside the text they're in. **Chapter** shows the TODOs of the chapter you're writing in (or another you pick), by section, and **Book** shows the whole book's, by chapter, each with the line of the book it's next to. TODO and FIXME above the list, and a filter, narrow it down. Beside the list is the chapter itself, at the TODO you picked, with its bar: ask the assistant to do it, or mark it Done, without leaving the tab. What you type there goes in the file. ↑ and ↓ move through the list, and Return opens the TODO in its file's tab. A TODO you mark done stays in the list, struck through, with Undo, until you leave the tab.
+- **Ways in.** *Open in a Tab* at the top of the sidebar's To do, *Show in To Do Tab* on a TODO's right-click, View ▸ To Do, or the count of TODOs in the status bar. A TODO's bar offers *This chapter's 5*, which opens the tab at that chapter, and the command palette has Next TODO in This Chapter and Previous TODO in This Chapter.
+
+### The assistant
+
+- **Like this, but…** Beside *More like this*, each option has *Like this, but…*: say what's wrong with it or what to change, press Return, and the new options start from that one with your change made. A later *More like this* keeps your change in mind.
+- **Options marks its pick.** When there's more than one option, the assistant marks the one it would pick, *My pick*, and says why, as Discuss does with its ways forward.
+- **An option goes where it was meant to.** Talk about a passage without selecting it, ask for options, and *Use this* replaces that passage, wherever your cursor is by then. The card says which lines it replaces. If the assistant doesn't say where an option goes and you hadn't selected anything, the card offers Copy, and says why, instead of putting it at the cursor.
+
+### Writing the book
+
+- **Rename a label in the whole book (F2).** Put the cursor on a label or a reference to it (`<intro>` or `@intro`) and press F2, or right-click and choose Rename Label…. Type the new name and press Return, and every reference to it, in every file of the book, changes with it. As with Replace All, History keeps a version from before, and the message that says what changed has Undo. A label on two things is renamed only where you are, which tells them apart.
+- **See where a label is used (⇧F12).** Find All References shows every place the book names a label, the label itself included, in a panel over the text. On a citation, it shows its entry in the bibliography too.
+- **Sections in files of their own.** The + at the top of Files is a menu now: a new chapter after the last one, a new section (or subsection) inside the heading you're in, the selected lines moved to a file of their own, a new file or a new folder. A new section's file goes beside its chapter's other parts, named as they are, and starts with its heading and the imports it needs; it's included at the end of the section it's in. *Move Selection to a New File* (on the +, the editor's right-click and the command palette) moves the lines to a file named after their first heading, and an include takes their place. In a paper, it's New Section and New Subsection.
+- **A tidier file tree.** Files line up under their folder, and a line runs down from an open folder past what's in it: the folder of the file you're in always, the others while the pointer is over the tree.
+
+### The preview
+
+- **Any Typst file on its own.** After Book and Chapter, **Other** lists the Typst files that aren't part of the book, such as the cover or a page you're trying out. Pick one and the preview shows it alone, and keeps showing it while you edit other files, until you go back to Book. *Show in Preview* on a file's or a tab's right-click does the same. The book remembers it, it follows the file when you rename it, and the preview's right-click exports it to a PDF of its own; Export PDF still exports the book.
+
+### Fixes
+
+- After an Xcode update, until its licence was agreed to again, Source Control could say a book had no repository, and History stopped keeping versions. Foreword now uses another Git on your Mac while Xcode's won't run, and if Git doesn't answer, Source Control says so and shows what it said. Settings ▸ Tools shows which Git is in use.
+- Going to another task while Options was finishing, then coming back, showed its options as plain text, without *Use this*, and *More like this* could say it couldn't find the passage. The options keep their cards and buttons now, and any that finished while you were away go where their reply says.
+- The note under a revised passage ("Revised", "3 options are in the chat") goes when you click anywhere else, as it does when you type.
+
 ## 0.12.1 · 23 November 2026
 
 ### The preview
