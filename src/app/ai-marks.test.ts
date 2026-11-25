@@ -30,15 +30,31 @@ describe('edit marks', () => {
     const after2 = after.replace('The storm came at noon.', 'The storm came at dawn.').replace('A new line.\n', '');
     const e2 = aiEdit(V('v2', 20), after, after2);
     const marks = editMarks([e1, e2], after2);
+    // The removal is before a blank line: its mark goes on the next line with text.
     expect(marks.map((m) => [m.from, m.versionId, m.removal])).toEqual([
       [3, 'v2', false],
-      [5, 'v2', true],
+      [6, 'v2', true],
     ]);
     expect(marks[0].old).toBe('The storm came at noon.');
     expect(marks[1].old).toBe('A new line.');
     // A removal at the very end marks the (new) last line.
     const after3 = after2.replace('\n\nThe end.', '');
     expect(editMarks([aiEdit(V('v3', 30), after2, after3)], after3)).toMatchObject([{ from: 4, removal: true, old: '\nThe end.' }]);
+  });
+
+  it('marks blank lines only inside a run, never at either end', () => {
+    const b = 'A.\n\nB.';
+    // New paragraphs between two: the blank between them is marked, the ones around them aren't.
+    const added = 'A.\n\nNew.\n\nAnother.\n\nB.';
+    expect(editMarks([aiEdit(V('v1', 1), b, added)], added).map((m) => [m.from, m.to, m.removal])).toEqual([[3, 5, false]]);
+    // Only a blank line added: nothing to mark.
+    expect(editMarks([aiEdit(V('v1', 1), 'A.\nB.', 'A.\n\nB.')], 'A.\n\nB.')).toEqual([]);
+    // Text replaced by a blank line is a removal, on the next line with text.
+    expect(editMarks([aiEdit(V('v1', 1), 'A.\nB.\nC.', 'A.\n\nC.')], 'A.\n\nC.')).toMatchObject([{ from: 3, to: 3, removal: true, old: 'B.' }]);
+    // A removal just before a blank line goes on the next line with text.
+    expect(editMarks([aiEdit(V('v1', 1), 'A.\nX.\n\nC.', 'A.\n\nC.')], 'A.\n\nC.')).toMatchObject([{ from: 3, to: 3, removal: true, old: 'X.' }]);
+    // The author rewrote the paragraph after a blank the assistant wrote: the blank is now at the end, unmarked.
+    expect(editMarks([aiEdit(V('v1', 1), b, added)], added.replace('Another.', 'Mine.')).map((m) => [m.from, m.to])).toEqual([[3, 3]]);
   });
 
   it('marks a whole new file', () => {

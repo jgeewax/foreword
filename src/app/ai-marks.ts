@@ -53,9 +53,20 @@ export type EditMark = {
   time: number;
 };
 
-/** Where each agent version's changes are in `current`, newest first. */
+/**
+ * Where each agent version's changes are in `current`, newest first. Blank
+ * lines are only marked inside a run of changed lines, never at either end:
+ * the space between paragraphs isn't the assistant's text.
+ */
 export function editMarks(edits: AiEdit[], current: string): EditMark[] {
   const lines = splitLines(current);
+  const blank = (i: number) => !lines[i]?.trim();
+  // A removal's line: the next one with text, so the mark isn't on the space between paragraphs.
+  const removalAt = (i: number) => {
+    let j = i;
+    while (j < lines.length && blank(j)) j++;
+    return j < lines.length ? j : i;
+  };
   const out: EditMark[] = [];
   const marked = new Set<number>();
   for (const e of [...edits].sort((x, y) => y.time - x.time)) {
@@ -66,13 +77,23 @@ export function editMarks(edits: AiEdit[], current: string): EditMark[] {
         // Only removals: mark the line after the gap, if it's still where it was.
         // (At the end of the file, the last line.)
         const at = blk.from < map.length ? map[blk.from] : blk.from > 0 ? map[blk.from - 1] : 0;
-        if (at >= 0 && at < Math.max(lines.length, 1)) out.push({ ...base, from: at + 1, to: at + 1, removal: true });
+        if (at >= 0 && at < Math.max(lines.length, 1)) out.push({ ...base, from: removalAt(at) + 1, to: removalAt(at) + 1, removal: true });
         continue;
       }
-      // The lines the assistant wrote that are still as it left them, as consecutive runs.
+      // The lines the assistant wrote that are still as it left them, as consecutive
+      // runs, less the blank lines at either end of each.
       let run: number[] = [];
+      let marks = 0;
+      let blankRun = -1;
       const flush = () => {
-        if (run.length) out.push({ ...base, from: run[0] + 1, to: run[run.length - 1] + 1, removal: false });
+        let a = 0;
+        let b = run.length;
+        while (a < b && blank(run[a])) a++;
+        while (b > a && blank(run[b - 1])) b--;
+        if (a < b) {
+          out.push({ ...base, from: run[a] + 1, to: run[b - 1] + 1, removal: false });
+          marks++;
+        } else if (run.length && blankRun < 0) blankRun = run[0];
         run = [];
       };
       for (let i = blk.from; i < blk.to; i++) {
@@ -86,6 +107,8 @@ export function editMarks(edits: AiEdit[], current: string): EditMark[] {
         run.push(now);
       }
       flush();
+      // All that's left of what it wrote is blank lines: if it replaced text, that's a removal.
+      if (!marks && blankRun >= 0 && blk.old.trim()) out.push({ ...base, from: removalAt(blankRun) + 1, to: removalAt(blankRun) + 1, removal: true });
     }
     for (const m of out) if (!m.removal) for (let l = m.from - 1; l < m.to; l++) marked.add(l);
   }
