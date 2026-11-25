@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from './studio';
-import { attachmentPlace, editOf, linesOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnsOf, turnTime, turnWords, verbAndRest } from './trace';
+import { attachmentPlace, editOf, linesOf, looksLikeProse, patchChanges, restatesError, spanWords, statsOf, toolTone, trimPieces, turnFailed, turnsOf, turnTime, turnWords, verbAndRest } from './trace';
 
 const user = (id: string, text = 'Do it'): ChatItem => ({ kind: 'user', id, text, attachments: [] });
 const said = (id: string, text = 'Done.'): ChatItem => ({ kind: 'assistant', id, text, done: true });
@@ -13,6 +13,21 @@ describe('the conversation in turns', () => {
       ['u1', ['t1', 'a1', 't2'], 'a2'],
       ['u2', [], 'a3'],
     ]);
+  });
+
+  it('a turn failed when an error notice is in it, before or after its reply', () => {
+    const failure: ChatItem = { kind: 'notice', id: 'n', tone: 'error', text: 'No capacity available' };
+    expect(turnFailed(turnsOf([user('u'), tool('t', 'read'), failure])[0])).toBe(true);
+    expect(turnFailed(turnsOf([user('u'), said('a'), failure])[0])).toBe(true);
+    expect(turnFailed(turnsOf([user('u'), said('a'), { ...failure, tone: 'info' }])[0])).toBe(false);
+  });
+
+  it('a reply that only says what the error said', () => {
+    const error = 'No capacity available for model gemini-4-hydrogen-high on the server (error 503)';
+    expect(restatesError('No capacity available for model gemini-4-hydrogen-high on the server', error)).toBe(true);
+    expect(restatesError('  no capacity available for model gemini-4-hydrogen-high on the server.\n', error)).toBe(true);
+    expect(restatesError('PC1 and PC2 are the first two principal components.', error)).toBe(false);
+    expect(restatesError('', error)).toBe(false);
   });
 
   it('a turn that ends on a step has no reply; questions asked in the reply come after it', () => {

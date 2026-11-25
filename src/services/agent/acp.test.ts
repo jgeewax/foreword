@@ -4,7 +4,7 @@ import { readOf } from '../../app/ai-marks';
 import recorded from './__fixtures__/acp-claude.jsonl?raw';
 import recordedCodex from './__fixtures__/acp-codex.jsonl?raw';
 import recordedPlan from './__fixtures__/acp-plan.jsonl?raw';
-import { AcpAdapter, isSignedOut, stripInstructions, type AcpTransport } from './acp';
+import { AcpAdapter, brokeOff, isSignedOut, stripInstructions, type AcpTransport } from './acp';
 import { FOREWORD_PROMPT } from './instructions';
 import { appTool, conversationTitle, decide, permissionAsk, toolOutput, type AcpToolCall } from './acp-events';
 import { PRESETS, sessionRules } from './permissions';
@@ -518,6 +518,59 @@ describe('Codex', () => {
     const before = sent.length;
     await gemini.createSession(null, { instructions: [['foreword', '# This book']] });
     expect(sent.slice(before).some((m) => m.method === 'session/new')).toBe(false);
+  });
+
+  it('Antigravity’s run broken off under the turn (no capacity) fails the turn, though it ends it as finished', async () => {
+    const sent: any[] = [];
+    let deliver: (m: any) => void = () => {};
+    const transport: AcpTransport = {
+      start: async (_kind, onMessage) => {
+        deliver = onMessage;
+      },
+      send: async (line) => {
+        const m = JSON.parse(line);
+        sent.push(m);
+        if (m.id === undefined || !m.method || m.method === 'session/prompt') return;
+        const result = m.method === 'initialize' ? { protocolVersion: 1 } : m.method === 'session/new' ? { sessionId: 'ag1' } : {};
+        queueMicrotask(() => deliver({ jsonrpc: '2.0', id: m.id, result }));
+      },
+      stop: async () => {},
+    };
+    const adapter = new AcpAdapter(ROOT, 'antigravity', transport);
+    const events: AgentEvent[] = [];
+    adapter.subscribe((e) => events.push(e));
+    await adapter.start();
+    const sessionId = await adapter.createSession(null, {});
+    const update = (u: any) => deliver({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update: u } });
+    const turn = async () => {
+      await adapter.send(sessionId, 'What are PC1 and PC2?', []);
+      return sent.findLast((m) => m.method === 'session/prompt').id;
+    };
+    // As it was seen: the reads at work fail with the server's 503, then it says so, and ends the turn.
+    const broke =
+      'Agent execution terminated due to error. ("agent executor error: Error 503, Message: No capacity available for model gemini-4-hydrogen-high on the server, Status: UNAVAILABLE, Details: [map[@type:type.googleapis.com/google.rpc.ErrorInfo domain:cloudcode-pa.googleapis.com metadata:map[error_number:2010]]]")';
+    const id = await turn();
+    update({ sessionUpdate: 'tool_call', toolCallId: 'r1', title: 'Read ch18.typ', kind: 'read', status: 'pending', rawInput: { path: `${ROOT}/ch18.typ` } });
+    update({ sessionUpdate: 'tool_call_update', toolCallId: 'r1', status: 'failed', content: [{ type: 'content', content: { type: 'text', text: broke } }] });
+    update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'No capacity available for model gemini-4-hydrogen-high on the server' } });
+    deliver({ jsonrpc: '2.0', id, result: { stopReason: 'end_turn' } });
+    await Promise.resolve();
+    expect(events.findLast((e) => e.type === 'turn-finished')).toEqual({ type: 'turn-finished', sessionId, outcome: 'failed', error: 'No capacity available for model gemini-4-hydrogen-high on the server (error 503)' });
+
+    // The next turn starts afresh: a call failing by itself is the call's failure, not the turn's.
+    const next = await turn();
+    update({ sessionUpdate: 'tool_call', toolCallId: 'r2', title: 'Read ch99.typ', kind: 'read', status: 'pending', rawInput: { path: `${ROOT}/ch99.typ` } });
+    update({ sessionUpdate: 'tool_call_update', toolCallId: 'r2', status: 'failed', content: [{ type: 'content', content: { type: 'text', text: 'File not found' } }] });
+    deliver({ jsonrpc: '2.0', id: next, result: { stopReason: 'end_turn' } });
+    await Promise.resolve();
+    expect(events.findLast((e) => e.type === 'turn-finished')).toMatchObject({ outcome: 'succeeded' });
+  });
+
+  it('a broken-off run in words: its message, else what it said', () => {
+    expect(brokeOff('File not found')).toBeNull();
+    expect(brokeOff('Agent execution terminated due to error. ("agent executor error: Error 429, Message: Resource exhausted, Status: RESOURCE_EXHAUSTED")')).toBe('Resource exhausted (error 429)');
+    expect(brokeOff('Agent execution terminated due to error. ("context deadline exceeded")')).toBe('context deadline exceeded');
+    expect(brokeOff('Agent execution terminated due to error.')).toBe('Its run stopped with an error.');
   });
 
   it('a model’s levels of effort: read for the model chosen, set after the model, only those it has', async () => {

@@ -84,7 +84,7 @@ import { copyText, showContextMenu, type MenuEntry } from '../lib/context-menu';
 import { includePath, nextChapterPath, withInclude } from './chapters';
 import { bookKind, headingOver, importsFor, includeInPlace, includeLines, insertLine, movedText, partName, partPath, partText, partTitle, placesOver, sectionEnd, sectionIncludes, topFolder, wholeLines, type BookKind, type PartPlace } from './new-parts';
 import { headingPath, headings } from '../editor/outline';
-import { turnsOf } from './trace';
+import { restatesError, turnsOf } from './trace';
 import { quotedAt, referencesTo, removeIncludes, resolveRef, updateReferences } from './references';
 import { findInSource, findPartial } from '../editor/find-text';
 import { parseTodos, restoreTodo, takeOutTodo, todoAt, todoPrompt, type DoneTodo, type Todo } from './todos';
@@ -6660,8 +6660,17 @@ export class Studio {
     else void this.openFile(f.path);
   }
 
-  /** `files`: these instead of the message box's (Try again: the same files as before); `picked`: Auto's reason for the mode it's in (sendTyped). */
-  async send(text: string, { delivery = 'queue' as Delivery, files: given, picked }: { delivery?: Delivery; files?: AttachedFile[]; picked?: string } = {}): Promise<boolean> {
+  /** What went with each message sent from here (Try again sends it again): its passages and the change it was about. */
+  private sentWith = new Map<string, { attachments: Attachment[]; change: ChangeNote | null }>();
+
+  /**
+   * `files`: these instead of the message box's (Try again: the same files as before); `again`: these passages and change
+   * instead of the box's and the selection (Try again's), which stay; `picked`: Auto's reason for the mode it's in (sendTyped).
+   */
+  async send(
+    text: string,
+    { delivery = 'queue' as Delivery, files: given, again, picked }: { delivery?: Delivery; files?: AttachedFile[]; again?: { attachments: Attachment[]; change: ChangeNote | null }; picked?: string } = {},
+  ): Promise<boolean> {
     // The mode just chosen: its assistant, model and effort first.
     await this.setupReady();
     const { agent, docs } = this;
@@ -6677,9 +6686,9 @@ export class Studio {
     // Options replace a passage: the one selected or attached; else, a follow-up, the one the last options were about; else
     // the cursor goes, for the assistant to know where it is. Where they go in the end is where the reply says (placeOptions).
     this.prunePassages();
-    if (state.mode === 'options' && !this.outgoingAttachments().length) await this.attachForOptions();
-    const attachments = this.outgoingAttachments();
-    const change = state.change;
+    if (!again && state.mode === 'options' && !this.outgoingAttachments().length) await this.attachForOptions();
+    const attachments = again?.attachments ?? this.outgoingAttachments();
+    const change = again ? again.change : state.change;
     // Followed from now on, so nothing the author does meanwhile moves it.
     const optionsTurn = state.mode === 'options' ? this.optionsTurnFor(attachments[0]) : null;
     // Handed over from another assistant: the turns this one hasn't seen go too.
@@ -6692,8 +6701,7 @@ export class Studio {
     this.setAgent((a) => ({
       running: true,
       stopped: false,
-      attachments: [],
-      change: null,
+      ...(!again && { attachments: [], change: null }),
       ...(!given && { files: [] }),
       activity: { phase: 'sending', since: Date.now() },
       items: [
@@ -6701,8 +6709,10 @@ export class Studio {
         { kind: 'user', id: userId, text, attachments: [...attachments.map((x) => x.label), ...(change ? [changeLabel(change)] : []), ...(earlier ? [EARLIER_CHIP] : [])], ...(files.length && { files }), at: Date.now(), by: this.turnBy(), mode: a.mode, ...(picked && { picked }) },
       ],
     }));
+    this.sentWith.set(userId, { attachments, change });
+    if (this.sentWith.size > 20) this.sentWith.delete(this.sentWith.keys().next().value!);
     const unsend = (why: string) => {
-      this.setAgent((a) => ({ running: false, attachments, change, ...(!given && { files: boxFiles }), items: a.items.filter((it) => it.id !== userId) }));
+      this.setAgent((a) => ({ running: false, ...(!again && { attachments, change }), ...(!given && { files: boxFiles }), items: a.items.filter((it) => it.id !== userId) }));
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: why });
       return false;
     };
@@ -6766,6 +6776,28 @@ export class Studio {
     } catch (e) {
       return unsend(`Message not sent: ${errorMessage(e)}`);
     }
+  }
+
+  /**
+   * Try again: a turn's message once more, as it went (its words, files and
+   * passages, in its mode), on another model or effort if `on` says. Those are
+   * the conversation's from then on, as when chosen in the message box's menus.
+   * A message whose passages aren't known any more (sent before a restart)
+   * takes what would go with a message typed now.
+   */
+  async tryAgain(userId: string, on: { model?: ModelRef; effort?: string } = {}): Promise<boolean> {
+    const user = this.state.agent.items.find((it): it is Extract<ChatItem, { kind: 'user' }> => it.id === userId && it.kind === 'user');
+    if (!user || this.state.agent.running || this.state.agent.status !== 'ready') return false;
+    if (user.mode && !(await this.enterMode(user.mode))) return false;
+    const onIt = (m: ModelRef) => !!this.state.agent.model && effortKey(this.state.agent.model) === effortKey(m);
+    if (on.model && !onIt(on.model)) {
+      await this.selectModel(on.model);
+      // Not changed (it said why in the chat): not sent on the old one.
+      if (!onIt(on.model)) return false;
+    }
+    if (on.effort && on.effort !== this.state.agent.effort && !(await this.selectEffort(on.effort))) return false;
+    const again = this.sentWith.get(userId);
+    return this.send(user.text, { files: user.files ?? [], ...(again && { again }), ...(user.picked && { picked: user.picked }) });
   }
 
   // ---- questions from the assistant ------------------------------------------------
@@ -7326,6 +7358,14 @@ export class Studio {
     await this.send(message);
   }
 
+  /** The turn failed, and its last words only said so (restatesError): the failure shows instead of them, as the answer. */
+  private dropRestatedError(error: string) {
+    const items = this.state.agent.items;
+    const from = items.findLastIndex((it) => it.kind === 'user');
+    const last = items.slice(from + 1).findLast((it) => it.kind !== 'notice');
+    if (last?.kind === 'assistant' && restatesError(last.text, error)) this.setAgent((a) => ({ items: a.items.filter((it) => it.id !== last.id) }));
+  }
+
   private agentError(message: string) {
     this.turnErrors.add(message);
     const m = this.state.agent.model;
@@ -7542,6 +7582,7 @@ export class Studio {
       case 'turn-finished':
         this.setAgent({ running: false, stopped: e.outcome === 'failed' || e.outcome === 'interrupted' });
         if (e.outcome === 'failed') {
+          if (e.error) this.dropRestatedError(e.error);
           // The same failure usually arrives first as a session error; show it once.
           if (!e.error || !this.turnErrors.has(e.error)) this.agentError(e.error ?? 'The agent stopped with an error.');
         } else if (e.outcome === 'interrupted') {

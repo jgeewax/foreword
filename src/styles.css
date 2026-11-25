@@ -2246,6 +2246,14 @@ button.icon.scm-hover:hover:not(:disabled) { color: var(--fg); background: color
 .turn-foot .link::before { content: "·"; margin-right: 8px; color: var(--muted); }
 .turn-foot .icon { width: 24px; height: 24px; padding: 0; color: var(--muted); }
 .turn-foot .icon:hover:not(:disabled) { color: var(--fg); }
+/* Try again, and its menu for another model or effort; after a failure, in words. */
+.try-again { display: inline-flex; align-items: center; }
+.turn-foot .try-again-more { width: 16px; margin-left: -3px; }
+.try-again.failed .try-again-go,
+.try-again.failed .try-again-more { height: 24px; border: 1px solid var(--border); background: var(--bg-2); color: var(--fg); }
+.try-again.failed .try-again-go { display: inline-flex; align-items: center; gap: 5px; padding: 0 9px 0 8px; border-radius: 12px 0 0 12px; font-size: 11.5px; font-weight: 550; }
+.try-again.failed .try-again-more { width: 22px; margin-left: -1px; border-radius: 0 12px 12px 0; }
+.try-again.failed button:hover:not(:disabled) { background: var(--bg-3); border-color: var(--muted); position: relative; }
 
 /* An earlier turn, folded to a line. */
 .turn-folded { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-2); color: var(--fg); text-align: left; animation: rise-in 0.16s ease-out; }

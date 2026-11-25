@@ -111,7 +111,27 @@ type Session = {
   title: string;
   /** Replaying (session/load): updates fill the transcript but aren't live events. */
   replaying: boolean;
+  /** This turn's run broke off under it (brokeOff), in words: the turn failed, however it ends. */
+  broke: string | null;
 };
+
+/**
+ * Antigravity's run broke off under the turn (its server out of capacity, say):
+ * the calls at work fail with "Agent execution terminated due to error.
+ * ("agent executor error: Error 503, Message: No capacity available for model
+ * gemini-4-hydrogen-high on the server, Status: UNAVAILABLE, …)", and it ends
+ * the turn as finished, with the message as its reply (seen 2026-11-25). What
+ * went wrong, in words; null for a call that failed by itself.
+ */
+export function brokeOff(output: string): string | null {
+  const m = /^Agent execution terminated due to error\.?\s*([\s\S]*)$/.exec(output.trim());
+  if (!m) return null;
+  const said = /Message: ([\s\S]+?), Status: /.exec(m[1])?.[1]?.trim();
+  const code = /\bError (\d{3})\b/.exec(m[1])?.[1];
+  if (said) return code ? `${said} (error ${code})` : said;
+  const rest = m[1].replace(/^\(\s*"?|"?\s*\)$/g, '').trim();
+  return rest ? (rest.length > 300 ? `${rest.slice(0, 299)}…` : rest) : 'Its run stopped with an error.';
+}
 
 /** Claude Code's tools whose every use the app's rules decide (see sessionMeta). */
 export const CLAUDE_ASKS = ['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'] as const;
@@ -423,6 +443,7 @@ export class AcpAdapter implements AgentAdapter {
       commands: [],
       title: '',
       replaying: false,
+      broke: null,
     };
     this.sessions.set(id, s);
     return s;
@@ -694,6 +715,7 @@ export class AcpAdapter implements AgentAdapter {
     s.turn++;
     if (record) s.transcript.user(`${s.id}:u${s.turn}`, text);
     s.running = true;
+    s.broke = null;
     this.emit({ type: 'turn-started', sessionId: s.id });
     if (this.promptHasInstructions() && this.systemFor(s.instructions) !== s.systemPrompt) {
       try {
@@ -708,7 +730,8 @@ export class AcpAdapter implements AgentAdapter {
     this.request('session/prompt', { sessionId: s.id, prompt }).then(
       (res) => {
         const reason = res?.stopReason;
-        if (reason === 'end_turn') this.finish(s, 'succeeded');
+        // Finished, it says, but its run broke off on the way: that's a failure.
+        if (reason === 'end_turn') this.finish(s, s.broke ? 'failed' : 'succeeded', s.broke ?? undefined);
         else if (reason === 'cancelled') this.finish(s, 'interrupted');
         else this.finish(s, 'failed', reason === 'refusal' ? 'The model refused.' : reason === 'max_tokens' ? 'The reply was too long for the model.' : `The turn ended early (${reason}).`);
       },
@@ -805,6 +828,7 @@ export class AcpAdapter implements AgentAdapter {
         const output = status === 'running' ? undefined : toolOutput(update.rawOutput !== undefined || update.content ? update : call, tool.name) || s.output.get(update.toolCallId) || '';
         s.transcript.tool(replyId, call.toolCallId, tool.name, tool.input, status, output);
         if (!live) break;
+        if (status === 'failed' && s.running) s.broke ??= brokeOff(output ?? '');
         if (!known) this.emit({ type: 'tool-started', sessionId, callId: update.toolCallId, name: tool.name });
         if (update.rawInput !== undefined || !known) this.emit({ type: 'tool-called', sessionId, callId: update.toolCallId, input: tool.input });
         if (status === 'completed') this.emit({ type: 'tool-succeeded', sessionId, callId: update.toolCallId, output: output ?? '' });

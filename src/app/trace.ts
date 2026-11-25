@@ -70,6 +70,19 @@ function shape({ key, user, items }: { key: string; user: UserItem | null; items
   return reply ? { key, user, steps: items.slice(0, r), reply, after: items.slice(r + 1) } : { key, user, steps: items, reply: null, after: [] };
 }
 
+/** A turn that failed: an error notice in it (the assistant's failure, or the message not getting through). */
+export const turnFailed = (turn: Turn) => [...turn.steps, ...turn.after].some((it) => it.kind === 'notice' && it.tone === 'error');
+
+/**
+ * A reply that only says what the error said ("No capacity available for model
+ * … on the server", Antigravity's when its run broke off): no answer, so the
+ * failure shows instead.
+ */
+export function restatesError(text: string, error: string): boolean {
+  const said = text.trim().replace(/[.!]+$/, '').toLowerCase();
+  return said.length > 0 && error.toLowerCase().includes(said);
+}
+
 /** An edit as the words it changed. */
 export type Edit = {
   /** The file, in the book ('' if it isn't one of the book's). */

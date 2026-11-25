@@ -13,7 +13,7 @@ import { withoutAddressed } from '../app/review';
 import { actionText, messageLine, stockAction, type StockAction } from '../app/stock-prompts';
 import { withoutMarker } from '../app/tasks';
 import { describePermission, describeTool } from '../app/tool-labels';
-import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnsOf, turnTime, turnWords, verbAndRest, type Edit, type Tone, type ToolItem, type Turn } from '../app/trace';
+import { attachmentPlace, editOf, linesOf, lookOf, looksLikeProse, patchChanges, spanWords, statsOf, toolTone, trimPieces, turnFailed, turnsOf, turnTime, turnWords, verbAndRest, type Edit, type Tone, type ToolItem, type Turn } from '../app/trace';
 import { countWords, wordPieces, type Piece } from '../app/prose-diff';
 import { plainLine } from '../app/task-list';
 import { onContextMenu } from '../lib/context-menu';
@@ -31,6 +31,7 @@ import { CommandPermission, RuleChip, scopeWords } from './CommandPermission';
 import { FileIcon, Icon, type IconName } from './icons';
 import { ChartBlock } from './Chart';
 import { Markdown, MarkdownLine, useBookFiles } from './Markdown';
+import { TryAgain } from './TryAgain';
 import { TypstPassage } from './TypstSnippet';
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
@@ -1167,9 +1168,8 @@ function UserCard({ item, onFold }: { item: Extract<ChatItem, { kind: 'user' }>;
 /** How a finished turn ended: in how long, the History version it made, and copy / try again. */
 function TurnFooter({ turn, last, copy, answered }: { turn: Turn; last: boolean; copy?: string; answered?: boolean }) {
   const stopped = useStore(studio.store, (s) => last && s.agent.stopped);
-  const running = useStore(studio.store, (s) => s.agent.running);
   const user = turn.user!;
-  const failed = [...turn.steps, ...turn.after].some((it) => it.kind === 'notice' && it.tone === 'error');
+  const failed = turnFailed(turn);
   const time = user.at && user.ended ? turnTime(user.ended - user.at) : null;
   const outcome = failed ? 'failed' : stopped ? 'stopped' : 'done';
   const done = answered ? 'Answered' : 'Done';
@@ -1192,11 +1192,7 @@ function TurnFooter({ turn, last, copy, answered }: { turn: Turn; last: boolean;
           <Icon name="copy" size={13} />
         </button>
       )}
-      {last && (
-        <button className="icon" aria-label="Try again" title="Send the same message again" disabled={running} onClick={() => void studio.send(user.text, { files: user.files })}>
-          <Icon name="retry" size={13} />
-        </button>
-      )}
+      {last && <TryAgain userId={user.id} failed={outcome === 'failed'} />}
     </div>
   );
 }
@@ -1519,7 +1515,8 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
   const [stepsOpen, setStepsOpen] = useState<boolean | null>(null);
   const [rephrase, setRephrase] = useState<string | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
-  const steps = turn.steps.filter((it) => it.kind !== 'user');
+  // A failure shows under the card (AskTurn), not folded away with how it found out.
+  const steps = turn.steps.filter((it) => it.kind !== 'user' && !isFailure(it));
   // The reply that holds the changes (its record says which were made).
   const changeItem = useMemo(() => [...turn.steps, ...(turn.reply ? [turn.reply] : [])].findLast((it): it is AssistantItem => it.kind === 'assistant' && (answerOf([it.text])?.changes.length ?? 0) > 0) ?? null, [turn]);
   const madeCount = Object.keys(changeItem?.made ?? {}).length;
@@ -1748,6 +1745,8 @@ function AskCard({ turn, answer, prose, charts, live, canAsk }: { turn: Turn; an
   );
 }
 
+const isFailure = (it: ChatItem) => it.kind === 'notice' && it.tone === 'error';
+
 /** A turn sent in Review mode (or, reopened, one whose message is the selection bar's Review): its card is a review's. */
 const isReviewTurn = (turn: Turn) => !!turn.user && (turn.user.mode === 'review' || (!turn.user.mode && stockAction(turn.user.text)?.mode === 'review'));
 
@@ -1761,6 +1760,8 @@ function AskTurn({ turn, last, running, onFold, answer }: TurnProps & { answer: 
   const canAsk = last && !busy;
   // A follow-up with no mode of its own stays in the turn's mode: Review's in Review.
   const home: AgentMode = isReviewTurn(turn) ? 'review' : 'ask';
+  // Under the card: what went wrong (the card leaves it out of its steps), then what came after the answer.
+  const after = [...turn.steps.filter(isFailure), ...turn.after];
   return (
     <div className={`turn ask-turn${last ? ' last' : ''}`}>
       {turn.user && <UserCard item={turn.user} onFold={onFold} />}
@@ -1789,9 +1790,9 @@ function AskTurn({ turn, last, running, onFold, answer }: TurnProps & { answer: 
           })}
         </div>
       )}
-      {turn.after.length > 0 && (
+      {after.length > 0 && (
         <ol className="trace after">
-          {turn.after.map((it) => (
+          {after.map((it) => (
             <StepItem key={it.id} item={it} editOpen={false} />
           ))}
         </ol>

@@ -2462,6 +2462,173 @@ async function askCardChecks() {
   return out;
 }
 
+/**
+ * Try again (TryAgain.tsx): an Ask turn whose run broke off, as Antigravity's
+ * does when its server has no capacity (the reads fail, it says only the
+ * error, and ends the turn as finished), shows as failed: no answer, the
+ * failure in sight under the card, Try again in words. It sends the message
+ * again with the passage it went with (not the box's), in its mode; its menu
+ * on another effort or model. A turn that finished keeps the quiet icon.
+ */
+async function tryAgainChecks() {
+  const out: Record<string, unknown> = {};
+  const s = studio as any;
+  const SID = 'selftest-tryagain';
+  const file = 'chapters/ch1-vectors.typ';
+  await studio.openFile(file);
+  const a = studio.state.agent;
+  const saved = { mode: a.mode, auto: a.auto, sessionId: a.sessionId, items: a.items, running: a.running, stopped: a.stopped, status: a.status, models: a.models, model: a.model, efforts: a.efforts, effort: a.effort, attachments: a.attachments, files: a.files, change: a.change };
+  const { send, setMode, selectEffort, selectModel, loadModels } = studio;
+  const sent: Record<string, unknown>[] = [];
+  studio.send = async (text, opts) => {
+    const now = studio.state.agent;
+    sent.push({ text, files: opts?.files, again: opts?.again?.attachments.map((x) => x.label), mode: now.mode, model: now.model?.id, effort: now.effort });
+    return true;
+  };
+  studio.setMode = async (mode) => {
+    studio.store.set((st) => ({ agent: { ...st.agent, ...(mode === 'auto' ? { auto: true } : { mode, auto: false }) } }));
+  };
+  studio.selectEffort = async (value) => {
+    studio.store.set((st) => ({ agent: { ...st.agent, effort: value } }));
+    return true;
+  };
+  studio.selectModel = async (m) => {
+    studio.store.set((st) => ({ agent: { ...st.agent, model: { providerID: m.providerID, id: m.id } } }));
+  };
+  studio.loadModels = async () => {};
+  const zoom = studio.state.zoom;
+  const still = document.createElement('style');
+  still.textContent = '*{animation:none!important;transition:none!important}';
+  const words = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+  const pane = () => document.querySelector('.agent-pane');
+  const foot = () => [...document.querySelectorAll('.turn-foot')].pop() ?? null;
+  const menu = () => document.querySelector('.try-again-menu');
+  const fake = (label: string) => ({ id: `a-${label}`, label, selection: { relativePath: file, start: { line: 3, column: 1 }, end: { line: 5, column: 1 }, selectedText: label } as any });
+  const passage = fake(`${file}:3–5`);
+  try {
+    document.head.append(still);
+    studio.store.set((st) => ({
+      agent: {
+        ...st.agent,
+        sessionId: SID,
+        status: 'ready',
+        running: true,
+        mode: 'ask',
+        auto: false,
+        models: [
+          { providerID: 'antigravity', id: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen', providerName: 'Antigravity', supportsTools: true },
+          { providerID: 'antigravity', id: 'gemini-4-neon', name: 'Gemini 4 Neon', providerName: 'Antigravity', supportsTools: true },
+        ],
+        model: { providerID: 'antigravity', id: 'gemini-4-hydrogen' },
+        efforts: [
+          { value: 'low', name: 'Low' },
+          { value: 'medium', name: 'Medium' },
+          { value: 'high', name: 'High' },
+        ],
+        effort: 'high',
+        // In the box now: another passage, which Try again leaves there.
+        attachments: [fake(`${file}:40–41`)],
+        items: [{ kind: 'user', id: 'u1', text: 'wtf is PC1 and PC2 ? i dont recall that appearing here ever ?', attachments: [passage.label], at: Date.now() - 14000, mode: 'ask' }],
+        queued: [],
+      },
+    }));
+    s.sentWith.set('u1', { attachments: [passage], change: null });
+    studio.events.emit('show-agent-pane');
+    await studio.setZoom(1.25, { persist: false, write: false });
+    await setAppTheme('light');
+    // As it came: the question given back, two searches, the reads failing with the 503, the error as its words, finished.
+    s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: 'm1', ordinal: 0, text: '```answer\nasked: What are "PC1" and "PC2" in chapter 18, and are they ever introduced before line 1108?\n```' });
+    const broke = 'Agent execution terminated due to error. ("agent executor error: Error 503, Message: No capacity available for model gemini-4-hydrogen-high on the server, Status: UNAVAILABLE")';
+    studio.store.set((st) => ({
+      agent: {
+        ...st.agent,
+        items: [
+          ...st.agent.items,
+          { kind: 'tool', id: 't1', name: 'grep', summary: 'PC[0-9]', status: 'done', detail: '', input: { pattern: 'PC[0-9]' }, started: Date.now() - 9000, ended: Date.now() - 8900 },
+          { kind: 'tool', id: 't2', name: 'read', summary: file, status: 'failed', detail: broke, input: { filePath: file }, started: Date.now() - 8000, ended: Date.now() - 100 },
+        ],
+      },
+    }));
+    s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: 'm2', ordinal: 0, text: 'No capacity available for model gemini-4-hydrogen-high on the server' });
+    s.onAgentEvent({ type: 'turn-finished', sessionId: SID, outcome: 'failed', error: 'No capacity available for model gemini-4-hydrogen-high on the server (error 503)' });
+    studio.store.set((st) => ({ agent: { ...st.agent, items: st.agent.items.map((it) => (it.kind === 'user' ? { ...it, ended: Date.now() } : it)) } }));
+    await sleep(400);
+    const turn = [...document.querySelectorAll('.turn')].pop();
+    out.failed = {
+      replyGone: !studio.state.agent.items.some((it) => it.id === 'm2:0'),
+      noAnswer: !turn?.querySelector('.answer-main'),
+      failureInSight: words(turn?.querySelector(':scope > .trace.after .notice.error')),
+      notInSteps: !turn?.querySelector('.answer-steps .notice'),
+      outcome: words(foot()?.querySelector('.turn-outcome')),
+      footFailed: foot()?.classList.contains('failed'),
+      button: words(foot()?.querySelector('.try-again.failed .try-again-go')),
+      snapshot: await snap('tryagain-failed'),
+    };
+    // Try again: the same words, the passage it went with, in Ask; the box keeps its own passage.
+    foot()?.querySelector<HTMLButtonElement>('.try-again-go')?.click();
+    await sleep(200);
+    out.again = { sent: sent.splice(0), boxKept: studio.state.agent.attachments.map((x) => x.label) };
+    // Its menu: the efforts, the models; Medium, then Neon.
+    foot()?.querySelector<HTMLButtonElement>('.try-again-more')?.click();
+    await sleep(300);
+    out.menu = {
+      open: !!menu(),
+      expanded: foot()?.querySelector('.try-again-more')?.getAttribute('aria-expanded'),
+      title: words(menu()?.querySelector('.setup-title')),
+      efforts: [...(menu()?.querySelectorAll('.setup-effort') ?? [])].map((b) => `${words(b)}${b.classList.contains('current') ? ' (now)' : ''}`),
+      models: [...(menu()?.querySelectorAll('.model-option') ?? [])].map((m) => words(m)),
+      snapshot: await snap('tryagain-menu'),
+    };
+    await setAppTheme('dark');
+    await sleep(400);
+    out.menuDark = await snap('tryagain-menu-dark');
+    await setAppTheme('light');
+    [...(menu()?.querySelectorAll<HTMLButtonElement>('.setup-effort') ?? [])].find((b) => words(b) === 'Medium')?.click();
+    await sleep(200);
+    out.withMedium = { sent: sent.splice(0), closed: !menu() };
+    foot()?.querySelector<HTMLButtonElement>('.try-again-more')?.click();
+    await sleep(300);
+    [...(menu()?.querySelectorAll<HTMLElement>('.model-option') ?? [])].find((m) => words(m)?.includes('Neon'))?.click();
+    await sleep(200);
+    out.withNeon = { sent: sent.splice(0), closed: !menu() };
+    // Escape closes it, as clicking away does.
+    foot()?.querySelector<HTMLButtonElement>('.try-again-more')?.click();
+    await sleep(200);
+    menu()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(200);
+    out.escapeCloses = !menu();
+    // While a reply runs, nothing to try again (the store tells the page by the frame, or 250 ms on in a covered window).
+    studio.store.set((st) => ({ agent: { ...st.agent, running: true } }));
+    await sleep(350);
+    out.whileRunning = { running: studio.state.agent.running, tryAgain: !!document.querySelector('.try-again'), enabled: [...document.querySelectorAll<HTMLButtonElement>('.try-again-go')].some((b) => !b.disabled) };
+    studio.store.set((st) => ({ agent: { ...st.agent, running: false } }));
+    // A turn that finished: the quiet icon, with its menu.
+    studio.store.set((st) => ({ agent: { ...st.agent, stopped: false, items: [...st.agent.items, { kind: 'user', id: 'u2', text: 'And in chapter 19?', attachments: [], at: Date.now() - 6000, ended: Date.now(), mode: 'ask' }] } }));
+    s.onAgentEvent({ type: 'text-ended', sessionId: SID, messageId: 'm3', ordinal: 0, text: '```answer\nasked: Does chapter 19 use PC1 and PC2?\nanswer: No: chapter 19 writes them as $v_1$ and $v_2$.\nsure: certain | searched the chapter\n```' });
+    await sleep(400);
+    out.done = {
+      outcome: words(foot()?.querySelector('.turn-outcome')),
+      quiet: !foot()?.querySelector('.try-again.failed') && words(foot()?.querySelector('.try-again-go')) === '',
+      more: !!foot()?.querySelector('.try-again-more'),
+      onlyLast: document.querySelectorAll('.try-again').length,
+      snapshot: await snap('tryagain-done'),
+    };
+    out.pane = !!pane();
+  } finally {
+    studio.send = send;
+    studio.setMode = setMode;
+    studio.selectEffort = selectEffort;
+    studio.selectModel = selectModel;
+    studio.loadModels = loadModels;
+    s.sentWith.delete('u1');
+    still.remove();
+    await setAppTheme(null);
+    await studio.setZoom(zoom, { persist: false, write: false });
+    studio.store.set((st) => ({ agent: { ...st.agent, ...saved } }));
+  }
+  return out;
+}
+
 async function optionsPassageChecks() {
   const out: Record<string, unknown> = {};
   const file = 'chapters/ch2-eigenvalues.typ';
@@ -12606,6 +12773,7 @@ export async function runSelftest(launch: LaunchOptions) {
     if (only?.includes('optionscut')) result.optionscut = await optionsCutChecks();
     if (only?.includes('optionspassage')) result.optionspassage = await optionsPassageChecks();
     if (only?.includes('askcard')) result.askcard = await askCardChecks();
+    if (only?.includes('tryagain')) result.tryagain = await tryAgainChecks();
     if (only?.includes('modecards')) result.modecards = await modeCardsChecks();
     if (only?.includes('selcard')) result.selcard = await selectionCardChecks();
     if (only?.includes('selnote')) result.selnote = await selectionNoteChecks();
