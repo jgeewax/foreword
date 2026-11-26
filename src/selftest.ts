@@ -3616,6 +3616,33 @@ async function templateChecks() {
   } catch (e) {
     out.duplicate = errorMessage(e);
   }
+  // A folder the author chose for the book itself: the files go right in it, not in one named after the title.
+  const chosen = `${parent}/selftest-chosen-${stamp}`;
+  try {
+    await studio.createBook('blank', { title: `Selftest chosen ${stamp}`, author: 'x' }, { root: chosen });
+    const files = studio.state.workspace?.files ?? [];
+    out.chosen = {
+      root: studio.state.workspace?.root,
+      rightThere: studio.state.workspace?.root === chosen,
+      main: files.some((f) => f === 'main.typ' || f.endsWith('/main.typ')),
+      nested: files.some((f) => f.includes('Selftest chosen')),
+      active: studio.state.active,
+    };
+    try {
+      out.peek = await ipc.folderPeek(chosen);
+    } catch (e) {
+      out.peek = errorMessage(e);
+    }
+    // Chosen again: the book's files are there already, so it's refused and nothing is replaced.
+    try {
+      await studio.createBook('blank', { title: 'Another', author: 'y' }, { root: chosen });
+      out.chosenAgain = 'created (unexpected)';
+    } catch (e) {
+      out.chosenAgain = errorMessage(e);
+    }
+  } catch (e) {
+    out.chosen = { error: errorMessage(e) };
+  }
   studio.closeNewBook();
   await studio.openWorkspace(original);
   return out;

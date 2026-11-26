@@ -305,6 +305,15 @@ export function bookFolderName(title: string): string {
   return name || 'Untitled Book';
 }
 
+/** Where a new book goes: a folder to make one named after its title in, or `{ root }`, the folder the author chose for the book itself. */
+export type BookLocation = string | { root: string };
+
+/** The new book's folder: `existing` when the author chose it (so it may be there already, and its files go right in it). */
+export function bookFolder(where: BookLocation, title: string): { root: string; existing: boolean } {
+  if (typeof where !== 'string') return { root: where.root.replace(/(.)\/+$/, '$1'), existing: true };
+  return { root: `${where.replace(/\/+$/, '')}/${bookFolderName(title)}`, existing: false };
+}
+
 /** The files of a template, ready to write. Placeholders only appear inside Typst strings. */
 export function templateFiles(template: BookTemplate, info: BookInfo): { path: string; text: string }[] {
   const prefix = `./${template.id}/`;

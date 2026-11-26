@@ -213,11 +213,17 @@ export const ipc = {
   workspaceList: () => invoke<string[]>('workspace_list'),
   fsRead: (path: string) => invoke<FileContent>('fs_read', { path }),
   fsHash: (path: string) => invoke<string | null>('fs_hash', { path }),
-  /** New book: create `parent/name` with these files (never into an existing folder). Returns its path. */
   /** A sample book's copy in `parent/name`: made the first time, then the same one. */
   sampleCreate: (id: string, parent: string, name: string) => invoke<string>('sample_create', { id, parent, name }),
-  projectCreate: (parent: string, name: string, files: { path: string; text: string }[]) =>
-    invoke<string>('project_create', { parent, name, files }),
+  /**
+   * New book: these files in the folder `root`, made for it. With `existing`
+   * (the author chose that folder) one that's there already is used, if none
+   * of the files are in it; never overwrites. Returns its path.
+   */
+  projectCreate: (root: string, existing: boolean, files: { path: string; text: string }[]) =>
+    invoke<string>('project_create', { root, existing, files }),
+  /** A folder's contents, hidden ones aside: how many, and the first few names. */
+  folderPeek: (path: string) => invoke<{ count: number; names: string[] }>('folder_peek', { path }),
   /** Run one code example in the book folder (only for trusted books). */
   /** Typst snippets (formulas, small blocks) to SVG, each on its own, with the book's imports if given; see src-tauri/src/render.rs. */
   typstRender: (sources: string[], fill: string, sizePt: number, book: { root: string; prelude: string } | null) =>
@@ -246,8 +252,8 @@ export const ipc = {
   /** Open a printer's web page in the browser (https, known printers only). */
   openUrl: (url: string) => invoke<void>('open_url', { url }),
   /** New project from a Typst Universe template package (downloaded from packages.typst.org). */
-  projectCreateFromPackage: (parent: string, name: string, pkg: { name: string; version: string }, extra: { path: string; text: string }[]) =>
-    invoke<{ root: string; entry: string }>('project_create_from_package', { parent, name, package: pkg, extra }),
+  projectCreateFromPackage: (root: string, existing: boolean, pkg: { name: string; version: string }, extra: { path: string; text: string }[]) =>
+    invoke<{ root: string; entry: string }>('project_create_from_package', { root, existing, package: pkg, extra }),
   fsMkdir: (path: string) => invoke<void>('fs_mkdir', { path }),
   /** Rename or move; refuses if the destination exists. */
   fsRename: (from: string, to: string) => invoke<void>('fs_rename', { from, to }),

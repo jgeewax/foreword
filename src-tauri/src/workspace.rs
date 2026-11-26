@@ -487,70 +487,176 @@ pub fn new_file_parts(files: Vec<NewFile>) -> Vec<(String, Vec<u8>)> {
         .collect()
 }
 
-/// New book from a template: create `parent/name` and write `files` into it.
-/// Only ever writes inside a folder it has just created (refuses an existing
-/// one, never overwrites); on failure that new folder is removed again.
-pub fn create_project(parent: &Path, name: &str, files: &[NewFile]) -> CmdResult<PathBuf> {
+/// New book from a template: write `files` into the folder `root`.
+/// See [`create_project_bytes`].
+pub fn create_project(root: &Path, existing: bool, files: &[NewFile]) -> CmdResult<PathBuf> {
     let bytes: Vec<(String, Vec<u8>)> = files
         .iter()
         .map(|f| (f.path.clone(), f.text.clone().into_bytes()))
         .collect();
-    create_project_bytes(parent, name, &bytes)
+    create_project_bytes(root, existing, &bytes)
 }
 
-/// [`create_project`] with arbitrary (binary) file contents.
-pub fn create_project_bytes(
-    parent: &Path,
-    name: &str,
-    files: &[(String, Vec<u8>)],
-) -> CmdResult<PathBuf> {
-    if !parent.is_absolute() || !parent.is_dir() {
-        return Err(CmdError::Invalid(format!(
-            "not a folder: {}",
-            parent.display()
-        )));
-    }
-    let valid_name = !name.trim().is_empty()
+/// Whether a new book folder can be called `name`.
+fn usable_folder_name(name: &str) -> bool {
+    !name.trim().is_empty()
         && name.len() <= 255
         && !name.starts_with('.')
-        && !name.contains(['/', '\0', ':']);
-    if !valid_name {
+        && !name.contains(['/', '\0', ':'])
+}
+
+/// Write `files` into the book folder `root` (an absolute path), made for
+/// it. With `existing` (the author chose that very folder), a folder that's
+/// already there is used as it is, as long as none of the files are in it
+/// yet; without, an existing folder is refused. Never overwrites anything,
+/// and on failure removes again just what it wrote.
+pub fn create_project_bytes(
+    root: &Path,
+    existing: bool,
+    files: &[(String, Vec<u8>)],
+) -> CmdResult<PathBuf> {
+    let parts_ok = root.is_absolute()
+        && root
+            .components()
+            .all(|c| matches!(c, Component::RootDir | Component::Normal(_)));
+    let (Some(parent), Some(name)) = (root.parent(), root.file_name().map(|n| n.to_string_lossy()))
+    else {
         return Err(CmdError::Invalid(format!(
-            "not a usable folder name: {name:?}"
+            "not a folder: {}",
+            root.display()
+        )));
+    };
+    if !parts_ok || !parent.is_dir() {
+        return Err(CmdError::Invalid(format!(
+            "not a folder: {}",
+            root.display()
         )));
     }
-    let root = parent.canonicalize()?.join(name);
-    fs::create_dir(&root).map_err(|e| match e.kind() {
-        std::io::ErrorKind::AlreadyExists => {
-            CmdError::Conflict(format!("{name} already exists in that folder"))
+    for (rel_path, _) in files {
+        if rel_path.is_empty()
+            || !Path::new(rel_path)
+                .components()
+                .all(|c| matches!(c, Component::Normal(_)))
+        {
+            return Err(CmdError::Invalid(format!(
+                "bad template path: {rel_path:?}"
+            )));
         }
-        _ => e.into(),
-    })?;
+    }
+    let there = fs::symlink_metadata(root).is_ok();
+    if there && !existing {
+        return Err(CmdError::Conflict(format!(
+            "{name} already exists in that folder"
+        )));
+    }
+    let root = if there {
+        if !root.is_dir() {
+            return Err(CmdError::Conflict(format!(
+                "{} isn't a folder",
+                root.display()
+            )));
+        }
+        let root = root.canonicalize()?;
+        let clashes: Vec<&str> = files
+            .iter()
+            .map(|(p, _)| p.as_str())
+            .filter(|p| fs::symlink_metadata(root.join(p)).is_ok())
+            .collect();
+        if let Some(first) = clashes.first() {
+            let more = match clashes.len() {
+                1 => String::new(),
+                n => format!(" and {} more of the book's files", n - 1),
+            };
+            return Err(CmdError::Conflict(format!(
+                "{name} already has {first}{more} in it; choose an empty folder"
+            )));
+        }
+        root
+    } else {
+        if !usable_folder_name(&name) {
+            return Err(CmdError::Invalid(format!(
+                "not a usable folder name: {name:?}"
+            )));
+        }
+        let root = parent.canonicalize()?.join(&*name);
+        fs::create_dir(&root).map_err(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => {
+                CmdError::Conflict(format!("{name} already exists in that folder"))
+            }
+            _ => e.into(),
+        })?;
+        root
+    };
+    // What this wrote (folders and files, in order), to take out again on failure.
+    let mut made: Vec<PathBuf> = vec![];
     let written = (|| -> CmdResult<()> {
         for (rel_path, contents) in files {
-            let rel = Path::new(rel_path);
-            if rel_path.is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_))) {
-                return Err(CmdError::Invalid(format!(
-                    "bad template path: {rel_path:?}"
-                )));
+            let path = root.join(rel_path);
+            let mut dir = root.clone();
+            for part in Path::new(rel_path)
+                .parent()
+                .into_iter()
+                .flat_map(|p| p.components())
+            {
+                dir.push(part);
+                if !dir.is_dir() {
+                    fs::create_dir(&dir)?;
+                    made.push(dir.clone());
+                }
             }
-            let path = root.join(rel);
-            if let Some(dir) = path.parent() {
-                fs::create_dir_all(dir)?;
-            }
-            fs::OpenOptions::new()
+            let mut file = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(&path)?
-                .write_all(contents)?;
+                .open(&path)?;
+            made.push(path);
+            file.write_all(contents)?;
         }
         Ok(())
     })();
     if let Err(e) = written {
-        let _ = fs::remove_dir_all(&root);
+        if there {
+            for path in made.iter().rev() {
+                let _ = if path.is_dir() {
+                    fs::remove_dir(path)
+                } else {
+                    fs::remove_file(path)
+                };
+            }
+        } else {
+            let _ = fs::remove_dir_all(&root);
+        }
         return Err(e);
     }
     Ok(root)
+}
+
+/// What's in a folder the author chose for a new book: how many things
+/// (hidden ones aside) and the names of the first few, sorted.
+#[derive(Serialize)]
+pub struct FolderPeek {
+    count: usize,
+    names: Vec<String>,
+}
+
+pub fn peek_folder(dir: &Path) -> CmdResult<FolderPeek> {
+    let mut names: Vec<String> = fs::read_dir(dir)?
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| !n.starts_with('.'))
+        .collect();
+    names.sort_by_key(|n| n.to_lowercase());
+    let count = names.len();
+    names.truncate(3);
+    Ok(FolderPeek { count, names })
+}
+
+#[tauri::command]
+pub async fn folder_peek(path: String) -> CmdResult<FolderPeek> {
+    let dir = Path::new(&path);
+    if !dir.is_absolute() || !dir.is_dir() {
+        return Err(CmdError::Invalid(format!("not a folder: {path}")));
+    }
+    peek_folder(dir)
 }
 
 /// The sample books that come with the app: the repo's samples/ folder in a
@@ -612,9 +718,14 @@ pub fn copy_sample(samples: &Path, id: &str, parent: &Path, name: &str) -> CmdRe
     if existing.is_dir() && !name.is_empty() && !name.contains(['/', '\0']) {
         return Ok(existing.canonicalize()?);
     }
+    if !usable_folder_name(name) {
+        return Err(CmdError::Invalid(format!(
+            "not a usable folder name: {name:?}"
+        )));
+    }
     let mut files = vec![];
     read_tree(&src, "", &mut files)?;
-    create_project_bytes(parent, name, &files)
+    create_project_bytes(&parent.join(name), false, &files)
 }
 
 /// Open a sample book: a copy of it in `parent`, made the first time.
@@ -635,13 +746,15 @@ pub async fn sample_create(
     )
 }
 
+/// New book: `files` in the folder `root`; `existing` when the author chose
+/// that folder (see [`create_project_bytes`]).
 #[tauri::command]
 pub async fn project_create(
-    parent: String,
-    name: String,
+    root: String,
+    existing: bool,
     files: Vec<NewFile>,
 ) -> CmdResult<String> {
-    Ok(create_project(Path::new(&parent), &name, &files)?
+    Ok(create_project(Path::new(&root), existing, &files)?
         .to_string_lossy()
         .into_owned())
 }
@@ -680,8 +793,8 @@ mod tests {
     fn create_project_writes_files_into_a_new_folder_only() {
         let parent = temp_root();
         let root = create_project(
-            &parent,
-            "My Novel",
+            &parent.join("My Novel"),
+            false,
             &[
                 file("main.typ", "= Hi"),
                 file("chapters/01.typ", "x"),
@@ -695,24 +808,126 @@ mod tests {
             "x"
         );
         assert!(root.join(".foreword.json").exists());
-        // Never into an existing folder.
-        let again = create_project(&parent, "My Novel", &[file("main.typ", "other")]);
+        // Never into an existing folder the author didn't choose.
+        let again = create_project(&root, false, &[file("other.typ", "other")]);
         assert!(matches!(again, Err(CmdError::Conflict(_))));
-        assert_eq!(fs::read_to_string(root.join("main.typ")).unwrap(), "= Hi");
+        assert!(!root.join("other.typ").exists());
+        // Nor anywhere its folder isn't.
+        let nested = create_project(&parent.join("a/b"), false, &[]);
+        assert!(matches!(nested, Err(CmdError::Invalid(_))));
     }
 
     #[test]
     fn create_project_rejects_escapes_and_cleans_up() {
         let parent = temp_root();
         for bad in ["../evil.typ", "/etc/x", "a/../../b"] {
-            let r = create_project(&parent, "Book", &[file("ok.typ", ""), file(bad, "x")]);
+            let r = create_project(
+                &parent.join("Book"),
+                false,
+                &[file("ok.typ", ""), file(bad, "x")],
+            );
             assert!(matches!(r, Err(CmdError::Invalid(_))), "{bad}");
             assert!(!parent.join("Book").exists(), "{bad} left a folder behind");
         }
         assert!(!parent.join("evil.typ").exists());
-        for name in ["", ".hidden", "a/b", "  "] {
-            assert!(create_project(&parent, name, &[]).is_err(), "{name:?}");
+        for name in ["", ".hidden", "  "] {
+            assert!(
+                create_project(&parent.join(name), false, &[]).is_err(),
+                "{name:?}"
+            );
         }
+        for root in ["relative/Book", "/", "/tmp/../Book"] {
+            let r = create_project(Path::new(root), true, &[]);
+            assert!(matches!(r, Err(CmdError::Invalid(_))), "{root}");
+        }
+    }
+
+    #[test]
+    fn create_project_uses_the_folder_the_author_chose() {
+        let root = temp_root();
+        fs::create_dir(root.join(".git")).unwrap();
+        fs::write(root.join("README.md"), "mine").unwrap();
+        let made = create_project(
+            &root,
+            true,
+            &[file("main.typ", "= Hi"), file("chapters/01.typ", "x")],
+        )
+        .unwrap();
+        // Right in it: no folder of its own inside, what was there kept.
+        assert_eq!(made, root);
+        assert_eq!(fs::read_to_string(root.join("main.typ")).unwrap(), "= Hi");
+        assert_eq!(
+            fs::read_to_string(root.join("chapters/01.typ")).unwrap(),
+            "x"
+        );
+        assert_eq!(fs::read_to_string(root.join("README.md")).unwrap(), "mine");
+        assert!(root.join(".git").is_dir());
+        // The chosen folder needn't be there yet.
+        let fresh = root.join("fresh");
+        assert_eq!(
+            create_project(&fresh, true, &[file("main.typ", "")]).unwrap(),
+            fresh
+        );
+    }
+
+    #[test]
+    fn create_project_in_a_chosen_folder_replaces_nothing() {
+        let root = temp_root();
+        fs::write(root.join("README.md"), "mine").unwrap();
+        fs::create_dir(root.join("chapters")).unwrap();
+        fs::write(root.join("chapters/01.typ"), "my chapter").unwrap();
+        // A clash is refused before anything is written.
+        let r = create_project(
+            &root,
+            true,
+            &[
+                file("main.typ", "= Hi"),
+                file("chapters/01.typ", "x"),
+                file("README.md", ""),
+            ],
+        );
+        let Err(CmdError::Conflict(message)) = r else {
+            panic!("{r:?}")
+        };
+        assert!(message.contains("chapters/01.typ and 1 more"), "{message}");
+        assert!(!root.join("main.typ").exists());
+        assert_eq!(
+            fs::read_to_string(root.join("chapters/01.typ")).unwrap(),
+            "my chapter"
+        );
+        // A failure part way (a file where the first made a folder) takes out
+        // just what it wrote: the author's folders and files stay.
+        let r = create_project(
+            &root,
+            true,
+            &[
+                file("main.typ", "= Hi"),
+                file("parts/one/a.typ", "a"),
+                file("chapters/02.typ", "b"),
+                file("parts", "x"),
+            ],
+        );
+        assert!(r.is_err());
+        let mut left: Vec<_> = fs::read_dir(&root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["README.md", "chapters"]);
+        assert_eq!(fs::read_dir(root.join("chapters")).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn peek_folder_counts_what_is_not_hidden() {
+        let dir = temp_root();
+        for name in ["b.typ", "A.md", ".DS_Store", "c", "d"] {
+            fs::write(dir.join(name), "").unwrap();
+        }
+        fs::create_dir(dir.join(".git")).unwrap();
+        let peek = peek_folder(&dir).unwrap();
+        assert_eq!(peek.count, 4);
+        assert_eq!(peek.names, ["A.md", "b.typ", "c"]);
+        assert_eq!(peek_folder(&temp_root()).unwrap().count, 0);
     }
 
     #[test]

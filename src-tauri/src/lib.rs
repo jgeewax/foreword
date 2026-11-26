@@ -803,6 +803,7 @@ pub fn run() {
             workspace::fs_write,
             workspace::preview_chapter_file,
             workspace::project_create,
+            workspace::folder_peek,
             workspace::sample_create,
             packages::project_create_from_package,
             workspace::reveal_in_finder,

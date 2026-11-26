@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, REGIONS, sizesByRegion, TEMPLATES, templateFiles, typstLength, typstString } from './index';
+import { bookFolder, bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, REGIONS, sizesByRegion, TEMPLATES, templateFiles, typstLength, typstString } from './index';
 
 const info = { title: 'The "Quiet" Harbour \\ Part One', author: 'Ada Example', year: '2026' };
 
@@ -94,6 +94,14 @@ describe('bookFolderName', () => {
     expect(bookFolderName('  My Book: Part 1/2 ')).toBe('My Book- Part 1-2');
     expect(bookFolderName('...hidden')).toBe('hidden');
     expect(bookFolderName('   ')).toBe('Untitled Book');
+  });
+});
+
+describe('bookFolder', () => {
+  it('makes a folder named after the title, or uses the one the author chose', () => {
+    expect(bookFolder('/Users/a/Documents/', 'My Book: 2')).toEqual({ root: '/Users/a/Documents/My Book- 2', existing: false });
+    expect(bookFolder({ root: '/Users/a/Projects/my-book/' }, 'My Book')).toEqual({ root: '/Users/a/Projects/my-book', existing: true });
+    expect(bookFolder({ root: '/' }, 'x').root).toBe('/');
   });
 });
 

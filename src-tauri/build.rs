@@ -28,6 +28,7 @@ fn main() {
             "fs_write",
             "preview_chapter_file",
             "project_create",
+            "folder_peek",
             "sample_create",
             "project_create_from_package",
             "reveal_in_finder",

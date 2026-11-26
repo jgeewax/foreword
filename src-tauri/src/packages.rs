@@ -143,8 +143,8 @@ fn unpack(archive: &[u8], dir: &Path) -> CmdResult<()> {
 
 #[tauri::command]
 pub async fn project_create_from_package(
-    parent: String,
-    name: String,
+    root: String,
+    existing: bool,
     package: PackageSpec,
     extra: Vec<NewFile>,
 ) -> CmdResult<CreatedProject> {
@@ -181,7 +181,7 @@ pub async fn project_create_from_package(
                 files.push(f);
             }
         }
-        let root = workspace::create_project_bytes(Path::new(&parent), &name, &files)?;
+        let root = workspace::create_project_bytes(Path::new(&root), existing, &files)?;
         Ok(CreatedProject {
             root: root.to_string_lossy().into_owned(),
             entry,

@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { documentDir } from '@tauri-apps/api/path';
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { baseName, isPicture, tildePath } from '../lib/paths';
+import { baseName, dirName, isPicture, tildePath } from '../lib/paths';
 import { bookFiles, refNamed, type SourceRef } from '../lib/source-links';
 import { commandId, type TabCommand } from '../lib/tab-keys';
 import { Documents, type Doc, type MergeQuestion } from '../editor/documents';
@@ -65,7 +65,7 @@ import { History, initialHistory, type ChangedFile, type HistoryState } from './
 import { proseDiff } from './prose-diff';
 import { fileTabs, GIT_TAB, GUIDE_TAB, HISTORY_FILE_TAB, HISTORY_TAB, isViewTab, TODO_TAB } from './view-tabs';
 import { todoKey, type BookChapter, type TodoRef, type TodoScope } from './todo-tab';
-import { bookFolderName, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
+import { bookFolder, type BookLocation, PAPER_TEMPLATES, paperExtras, paperSetupMessage, TEMPLATES, templateFiles, typstLength } from '../templates';
 import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { makefile } from '../templates/makefile';
 import { edgeToEdgeWithoutBleed, lengthPt, parseCoverSpec, PRINT_WRAPPER, printChecks, printWrapper, type Check, type PdfInfo, type PrintFacts } from '../print';
@@ -2540,19 +2540,27 @@ export class Studio {
     this.syncPreviewVisibility();
   }
 
-  /** Create `parent/<title>` from a template and open it. Throws (for the dialog) if that fails. */
-  async createBook(templateId: string, info: { title: string; author: string; size?: { width: string; height: string } }, parent: string) {
+  /** The folder a new book went in and its author, for next time; not by self-tests (they share the author's storage). */
+  private rememberNewBook(root: string, author: string) {
+    if (this.state.launch?.selftestOut) return;
+    localStorage.setItem(NEW_BOOK_PARENT, dirName(root));
+    if (author.trim()) localStorage.setItem(AUTHOR_KEY, author.trim());
+  }
+
+  /**
+   * Create a book from a template and open it. `where` is a folder to make
+   * `<title>` in, or `{ root }`: the folder the author chose for the book
+   * itself (its files go right in it). Throws (for the dialog) if that fails.
+   */
+  async createBook(templateId: string, info: { title: string; author: string; size?: { width: string; height: string } }, where: BookLocation) {
     const paper = PAPER_TEMPLATES.find((t) => t.id === templateId);
-    if (paper) return this.createPaper(paper, info, parent);
+    if (paper) return this.createPaper(paper, info, where);
     const template = TEMPLATES.find((t) => t.id === templateId);
     if (!template) throw new Error(`Unknown template ${templateId}`);
     const files = templateFiles(template, { ...info, year: String(new Date().getFullYear()) });
-    const root = await ipc.projectCreate(parent, bookFolderName(info.title), files);
-    // Remembered for next time, except by self-tests (they share the author's storage).
-    if (!this.state.launch?.selftestOut) {
-      localStorage.setItem(NEW_BOOK_PARENT, parent);
-      if (info.author.trim()) localStorage.setItem(AUTHOR_KEY, info.author.trim());
-    }
+    const folder = bookFolder(where, info.title);
+    const root = await ipc.projectCreate(folder.root, folder.existing, files);
+    this.rememberNewBook(root, info.author);
     this.closeNewBook();
     await this.openWorkspace(root);
     await this.openFile(template.firstFile).catch(() => {});
@@ -2565,12 +2573,10 @@ export class Studio {
    * assistant is offered the job of filling them in (the message waits in
    * the composer).
    */
-  private async createPaper(paper: (typeof PAPER_TEMPLATES)[number], info: { title: string; author: string }, parent: string) {
-    const created = await ipc.projectCreateFromPackage(parent, bookFolderName(info.title), paper.package, paperExtras(info));
-    if (!this.state.launch?.selftestOut) {
-      localStorage.setItem(NEW_BOOK_PARENT, parent);
-      if (info.author.trim()) localStorage.setItem(AUTHOR_KEY, info.author.trim());
-    }
+  private async createPaper(paper: (typeof PAPER_TEMPLATES)[number], info: { title: string; author: string }, where: BookLocation) {
+    const folder = bookFolder(where, info.title);
+    const created = await ipc.projectCreateFromPackage(folder.root, folder.existing, paper.package, paperExtras(info));
+    this.rememberNewBook(created.root, info.author);
     this.closeNewBook();
     await this.openWorkspace(created.root);
     await this.openFile(created.entry).catch(() => {});

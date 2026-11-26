@@ -2,8 +2,8 @@ import { documentDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
 import { AUTHOR_KEY, NEW_BOOK_PARENT, studio, type NewBookTab } from '../app/studio';
-import { errorMessage } from '../lib/ipc';
-import { tildePath as tilde } from '../lib/paths';
+import { errorMessage, ipc } from '../lib/ipc';
+import { dirName, tildePath as tilde } from '../lib/paths';
 import { useStore } from '../lib/store';
 import { SAMPLES, SAMPLES_FOLDER } from '../samples';
 import { bookFolderName, PAPER_TEMPLATES, sizesByRegion, TEMPLATES, typstLength } from '../templates';
@@ -34,6 +34,10 @@ export function NewBookDialog() {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState(() => stored(AUTHOR_KEY));
   const [parent, setParent] = useState(() => stored(NEW_BOOK_PARENT));
+  // The folder the author chose for the book itself (its files go right in
+  // it, whatever the title), with what's in it already; null for a new
+  // folder named after the title, in `parent`.
+  const [picked, setPicked] = useState<{ root: string; count: number; names: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -46,9 +50,18 @@ export function NewBookDialog() {
     return () => window.removeEventListener('keydown', onKey);
   }, [creating]);
 
-  const chooseParent = async () => {
-    const picked = await openDialog({ directory: true, multiple: false, defaultPath: parent || undefined, title: 'Where should the book folder go?' });
-    if (typeof picked === 'string') setParent(picked);
+  const chooseFolder = async () => {
+    const at = picked ? dirName(picked.root) : parent;
+    const root = await openDialog({ directory: true, multiple: false, canCreateDirectories: true, defaultPath: at || undefined, title: 'Choose the book’s folder' });
+    if (typeof root !== 'string') return;
+    const peek = await ipc.folderPeek(root).catch(() => ({ count: 0, names: [] }));
+    setPicked({ root, ...peek });
+  };
+  // A chosen folder that has things in it: make the book a folder of its own in there instead.
+  const newFolderInside = () => {
+    if (!picked) return;
+    setParent(picked.root);
+    setPicked(null);
   };
 
   const create = async () => {
@@ -56,16 +69,17 @@ export function NewBookDialog() {
     setCreating(true);
     try {
       if (kind === 'sample') await studio.openSample(sampleId);
-      else if (kind === 'paper') await studio.createBook(paper.id, { title: title.trim(), author: author.trim() }, parent);
-      else await studio.createBook(template, { title: title.trim(), author: author.trim(), size: size ?? undefined }, parent);
+      else if (kind === 'paper') await studio.createBook(paper.id, { title: title.trim(), author: author.trim() }, where);
+      else await studio.createBook(template, { title: title.trim(), author: author.trim(), size: size ?? undefined }, where);
     } catch (e) {
       setError(errorMessage(e));
       setCreating(false);
     }
   };
 
-  const folder = bookFolderName(title);
-  const ready = kind === 'sample' ? !creating : !!title.trim() && !!parent && (kind === 'paper' || !!size) && !creating;
+  const where = picked ? { root: picked.root } : parent;
+  const location = picked ? picked.root : parent ? `${parent.replace(/\/+$/, '')}/${bookFolderName(title)}` : '';
+  const ready = kind === 'sample' ? !creating : !!title.trim() && !!location && (kind === 'paper' || !!size) && !creating;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !creating && studio.closeNewBook()}>
       <form
@@ -212,17 +226,32 @@ export function NewBookDialog() {
           <div className="field">
             <span>Location</span>
             <div className="field-row">
-              <code className="path" title={parent}>
-                {parent ? `${tilde(parent)}/${folder}` : 'Choose a folder…'}
+              <code className="path" title={location}>
+                {location ? tilde(location) : 'Choose a folder…'}
               </code>
-              <button type="button" onClick={() => void chooseParent()}>
+              <button type="button" onClick={() => void chooseFolder()}>
                 Change…
               </button>
             </div>
+            <span className="field-note location-note">
+              {!picked ? (
+                <>A new folder named after the title. To put the book in a folder of your own, choose Change… (you can make one there).</>
+              ) : !picked.count ? (
+                <>The book’s files go right in this folder.</>
+              ) : (
+                <>
+                  This folder has {picked.count === 1 ? 'something' : `${picked.count} things`} in it already ({picked.names.join(', ')}
+                  {picked.count > picked.names.length ? ', …' : ''}). The book’s files go in beside {picked.count === 1 ? 'it' : 'them'}; nothing is replaced.{' '}
+                  <button type="button" className="link" onClick={newFolderInside}>
+                    Make a new folder in it instead
+                  </button>
+                </>
+              )}
+            </span>
           </div>
           <p className="settings-help" hidden={kind === 'paper'}>
-            Creates a folder with the book’s files, a writing style guide to fill in (WRITING_STYLE.md), and an <code>export</code> folder setting for PDFs. You can
-            change the title and author later in <code>main.typ</code>.
+            The book’s folder gets its files, a writing style guide to fill in (WRITING_STYLE.md), and an <code>export</code> folder setting for PDFs. You can change the
+            title and author later in <code>main.typ</code>.
           </p>
             </>
           )}
