@@ -3910,6 +3910,127 @@ async function snap(name: string, target: 'main' | 'preview' = 'main') {
 }
 
 /**
+ * How the assistant talks (Settings ▸ Assistant ▸ How it talks with you, and
+ * the book's AGENT_STYLE.md): the dropdown changes the setting and the
+ * conversation's instructions; the file is made from its template, says
+ * nothing until written in, then is followed. With a live agent, a turn
+ * follows the file. Writes AGENT_STYLE.md: scratch book only.
+ */
+async function agentStyleChecks(live: boolean) {
+  const out: Record<string, unknown> = {};
+  const saved = { agentStyle: studio.state.settings.agentStyle, assistant: studio.state.settings.assistant, permissions: studio.state.settings.permissions };
+  const entries = () => Object.fromEntries((studio as any).instructionEntries() as [string, string][]);
+  const style = document.createElement('style');
+  style.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.append(style);
+  try {
+    studio.updateSettings({ agentStyle: 'balanced' }, { write: false });
+    if (live) {
+      studio.updateSettings({ assistant: 'claude', permissions: PRESETS.ask.permissions }, { write: false });
+      await sleep(500);
+      await waitFor(() => ['ready', 'error'].includes(studio.state.agent.status) && (studio.state.agent.status === 'error' || studio.state.agent.models.length > 0), 180000, 'agent').catch(() => {});
+      out.agent = { status: studio.state.agent.status, model: studio.state.agent.model };
+    }
+    out.balancedEntry = 'agent-style' in entries();
+
+    studio.openSettings('assistant');
+    await sleep(600);
+    const select = () => document.querySelector<HTMLSelectElement>('#agent-style');
+    const section = () => select()?.closest('.settings-section') as HTMLElement | null;
+    out.settings = {
+      heading: section()?.querySelector('h2')?.textContent,
+      options: [...(select()?.options ?? [])].map((o) => `${o.value}:${o.textContent}`),
+      value: select()?.value,
+      help: [...(section()?.querySelectorAll('.settings-help') ?? [])].map((p) => p.textContent),
+      fileLink: section()?.querySelector('button.link')?.textContent,
+      width: Math.round(select()?.getBoundingClientRect().width ?? 0),
+    };
+    section()?.scrollIntoView({ block: 'center' });
+    await sleep(300);
+    out.snapBalanced = await snap('agentstyle-settings-balanced');
+
+    // Choose Concise in the dropdown, as the author would.
+    const sel = select()!;
+    sel.value = 'concise';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(400);
+    out.afterPick = {
+      setting: studio.state.settings.agentStyle,
+      value: select()?.value,
+      detail: section()?.querySelector('.settings-field .settings-help')?.textContent,
+      entry: (entries()['agent-style'] ?? '').split('\n').filter((l) => l.startsWith('#')),
+      keys: Object.keys(entries()),
+    };
+    out.snapConcise = await snap('agentstyle-settings-concise');
+
+    // The book's page says where the file is, and that there's none yet.
+    studio.closeSettings();
+    await sleep(250);
+    studio.openSettings('book-assistant');
+    await sleep(600);
+    const bookSection = [...document.querySelectorAll('.settings-section')].find((s) => s.querySelector('h2')?.textContent?.startsWith('How it talks')) as HTMLElement | undefined;
+    out.bookPage = { text: bookSection?.querySelector('.settings-help')?.textContent, link: bookSection?.querySelector('button.link')?.textContent };
+    out.snapBook = await snap('agentstyle-book-page');
+
+    // "Write one": the template, opened, saying nothing yet.
+    (bookSection?.querySelector('button.link') as HTMLButtonElement | null)?.click();
+    await waitFor(() => studio.state.active === 'AGENT_STYLE.md', 5000, 'AGENT_STYLE.md open').catch(() => {});
+    await sleep(300);
+    out.created = {
+      settingsOpen: studio.state.settingsOpen,
+      active: studio.state.active,
+      file: studio.state.agentStyleFile,
+      firstLine: studio.editor?.getModel()?.getLineContent(1),
+      entryNamesFile: (entries()['agent-style'] ?? '').includes('AGENT_STYLE.md'),
+    };
+
+    // Written in: followed, and the conversation is told.
+    const cur = await ipc.fsRead('AGENT_STYLE.md');
+    await ipc.fsWrite('AGENT_STYLE.md', `${cur.text}- Begin every reply with the word "Ahoy", then a comma.\n`, cur.hash);
+    await waitFor(() => studio.state.agentStyleFile.says, 8000, 'file says').catch(() => {});
+    await studio.reloadFromDisk('AGENT_STYLE.md').catch(() => {});
+    out.written = { file: studio.state.agentStyleFile, entry: (entries()['agent-style'] ?? '').split('\n').filter((l) => l.startsWith('#') || l.includes('Ahoy')) };
+
+    if (live && studio.state.agent.status === 'ready') {
+      studio.newSession();
+      await sleep(300);
+      const reply = await askAgent('Without using any tools: in one sentence, what is a semicolon for?');
+      const sid = studio.state.agent.sessionId!;
+      const user = studio.state.agent.items.find((i) => i.kind === 'user') as { text: string } | undefined;
+      out.turn = {
+        reply,
+        ahoy: /^\W*ahoy/i.test(reply),
+        words: reply.split(/\s+/).filter(Boolean).length,
+        keys: (await studio.agent!.getInstructions(sid)).map((e) => e.key),
+        userShows: user?.text,
+      };
+      // Back to Balanced mid-conversation: said in the chat, and the instructions keep only the file.
+      studio.updateSettings({ agentStyle: 'balanced' }, { write: false });
+      await sleep(500);
+      const notices = studio.state.agent.items.filter((i) => i.kind === 'notice').map((i) => (i as { text: string }).text);
+      const now = (await studio.agent!.getInstructions(sid)).find((e) => e.key === 'agent-style')?.value as string | undefined;
+      out.switched = { notice: notices[notices.length - 1], hasConcise: !!now?.includes('## Concise'), hasFile: !!now?.includes('Ahoy') };
+      out.snapChat = await snap('agentstyle-chat');
+    }
+
+    // Emptied again: nothing for the assistant from the file.
+    const again = await ipc.fsRead('AGENT_STYLE.md');
+    await ipc.fsWrite('AGENT_STYLE.md', again.text.replace(/- Begin every reply[^\n]*\n/, ''), again.hash);
+    await waitFor(() => !studio.state.agentStyleFile.says, 8000, 'file empty').catch(() => {});
+    studio.updateSettings({ agentStyle: 'balanced' }, { write: false });
+    await sleep(300);
+    out.emptied = { file: studio.state.agentStyleFile, entry: 'agent-style' in entries() };
+  } catch (e) {
+    out.error = errorMessage(e);
+  } finally {
+    studio.closeSettings();
+    studio.updateSettings(saved, { write: false });
+    style.remove();
+  }
+  return out;
+}
+
+/**
  * New-book journey: dialog with a custom page size, create a novel, add
  * chapters (directly and through the prompt dialog). Works next to the
  * scratch book, then reopens it.
@@ -12817,6 +12938,7 @@ export async function runSelftest(launch: LaunchOptions) {
     for (const kind of ['claude', 'gemini', 'codex'] as const) if (launch.selftestAgent && want(`acp-${kind}`)) result[`acp-${kind}`] = await acpChecks(kind);
     if (want('sidebarwidth')) result.sidebarwidth = await sidebarWidthChecks();
     if (want('dividers')) result.dividers = await dividerChecks();
+    if (want('agentstyle')) result.agentstyle = await agentStyleChecks(!!launch.selftestAgent);
     if (want('conversations')) result.conversations = await conversationsChecks();
     if (want('windows')) result.windows = await windowsChecks();
     if (want('dock')) result.dock = await dockChecks();

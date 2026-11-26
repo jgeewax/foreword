@@ -7,6 +7,7 @@ import { describeCommand } from './command-words';
 import { scanIncludes } from './includes';
 import { resolveRef } from './references';
 import { ASSISTANT_NAMES, type AssistantId } from './settings';
+import { AGENT_STYLE_FILE, agentStyleInfo, isAgentStyle } from '../services/agent/agent-style';
 import { CLAUDE_PROJECT } from '../services/agent/permissions';
 import { isPlanFile, PLAN_ENTER, PLAN_EXIT, PLAN_WRITE } from '../services/agent/plan-mode';
 import { STUDIO_TOOL_ACTION, studioToolName } from '../services/agent/studio-tool';
@@ -88,6 +89,7 @@ export function numberedTitle(path: string, names: BookNames): string | undefine
 export function fileName(path: string, names: BookNames): string {
   if (path === names.entry) return 'the main file';
   if (path === 'WRITING_STYLE.md') return 'the style guide';
+  if (path === AGENT_STYLE_FILE) return 'how it talks with you';
   const title = names.titles[path];
   const chapter = chapterNumber(path, names);
   if (title && chapter) return `“${title}” (chapter ${chapter})`;
@@ -259,6 +261,7 @@ const PREFERENCE_WORDS: Record<string, (v: unknown) => string> = {
   aiReadColor: (v) => `what it read marked in ${v}`,
   checkForUpdates: (v) => `checking for updates ${v ? 'on' : 'off'}`,
   zoom: (v) => `zoom ${Math.round(Number(v) * 100)}%`,
+  agentStyle: (v) => (isAgentStyle(v) ? `talking with you: ${agentStyleInfo(v).label}` : 'how it talks with you'),
 };
 
 /** Foreword's own tools that change something, completing "The assistant wants to …" (what, exactly, is in the row above). */

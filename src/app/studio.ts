@@ -105,6 +105,7 @@ import { closestOurs, findPassage, locatePassage, namesElsewhere, optionText, ty
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, STYLE_REVISE_PLACEHOLDER, styleDraftBrief, styleInstructions, styleInterviewBrief, styleReviseBrief, styleReviseMessage, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
+import { AGENT_STYLE_FILE, AGENT_STYLE_KEY, AGENT_STYLE_TEMPLATE, agentStyleInfo, agentStyleInstructions, agentStyleReminder, agentStyleSays } from '../services/agent/agent-style';
 import { matchesQuery, pushRecent } from '../services/agent/model-search';
 import { chooseModel, effortFor, effortKey, PREFERRED_PROVIDERS } from '../services/agent/models';
 import { describePermissions, onlyLooks, PRESETS, sessionRules, type PermissionRule } from '../services/agent/permissions';
@@ -534,6 +535,8 @@ export type StudioState = {
    * ('' while it starts), until the guide is written.
    */
   styleGuide: { exists: boolean; chars: number; dismissed: boolean; drafting: string | null; draftKind: StyleDraftKind };
+  /** AGENT_STYLE.md, how the assistant talks with the author in this book: whether it's there, and whether it says anything (not only comments). */
+  agentStyleFile: { exists: boolean; says: boolean };
   history: HistoryState;
   /** The author's own Git repository, if the book is in one. */
   git: GitState;
@@ -674,6 +677,7 @@ const initialState: StudioState = {
   peacockColor: null,
   exporting: false,
   styleGuide: { exists: false, chars: 0, dismissed: false, drafting: null, draftKind: 'draft' },
+  agentStyleFile: { exists: false, says: false },
   history: initialHistory,
   git: initialGit,
   code: initialCode,
@@ -1036,6 +1040,8 @@ export class Studio {
   /** Tool calls in flight: name and input, for when their result arrives. */
   private toolCalls = new Map<string, { name: string; input?: unknown }>();
   private styleGuideText: string | null = null;
+  /** AGENT_STYLE.md as it is on disk (null: none). */
+  private agentStyleText: string | null = null;
   /** Options mode: the passage the current turn's options replace. */
   private optionsTurn: OptionsTurn | null = null;
   /** The same for each message queued in Options mode, until it's handed to the conversation. */
@@ -1435,6 +1441,7 @@ export class Studio {
     await this.loadProjectSettings();
     void this.loadPeacockColor();
     await this.loadStyleGuide();
+    await this.loadAgentStyle();
     this.aiEdits.clear();
     this.aiReads = [];
     void this.refreshNames();
@@ -3787,8 +3794,10 @@ export class Studio {
       agent: initialState.agent,
       project: initialState.project,
       styleGuide: initialState.styleGuide,
+      agentStyleFile: initialState.agentStyleFile,
     });
     this.styleGuideText = null;
+    this.agentStyleText = null;
   }
 
   async refreshFiles() {
@@ -3828,6 +3837,7 @@ export class Studio {
       this.scheduleGitRefresh();
       if (batch.includes(PROJECT_FILE)) void this.loadProjectSettings({ restartIfNeeded: true });
       if (batch.includes(STYLE_GUIDE_FILE)) void this.loadStyleGuide({ updateSession: true });
+      if (batch.includes(AGENT_STYLE_FILE)) void this.loadAgentStyle({ updateSession: true });
     }, 120);
   }
 
@@ -5751,11 +5761,16 @@ export class Studio {
     await this.send(modeChoiceMessage(s, go));
   }
 
-  /** The mode's reminder of how to reply, to go with a message (Ask's answer card, how many options); in Auto, which mode the message is in, too. */
+  /**
+   * The mode's reminder of how to reply, to go with a message (Ask's answer
+   * card, how many options); in Auto, which mode the message is in, too. Then
+   * how to talk with the author, when that isn't Foreword's usual.
+   */
   private modeReminder(mode: AgentMode): MessageContext[] {
     const own = mode === 'options' ? optionsReminder(this.state.settings.optionCount) : modeConfig(mode).reminder;
     const reminder = this.state.agent.auto ? autoReminder(mode, own) : own;
-    return reminder ? [{ reminder }] : [];
+    const style = agentStyleReminder(this.state.settings.agentStyle, this.agentStyleText);
+    return [...(reminder ? [{ reminder }] : []), ...(style ? [{ reminder: style }] : [])];
   }
 
   /**
@@ -7014,7 +7029,7 @@ export class Studio {
     }
   }
 
-  /** Session context, as (key, text): this is a Typst book, not a software project (see instructions.ts); the style guide, the task, the mode. */
+  /** Session context, as (key, text): this is a Typst book, not a software project (see instructions.ts); the style guide, how to talk with the author, the task, the mode. */
   private instructionEntries(): [string, string][] {
     const ws = this.state.workspace;
     if (!ws || !this.agent) return [];
@@ -7029,9 +7044,11 @@ export class Studio {
       ownPrompt: this.agent.ownsSystemPrompt(),
     });
     const modeText = this.modeInstructions();
+    const talk = agentStyleInstructions(this.state.settings.agentStyle, this.agentStyleText);
     return [
       [INSTRUCTIONS_KEY, text],
       ...(this.styleGuideText?.trim() ? [[STYLE_INSTRUCTIONS_KEY, styleInstructions(this.styleGuideText)] as [string, string]] : []),
+      ...(talk ? [[AGENT_STYLE_KEY, talk] as [string, string]] : []),
       [TASK_INSTRUCTIONS_KEY, TASK_INSTRUCTIONS],
       ...(modeText ? [[MODE_INSTRUCTIONS_KEY, modeText] as [string, string]] : []),
     ];
@@ -7815,6 +7832,7 @@ export class Studio {
     if (write) this.scheduleConfigWrite();
     if (settings.previewPages !== before.previewPages) this.configurePreview();
     if (PROOFING_KEYS.some((k) => JSON.stringify(settings[k]) !== JSON.stringify(before[k]))) this.proofing.recheckAll();
+    if (settings.agentStyle !== before.agentStyle) void this.applyAgentStyle(`The assistant is ${agentStyleInfo(settings.agentStyle).label} from your next message.`);
     if (JSON.stringify(settings.permissions) !== JSON.stringify(before.permissions)) this.permissionsApplied = this.applyPermissions();
     else if (rulesDiffer(settings, before)) this.permissionsApplied = this.applyPermissions({ notice: false });
     if (settings.assistant !== before.assistant && this.state.workspace && restart) {
@@ -8852,6 +8870,54 @@ export class Studio {
     } catch (e) {
       this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't update the style guide for this conversation: ${errorMessage(e)}` });
     }
+  }
+
+  // ---- how the assistant talks (Settings ▸ Assistant, AGENT_STYLE.md) ----------------
+
+  /** Read AGENT_STYLE.md; with `updateSession`, give the conversation what it says now. */
+  async loadAgentStyle({ updateSession = false } = {}) {
+    let text: string | null = null;
+    try {
+      text = (await ipc.fsRead(AGENT_STYLE_FILE)).text;
+    } catch {}
+    const before = this.agentStyleText;
+    this.agentStyleText = text;
+    this.store.set({ agentStyleFile: { exists: text !== null, says: agentStyleSays(text) } });
+    if (!updateSession || text === before) return;
+    const says = agentStyleSays(text);
+    // Only comments, as a new file is, then and now: nothing for the assistant changed.
+    if (!says && !agentStyleSays(before)) return;
+    await this.applyAgentStyle(says ? `Using the updated ${AGENT_STYLE_FILE}.` : `${AGENT_STYLE_FILE} says nothing now; the assistant talks as Settings ▸ Assistant says.`);
+  }
+
+  /** How to talk with the author, as it is now, for the conversation shown; `notice` says what changed. */
+  private async applyAgentStyle(notice: string) {
+    const { sessionId } = this.state.agent;
+    if (!sessionId || !this.agent) return;
+    const text = agentStyleInstructions(this.state.settings.agentStyle, this.agentStyleText);
+    try {
+      if (text) await this.agent.setInstructions(sessionId, AGENT_STYLE_KEY, text);
+      else await this.agent.removeInstructions(sessionId, AGENT_STYLE_KEY);
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'info', text: notice });
+    } catch (e) {
+      this.pushItem({ kind: 'notice', id: uid('n'), tone: 'error', text: `Couldn't change how the assistant talks in this conversation: ${errorMessage(e)}` });
+    }
+  }
+
+  /** Open AGENT_STYLE.md, made from its template first if the book has none. */
+  async openAgentStyle() {
+    if (!this.state.workspace) return;
+    if (!this.state.agentStyleFile.exists) {
+      try {
+        await ipc.fsWrite(AGENT_STYLE_FILE, AGENT_STYLE_TEMPLATE, null);
+      } catch (e) {
+        this.toast(`Couldn't write ${AGENT_STYLE_FILE}: ${errorMessage(e)}`, 'error');
+        return;
+      }
+      await this.refreshFiles();
+      await this.loadAgentStyle();
+    }
+    await this.openFile(AGENT_STYLE_FILE);
   }
 
   openStyleTemplates() {

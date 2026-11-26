@@ -12,6 +12,7 @@ import { Icon, type IconName } from './icons';
 import { LOOK_COMMANDS } from '../services/agent/permissions';
 import { CommandRules } from './CommandRules';
 import { AssistantPage } from './AssistantSettings';
+import { AGENT_STYLE_FILE, agentStyleInfo } from '../services/agent/agent-style';
 import { BookFilesPage } from './BookFilesSettings';
 import { BookSpellingPage, SpellingPage } from './SpellingSettings';
 import { Choice, ColorChoice, SwitchRow, TypedSetting } from './SettingControls';
@@ -77,11 +78,13 @@ function BookColorPage() {
   );
 }
 
-/** The assistant in this book: its style guide, the commands it may run here, and its code examples. */
+/** The assistant in this book: its style guide, how it talks (AGENT_STYLE.md), the commands it may run here, and its code examples. */
 function BookAssistantPage() {
   const ws = useStore(studio.store, (s) => s.workspace);
   const project = useStore(studio.store, (s) => s.project);
   const guide = useStore(studio.store, (s) => s.styleGuide);
+  const agentStyle = useStore(studio.store, (s) => s.agentStyleFile);
+  const style = useStore(studio.store, (s) => s.settings.agentStyle);
   const assistantIdle = useStore(studio.store, (s) => s.agent.status === 'ready' && !s.agent.running);
   const code = useStore(studio.store, (s) => s.code);
   if (!ws) return null;
@@ -117,6 +120,29 @@ function BookAssistantPage() {
           ) : (
             'This book has no style guide yet: the chat offers to draft one from your chapters.'
           )}
+        </p>
+      </Section>
+      <Section title="How it talks with you, in this book">
+        <p className="settings-help">
+          {agentStyle.says ? (
+            <>
+              Every message follows <code>{AGENT_STYLE_FILE}</code>, on top of the {agentStyleInfo(style).label} style for every book (Foreword ▸ Assistant).{' '}
+            </>
+          ) : (
+            <>
+              The assistant talks as the {agentStyleInfo(style).label} style says, as in every book (Foreword ▸ Assistant).{' '}
+              {agentStyle.exists ? <><code>{AGENT_STYLE_FILE}</code> has nothing in it yet: say in your own words how it should talk with you in this book. </> : <>To say in your own words how it should talk with you in this book, write <code>{AGENT_STYLE_FILE}</code>. </>}
+            </>
+          )}
+          <button
+            className="link"
+            onClick={() => {
+              studio.closeSettings();
+              void studio.openAgentStyle();
+            }}
+          >
+            {agentStyle.exists ? 'Open it' : 'Write one'}
+          </button>
         </p>
       </Section>
       <Section title="Commands, in this book">

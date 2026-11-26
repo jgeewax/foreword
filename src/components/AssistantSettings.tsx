@@ -1,10 +1,12 @@
 // Settings ▸ Assistant: which program is the writing assistant, as cards that
 // say how each would run on this Mac, and a panel for the one chosen: how it
 // is now, its account (with sign-in in Terminal, or Antigravity's with Google)
-// and its program. Its model is chosen in the chat.
+// and its program. Its model is chosen in the chat. Then how it talks with
+// the author: a style for every book, and the book's AGENT_STYLE.md.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { studio, type StudioState } from '../app/studio';
 import { ASSISTANT_NAMES, ASSISTANTS, type AssistantId } from '../app/settings';
+import { AGENT_STYLE_FILE, AGENT_STYLES, agentStyleInfo, type AgentStyle } from '../services/agent/agent-style';
 import { errorMessage, ipc, type AssistantSetup, type AssistantsSetup, type InstallPlan, type ToolInfo } from '../lib/ipc';
 import { tildePath } from '../lib/paths';
 import { useStore } from '../lib/store';
@@ -359,7 +361,59 @@ export function AssistantPage() {
         </div>
         <p className="settings-help">Switching keeps the chat, as switching models does: the other assistant carries the task on, and gets the chat so far with your next message. The model is chosen in the chat, under the message box.</p>
       </section>
+      <AgentStyleSection />
     </>
+  );
+}
+
+/**
+ * How the assistant talks with the author, whichever assistant it is: a
+ * style for every book, and the book's AGENT_STYLE.md in their own words,
+ * which adds to it. A change reaches the conversation with the next message.
+ */
+export function AgentStyleSection() {
+  const style = useStore(studio.store, (s) => s.settings.agentStyle);
+  const file = useStore(studio.store, (s) => s.agentStyleFile);
+  const hasBook = useStore(studio.store, (s) => !!s.workspace);
+  const open = () => {
+    studio.closeSettings();
+    void studio.openAgentStyle();
+  };
+  return (
+    <section className="settings-section">
+      <h2>How it talks with you</h2>
+      <div className="settings-field">
+        <label className="settings-label" htmlFor="agent-style">
+          Style
+        </label>
+        <select id="agent-style" className="agent-style-select" value={style} onChange={(e) => studio.updateSettings({ agentStyle: e.target.value as AgentStyle })}>
+          {AGENT_STYLES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <p className="settings-help">{agentStyleInfo(style).detail}</p>
+      </div>
+      <p className="settings-help">
+        Its personality in the chat, in every book, from your next message. It changes how the assistant talks with you, not how it writes: the book’s voice is its writing style guide’s.
+      </p>
+      <p className="settings-help">
+        {hasBook ? (
+          <>
+            In your own words, for this book: <code>{AGENT_STYLE_FILE}</code> in its folder adds to the style, and wins where they differ.{' '}
+            {file.exists && !file.says && 'It has nothing in it yet. '}
+            <button className="link" onClick={open}>
+              {file.exists ? 'Open it' : 'Write one'}
+            </button>
+          </>
+        ) : (
+          <>
+            In your own words, for one book: <code>{AGENT_STYLE_FILE}</code> in its folder adds to the style, and wins where they differ.
+          </>
+        )}
+      </p>
+    </section>
   );
 }
 

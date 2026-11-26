@@ -152,6 +152,17 @@ describe('Foreword’s tools, as an MCP server', () => {
     expect(r.text).toBe('Changed (in effect now): editorFontSize: 12 px → 14 px; rulers: none → 80, 120; zoom: 100% → 125%; formatOnSave was already true.');
   });
 
+  it('change_settings: how it talks with the author, from their next message', async () => {
+    const t = host();
+    const prefs = JSON.parse((await call(t.h, 'get_settings', {})).text).preferences;
+    expect(prefs.agentStyle).toMatchObject({ value: 'balanced', values: 'balanced, concise, candid, encouraging, explain' });
+    expect(prefs.agentStyle.about).toMatch(/not how you write the book/);
+    const r = await call(t.h, 'change_settings', { agentStyle: 'concise' });
+    expect(r.text).toBe('Changed (in effect now): agentStyle: balanced → concise. How you talk changes with the author’s next message, when Foreword gives you that style’s instructions.');
+    expect(t.settings()).toMatchObject({ agentStyle: 'concise' });
+    expect((await call(t.h, 'change_settings', { agentStyle: 'terse' })).text).toMatch(/agentStyle \(balanced, concise, candid, encouraging, explain\)\. Nothing was changed\./);
+  });
+
   it('change_settings: the preview’s whole book or one chapter is this window’s, not a setting', async () => {
     const t = host();
     expect(JSON.parse((await call(t.h, 'get_settings', {})).text).preferences.previewScope.value).toBe('book');

@@ -17,6 +17,7 @@ import { effortFor } from '../services/agent/models';
 import { matchesQuery } from '../services/agent/model-search';
 import type { EffortOption, ModelInfo, ModelRef } from '../services/agent/types';
 import { ZOOM_STEPS } from '../lib/zoom';
+import { AGENT_STYLE_FILE, AGENT_STYLES } from '../services/agent/agent-style';
 import type { Level } from '../services/agent/permissions';
 import type { PreviewScope } from './book-state';
 import { describeTool, NO_NAMES } from './tool-labels';
@@ -136,6 +137,11 @@ const PREFERENCES: Record<string, { about: string; values: string; schema: Recor
   spellingLanguage: { about: 'The language of books whose Typst doesn’t set one ("en-GB"); "" for the Mac’s.', values: 'a language tag such as en-US, en-GB, fr, de, or ""', schema: { type: 'string', pattern: '^([a-z]{2,3}(-[A-Z]{2})?)?$' } },
   checkForUpdates: { about: 'Look for a new version of Foreword when it starts.', values: 'true, false', schema: { type: 'boolean' } },
   zoom: { about: 'The size of the whole window’s text and controls (1 is 100%).', values: ZOOM_STEPS.join(', '), schema: { type: 'number', minimum: ZOOM_STEPS[0], maximum: ZOOM_STEPS[ZOOM_STEPS.length - 1] } },
+  agentStyle: {
+    about: `How you talk with the author in the chat, in every book (not how you write the book): ${AGENT_STYLES.map((s) => `${s.id} (${s.detail.replace(/’/g, "'")})`).join('; ')}. Change it when the author asks you to talk another way from now on ("be more concise"); it takes effect with their next message. For one book in their own words, ${AGENT_STYLE_FILE} in its folder adds to it.`,
+    values: AGENT_STYLES.map((s) => s.id).join(', '),
+    schema: { type: 'string', enum: AGENT_STYLES.map((s) => s.id) },
+  },
 };
 
 /** Settings only the author changes: what the assistant may do, and the programs the app runs. */
@@ -150,7 +156,7 @@ const AUTHOR_ONLY: Record<string, string> = {
 const AUTHOR_ONLY_NOTE =
   'What the assistant may do (Settings ▸ Permissions), the commands it may run without asking, and the programs Foreword runs (Settings ▸ Tools) are the author’s to change, in Settings: open_settings opens the page for them.';
 const BOOK_NOTE =
-  'This book’s own settings (its main file, Typst root, output folder, font folders, the language its spelling is checked in) are in .foreword.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there. The words its spelling check accepts (its characters’ names, its terms) are in .foreword/dictionary.txt, one per line, sorted.';
+  `This book’s own settings (its main file, Typst root, output folder, font folders, the language its spelling is checked in) are in .foreword.json in the book’s folder: change them by editing that file. The writing style guide is WRITING_STYLE.md there, and how you talk with the author in this book, in their words, is ${AGENT_STYLE_FILE}. The words its spelling check accepts (its characters’ names, its terms) are in .foreword/dictionary.txt, one per line, sorted.`;
 
 /** A tool's answer: words, and pictures after them (PNGs, base64). */
 type ToolOutput = { text: string; images?: string[] };
@@ -354,7 +360,8 @@ export const TOOLS: Tool[] = [
         const was = k === 'zoom' ? before.zoom : k === 'previewScope' ? before.previewScope : before.settings[k as keyof AppSettings];
         return JSON.stringify(was) === JSON.stringify(v) ? `${k} was already ${shown(k, v)}` : `${k}: ${shown(k, was)} → ${shown(k, v)}`;
       });
-      return `Changed (in effect now): ${changes.join('; ')}.`;
+      const talk = 'agentStyle' in patch && patch.agentStyle !== before.settings.agentStyle ? ' How you talk changes with the author’s next message, when Foreword gives you that style’s instructions.' : '';
+      return `Changed (in effect now): ${changes.join('; ')}.${talk}`;
     },
   },
   {

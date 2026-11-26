@@ -5493,6 +5493,54 @@ no cards and no buttons.
   insertion now lands on a line of its own above the sentence (the old check
   expected the option run into the sentence).
 
+### How the assistant talks: a style, and AGENT_STYLE.md (2026-11-26)
+
+- **The ask (from the user):** control the assistant's personality, most often
+  to make it more concise, or to lean one way or another; an `AGENT_STYLE.md`
+  passed in, and presets chosen from a dropdown in Settings.
+- **Two layers.** A style for every book in Settings ▸ Assistant ▸ How it
+  talks with you (`agentStyle`: Balanced, Concise, Candid, Encouraging,
+  Explains), and the book's `AGENT_STYLE.md`, in the author's own words, which
+  adds to it and wins where they differ. A style is the author's across books
+  (they want it concise everywhere); the file sits beside `WRITING_STYLE.md`,
+  opens in the editor, keeps its History and travels with the book. A file
+  for every book (`~/.foreword/AGENT_STYLE.md`) was left for later.
+- **About the chat, not the book.** The instructions say so first: what goes
+  in the book follows the book's voice and its style guide, and the mode's
+  formats (answer, change, questions blocks) still apply. Balanced adds
+  nothing: Foreword's own instructions are it. Each other style is a few rules
+  and one example of how a reply starts, plus a per-message reminder line
+  (`(Foreword, how you talk: Concise. …)`), stripped from the chat as the mode
+  reminders are.
+- **The file** is made from a template whose suggestions are in an HTML
+  comment, and comments aren't sent, so a new file changes nothing until the
+  author writes in it. A change to it, or to the style (from Settings, or by
+  the assistant's `change_settings` when the author says "be more concise from
+  now on"), reaches the conversation with the next message, and the chat says
+  so in a notice.
+- **Eval** (headless `claude -p` with the app's real system prompt in Write
+  mode; a 4-paragraph amateur chapter; cases: "What do you think of the
+  opening?", "Fix the typos", "Rewrite the first paragraph so it flows
+  better", "Is the cellar mentioned anywhere else?"). Reply words, Balanced →
+  Concise: Sonnet 406 → 58 (opinion), 35 → 15 (rewrite report), 33 → 6
+  (quick); Haiku 163/239 → 79/87, 67/57/52/43 → 29/27/23/16, 71/39 → 23/29.
+  Explains is longer everywhere (Sonnet opinion 547). Candid opens on the
+  problem ("It's slow: …"), Encouraging on what works, in both models.
+  Without the reminder Haiku's Concise replies were a little longer (quick
+  32/35 vs 21/24), so it stays.
+  - Controls: both typos were fixed in all 17 typo runs, in every style. Rewrite length in the
+    book: one early Haiku Concise rewrite dropped a detail ("the people
+    walking to work"), so Concise says "Only your replies are short": after it,
+    4/4 Haiku Concise rewrites kept it at 42–49 words, against Balanced's
+    33–47 (one Balanced rewrite dropped it too). Sonnet's rewrites were 47–56
+    words in every style.
+- **Verified:** unit tests for the instructions, the reminder, the file's
+  comments, the setting and `change_settings`. Self-test `agentstyle`: the
+  dropdown changes the setting and the instructions, the book's page and
+  "Write one" make and open the file, and a live Claude Code turn follows it
+  (began "Ahoy," as the file said); switching back to Balanced mid-conversation
+  shows a notice and keeps only the file's part.
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through
