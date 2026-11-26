@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closestOurs, findPassage, locatePassage } from './option-passage';
+import { closestOurs, findPassage, locatePassage, namesElsewhere, optionText } from './option-passage';
 
 const before = 'Intro. ';
 const passage = 'The cat sat on the mat.';
@@ -128,5 +128,52 @@ describe('the passage a reply says its options replace', () => {
   it('a regex character in the words is only itself', () => {
     const doc = 'Let $x in (a, b)$ [see @ref].\nThen $x^2 + 1 > 0$.';
     expect(findPassage(doc, 'Let $x in (a, b)$  [see @ref].', 1)).toEqual(span(doc, 'Let $x in (a, b)$ [see @ref].'));
+  });
+});
+
+describe('whether a reply names a place other than the selection', () => {
+  // Selected: lines 1442–1478, as when "Options" on a direction said "at line 501".
+  const asked = { path: 'ch18.typ', start: { line: 1442 }, end: { line: 1478 } };
+
+  it('lines clear of the selection, or another file: elsewhere', () => {
+    expect(namesElsewhere({ path: 'ch18.typ', line: 501 }, asked)).toBe(true);
+    expect(namesElsewhere({ path: 'ch18.typ', line: 1490, endLine: 1500 }, asked)).toBe(true);
+    expect(namesElsewhere({ path: 'ch17.typ', line: 1442, endLine: 1478 }, asked)).toBe(true);
+    expect(namesElsewhere({ path: 'ch17.typ' }, asked)).toBe(true);
+  });
+
+  it('its lines, a line in it, or lines a little off: the selection', () => {
+    expect(namesElsewhere({ path: 'ch18.typ', line: 1442, endLine: 1478 }, asked)).toBe(false);
+    expect(namesElsewhere({ path: 'ch18.typ', line: 1460 }, asked)).toBe(false);
+    expect(namesElsewhere({ path: 'ch18.typ', line: 1440, endLine: 1476 }, asked)).toBe(false);
+    expect(namesElsewhere({ path: 'ch18.typ', line: 1481 }, asked)).toBe(false);
+    expect(namesElsewhere({ path: 'ch18.typ', line: 1420, endLine: 1439 }, asked)).toBe(false);
+  });
+
+  it('its file with no lines: no telling, so not elsewhere', () => {
+    expect(namesElsewhere({ path: 'ch18.typ' }, asked)).toBe(false);
+  });
+});
+
+describe('an option as it goes in', () => {
+  const insertAt = (column: number) => ({ text: '', start: { column } });
+  // What the option does to "…allow.\n\nNow that…" put in at the blank line's start (503:1).
+  const put = (option: string) => {
+    const doc = 'Its size depends on units.\n\nNow that we have it.';
+    const at = doc.indexOf('\n') + 1;
+    return doc.slice(0, at) + optionText(option, insertAt(1)) + doc.slice(at);
+  };
+
+  it('in at a line’s start: lines of its own, so the paragraphs stay apart', () => {
+    expect(put('Variance is squared.\nIts root is not.')).toBe('Its size depends on units.\nVariance is squared.\nIts root is not.\n\nNow that we have it.');
+    // Already ended with a line break, or a blank line: as written.
+    expect(put('Variance is squared.\n')).toBe('Its size depends on units.\nVariance is squared.\n\nNow that we have it.');
+    expect(optionText('A new paragraph.\n\n', insertAt(1))).toBe('A new paragraph.\n\n');
+  });
+
+  it('in place of a passage, or within a line: as written; nothing stays nothing', () => {
+    expect(optionText('Shorter.', { text: 'A longer sentence.', start: { column: 1 } })).toBe('Shorter.');
+    expect(optionText(' and more', insertAt(12))).toBe(' and more');
+    expect(optionText('', insertAt(1))).toBe('');
   });
 });

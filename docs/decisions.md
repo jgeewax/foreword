@@ -5443,6 +5443,56 @@ no cards and no buttons.
   bar (Book) and Next TODO in the tab and the editor. The `todos` group
   still passes.
 
+### Options go where the message says, not over the selection (2026-11-26)
+
+- **The bug (from the user):** a discussion about a selected subsection
+  (ch18:1442–1478) ended with a direction, "At line 501, add one or two
+  sentences… Then rewrite the standardize subsection…". Its Options button
+  sent that in Options mode with the selection still live, and the three
+  options were rewrites of 1442–1478. The user wanted three versions of the
+  sentences to insert at line 501. Their real reply had no ```` ```replaces ````
+  block, so the app fell back on the selection. But the instructions caused it
+  anyway: "The passage is the one they selected", "With a selection, that's
+  the selection", and the base prompt's "Work on that passage".
+- **The rule now:** a place the message names wins over the selection, which
+  may only be what was being discussed. The selection counts when the message
+  names no other place. Options are for one place, so a message naming two is
+  answered for the first, and the opening sentence says the rest is a request
+  of its own. The rule went in the Options section, with an example ("At line
+  147, add a sentence… Then rewrite the section on bases" with that section
+  selected: sentences for 147:1, not versions of the section). The
+  per-message reminder adds "the place this message names if it names one
+  (the first, if it names more), even with something else selected", and the
+  base prompt says "unless the message names another place to work on".
+- **The fallback:** when a reply's words aren't found, it still falls back on
+  the selection, unless its `at` names another file or lines more than 3
+  away from the selection (`namesElsewhere`). Then the card has Copy only,
+  with no Use this.
+- **Insertions as lines:** an option put in at the start of a line (`at:
+  …:503:1`, empty `find`) gets a final line break if it has none
+  (`optionText`). Opus writes insertion options without one, and at the
+  blank line between two paragraphs that joined the next paragraph onto
+  this one. At a line with text, it ran into that line ("…allow.Now that").
+- **Eval** (headless `claude -p` with the app's real system prompt and
+  message; ch18 as it was, with the selected subsection at 1369–1405 and the
+  "units" line at 502). The case is the line-502 direction, sent in Options
+  and in Auto:
+  - Baseline: the selection in 7 of 7 replies that had a block (Haiku,
+    Sonnet, Opus). One Haiku reply had no block.
+  - Rule and reminder only: Sonnet 2/2 and Opus 2/2 at 502, Haiku 0/4.
+  - With the example and "(the first…)" added: Sonnet 2/2, Opus 2/2,
+    Haiku 2/4.
+  - Controls stayed on the selection in all 18 runs: "Fix in place only" (a
+    direction about the selected subsection), "make it clearer" for the
+    selected passage (Options and Auto). An offer naming only line 502 was
+    already right at baseline.
+- **Verified:** unit tests for the rule, the reminder, `namesElsewhere` and
+  `optionText`. Self-test `optionsanchor` adds two cases with a far line
+  selected: a reply naming another line with words that aren't there gets no
+  Use this, and one naming the selected line falls back on the selection. Its
+  insertion now lands on a line of its own above the sentence (the old check
+  expected the option run into the sentence).
+
 ### Open questions
 
 - Release-build numbers, and real keyboard input (the self-test types through

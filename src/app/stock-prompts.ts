@@ -96,7 +96,7 @@ export const reviewPrompt = (aim: string) => `Review the selected passage: ${aim
 export const directionWritePrompt = (d: Pick<Direction, 'name' | 'what'>) =>
   `Let's go with this direction from our discussion: “${d.name.trim()}”: ${d.what.trim()}\n\nWrite it now, in the book's voice and style guide, editing the files directly. Afterwards, say in a sentence or two what you changed and where.`;
 
-/** "Options" on a direction from Discuss, sent in Options mode: versions of it, for the selected passage (or the one the options are about). */
+/** "Options" on a direction from Discuss, sent in Options mode: versions of it, for the place it names (else the selected passage, or the one the options are about). */
 export const directionOptionsPrompt = (d: Pick<Direction, 'name' | 'what'>, count = DEFAULT_OPTION_COUNT) =>
   `${capitalized(optionsInWords(count))} for this direction from our discussion: “${d.name.trim()}”: ${d.what.trim()}`;
 

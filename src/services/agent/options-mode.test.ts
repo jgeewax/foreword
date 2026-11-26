@@ -166,11 +166,19 @@ describe('OPTIONS_INSTRUCTIONS', () => {
     expect(OPTIONS_INSTRUCTIONS).toMatch(/goes in where your reply says, in place of the passage it names: nowhere else, whatever the cursor is doing/);
     expect(OPTIONS_INSTRUCTIONS).toMatch(/leave `find` empty and give the line and column it goes at: `at: chapters\/02-spaces\.typ:147:1`/);
   });
+
+  it('a place the message names wins over the selection, and options are for one place', () => {
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/The passage is the one the message names, when it names one .*: the options go there even with something else selected/);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/Otherwise it's the one they selected/);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/when the message names more than one, write them for the first, .*not versions of the section/);
+    expect(OPTIONS_INSTRUCTIONS).toMatch(/With a selection, that's the selection, unless the message names another place for the options\./);
+  });
 });
 
 describe('how many options', () => {
   it('each message says, as a reminder the chat leaves out', () => {
-    const start = '(Foreword, Options mode: start with the ```replaces block that says what they replace (`at:` the file and line, `find:` the passage exactly as it is in the file), then write exactly';
+    const start =
+      '(Foreword, Options mode: start with the ```replaces block that says what they replace (`at:` the file and line, `find:` the passage exactly as it is in the file): the place this message names if it names one (the first, if it names more), even with something else selected. Then write exactly';
     expect(optionsReminder(3)).toBe(`${start} three options, Option 1 to Option 3, with (my pick) at the end of the heading of the one you'd pick, in the format your Options mode instructions give.)`);
     expect(optionsReminder(1)).toBe(`${start} one option, in the format your Options mode instructions give.)`);
     expect(optionsReminder(5).startsWith(REMINDER_START)).toBe(true);

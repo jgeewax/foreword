@@ -26,7 +26,7 @@ export const OPTIONS_INSTRUCTIONS = `# Options mode
 
 The author wants choices, not edits. In this mode you must not edit, create, or delete files (edits are blocked); reading files is fine. The app shows each option as a card, and the one the author picks goes in where your reply says, in place of the passage it names: nowhere else, whatever the cursor is doing.
 
-For each request, reply with exactly as many alternative versions of the passage the author means as they chose: the app says how many with each message (${optionsInWords(DEFAULT_OPTION_COUNT)} if it doesn't). The passage is the one they selected; with nothing selected, the one you've been talking about, or what they ask for (a title, a sentence to insert at the cursor, and so on). Use exactly this format:
+For each request, reply with exactly as many alternative versions of the passage the author means as they chose: the app says how many with each message (${optionsInWords(DEFAULT_OPTION_COUNT)} if it doesn't). The passage is the one the message names, when it names one (line 147, the definition of span, a sentence to add after the first example): the options go there even with something else selected, because a selection can be what you were talking about rather than where the options go. Otherwise it's the one they selected; with nothing selected, the one you've been talking about, or what they ask for (a title, a sentence to insert at the cursor, and so on). The options are for one place: when the message names more than one, write them for the first, and say in your opening sentence that the rest is a request of its own. Asked "At line 147, add a sentence that defines span. Then rewrite the section on bases" with that section selected, the options are sentences for line 147 (\`at: chapters/02-spaces.typ:147:1\`, \`find\` empty), not versions of the section. Use exactly this format:
 
 One short sentence about your approach (optional).
 
@@ -49,16 +49,21 @@ In other words, it is the smallest subspace that contains every vector in the li
 and so on, one section for each option.
 
 Rules:
-- Start with the replaces block, once: it's where the options go, and without it none can. \`at\`: the file and its lines. \`find\`: the whole passage the options replace, all of it and nothing more, copied exactly from the file as it is now (every character, with its indentation and line breaks; read the file first if you haven't got it word for word). With a selection, that's the selection. To put an option in without replacing anything (at the cursor, say), leave \`find\` empty and give the line and column it goes at: \`at: chapters/02-spaces.typ:147:1\`.
+- Start with the replaces block, once: it's where the options go, and without it none can. \`at\`: the file and its lines. \`find\`: the whole passage the options replace, all of it and nothing more, copied exactly from the file as it is now (every character, with its indentation and line breaks; read the file first if you haven't got it word for word). With a selection, that's the selection, unless the message names another place for the options. To put an option in without replacing anything (at the cursor, or a sentence added where the message says), leave \`find\` empty and give the line and column it goes at: \`at: chapters/02-spaces.typ:147:1\`.
 - Each code block replaces the whole of \`find\`, so it must be complete Typst markup that can be pasted in its place. Keep its labels like <eq-name>, citations like @key, math and markup, and lay it out as the passage is: one sentence per line, at its indentation.
 - Work out what the passage needs first (How to revise, steps 1 and 2). Then make each option a different way to give it that, an editor's different move (lead with the point, cut to what matters, recast the rhythm, shift the emphasis, rebuild the order), not the same version reworded; label it by its move. Every one follows the style guide and passes How to revise's check (step 5). Asked for one option, write the best version you can.
 - With more than one option, end the heading of the one you'd pick with \`(my pick)\`: just one, the one that best gives the passage what it needs, wherever it is in the list. Its sentence says why you'd pick it. The app marks it on its card.
 - Write nothing after the last option.
 - If the message isn't something to give options for (a question, say), answer it briefly and normally instead.`;
 
-/** Sent with every message in Options mode, after the author's words: how many options to write. */
+/**
+ * Sent with every message in Options mode, after the author's words: where they
+ * go and how many to write. A place the message names wins over the selection:
+ * the selection left from a discussion went with "Options" on a direction that
+ * said "at line 501", and the options replaced the selection.
+ */
 export const optionsReminder = (n: number) =>
-  `(Foreword, Options mode: start with the \`\`\`replaces block that says what they replace (\`at:\` the file and line, \`find:\` the passage exactly as it is in the file), then write exactly ${optionsInWords(n)}${n > 1 ? `, Option 1 to Option ${n}, with (my pick) at the end of the heading of the one you'd pick` : ''}, in the format your Options mode instructions give.)`;
+  `(Foreword, Options mode: start with the \`\`\`replaces block that says what they replace (\`at:\` the file and line, \`find:\` the passage exactly as it is in the file): the place this message names if it names one (the first, if it names more), even with something else selected. Then write exactly ${optionsInWords(n)}${n > 1 ? `, Option 1 to Option ${n}, with (my pick) at the end of the heading of the one you'd pick` : ''}, in the format your Options mode instructions give.)`;
 
 /**
  * What a reply's options replace, as it says (its ```replaces block): `at`, the

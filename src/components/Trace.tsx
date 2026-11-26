@@ -903,7 +903,7 @@ function DirectionCards({ item, directions }: { item: AssistantItem; directions:
                   </span>
                   Write it
                 </button>
-                <button className="direction-go mode-options" disabled={running} title="Versions of it to pick from, for the selected passage" onClick={() => void studio.takeDirection(d, 'options')}>
+                <button className="direction-go mode-options" disabled={running} title="Versions of it to pick from: for the place it names, else the selected passage" onClick={() => void studio.takeDirection(d, 'options')}>
                   <span className="mode-glyph" aria-hidden="true">
                     {options.icon}
                   </span>

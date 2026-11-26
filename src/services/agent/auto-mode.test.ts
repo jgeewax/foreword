@@ -262,7 +262,7 @@ describe('what the assistant is told in Auto', () => {
       /^\(Foreword, Auto: this message is in Review mode, whatever mode earlier ones were in\. Reply as your Review mode instructions say\. Start with/,
     );
     expect(autoReminder('options', optionsReminder(3))).toBe(
-      "(Foreword, Auto: this message is in Options mode, whatever mode earlier ones were in. Start with the ```replaces block that says what they replace (`at:` the file and line, `find:` the passage exactly as it is in the file), then write exactly three options, Option 1 to Option 3, with (my pick) at the end of the heading of the one you'd pick, in the format your Options mode instructions give.)",
+      "(Foreword, Auto: this message is in Options mode, whatever mode earlier ones were in. Start with the ```replaces block that says what they replace (`at:` the file and line, `find:` the passage exactly as it is in the file): the place this message names if it names one (the first, if it names more), even with something else selected. Then write exactly three options, Option 1 to Option 3, with (my pick) at the end of the heading of the one you'd pick, in the format your Options mode instructions give.)",
     );
     expect(autoReminder('figures', null)).toBe('(Foreword, Auto: this message is in Figures mode, whatever mode earlier ones were in. Reply as your Figures mode instructions say.)');
   });

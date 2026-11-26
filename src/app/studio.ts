@@ -101,7 +101,7 @@ import { AUTO_INSTRUCTIONS, autoReminder, pickMode, type AutoPick } from '../ser
 import { answerOf, removalLines, withoutAnswerBlocks, type AnswerChange } from '../services/agent/ask-answer';
 import { changePrompt, changesPrompt, meantMessage } from '../services/agent/ask-mode';
 import { optionsReminder, parseOptions, withoutAnchor, type OptionsAnchor } from '../services/agent/options-mode';
-import { closestOurs, findPassage, locatePassage, type PassageAt } from './option-passage';
+import { closestOurs, findPassage, locatePassage, namesElsewhere, optionText, type PassageAt } from './option-passage';
 import { STYLE_TEMPLATES } from '../style-guides';
 import { bookId, chapterFile, chapterHead, CONTAINER_XML, didntCarryOver, EPUB_CSS, epubSource, extractImages, fixedFor, fixedPage, linkParts, mathHeavy, navPage, packageOpf, splitBook, toXhtml, uniqueSvgIds, xhtmlPage, type EpubFile, type EpubKind, type ManifestItem } from '../epub';
 import { STYLE_DRAFT_KEY, STYLE_DRAFT_MESSAGE, STYLE_GUIDE_FILE, STYLE_INSTRUCTIONS_KEY, STYLE_INTERVIEW_MESSAGE, STYLE_REDRAFT_MESSAGE, STYLE_REVISE_PLACEHOLDER, styleDraftBrief, styleInstructions, styleInterviewBrief, styleReviseBrief, styleReviseMessage, type AuthorRevision, type GuideChange } from '../services/agent/style-guide';
@@ -5760,8 +5760,9 @@ export class Studio {
 
   /**
    * A direction from Discuss, taken on: made in Write mode, or as versions to
-   * pick from in Options mode (for the selected passage, or the one the last
-   * options were about). A reply running in another mode finishes first.
+   * pick from in Options mode (for the place it names; else the selected
+   * passage, or the one the last options were about). A reply running in
+   * another mode finishes first.
    */
   async takeDirection(d: Direction, to: 'write' | 'options') {
     if (to === 'options') return this.sendForOptions(directionOptionsPrompt(d, this.state.settings.optionCount), null);
@@ -7082,23 +7083,26 @@ export class Studio {
    * ```replaces block names (the passage found by its words, near the line it
    * gives; or with no words, the line and column), followed from now on. A
    * reply that doesn't say, or whose words aren't in the file, falls back on
-   * the selection it was asked about; a bare cursor isn't one (it goes with
-   * every message, whatever the message is about), so then there's nowhere,
-   * and the card says why: copy only.
+   * the selection it was asked about, unless it names somewhere else (then its
+   * options are for there, whatever was selected); a bare cursor isn't one (it
+   * goes with every message, whatever the message is about), so then there's
+   * nowhere, and the card says why: copy only.
    */
   private placeOptions(itemId: string, text: string) {
     const parsed = parseOptions(text);
     if (!parsed.options.length && !parsed.anchor) return;
     const run = (async () => {
-      const place = parsed.anchor?.complete ? await this.anchorTarget(parsed.anchor) : null;
+      const anchor = parsed.anchor?.complete ? parsed.anchor : null;
+      const place = anchor ? await this.anchorTarget(anchor) : null;
       const item = this.state.agent.items.find((i) => i.id === itemId);
       const asked = item?.kind === 'assistant' ? item.options?.target : null;
       if (item?.kind !== 'assistant' || !item.options || item.options.applied != null) return;
+      const said = anchor && this.anchorRef(anchor);
       let options: OptionsState;
       if (place) {
         const passage = this.followPassage(place);
         options = { ...item.options, target: place, original: place, passage, unplaced: undefined };
-      } else if (asked?.text) return;
+      } else if (asked?.text && !(said && namesElsewhere(said, asked))) return;
       else options = { ...item.options, target: null, original: null, passage: undefined, unplaced: { at: parsed.anchor?.at || null } };
       this.updateItem(itemId, (it) => (it.kind === 'assistant' ? { ...it, options } : it));
       this.prunePassages();
@@ -7108,8 +7112,7 @@ export class Studio {
 
   /** The place a reply's ```replaces block names, in its file as it is now (opened for it, unseen), or null if it isn't there. */
   private async anchorTarget(anchor: OptionsAnchor): Promise<OptionTarget | null> {
-    const ws = this.state.workspace;
-    const ref = ws && anchor.at ? refNamed(bookFiles(ws.files, ws.root), anchor.at) : null;
+    const ref = this.anchorRef(anchor);
     if (!ref) return null;
     const model = (this.docs?.get(ref.path) ?? (await this.docs?.open(ref.path).catch(() => null)))?.model;
     if (!model || model.isDisposed()) return null;
@@ -7120,6 +7123,12 @@ export class Studio {
     }
     const at = findPassage(model.getValue(), anchor.find, ref.line ?? null);
     return at && targetIn(ref.path, model, offsetsRange(model, at.start, at.end));
+  }
+
+  /** The book's file (and lines) a reply's ```replaces block names in `at`, or null if it names none of them. */
+  private anchorRef(anchor: OptionsAnchor): SourceRef | null {
+    const ws = this.state.workspace;
+    return ws && anchor.at ? refNamed(bookFiles(ws.files, ws.root), anchor.at) : null;
   }
 
   // ---- the passage Options replies are about ------------------------------------------
@@ -7294,10 +7303,12 @@ export class Studio {
       return;
     }
     const start = range.getStartPosition();
+    // In at a line's start: as lines of its own, whichever option (the passage asked about says, not what's in it now).
+    const text = optionText(option.text, asked);
     editor.pushUndoStop();
-    editor.executeEdits('agent-option', [{ range, text: option.text, forceMoveMarkers: true }]);
+    editor.executeEdits('agent-option', [{ range, text, forceMoveMarkers: true }]);
     editor.pushUndoStop();
-    const end = model.getPositionAt(model.getOffsetAt(start) + option.text.length);
+    const end = model.getPositionAt(model.getOffsetAt(start) + text.length);
     const put = monaco.Range.fromPositions(start, end);
     this.showWords(put);
     const applied = targetIn(p.path, model, put);

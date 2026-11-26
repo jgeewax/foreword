@@ -2821,8 +2821,11 @@ async function optionsPassageChecks() {
  * selected and the cursor elsewhere, as after talking about a passage: Use
  * this puts the option over the passage the reply names, found by its words
  * though its line is off, not at the cursor. Also an insertion at the line
- * and column it names; and with no block, or words that aren't in the file,
- * no Use this, and the card says why. Made-up replies; restores the buffer.
+ * and column it names, on a line of its own; and with no block, or words that
+ * aren't in the file, no Use this, and the card says why. With a line far off
+ * selected (left from a discussion), a reply that names another place whose
+ * words aren't there doesn't fall back on the selection; one that names the
+ * selection's lines does. Made-up replies; restores the buffer.
  */
 async function optionsAnchorChecks() {
   const out: Record<string, unknown> = {};
@@ -2850,9 +2853,11 @@ async function optionsAnchorChecks() {
   const item = () => [...studio.state.agent.items].reverse().find((i) => i.kind === 'assistant' && i.options) as any;
   let n = 0;
   // As send does with nothing selected: the cursor goes with the message (attachForOptions), followed; then the reply.
-  const ask = async (text: string) => {
+  // `select`: the far line selected instead, as it goes with the message.
+  const ask = async (text: string, select = false) => {
     n++;
-    editor.setPosition({ lineNumber: far, column: 3 });
+    if (select) editor.setSelection({ startLineNumber: far, startColumn: 1, endLineNumber: far, endColumn: farText.length + 1 });
+    else editor.setPosition({ lineNumber: far, column: 3 });
     studio.store.set((st) => ({ agent: { ...st.agent, attachments: [] } }));
     await s.attachForOptions();
     const a = studio.state.agent.attachments[0];
@@ -2881,11 +2886,11 @@ async function optionsAnchorChecks() {
     model.setValue(original);
     await sleep(200);
 
-    // Nothing replaced: in at the line and column it names.
+    // Nothing replaced: in at the line and column it names, on a line of its own (not run into the sentence).
     out.insert = await ask(reply(`\`\`\`replaces\nat: ${file}:${line}:1\nfind:\n\`\`\``));
     out.insert = { ...(out.insert as object), card: card() };
     await use();
-    out.insertUsed = { ok: model.getLineContent(line) === OPTIONS[0] + sentence, cursorLine: model.getLineContent(far) === farText };
+    out.insertUsed = { ok: model.getLineContent(line) === OPTIONS[0] && model.getLineContent(line + 1) === sentence, cursorLine: model.getLineContent(far + 1) === farText };
     model.setValue(original);
     await sleep(200);
 
@@ -2904,6 +2909,14 @@ async function optionsAnchorChecks() {
     } catch (e) {
       out.snapshot = errorMessage(e);
     }
+
+    // A line far off selected, and a reply that names the sentence's line with words that aren't there: not the selection.
+    out.elsewhere = await ask(reply(`\`\`\`replaces\nat: ${file}:${line}\nfind:\nA sentence the chapter never had.\n\`\`\``), true);
+    out.elsewhere = { ...(out.elsewhere as object), target: item()?.options?.target ?? null, unplaced: item()?.options?.unplaced, card: card() };
+    // The same, naming the selected line: its words are just off, so the selection.
+    out.selectedLine = await ask(reply(`\`\`\`replaces\nat: ${file}:${far}\nfind:\nA sentence the chapter never had.\n\`\`\``), true);
+    out.selectedLine = { ...(out.selectedLine as object), target: item()?.options?.target?.start ?? null, card: card() };
+    editor.setPosition({ lineNumber: far, column: 1 });
   } finally {
     if (model.getValue() !== original) model.setValue(original);
     await sleep(300);

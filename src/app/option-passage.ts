@@ -98,6 +98,31 @@ export function findPassage(doc: string, find: string, line: number | null): Spa
   return pick(doc, found, line);
 }
 
+/** How many lines a reply's place may be off the selection's and still mean it (it's given the selection's lines, but may count loosely). */
+const SLACK = 3;
+
+/**
+ * Whether the place a reply names (`at`: its file, and its lines if it gives
+ * them) is somewhere other than the passage it was asked about (`asked`):
+ * another file, or lines clear of it. Then options whose words aren't found
+ * there are about that place, not the selection, and mustn't go over it.
+ */
+export function namesElsewhere(at: { path: string; line?: number; endLine?: number }, asked: { path: string; start: { line: number }; end: { line: number } }): boolean {
+  if (at.path !== asked.path) return true;
+  if (at.line == null) return false;
+  return (at.endLine ?? at.line) < asked.start.line - SLACK || at.line > asked.end.line + SLACK;
+}
+
+/**
+ * An option as it goes in. In place of a passage, as written. In at the start
+ * of a line with nothing replaced (a reply's `at: file:503:1`), as lines of
+ * its own: ended with a line break if it isn't, so it doesn't run into the
+ * line it goes before, or close up the blank line between two paragraphs.
+ */
+export function optionText(text: string, asked: { text: string; start: { column: number } }): string {
+  return !asked.text && asked.start.column === 1 && text && !text.endsWith('\n') ? `${text}\n` : text;
+}
+
 /** Which of ours the author's version comes from (the fewest characters changed): what the card shows them changing. */
 export function closestOurs(now: string, ours: readonly string[]): string {
   let best = ours[0] ?? '';
