@@ -2,7 +2,7 @@
 title: The assistant
 heading: The assistant
 lede: Ask for a change in plain words and the assistant makes it in your chapters. It tells you what it did in the book’s own terms (“Read ‘Story of the Door’ (chapter 1)”), marks every line it changed, and History keeps the text from before, so any change can come out again.
-description: How Foreword's writing assistant works: a bar under what you select (Revise, Options, Ask, Review, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book's terms, the lines it changed marked in your text, pictures and files you attach to a message, files named with @, asking about a change, formulas in your book's notation, Auto and six modes (Write, Ask, Discuss, Review, Options, Figures) and pinning one to its own model, answers you can check, with charts, reviews with a change for each problem, versions to pick from, the pages it can see, and questions you answer in a panel.
+description: How Foreword's writing assistant works: a bar under what you select (Revise, Options, Ask, Review, Comment, Add to chat), one task at a time and a view of them all, an account of what it did in the book's terms, the lines it changed marked in your text, pictures and files you attach to a message, files named with @, asking about a change, formulas in your book's notation, Auto and six modes (Write, Ask, Discuss, Review, Options, Figures) and pinning one to its own model, answers you can check, with charts, reviews with a change for each problem, versions to pick from, the pages it can see, questions you answer in a panel, and how it talks with you.
 image: images/f/assistant-trace.webp
 -->
 <figure class="lead">
@@ -167,6 +167,11 @@ image: images/f/assistant-trace.webp
   <dt>Settings</dt><dd><code>/model sonnet</code> <code>/effort high</code> <code>/assistant codex</code> <code>/pin</code> <code>/unpin</code></dd>
   <dt>The book</dt><dd><code>/fix</code> (every open review comment) <code>/export</code> <code>/pdf</code></dd>
 </dl>
+
+<h2 id="how-it-talks">How it talks with you</h2>
+<p>Settings ▸ Assistant ▸ <span class="ui">How it talks with you</span> sets the assistant’s manner in the chat, in every book. <strong>Balanced</strong> is Foreword’s usual: plain and friendly, a few sentences after a change. <strong>Concise</strong> gives the answer or the change first, with no preamble, recap or praise. <strong>Candid</strong> is a frank editor: it says plainly what isn’t working and why, and skips the praise. <strong>Encouraging</strong> starts with what’s working, then picks the one or two things that matter most. <strong>Explains</strong> says why: the craft behind each change and what each piece of Typst does, so you learn as you go.</p>
+<p>For one book, say it in your own words in <code>AGENT_STYLE.md</code>, in the book’s folder: “Be blunt about what isn’t working. Call me Sam.” It adds to the style, and wins where they differ. <span class="ui">Write one</span>, in Settings, starts it with suggestions to pick from. Or tell the assistant “be more concise from now on”, and it changes the setting. A change applies from your next message, and the chat says so.</p>
+<p>It’s about the chat, not the book. What the assistant writes in your chapters follows the book’s voice and its <a href="style-guide.html">style guide</a>, whichever way it talks with you.</p>
 
 <h2>Ask it to change Foreword</h2>
 <p>“Make the text bigger.” “Put a ruler at 80.” “Switch me to Claude Code.” The assistant can change Foreword’s settings, so these just happen, and its account says what changed: “Changed Foreword’s settings · text size 15 px, rulers at 80”. Unless you’ve said otherwise, it asks you first. A change to the assistant itself (its model, its mode, which assistant it is) waits until its reply is finished.</p>
