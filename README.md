@@ -16,6 +16,8 @@ A Mac app for writing books in [Typst](https://typst.app). Your chapter on one s
 
 **[Download for Mac](https://github.com/jgeewax/foreword/releases/latest/download/Foreword_aarch64.dmg)** · [Website](https://jgeewax.github.io/foreword/) · [Releases](https://github.com/jgeewax/foreword/releases) · [What's new](CHANGELOG.md)
 
+**New in 0.13.1:** choose how the assistant talks with you, or say it in `AGENT_STYLE.md` · Try again on another model or effort · New Book in a folder you choose
+
 **New in 0.13:** a To do tab, each TODO beside its text · *Like this, but…* on an option · Options marks its pick · rename a label in the whole book (F2) · sections in files of their own · any Typst file in the preview on its own
 
 <br>

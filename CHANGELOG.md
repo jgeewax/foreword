@@ -2,6 +2,23 @@
 
 What's new in each version of Foreword (called Typst Studio up to 0.3.0). The release build uses each version's section as its release notes, which the app's update dialog shows under What's new.
 
+## 0.13.1 · 27 November 2026
+
+### The assistant
+
+- **Choose how it talks with you.** Settings ▸ Assistant has a new section, *How it talks with you*, with a style for every book: **Balanced** (Foreword's usual), **Concise** (the answer or the change first, with no preamble or recap), **Candid** (says plainly what isn't working, and skips the praise), **Encouraging** (starts with what's working, then the one or two things to do next) or **Explains** (the why behind each change and each piece of Typst). For one book, say it in your own words in `AGENT_STYLE.md` in the book's folder: it adds to the style, and wins where they differ. *Write one* starts it with suggestions to pick from. Or tell the assistant ("be more concise from now on") and it changes the setting. A change applies from your next message, and the chat says so. It changes how the assistant talks with you, never how it writes your book.
+- **Try again, on another model or effort.** A reply that didn't finish says *Try again* at its foot, in words. Beside it, on the last reply, a menu sends the same message on another model or effort, which the chat then keeps for the messages after it. Try again sends the message as it went: its words, files and passages, in its mode, whatever is selected or attached now.
+- **Options go where your message says.** When the message names a place ("At line 501, add a sentence…", as a Discuss direction can), the options go there, even with a passage still selected from the discussion. An option that goes in at the start of a line goes in as lines of its own, without running into the paragraph after it.
+
+### Books
+
+- **New Book in a folder you choose.** *Change…* under Location now picks the book's folder itself, one you have or one you make with New Folder, and the book's files go right in it. Without a choice, the book gets a new folder named after its title, as before. A folder with things in it already says what's there and offers to make a new folder in it instead, and nothing of yours is ever replaced. Papers work the same way.
+
+### Fixes
+
+- When Antigravity had no capacity for its model, the error showed as its answer, with Done. It now shows as a failed reply, with Try again.
+- The marks on lines the assistant changed leave out the blank lines around a change, and a removal is marked on the next line with text rather than on a blank one.
+
 ## 0.13.0 · 24 November 2026
 
 ### To do
