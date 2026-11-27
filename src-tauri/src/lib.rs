@@ -13,6 +13,8 @@ mod epub;
 mod error;
 mod export;
 mod files;
+#[cfg(target_os = "macos")]
+mod fullscreen;
 mod git;
 mod history;
 mod install;
@@ -405,8 +407,8 @@ fn open_window(
             .inner_size(frame.width.max(960.0), frame.height.max(600.0));
     }
     // As in VS Code: no native title bar, the page draws its own and the
-    // window's buttons sit in it. The title is still set (Window menu, Mission
-    // Control), just not drawn.
+    // window's buttons sit in it. The title is still set (Window menu), just
+    // not drawn, except in full screen, for Mission Control (fullscreen.rs).
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
@@ -775,6 +777,9 @@ pub fn run() {
             // Right-click on Foreword in the Dock: New Window, and the recent books.
             #[cfg(target_os = "macos")]
             dock::install(app.handle());
+            // Mission Control labels a full-screen window with its book, not just "Foreword".
+            #[cfg(target_os = "macos")]
+            fullscreen::install();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
